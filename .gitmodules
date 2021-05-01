@@ -1,0 +1,3 @@
+[submodule "gcmake-rust-test-project"]
+	path = gcmake-rust-test-project
+	url = ./gcmake-rust-test-project
