@@ -4,6 +4,8 @@ use serde::{Serialize, Deserialize};
 #[derive(Serialize, Deserialize, Debug)]
 pub struct RawProject {
   name: String,
+  // If possible, should be the same as the project name
+  include_prefix: String,
   description: String,
   version: String,
   languages: HashSet<String>,
@@ -12,6 +14,10 @@ pub struct RawProject {
 }
 
 impl RawProject {
+  pub fn get_include_prefix(&self) -> &str {
+    return &self.include_prefix;
+  }
+
   pub fn get_output(&self) -> &HashMap<String, RawCompiledItem> {
     return &self.output;
   }

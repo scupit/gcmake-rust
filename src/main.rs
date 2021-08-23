@@ -41,7 +41,18 @@ fn main() {
   };
 
   match project_result {
-    Ok(project_data) => println!("Project in YAML: {:?}", project_data.get_raw_project()),
+    Ok(project_data) => {
+      // println!("Project in YAML: {:?}", project_data.get_raw_project());
+
+      // println!("src dir: {:?}", project_data.get_src_dir());
+      // println!("src list: {:?}", project_data.src_files);
+
+      println!("header dir: {:?}", project_data.get_include_dir());
+      println!("header list: {:?}", project_data.include_files);
+
+      // println!("template-impl dir: {:?}", project_data.get_template_impl_dir());
+      // println!("template-impl list: {:?}", project_data.template_impl_files);
+    },
     Err(message) => exit_error_log(&message)
   }
 }
