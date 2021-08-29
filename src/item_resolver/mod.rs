@@ -1,5 +1,5 @@
 mod path_manipulation;
-use std::{fs::{self, DirEntry, read_dir}, io::{self, Result}, path::{Path, PathBuf}};
+use std::{borrow::Borrow, collections::{HashMap, HashSet}, fs::{self, DirEntry, read_dir}, io::{self, Result}, path::{Path, PathBuf}};
 
 use crate::{data_types::raw_types::*, item_resolver::path_manipulation::cleaned_path_str};
 
@@ -62,11 +62,19 @@ impl FinalProjectData {
     return finalized_project_data;
   }
 
-  fn get_include_prefix(&self) -> &str {
+  pub fn get_outputs(&self) -> &HashMap<String, RawCompiledItem> {
+    self.project.get_output()
+  }
+
+  pub fn get_project_root(&self) -> &str {
+    &self.project_root
+  }
+
+  pub fn get_include_prefix(&self) -> &str {
     return self.project.get_include_prefix();
   }
 
-  fn get_project_name(&self) -> &str {
+  pub fn get_project_name(&self) -> &str {
     return self.project.get_name();
   }
 
@@ -84,5 +92,12 @@ impl FinalProjectData {
 
   pub fn get_template_impl_dir(&self) -> &str {
     &self.template_impls_dir
+  }
+
+  pub fn get_languages(&self) -> HashSet<&str> {
+    self.project.languages
+      .iter()
+      .map(|str| str as &str)
+      .collect()
   }
 }

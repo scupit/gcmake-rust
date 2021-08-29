@@ -1,11 +1,14 @@
 mod data_types;
 mod item_resolver;
 mod logger;
+mod cmakelists_writer;
 
 use std::{fs, io, path::{Path, PathBuf}};
 use data_types::raw_types::*;
 use item_resolver::FinalProjectData;
 use logger::exit_error_log;
+
+use crate::cmakelists_writer::CMakeListsWriter;
 
 fn yaml_names_from_dir(project_root: &str) -> Vec<PathBuf> {
   let cmake_data_path: PathBuf = Path::new(project_root)
@@ -44,11 +47,22 @@ fn main() {
     Ok(project_data) => {
       // println!("Project in YAML: {:?}", project_data.get_raw_project());
 
+      println!("Project root: {:?}", project_data.get_project_root());
+      // println!("Include Dir: {:?}", project_data.get_include_dir());
+
+      match CMakeListsWriter::new(project_data) {
+        Ok(cmakelists_writer) => {
+          cmakelists_writer.write_cmakelists();
+        },
+        Err(err) => {
+          println!("{:?}", err);
+        }
+      }
       // println!("src dir: {:?}", project_data.get_src_dir());
       // println!("src list: {:?}", project_data.src_files);
 
-      println!("header dir: {:?}", project_data.get_include_dir());
-      println!("header list: {:?}", project_data.include_files);
+      // println!("header dir: {:?}", project_data.get_include_dir());
+      // println!("header list: {:?}", project_data.include_files);
 
       // println!("template-impl dir: {:?}", project_data.get_template_impl_dir());
       // println!("template-impl list: {:?}", project_data.template_impl_files);

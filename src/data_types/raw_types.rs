@@ -8,7 +8,7 @@ pub struct RawProject {
   include_prefix: String,
   description: String,
   version: String,
-  languages: HashSet<String>,
+  pub languages: HashSet<String>,
   supported_compilers: HashSet<CompilerSpecifier>,
   output: HashMap<String, RawCompiledItem>
 }
