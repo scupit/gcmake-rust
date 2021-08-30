@@ -94,10 +94,11 @@ impl FinalProjectData {
     &self.template_impls_dir
   }
 
-  pub fn get_languages(&self) -> HashSet<&str> {
-    self.project.languages
-      .iter()
-      .map(|str| str as &str)
-      .collect()
+  pub fn get_build_configs(&self) -> &BuildConfigMap {
+    self.project.get_build_configs()
+  }
+
+  pub fn get_language_info(&self) -> &LanguageMap {
+    self.project.get_langauge_info()
   }
 }

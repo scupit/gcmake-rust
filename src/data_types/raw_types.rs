@@ -1,6 +1,11 @@
 use std::collections::{HashMap, HashSet};
 use serde::{Serialize, Deserialize};
 
+pub type BuildTypeOptionMap = HashMap<BuildConfigCompilerSpecifier, BuildConfig>;
+pub type BuildConfigMap = HashMap<BuildType, BuildTypeOptionMap>;
+
+pub type LanguageMap = HashMap<ImplementationLanguage, LanguageConfig>;
+
 #[derive(Serialize, Deserialize, Debug)]
 pub struct RawProject {
   name: String,
@@ -8,8 +13,10 @@ pub struct RawProject {
   include_prefix: String,
   description: String,
   version: String,
-  pub languages: HashSet<String>,
+  languages: LanguageMap,
   supported_compilers: HashSet<CompilerSpecifier>,
+  default_build_type: BuildType,
+  build_configs: BuildConfigMap,
   output: HashMap<String, RawCompiledItem>
 }
 
@@ -25,7 +32,66 @@ impl RawProject {
   pub fn get_name(&self) -> &str {
     return &self.name;
   }
+
+  pub fn get_build_configs(&self) -> &BuildConfigMap {
+    &self.build_configs
+  }
+
+  pub fn get_langauge_info(&self) -> &LanguageMap {
+    &self.languages
+  }
 }
+
+#[derive(Serialize, Deserialize, Debug, Eq, PartialEq, Hash)]
+pub enum ImplementationLanguage {
+  C,
+  Cpp
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct LanguageConfig {
+  pub default_standard: i8,
+  allowed_standards: HashSet<i8>
+}
+
+impl LanguageConfig {
+  pub fn get_sorted_standards(&self) -> Vec<String> {
+    let mut temp: Vec<i8> = self.allowed_standards
+      .iter()
+      .map(|num| *num)
+      .collect();
+
+    temp.sort();
+
+    return temp
+      .iter()
+      .map(|standard_num| standard_num.to_string())
+      .collect()
+  }
+}
+
+#[derive(Serialize, Deserialize, Debug, Eq, PartialEq, Hash)]
+pub enum BuildType {
+  Debug,
+  Release,
+  SmallRelease
+}
+
+#[derive(Serialize, Deserialize, Debug, Eq, PartialEq, Hash)]
+pub enum BuildConfigCompilerSpecifier {
+  All,
+  GCC,
+  MSVC,
+  Clang
+}
+
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct BuildConfig {
+  pub flags: Option<HashSet<String>>,
+  pub defines: Option<HashSet<String>>
+}
+
 
 #[derive(Serialize, Deserialize, Debug)]
 pub enum CompiledItemType {

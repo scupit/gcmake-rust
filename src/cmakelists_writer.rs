@@ -1,6 +1,9 @@
-use std::{fmt::format, fs::File, io::{self, Write}, path::PathBuf};
+use std::{borrow::BorrowMut, fmt::format, fs::File, io::{self, Write}, path::PathBuf};
 
-use crate::{data_types::raw_types::CompiledItemType, item_resolver::FinalProjectData};
+use crate::{
+  data_types::raw_types::{CompiledItemType, ImplementationLanguage},
+  item_resolver::FinalProjectData
+};
 
 pub struct CMakeListsWriter {
   project_data: FinalProjectData,
@@ -19,24 +22,83 @@ impl CMakeListsWriter {
   }
 
   pub fn write_cmakelists(&self) -> io::Result<()> {
-    self.write_version_header()?;
     self.write_project_header()?;
+
+    self.write_section_header("Language Configuration")?;
+    self.write_language_config()?;
+
+    self.write_section_header("Outputs")?;
     self.write_outputs()?;
     Ok(())
   }
 
-  fn write_version_header(&self) -> io::Result<()> {
-    writeln!(&self.cmakelists_file, "cmake_minimum_required( VERSION 3.12 )")
-  }
-
   fn write_project_header(&self) -> io::Result<()> {
+    // CMake Version header
+    writeln!(&self.cmakelists_file, "cmake_minimum_required( VERSION 3.12 )")?;
+
+    // Project metadata
     writeln!(&self.cmakelists_file,
       "project( {} )",
       self.project_data.get_project_name()
     )?;
 
+    // TODO: Set Output directory configuration by config
+    // self.set_basic_var("", var_value)
+
     Ok(())
   }
+
+  fn write_language_config(&self) -> io::Result<()> {
+    for (lang, lang_config) in self.project_data.get_language_info() {
+      self.write_newline()?;
+
+      match *lang {
+        ImplementationLanguage::C => {
+          self.set_basic_var(
+            "CMAKE_C_STANDARD",
+            &format!("{} CACHE STRING \"C Compiler Standard\"", &lang_config.default_standard)
+          )?;
+
+          writeln!(&self.cmakelists_file,
+            "set_property( CACHE CMAKE_C_STANDARD PROPERTY STRINGS {} )",
+            lang_config.get_sorted_standards().join(" ")
+          )?;
+        }
+        ImplementationLanguage::Cpp => {
+          self.set_basic_var(
+            "CMAKE_CXX_STANDARD",
+            &format!("{} CACHE STRING \"CXX Compiler Standard\"", &lang_config.default_standard)
+          )?;
+
+          writeln!(&self.cmakelists_file,
+            "set_property( CACHE CMAKE_CXX_STANDARD PROPERTY STRINGS {} )",
+            lang_config.get_sorted_standards().join(" ")
+          )?;
+        }
+      }
+    }
+
+    self.write_newline()?;
+    self.set_basic_var("CMAKE_C_STANDARD_REQUIRED", "ON")?;
+    self.set_basic_var("CMAKE_C_EXTENSIONS", "OFF")?;
+
+    self.write_newline()?;
+    self.set_basic_var("CMAKE_CXX_STANDARD_REQUIRED", "ON")?;
+    self.set_basic_var("CMAKE_CXX_EXTENSIONS", "OFF")?;
+
+    Ok(())
+  }
+
+  // fn write_build_config(&self) -> io::Result<()> {
+  //   self.set_basic_var("CMAKE_C_STANDARD_REQUIRED", "ON")?;
+  //   self.set_basic_var("CMAKE_C_EXTENSIONS", "OFF")?;
+  //   self.write_newline();
+
+  //   self.set_basic_var("CMAKE_CXX_STANDARD_REQUIRED", "ON")?;
+  //   self.set_basic_var("CMAKE_CXX_EXTENSIONS", "OFF")?;
+    
+  //   Ok(())
+  // }
 
   fn set_basic_var(&self, var_name: &str, var_value: &str) -> io::Result<()> {
     writeln!(&self.cmakelists_file, "set( {} {} )", var_name, var_value)?;
@@ -65,6 +127,17 @@ impl CMakeListsWriter {
 
   fn write_newline(&self) -> io::Result<()> {
     writeln!(&self.cmakelists_file, "")
+  }
+
+  fn write_message(&self, message: &str) -> io::Result<()> {
+    writeln!(&self.cmakelists_file, "message( {} )", message)
+  }
+
+  fn write_section_header(&self, title: &str) -> io::Result<()> {
+    writeln!(&self.cmakelists_file, "\n# ////////////////////////////////////////////////////////////////////////////////")?;
+    writeln!(&self.cmakelists_file, "# {}", title)?;
+    writeln!(&self.cmakelists_file, "# ////////////////////////////////////////////////////////////////////////////////")?;
+    Ok(())
   }
 
   fn write_outputs(&self) -> io::Result<()> {
