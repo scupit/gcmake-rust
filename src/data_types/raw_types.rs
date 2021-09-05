@@ -17,6 +17,7 @@ pub struct RawProject {
   supported_compilers: HashSet<CompilerSpecifier>,
   default_build_type: BuildType,
   build_configs: BuildConfigMap,
+  global_defines: HashSet<String>,
   output: HashMap<String, RawCompiledItem>
 }
 
@@ -43,6 +44,10 @@ impl RawProject {
 
   pub fn get_langauge_info(&self) -> &LanguageMap {
     &self.languages
+  }
+
+  pub fn get_global_defines(&self) -> &HashSet<String> {
+    &self.global_defines
   }
 }
 

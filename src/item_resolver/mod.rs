@@ -105,4 +105,8 @@ impl FinalProjectData {
   pub fn get_language_info(&self) -> &LanguageMap {
     self.project.get_langauge_info()
   }
+
+  pub fn get_global_defines(&self) -> &HashSet<String> {
+    self.project.get_global_defines()
+  }
 }

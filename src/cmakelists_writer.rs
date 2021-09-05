@@ -1,9 +1,6 @@
-use std::{borrow::BorrowMut, fmt::format, fs::File, io::{self, Write}, path::PathBuf};
+use std::{borrow::BorrowMut, collections::HashSet, fmt::format, fs::File, io::{self, Write}, path::PathBuf};
 
-use crate::{
-  data_types::raw_types::{CompiledItemType, ImplementationLanguage},
-  item_resolver::FinalProjectData
-};
+use crate::{data_types::raw_types::{BuildConfigCompilerSpecifier, CompiledItemType, ImplementationLanguage}, item_resolver::FinalProjectData};
 
 pub struct CMakeListsWriter {
   project_data: FinalProjectData,
@@ -92,7 +89,64 @@ impl CMakeListsWriter {
     Ok(())
   }
 
+  fn write_def_list(&self, spacer: &'static str, items: &HashSet<String>) -> io::Result<()> {
+    writeln!(&self.cmakelists_file,
+      "{}add_compile_definitions(",
+      spacer
+    )?;
+ 
+    for def in items {
+      writeln!(&self.cmakelists_file,
+        "{}\t{}",
+        spacer,
+        def
+      )?;
+    }
+
+    writeln!(&self.cmakelists_file, "{})", spacer)?;
+
+    Ok(())
+  }
+
+  fn write_message(&self, message: &str) -> io::Result<()> {
+    writeln!(&self.cmakelists_file,
+      "message( \"{}\" )",
+      message
+    )?;
+    Ok(())
+  }
+
+  fn write_global_config_specific_defines(&self) -> io::Result<()> {
+    let mut any_config_written: bool = false;
+    let mut if_prefix: &str = "";
+
+    for (build_type, build_config) in self.project_data.get_build_configs() {
+      if let Some(all_compilers_config) = build_config.get(&BuildConfigCompilerSpecifier::All) {
+        if all_compilers_config.defines.is_some() {
+          writeln!(&self.cmakelists_file,
+            "{}if( \"${{CMAKE_BUILD_TYPE}}\" STREQUAL \"{}\" )",
+            if_prefix,
+            build_type.name_string()
+          )?;
+          
+          self.write_def_list("\t", all_compilers_config.defines.as_ref().unwrap())?;
+
+          if_prefix = "else";
+          any_config_written = true;
+        }
+      }
+    }
+
+    if any_config_written {
+      writeln!(&self.cmakelists_file, "endif()")?;
+    }
+
+    Ok(())
+  }
+
   fn write_build_config(&self) -> io::Result<()> {
+    self.write_def_list("", self.project_data.get_global_defines())?;
+
     let config_names: Vec<&'static str> = self.project_data.get_build_configs()
       .iter()
       .map(|(build_type, _)| build_type.name_string())
@@ -104,10 +158,15 @@ impl CMakeListsWriter {
     )?;
     self.write_newline()?;
 
+    self.write_message("Building configuration: ${CMAKE_BUILD_TYPE}")?;
+
     writeln!(&self.cmakelists_file,
-      "if( NOT ${{CMAKE_BUILD_TYPE}} )\n\tset( CMAKE_BUILD_TYPE \"{}\" CACHE STRING \"Project Build configuration\" FORCE )\nendif()",
+      "if( \"${{CMAKE_BUILD_TYPE}}\" STREQUAL \"\")\n\tset( CMAKE_BUILD_TYPE \"{}\" CACHE STRING \"Project Build configuration\" FORCE )\nendif()",
       self.project_data.get_default_build_config().name_string()
     )?;
+    self.write_newline()?;
+
+    self.write_global_config_specific_defines()?;
     
     Ok(())
   }
@@ -139,10 +198,6 @@ impl CMakeListsWriter {
 
   fn write_newline(&self) -> io::Result<()> {
     writeln!(&self.cmakelists_file, "")
-  }
-
-  fn write_message(&self, message: &str) -> io::Result<()> {
-    writeln!(&self.cmakelists_file, "message( {} )", message)
   }
 
   fn write_section_header(&self, title: &str) -> io::Result<()> {
