@@ -37,6 +37,10 @@ impl RawProject {
     &self.build_configs
   }
 
+  pub fn get_default_build_config(&self) -> &BuildType {
+    &self.default_build_type
+  }
+
   pub fn get_langauge_info(&self) -> &LanguageMap {
     &self.languages
   }
@@ -74,7 +78,19 @@ impl LanguageConfig {
 pub enum BuildType {
   Debug,
   Release,
-  SmallRelease
+  MinSizeRel,
+  RelWithDebInfo
+}
+
+impl BuildType {
+  pub fn name_string(&self) -> &'static str {
+    match *self {
+      Self::Debug => "Debug",
+      Self::Release => "Release",
+      Self::MinSizeRel => "MinSizeRel",
+      Self::RelWithDebInfo => "RelWithDebInfo"
+    }
+  }
 }
 
 #[derive(Serialize, Deserialize, Debug, Eq, PartialEq, Hash)]

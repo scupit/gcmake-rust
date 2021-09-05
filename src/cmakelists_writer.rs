@@ -27,6 +27,9 @@ impl CMakeListsWriter {
     self.write_section_header("Language Configuration")?;
     self.write_language_config()?;
 
+    self.write_section_header("Build Configurations")?;
+    self.write_build_config()?;
+
     self.write_section_header("Outputs")?;
     self.write_outputs()?;
     Ok(())
@@ -89,16 +92,25 @@ impl CMakeListsWriter {
     Ok(())
   }
 
-  // fn write_build_config(&self) -> io::Result<()> {
-  //   self.set_basic_var("CMAKE_C_STANDARD_REQUIRED", "ON")?;
-  //   self.set_basic_var("CMAKE_C_EXTENSIONS", "OFF")?;
-  //   self.write_newline();
+  fn write_build_config(&self) -> io::Result<()> {
+    let config_names: Vec<&'static str> = self.project_data.get_build_configs()
+      .iter()
+      .map(|(build_type, _)| build_type.name_string())
+      .collect();
 
-  //   self.set_basic_var("CMAKE_CXX_STANDARD_REQUIRED", "ON")?;
-  //   self.set_basic_var("CMAKE_CXX_EXTENSIONS", "OFF")?;
+    writeln!(&self.cmakelists_file,
+      "set_property( CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS {} )",
+      config_names.join(" ")
+    )?;
+    self.write_newline()?;
+
+    writeln!(&self.cmakelists_file,
+      "if( NOT ${{CMAKE_BUILD_TYPE}} )\n\tset( CMAKE_BUILD_TYPE \"{}\" CACHE STRING \"Project Build configuration\" FORCE )\nendif()",
+      self.project_data.get_default_build_config().name_string()
+    )?;
     
-  //   Ok(())
-  // }
+    Ok(())
+  }
 
   fn set_basic_var(&self, var_name: &str, var_value: &str) -> io::Result<()> {
     writeln!(&self.cmakelists_file, "set( {} {} )", var_name, var_value)?;
@@ -187,6 +199,8 @@ impl CMakeListsWriter {
 
     // Write the actual outputs
     for (output_name, output_data) in self.project_data.get_outputs() {
+      self.write_newline()?;
+
       // TODO: Write libraries
       match *output_data.get_output_type() {
         CompiledItemType::Executable => {
@@ -198,11 +212,18 @@ impl CMakeListsWriter {
             includes_var_name,
             template_impls_var_name
           )?;
+          self.write_newline()?;
 
           writeln!(&self.cmakelists_file,
             "target_include_directories( {}\n\tPRIVATE ${{{}}}\n)",
             output_name,
             &project_include_dir_varname
+          )?;
+          self.write_newline()?;
+
+          writeln!(&self.cmakelists_file,
+            "set_target_properties( {} PROPERTIES\n\tRUNTIME_OUTPUT_DIRECTORY ${{CMAKE_BINARY_DIR}}/bin/${{CMAKE_BUILD_TYPE}}\n)",
+            output_name
           )?;
         },
         _ => {

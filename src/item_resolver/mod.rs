@@ -98,6 +98,10 @@ impl FinalProjectData {
     self.project.get_build_configs()
   }
 
+  pub fn get_default_build_config(&self) -> &BuildType {
+    self.project.get_default_build_config()
+  }
+
   pub fn get_language_info(&self) -> &LanguageMap {
     self.project.get_langauge_info()
   }
