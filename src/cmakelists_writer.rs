@@ -1,6 +1,23 @@
-use std::{borrow::BorrowMut, collections::HashSet, fmt::format, fs::File, io::{self, Write}, path::PathBuf};
+use std::{borrow::BorrowMut, collections::{HashMap, HashSet}, fmt::format, fs::File, io::{self, Write}, path::PathBuf};
 
-use crate::{data_types::raw_types::{BuildConfigCompilerSpecifier, CompiledItemType, ImplementationLanguage}, item_resolver::FinalProjectData};
+use crate::{data_types::raw_types::{BuildConfig, BuildConfigCompilerSpecifier, BuildType, CompiledItemType, CompilerSpecifier, ImplementationLanguage}, item_resolver::FinalProjectData};
+
+fn defines_generator_string(build_type: &BuildType, build_config: &BuildConfig) -> Option<String> {
+  if let Some(defines) = build_config.defines.as_ref() {
+    let defines_list = defines.iter()
+      .map(|def| &def[..])
+      .collect::<Vec<&str>>()
+      .join(";");
+
+    Some(format!(
+      "\"$<$<CONFIG:{}>:{}>\"",
+      build_type.name_string(),
+      defines_list
+    ))
+  } else {
+    None
+  }
+}
 
 pub struct CMakeListsWriter {
   project_data: FinalProjectData,
@@ -25,7 +42,7 @@ impl CMakeListsWriter {
     self.write_language_config()?;
 
     self.write_section_header("Build Configurations")?;
-    self.write_build_config()?;
+    self.write_build_config_section()?;
 
     self.write_section_header("Outputs")?;
     self.write_outputs()?;
@@ -55,6 +72,7 @@ impl CMakeListsWriter {
       match *lang {
         ImplementationLanguage::C => {
           self.set_basic_var(
+            "",
             "CMAKE_C_STANDARD",
             &format!("{} CACHE STRING \"C Compiler Standard\"", &lang_config.default_standard)
           )?;
@@ -66,6 +84,7 @@ impl CMakeListsWriter {
         }
         ImplementationLanguage::Cpp => {
           self.set_basic_var(
+            "",
             "CMAKE_CXX_STANDARD",
             &format!("{} CACHE STRING \"CXX Compiler Standard\"", &lang_config.default_standard)
           )?;
@@ -79,12 +98,12 @@ impl CMakeListsWriter {
     }
 
     self.write_newline()?;
-    self.set_basic_var("CMAKE_C_STANDARD_REQUIRED", "ON")?;
-    self.set_basic_var("CMAKE_C_EXTENSIONS", "OFF")?;
+    self.set_basic_var("", "CMAKE_C_STANDARD_REQUIRED", "ON")?;
+    self.set_basic_var("", "CMAKE_C_EXTENSIONS", "OFF")?;
 
     self.write_newline()?;
-    self.set_basic_var("CMAKE_CXX_STANDARD_REQUIRED", "ON")?;
-    self.set_basic_var("CMAKE_CXX_EXTENSIONS", "OFF")?;
+    self.set_basic_var("", "CMAKE_CXX_STANDARD_REQUIRED", "ON")?;
+    self.set_basic_var("", "CMAKE_CXX_EXTENSIONS", "OFF")?;
 
     Ok(())
   }
@@ -108,43 +127,137 @@ impl CMakeListsWriter {
     Ok(())
   }
 
-  fn write_message(&self, message: &str) -> io::Result<()> {
+  fn write_message(&self, spacer: &str, message: &str) -> io::Result<()> {
     writeln!(&self.cmakelists_file,
-      "message( \"{}\" )",
+      "{}message( \"{}\" )",
+      spacer,
       message
     )?;
     Ok(())
   }
 
   fn write_global_config_specific_defines(&self) -> io::Result<()> {
-    let mut any_config_written: bool = false;
-    let mut if_prefix: &str = "";
+    let mut compiler_all_config_map: HashMap<&BuildType, &BuildConfig> = HashMap::new();
 
     for (build_type, build_config) in self.project_data.get_build_configs() {
       if let Some(all_compilers_config) = build_config.get(&BuildConfigCompilerSpecifier::All) {
-        if all_compilers_config.defines.is_some() {
-          writeln!(&self.cmakelists_file,
-            "{}if( \"${{CMAKE_BUILD_TYPE}}\" STREQUAL \"{}\" )",
-            if_prefix,
-            build_type.name_string()
-          )?;
-          
-          self.write_def_list("\t", all_compilers_config.defines.as_ref().unwrap())?;
-
-          if_prefix = "else";
-          any_config_written = true;
-        }
+        compiler_all_config_map.insert(build_type, all_compilers_config);
       }
     }
 
-    if any_config_written {
-      writeln!(&self.cmakelists_file, "endif()")?;
-    }
+    let defines_list: HashSet<String> = compiler_all_config_map.iter()
+      .map(|(build_type, build_config)| defines_generator_string(build_type, build_config))
+      .filter(|def| def.is_some())
+      .map(|def| def.unwrap())
+      .collect();
+
+    self.write_def_list("", &defines_list)?;
 
     Ok(())
   }
 
-  fn write_build_config(&self) -> io::Result<()> {
+  fn write_build_configs(&self) -> io::Result<()> {
+    /*
+      Compiler
+        - <Build/Release...>
+          - flags
+          - defines
+    */
+
+    let mut simplified_map: HashMap<CompilerSpecifier, HashMap<&BuildType, &BuildConfig>> = HashMap::new();
+
+    for (build_type, build_config) in self.project_data.get_build_configs() {
+      for (build_config_compiler, specific_config) in build_config {
+        let converted_compiler_specifier: CompilerSpecifier = match *build_config_compiler {
+          BuildConfigCompilerSpecifier::GCC => CompilerSpecifier::GCC,
+          BuildConfigCompilerSpecifier::Clang => CompilerSpecifier::Clang,
+          BuildConfigCompilerSpecifier::MSVC => CompilerSpecifier::MSVC,
+          BuildConfigCompilerSpecifier::All => continue
+        };
+
+        if simplified_map.get(&converted_compiler_specifier).is_none() {
+          simplified_map.insert(converted_compiler_specifier, HashMap::new());
+        }
+
+        simplified_map.get_mut(&converted_compiler_specifier)
+          .unwrap()
+          .insert(build_type, specific_config);
+      }
+    }
+
+    let mut has_written_a_config: bool = false;
+    let mut if_prefix: &str = "";
+
+    for (compiler, config_map) in &simplified_map {
+      if !config_map.is_empty() {
+        // TODO: Make these strings global, otherwise a simple change to any name could mess all these up.
+        let using_compiler_varname: &str = match compiler {
+          CompilerSpecifier::GCC => "is_using_GCC",
+          CompilerSpecifier::Clang => "is_using_Clang",
+          CompilerSpecifier::MSVC => "is_using_MSVC"
+        };
+
+        writeln!(&self.cmakelists_file,
+          "{}if( \"${{{}}}\" )",
+          if_prefix,
+          using_compiler_varname 
+        )?;
+
+        for (config_name, build_config) in config_map {
+          // Write flags per compiler for each config.
+          let mut flags_string: String = build_config.flags
+            .as_ref()
+            .unwrap_or(&HashSet::new())
+            .iter()
+            .map(|flag| &flag[..])
+            .collect::<Vec<&str>>()
+            .join(" ");
+          
+          flags_string = format!("\"{}\" ", flags_string);
+
+          self.set_basic_var("\t",
+            &format!("CMAKE_C_FLAGS_{}", config_name.name_string().to_uppercase()),
+            &flags_string
+          )?;
+
+          self.set_basic_var("\t",
+            &format!("CMAKE_CXX_FLAGS_{}", config_name.name_string().to_uppercase()),
+            &flags_string
+          )?;
+        }
+
+          
+        let definitions_generator_string: HashSet<String> = config_map
+          .iter()
+          .map(|(build_type, build_config)| defines_generator_string(build_type, build_config) )
+          .filter(|def| def.is_some())
+          .map(|def| def.unwrap())
+          .collect();
+
+        self.write_newline()?;
+        self.write_def_list("\t", &definitions_generator_string)?;
+
+        has_written_a_config = true;
+        if_prefix = "else";
+      }
+    }
+
+    if has_written_a_config {
+      writeln!(&self.cmakelists_file, "endif()")?;
+    }
+    Ok(())
+  }
+
+  fn write_build_config_section(&self) -> io::Result<()> {
+    self.set_basic_var("", "is_using_GCC", "${CMAKE_C_COMPILER_ID} STREQUAL \"GNU\" OR ${CMAKE_CXX_COMPILER_ID} STREQUAL \"GNU\"")?;
+    self.set_basic_var("", "is_using_Clang", " ${CMAKE_C_COMPILER_ID} MATCHES \"Clang\" OR ${CMAKE_CXX_COMPILER_ID} MATCHES \"Clang\"")?;
+    self.set_basic_var("", "is_using_MSVC", "${MSVC}")?;
+
+    // We will use configuration specific values to populate these later. However, they must be set
+    // to empty because the configuration specific values only append to these variables.
+    self.set_basic_var("", "CMAKE_C_FLAGS", "")?;
+    self.set_basic_var("", "CMAKE_CXX_FLAGS", "")?;
+
     self.write_def_list("", self.project_data.get_global_defines())?;
 
     let config_names: Vec<&'static str> = self.project_data.get_build_configs()
@@ -153,26 +266,34 @@ impl CMakeListsWriter {
       .collect();
 
     writeln!(&self.cmakelists_file,
-      "set_property( CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS {} )",
-      config_names.join(" ")
+      "\nif( NOT \"${{is_using_MSVC}}\" )"
     )?;
-    self.write_newline()?;
-
-    self.write_message("Building configuration: ${CMAKE_BUILD_TYPE}")?;
 
     writeln!(&self.cmakelists_file,
-      "if( \"${{CMAKE_BUILD_TYPE}}\" STREQUAL \"\")\n\tset( CMAKE_BUILD_TYPE \"{}\" CACHE STRING \"Project Build configuration\" FORCE )\nendif()",
+      "\tset_property( CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS {} )",
+      config_names.join(" ")
+    )?;
+
+    writeln!(&self.cmakelists_file,
+      "\n\tif( \"${{CMAKE_BUILD_TYPE}}\" STREQUAL \"\")\n\t\tset( CMAKE_BUILD_TYPE \"{}\" CACHE STRING \"Project Build configuration\" FORCE )\n\tendif()",
       self.project_data.get_default_build_config().name_string()
     )?;
+
+    self.write_newline()?;
+    self.write_message("\t", "Building configuration: ${CMAKE_BUILD_TYPE}")?;
+    writeln!(&self.cmakelists_file, "endif()")?;
+
     self.write_newline()?;
 
     self.write_global_config_specific_defines()?;
+    self.write_newline()?;
+    self.write_build_configs()?;
     
     Ok(())
   }
 
-  fn set_basic_var(&self, var_name: &str, var_value: &str) -> io::Result<()> {
-    writeln!(&self.cmakelists_file, "set( {} {} )", var_name, var_value)?;
+  fn set_basic_var(&self, spacer: &str, var_name: &str, var_value: &str) -> io::Result<()> {
+    writeln!(&self.cmakelists_file, "{}set( {} {} )", spacer, var_name, var_value)?;
     Ok(())
   }
 
@@ -223,10 +344,10 @@ impl CMakeListsWriter {
 
     self.write_newline()?;
 
-    self.set_basic_var(&src_root_varname, &format!("${{CMAKE_CURRENT_SOURCE_DIR}}/src/{}", include_prefix))?;
-    self.set_basic_var(&include_root_varname, &format!("${{CMAKE_CURRENT_SOURCE_DIR}}/include/{}", include_prefix))?;
-    self.set_basic_var(&template_impls_root_varname, &format!("${{CMAKE_CURRENT_SOURCE_DIR}}/template_impls/{}", include_prefix))?;
-    self.set_basic_var(&project_include_dir_varname, "${CMAKE_CURRENT_SOURCE_DIR}/include")?;
+    self.set_basic_var("", &src_root_varname, &format!("${{CMAKE_CURRENT_SOURCE_DIR}}/src/{}", include_prefix))?;
+    self.set_basic_var("", &include_root_varname, &format!("${{CMAKE_CURRENT_SOURCE_DIR}}/include/{}", include_prefix))?;
+    self.set_basic_var("", &template_impls_root_varname, &format!("${{CMAKE_CURRENT_SOURCE_DIR}}/template_impls/{}", include_prefix))?;
+    self.set_basic_var("", &project_include_dir_varname, "${CMAKE_CURRENT_SOURCE_DIR}/include")?;
 
     self.write_newline()?;
 

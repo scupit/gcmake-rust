@@ -121,7 +121,7 @@ pub enum CompiledItemType {
   SharedLib
 }
 
-#[derive(Serialize, Deserialize, Hash, Debug, Eq, PartialEq, PartialOrd, Ord)]
+#[derive(Serialize, Deserialize, Hash, Debug, Eq, PartialEq, PartialOrd, Ord, Clone, Copy)]
 pub enum CompilerSpecifier {
   GCC,
   MSVC,
