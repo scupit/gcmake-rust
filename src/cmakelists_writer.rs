@@ -224,6 +224,7 @@ impl CMakeListsWriter {
             &format!("CMAKE_CXX_FLAGS_{}", config_name.name_string().to_uppercase()),
             &flags_string
           )?;
+          self.write_newline()?;
         }
 
           
@@ -234,7 +235,6 @@ impl CMakeListsWriter {
           .map(|def| def.unwrap())
           .collect();
 
-        self.write_newline()?;
         self.write_def_list("\t", &definitions_generator_string)?;
 
         has_written_a_config = true;
@@ -249,14 +249,17 @@ impl CMakeListsWriter {
   }
 
   fn write_build_config_section(&self) -> io::Result<()> {
+    self.write_newline()?;
     self.set_basic_var("", "is_using_GCC", "${CMAKE_C_COMPILER_ID} STREQUAL \"GNU\" OR ${CMAKE_CXX_COMPILER_ID} STREQUAL \"GNU\"")?;
     self.set_basic_var("", "is_using_Clang", " ${CMAKE_C_COMPILER_ID} MATCHES \"Clang\" OR ${CMAKE_CXX_COMPILER_ID} MATCHES \"Clang\"")?;
     self.set_basic_var("", "is_using_MSVC", "${MSVC}")?;
+    self.write_newline()?;
 
     // We will use configuration specific values to populate these later. However, they must be set
     // to empty because the configuration specific values only append to these variables.
     self.set_basic_var("", "CMAKE_C_FLAGS", "")?;
     self.set_basic_var("", "CMAKE_CXX_FLAGS", "")?;
+    self.write_newline()?;
 
     self.write_def_list("", self.project_data.get_global_defines())?;
 
@@ -357,6 +360,7 @@ impl CMakeListsWriter {
       &src_root_varname,
       &self.project_data.src_files
     )?;
+    self.write_newline()?;
 
     self.set_file_collection(
       &includes_var_name,
@@ -364,6 +368,7 @@ impl CMakeListsWriter {
       &include_root_varname,
       &self.project_data.include_files
     )?;
+    self.write_newline()?;
 
     self.set_file_collection(
       &template_impls_var_name,
@@ -372,10 +377,12 @@ impl CMakeListsWriter {
       &self.project_data.template_impl_files
     )?;
 
-
     // Write the actual outputs
     for (output_name, output_data) in self.project_data.get_outputs() {
-      self.write_newline()?;
+      writeln!(&self.cmakelists_file,
+        "\n# ========== {} ==========",
+        output_name
+      )?;
 
       // TODO: Write libraries
       match *output_data.get_output_type() {
