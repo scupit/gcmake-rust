@@ -1,6 +1,15 @@
 use std::{borrow::BorrowMut, collections::{HashMap, HashSet}, fmt::format, fs::File, io::{self, Write}, path::PathBuf};
 
-use crate::{data_types::raw_types::{BuildConfig, BuildConfigCompilerSpecifier, BuildType, CompiledItemType, CompilerSpecifier, ImplementationLanguage}, item_resolver::FinalProjectData};
+use crate::{data_types::raw_types::{BuildConfig, BuildConfigCompilerSpecifier, BuildType, CompiledItemType, CompilerSpecifier, ImplementationLanguage}, item_resolver::{FinalProjectData, FinalProjectType}};
+
+pub fn write_cmakelists(project_data: &FinalProjectData) -> io::Result<()> {
+  for project in project_data.get_subprojects() {
+    write_cmakelists(project)?
+  }
+
+  CMakeListsWriter::new(project_data)?.write_cmakelists()?;
+  Ok(())
+}
 
 fn defines_generator_string(build_type: &BuildType, build_config: &BuildConfig) -> Option<String> {
   if let Some(defines) = build_config.defines.as_ref() {
@@ -19,30 +28,39 @@ fn defines_generator_string(build_type: &BuildType, build_config: &BuildConfig) 
   }
 }
 
-pub struct CMakeListsWriter {
-  project_data: FinalProjectData,
+struct CMakeListsWriter<'a> {
+  project_data: &'a FinalProjectData,
   cmakelists_file: File
 }
 
-impl CMakeListsWriter {
-  pub fn new(project_data: FinalProjectData) -> io::Result<Self> {
+impl<'a> CMakeListsWriter<'a> {
+  fn new(project_data: &'a FinalProjectData) -> io::Result<Self> {
     let file_name: String = format!("{}/CMakeLists.txt", project_data.get_project_root());
     let cmakelists_file: File = File::create(file_name)?;
 
-    Ok(CMakeListsWriter {
+    Ok(Self {
       project_data,
       cmakelists_file
     })
   }
 
-  pub fn write_cmakelists(&self) -> io::Result<()> {
+  fn write_cmakelists(&self) -> io::Result<()> {
     self.write_project_header()?;
 
-    self.write_section_header("Language Configuration")?;
-    self.write_language_config()?;
+    if let FinalProjectType::Full = self.project_data.get_project_type() {
+      self.write_section_header("Language Configuration")?;
+      self.write_language_config()?;
 
-    self.write_section_header("Build Configurations")?;
-    self.write_build_config_section()?;
+      self.write_section_header("Build Configurations")?;
+      self.write_build_config_section()?;
+    }
+
+    // NOTE: All subprojects must be added after build configuration in order to
+    // ensure they inherit all build configuration options.
+    if self.project_data.has_subprojects() {
+      self.write_section_header("Import Subprojects")?;
+      self.write_subproject_includes()?;
+    }
 
     self.write_section_header("Outputs")?;
     self.write_outputs()?;
@@ -61,6 +79,17 @@ impl CMakeListsWriter {
 
     // TODO: Set Output directory configuration by config
     // self.set_basic_var("", var_value)
+
+    Ok(())
+  }
+
+  fn write_subproject_includes(&self) -> io::Result<()> {
+    for subproject_name in self.project_data.get_subproject_names() {
+      writeln!( &self.cmakelists_file,
+        "add_subdirectory( ${{CMAKE_CURRENT_SOURCE_DIR}}/subprojects/{} )",
+        subproject_name
+      )?;
+    }
 
     Ok(())
   }
@@ -191,16 +220,16 @@ impl CMakeListsWriter {
     for (compiler, config_map) in &simplified_map {
       if !config_map.is_empty() {
         // TODO: Make these strings global, otherwise a simple change to any name could mess all these up.
-        let using_compiler_varname: &str = match compiler {
-          CompilerSpecifier::GCC => "is_using_GCC",
-          CompilerSpecifier::Clang => "is_using_Clang",
-          CompilerSpecifier::MSVC => "is_using_MSVC"
+        let compiler_check_string: &str = match compiler {
+          CompilerSpecifier::GCC => "${CMAKE_C_COMPILER_ID} MATCHES \"GNU\" OR ${CMAKE_CXX_COMPILER_ID} MATCHES \"GNU\"",
+          CompilerSpecifier::Clang => "${CMAKE_C_COMPILER_ID} MATCHES \"Clang\" OR ${CMAKE_CXX_COMPILER_ID} MATCHES \"MATCHES\"",
+          CompilerSpecifier::MSVC => "${MSVC}"
         };
 
         writeln!(&self.cmakelists_file,
-          "{}if( \"${{{}}}\" )",
+          "{}if( {} )",
           if_prefix,
-          using_compiler_varname 
+          compiler_check_string 
         )?;
 
         for (config_name, build_config) in config_map {
@@ -250,10 +279,6 @@ impl CMakeListsWriter {
 
   fn write_build_config_section(&self) -> io::Result<()> {
     self.write_newline()?;
-    self.set_basic_var("", "is_using_GCC", "${CMAKE_C_COMPILER_ID} STREQUAL \"GNU\" OR ${CMAKE_CXX_COMPILER_ID} STREQUAL \"GNU\"")?;
-    self.set_basic_var("", "is_using_Clang", " ${CMAKE_C_COMPILER_ID} MATCHES \"Clang\" OR ${CMAKE_CXX_COMPILER_ID} MATCHES \"Clang\"")?;
-    self.set_basic_var("", "is_using_MSVC", "${MSVC}")?;
-    self.write_newline()?;
 
     // We will use configuration specific values to populate these later. However, they must be set
     // to empty because the configuration specific values only append to these variables.
@@ -268,8 +293,10 @@ impl CMakeListsWriter {
       .map(|(build_type, _)| build_type.name_string())
       .collect();
 
+    writeln!(&self.cmakelists_file, "\nget_property(isMultiConfigGenerator GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)")?;
+
     writeln!(&self.cmakelists_file,
-      "\nif( NOT \"${{is_using_MSVC}}\" )"
+      "\nif( NOT isMultiConfigGenerator )"
     )?;
 
     writeln!(&self.cmakelists_file,

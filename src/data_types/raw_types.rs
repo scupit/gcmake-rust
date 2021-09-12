@@ -18,10 +18,15 @@ pub struct RawProject {
   default_build_type: BuildType,
   build_configs: BuildConfigMap,
   global_defines: HashSet<String>,
-  output: HashMap<String, RawCompiledItem>
+  output: HashMap<String, RawCompiledItem>,
+  subprojects: Option<HashSet<String>>
 }
 
 impl RawProject {
+  pub fn get_subproject_dirnames(&self) -> &Option<HashSet<String>> {
+    &self.subprojects
+  }
+
   pub fn get_include_prefix(&self) -> &str {
     return &self.include_prefix;
   }
@@ -48,6 +53,37 @@ impl RawProject {
 
   pub fn get_global_defines(&self) -> &HashSet<String> {
     &self.global_defines
+  }
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct RawSubproject {
+  name: String,
+  // If possible, should be the same as the project name
+  include_prefix: String,
+  description: String,
+  version: String,
+  // global_defines: HashSet<String>,
+  output: HashMap<String, RawCompiledItem>,
+  subprojects: Option<HashSet<String>>
+}
+
+impl Into<RawProject> for RawSubproject {
+  fn into(self) -> RawProject {
+    RawProject {
+      name: self.name,
+      // If possible, should be the same as the project name
+      include_prefix: self.include_prefix,
+      description: self.description,
+      version: self.version,
+      languages: HashMap::new(),
+      supported_compilers: HashSet::new(),
+      default_build_type: BuildType::Debug,
+      build_configs: HashMap::new(),
+      global_defines: HashSet::new(),
+      output: self.output,
+      subprojects: self.subprojects
+    }
   }
 }
 
