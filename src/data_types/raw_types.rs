@@ -7,19 +7,20 @@ pub type BuildConfigMap = HashMap<BuildType, BuildTypeOptionMap>;
 pub type LanguageMap = HashMap<ImplementationLanguage, LanguageConfig>;
 
 #[derive(Serialize, Deserialize, Debug)]
+#[serde(deny_unknown_fields)]
 pub struct RawProject {
-  name: String,
+  pub name: String,
   // If possible, should be the same as the project name
-  include_prefix: String,
-  description: String,
-  version: String,
-  languages: LanguageMap,
-  supported_compilers: HashSet<CompilerSpecifier>,
-  default_build_type: BuildType,
-  build_configs: BuildConfigMap,
-  global_defines: HashSet<String>,
-  output: HashMap<String, RawCompiledItem>,
-  subprojects: Option<HashSet<String>>
+  pub include_prefix: String,
+  pub description: String,
+  pub version: String,
+  pub languages: LanguageMap,
+  pub supported_compilers: HashSet<CompilerSpecifier>,
+  pub default_build_type: BuildType,
+  pub global_defines: Option<HashSet<String>>,
+  pub output: HashMap<String, RawCompiledItem>,
+  pub subprojects: Option<HashSet<String>>,
+  pub build_configs: BuildConfigMap,
 }
 
 impl RawProject {
@@ -51,7 +52,7 @@ impl RawProject {
     &self.languages
   }
 
-  pub fn get_global_defines(&self) -> &HashSet<String> {
+  pub fn get_global_defines(&self) -> &Option<HashSet<String>> {
     &self.global_defines
   }
 }
@@ -80,7 +81,7 @@ impl Into<RawProject> for RawSubproject {
       supported_compilers: HashSet::new(),
       default_build_type: BuildType::Debug,
       build_configs: HashMap::new(),
-      global_defines: HashSet::new(),
+      global_defines: None,
       output: self.output,
       subprojects: self.subprojects
     }
@@ -96,7 +97,7 @@ pub enum ImplementationLanguage {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct LanguageConfig {
   pub default_standard: i8,
-  allowed_standards: HashSet<i8>
+  pub allowed_standards: HashSet<i8>
 }
 
 impl LanguageConfig {
@@ -166,8 +167,8 @@ pub enum CompilerSpecifier {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct RawCompiledItem {
-  output_type: CompiledItemType,
-  entry_file: String
+  pub output_type: CompiledItemType,
+  pub entry_file: String
 }
 
 impl RawCompiledItem {

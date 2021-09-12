@@ -286,7 +286,9 @@ impl<'a> CMakeListsWriter<'a> {
     self.set_basic_var("", "CMAKE_CXX_FLAGS", "")?;
     self.write_newline()?;
 
-    self.write_def_list("", self.project_data.get_global_defines())?;
+    if let Some(def_list) = self.project_data.get_global_defines() {
+      self.write_def_list("", def_list)?;
+    }
 
     let config_names: Vec<&'static str> = self.project_data.get_build_configs()
       .iter()

@@ -206,7 +206,7 @@ impl FinalProjectData {
     self.project.get_langauge_info()
   }
 
-  pub fn get_global_defines(&self) -> &HashSet<String> {
+  pub fn get_global_defines(&self) -> &Option<HashSet<String>> {
     self.project.get_global_defines()
   }
   
