@@ -15,21 +15,35 @@ use project_generator::create_project_at;
 
 fn main() {
   let opts: Opts = Opts::parse();
-  let project_root_dir = &opts.project_root;
+
+  let mut project_root_dir: String = opts.project_root;
+  let mut should_generate_cmakelists: bool = true;
 
   if let Some(subcommand) = opts.subcommand {
     match subcommand {
       SubCommand::New(command) => match create_project_at(&command.new_project_root) {
-        Ok(_) => println!("Project created successfully"),
+        Ok(maybe_project) => match maybe_project {
+          Some(raw_project) => {
+            println!("Project {} created successfully", raw_project.get_name());
+            project_root_dir = raw_project.name;
+          },
+          None => {
+            println!("Project not created. Skipping CMakeLists generation.");
+            should_generate_cmakelists = false;
+          }
+        },
         Err(err) => println!("{}", err)
       }
     }
   }
-  else {
-    match FinalProjectData::new(project_root_dir) {
+
+  if should_generate_cmakelists {
+    println!("Beginning CMakeLists generation...");
+
+    match FinalProjectData::new(&project_root_dir) {
       Ok(project_data) => {
         match write_cmakelists(&project_data) {
-          Ok(_)=> println!("CMakeLists all written successfully!"),
+          Ok(_) => println!("CMakeLists all written successfully!"),
           Err(err) => println!("{:?}", err)
         }
       },

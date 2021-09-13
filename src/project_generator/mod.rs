@@ -2,9 +2,9 @@ mod c_file_generation;
 mod cpp_file_generation;
 mod default_project_config;
 
-use std::{collections::{HashMap, HashSet}, error::Error, fs::{File, create_dir, remove_dir_all}, io::{self, ErrorKind, stdin}, iter::FromIterator, path::Path};
+use std::{collections::{HashMap, HashSet}, error::Error, fs::{File, create_dir, remove_dir_all}, io::{self, ErrorKind, Write, stdin}, iter::FromIterator, path::Path};
 
-use crate::project_generator::default_project_config::{MainFileLanguage, ProjectType, get_default_project_config};
+use crate::{data_types::raw_types::RawProject, project_generator::default_project_config::{MainFileLanguage, ProjectType, get_default_project_config}};
 
 const SRC_DIR: &'static str = "src";
 const INCLUDE_DIR: &'static str = "include";
@@ -66,7 +66,7 @@ impl PromptResult {
   }
 }
 
-pub fn create_project_at(new_project_root: &str) -> io::Result<()> {
+pub fn create_project_at(new_project_root: &str) -> io::Result<Option<RawProject>> {
   let project_root = Path::new(new_project_root);
   let mut should_create_project: bool = true;
 
@@ -75,7 +75,10 @@ pub fn create_project_at(new_project_root: &str) -> io::Result<()> {
 
     match prompt_until_boolean(&prompt)? {
       PromptResult::No => should_create_project = false,
-      // PromptResult::Yes => remove_dir_all(projec)
+      PromptResult::Yes => {
+        remove_dir_all(project_root)?;
+        println!("Directory removed. Generating new project...");
+      },
       _ => ()
     }
   }
@@ -111,10 +114,7 @@ pub fn create_project_at(new_project_root: &str) -> io::Result<()> {
         match value.as_str() {
           "1" | "C" => true,
           "2" | "C++" => true,
-          unmatched_value => {
-            println!("ERR: Not matched: {}", unmatched_value);
-            false
-          }
+          _ => false
         }
       } else { false }
     )?
@@ -140,15 +140,18 @@ pub fn create_project_at(new_project_root: &str) -> io::Result<()> {
     }
 
     // TODO: Write main file
+    return Ok(Some(project_info));
   }
 
-  Ok(())
+  Ok(None)
 }
 
 fn prompt_once(prompt: &str) -> io::Result<PromptResult> {
   let mut buffer = String::new();
 
-  println!("{}", prompt);
+  print!("{}", prompt);
+  io::stdout().flush()?;
+
   stdin().read_line(&mut buffer)?;
   return Ok(PromptResult::from_str(buffer.trim()))
 }
@@ -158,12 +161,18 @@ fn prompt_until<T>(prompt: &str, predicate: T) -> io::Result<PromptResult>
 {
   let mut buffer = String::new();
 
-  println!("{}", prompt);
+  print!("{}", prompt);
+  io::stdout().flush()?;
+
   stdin().read_line(&mut buffer)?;
   let mut result: PromptResult = PromptResult::from_str(buffer.trim());
 
   while !predicate(&result) {
-    println!("{}", prompt);
+    buffer.clear();
+
+    print!("{}", prompt);
+    io::stdout().flush()?;
+
     stdin().read_line(&mut buffer)?;
     result = PromptResult::from_str(buffer.trim());
   }
