@@ -4,7 +4,7 @@ mod default_project_config;
 
 use std::{collections::{HashMap, HashSet}, error::Error, fs::{File, create_dir, remove_dir_all}, io::{self, ErrorKind, Write, stdin}, iter::FromIterator, path::Path};
 
-use crate::{data_types::raw_types::RawProject, project_generator::default_project_config::{MainFileLanguage, ProjectType, get_default_project_config}};
+use crate::{data_types::raw_types::RawProject, project_generator::{c_file_generation::generate_c_main, cpp_file_generation::generate_cpp_main, default_project_config::{MainFileLanguage, ProjectType, get_default_project_config, main_file_name}}};
 
 const SRC_DIR: &'static str = "src";
 const INCLUDE_DIR: &'static str = "include";
@@ -127,9 +127,9 @@ pub fn create_project_at(new_project_root: &str) -> io::Result<Option<RawProject
     let project_info = get_default_project_config(
       &project_root,
       &include_prefix,
-      lang_selection,
+      &lang_selection,
       // TODO: Prompt for project type
-      ProjectType::Executable
+      &ProjectType::Executable
     );
 
     let cmake_data_file = File::create(format!("{}/cmake_data.yaml", project_root.to_str().unwrap()))?;
@@ -140,6 +140,17 @@ pub fn create_project_at(new_project_root: &str) -> io::Result<Option<RawProject
     }
 
     // TODO: Write main file
+
+    let mut main_file_path = project_root.to_owned();
+    main_file_path.push(main_file_name(&lang_selection));
+
+    match lang_selection {
+      MainFileLanguage::C => generate_c_main(main_file_path)?,
+      MainFileLanguage::Cpp => generate_cpp_main(main_file_path)?
+    }
+
+    println!("Generated {}", main_file_name(&lang_selection));
+
     return Ok(Some(project_info));
   }
 

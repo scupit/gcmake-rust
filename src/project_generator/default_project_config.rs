@@ -1,6 +1,7 @@
 use std::{collections::{HashMap, HashSet}, error::Error, fs::create_dir, io::{self, stdin}, iter::FromIterator, path::{Path, PathBuf}};
 use crate::{data_types::raw_types::{BuildConfig, BuildConfigCompilerSpecifier, BuildType, CompiledItemType, CompilerSpecifier, ImplementationLanguage, LanguageConfig, RawCompiledItem, RawProject}, main};
 
+#[derive(Clone, Copy)]
 pub enum MainFileLanguage {
   C,
   Cpp
@@ -14,8 +15,8 @@ pub enum ProjectType {
 pub fn get_default_project_config(
   project_root: &Path,
   include_prefix: &str,
-  project_lang: MainFileLanguage,
-  project_type: ProjectType
+  project_lang: &MainFileLanguage,
+  project_type: &ProjectType
 ) -> RawProject {
 
   RawProject {
@@ -40,7 +41,7 @@ pub fn get_default_project_config(
       ]),
       output: HashMap::from_iter([
         (String::from("Main"), RawCompiledItem {
-          entry_file: main_file_name(project_lang),
+          entry_file: String::from(main_file_name(&project_lang)),
           output_type: match project_type {
             ProjectType::Executable => CompiledItemType::Executable,
             // TODO: Allow the library type to be selected once type selection is implemented
@@ -124,10 +125,10 @@ pub fn get_default_project_config(
     }
 }
 
-fn main_file_name(project_lang: MainFileLanguage) -> String {
-  return match project_lang {
-    MainFileLanguage::C => String::from("main.c"),
-    MainFileLanguage::Cpp => String::from("main.cpp")
+pub fn main_file_name(project_lang: &MainFileLanguage) -> &'static str {
+  return match *project_lang {
+    MainFileLanguage::C => "main.c",
+    MainFileLanguage::Cpp => "main.cpp"
   }
 }
 

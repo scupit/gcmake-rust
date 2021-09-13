@@ -222,7 +222,7 @@ impl<'a> CMakeListsWriter<'a> {
         // TODO: Make these strings global, otherwise a simple change to any name could mess all these up.
         let compiler_check_string: &str = match compiler {
           CompilerSpecifier::GCC => "${CMAKE_C_COMPILER_ID} MATCHES \"GNU\" OR ${CMAKE_CXX_COMPILER_ID} MATCHES \"GNU\"",
-          CompilerSpecifier::Clang => "${CMAKE_C_COMPILER_ID} MATCHES \"Clang\" OR ${CMAKE_CXX_COMPILER_ID} MATCHES \"MATCHES\"",
+          CompilerSpecifier::Clang => "${CMAKE_C_COMPILER_ID} MATCHES \"Clang\" OR ${CMAKE_CXX_COMPILER_ID} MATCHES \"Clang\"",
           CompilerSpecifier::MSVC => "${MSVC}"
         };
 
