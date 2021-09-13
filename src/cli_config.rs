@@ -19,10 +19,18 @@ pub enum SubCommand {
     New(CommandNew)
 }
 
-/// Noice other one
+/// Generate a new project
 #[derive(Clap)]
 pub struct CommandNew {
-    /// Do something with debug
+    /// Project name, no whitespace
     #[clap(required = true)]
-    pub new_project_root: String
+    pub new_project_root: String,
+
+    /// Generate a C project and skip language prompt.
+    #[clap(long)]
+    pub c: bool,
+
+    /// Generate a C++ project and skip language prompt.
+    #[clap(long)]
+    pub cpp: bool
 }

@@ -2,9 +2,11 @@ mod c_file_generation;
 mod cpp_file_generation;
 mod default_project_config;
 
-use std::{collections::{HashMap, HashSet}, error::Error, fs::{File, create_dir, remove_dir_all}, io::{self, ErrorKind, Write, stdin}, iter::FromIterator, path::Path};
+pub use default_project_config::configuration;
 
-use crate::{data_types::raw_types::RawProject, project_generator::{c_file_generation::generate_c_main, cpp_file_generation::generate_cpp_main, default_project_config::{MainFileLanguage, ProjectType, get_default_project_config, main_file_name}}};
+use std::{fs::{File, create_dir, remove_dir_all}, io::{self, ErrorKind, Write, stdin}, path::Path};
+
+use crate::{data_types::raw_types::RawProject, project_generator::{c_file_generation::generate_c_main, cpp_file_generation::generate_cpp_main, default_project_config::{get_default_project_config, main_file_name, configuration::{MainFileLanguage, ProjectType}}}};
 
 const SRC_DIR: &'static str = "src";
 const INCLUDE_DIR: &'static str = "include";
@@ -66,7 +68,7 @@ impl PromptResult {
   }
 }
 
-pub fn create_project_at(new_project_root: &str) -> io::Result<Option<RawProject>> {
+pub fn create_project_at(new_project_root: &str, project_lang: Option<MainFileLanguage>) -> io::Result<Option<RawProject>> {
   let project_root = Path::new(new_project_root);
   let mut should_create_project: bool = true;
 
@@ -107,29 +109,19 @@ pub fn create_project_at(new_project_root: &str) -> io::Result<Option<RawProject
       create_dir(extended_path)?;
     }
 
-    // TODO: Refactor this, and probably the rest of the function honestly.
-    let lang_selection: MainFileLanguage = prompt_until(
-      "1: C\n2: C++\nChoose Language (1 or 2): ",
-      |result| if let PromptResult::Custom(value) = result {
-        match value.as_str() {
-          "1" | "C" => true,
-          "2" | "C++" => true,
-          _ => false
-        }
-      } else { false }
-    )?
-      .custom_into(|value| match value.as_str() {
-        "1" | "C" => MainFileLanguage::C,
-        "2" | "C++" => MainFileLanguage::Cpp,
-        _ => MainFileLanguage::Cpp
-      });
+    let lang_selection: MainFileLanguage = if let Some(lang) = project_lang {
+      lang
+    } else { prompt_for_language()? };
+
+    let project_description: String = prompt_for_description()?;
 
     let project_info = get_default_project_config(
       &project_root,
       &include_prefix,
       &lang_selection,
       // TODO: Prompt for project type
-      &ProjectType::Executable
+      &ProjectType::Executable,
+      &project_description
     );
 
     let cmake_data_file = File::create(format!("{}/cmake_data.yaml", project_root.to_str().unwrap()))?;
@@ -138,8 +130,6 @@ pub fn create_project_at(new_project_root: &str) -> io::Result<Option<RawProject
       Ok(_) => println!("Successfully wrote cmake_data.yaml"),
       Err(err) => return Err(io::Error::new(ErrorKind::Other, err))
     }
-
-    // TODO: Write main file
 
     let mut main_file_path = project_root.to_owned();
     main_file_path.push(main_file_name(&lang_selection));
@@ -197,4 +187,29 @@ fn prompt_until_boolean(prompt: &str) -> io::Result<PromptResult> {
 
 fn prompt_until_value(prompt: &str) -> io::Result<PromptResult> {
   prompt_until(prompt, |result| result.is_custom())
+}
+
+fn prompt_for_language() -> io::Result<MainFileLanguage> {
+  let prompt_result =  prompt_until(
+    "1: C\n2: C++\nChoose Language (1 or 2): ",
+    |result| if let PromptResult::Custom(value) = result {
+      match value.as_str() {
+        "1" | "C" => true,
+        "2" | "C++" => true,
+        _ => false
+      }
+    } else { false }
+  )?;
+
+  return Ok(
+    prompt_result.custom_into(|value| match value.as_str() {
+      "1" | "C" => MainFileLanguage::C,
+      "2" | "C++" => MainFileLanguage::Cpp,
+      _ => MainFileLanguage::Cpp
+    })
+  )
+}
+
+fn prompt_for_description() -> io::Result<String> {
+  Ok(prompt_until_value("Description: ")?.unwrap_custom())
 }

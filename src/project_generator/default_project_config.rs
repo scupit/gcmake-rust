@@ -1,28 +1,33 @@
 use std::{collections::{HashMap, HashSet}, error::Error, fs::create_dir, io::{self, stdin}, iter::FromIterator, path::{Path, PathBuf}};
 use crate::{data_types::raw_types::{BuildConfig, BuildConfigCompilerSpecifier, BuildType, CompiledItemType, CompilerSpecifier, ImplementationLanguage, LanguageConfig, RawCompiledItem, RawProject}, main};
+use self::configuration::{MainFileLanguage, ProjectType};
 
-#[derive(Clone, Copy)]
-pub enum MainFileLanguage {
-  C,
-  Cpp
-}
 
-pub enum ProjectType {
-  Library,
-  Executable
+pub mod configuration {
+  #[derive(Clone, Copy)]
+  pub enum MainFileLanguage {
+    C,
+    Cpp
+  }
+
+  pub enum ProjectType {
+    Library,
+    Executable
+  }
 }
 
 pub fn get_default_project_config(
   project_root: &Path,
   include_prefix: &str,
   project_lang: &MainFileLanguage,
-  project_type: &ProjectType
+  project_type: &ProjectType,
+  project_description: &str
 ) -> RawProject {
 
   RawProject {
       name: project_root.to_str().unwrap().to_string(),
       include_prefix: include_prefix.to_owned(),
-      description: String::from("TODO"),
+      description: String::from(project_description),
       version: String::from("0.0.1"),
       supported_compilers: HashSet::from_iter([
         CompilerSpecifier::GCC,
