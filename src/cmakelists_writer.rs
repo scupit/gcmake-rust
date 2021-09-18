@@ -1,6 +1,6 @@
 use std::{borrow::BorrowMut, collections::{HashMap, HashSet}, fmt::format, fs::File, io::{self, Write}, path::PathBuf};
 
-use crate::{data_types::raw_types::{BuildConfig, BuildConfigCompilerSpecifier, BuildType, CompiledItemType, CompilerSpecifier, ImplementationLanguage}, item_resolver::{FinalProjectData, FinalProjectType}};
+use crate::{data_types::raw_types::{BuildConfig, BuildConfigCompilerSpecifier, BuildType, CompiledItemType, CompilerSpecifier, ImplementationLanguage, RawCompiledItem}, item_resolver::{FinalProjectData, FinalProjectType}};
 
 pub fn write_cmakelists(project_data: &FinalProjectData) -> io::Result<()> {
   for project in project_data.get_subprojects() {
@@ -406,43 +406,150 @@ impl<'a> CMakeListsWriter<'a> {
       &self.project_data.template_impl_files
     )?;
 
-    // Write the actual outputs
+    // Write libraries first
     for (output_name, output_data) in self.project_data.get_outputs() {
-      writeln!(&self.cmakelists_file,
-        "\n# ========== {} ==========",
-        output_name
-      )?;
+      match output_data.get_output_type() {
+        output_type @ (CompiledItemType::StaticLib | CompiledItemType::SharedLib) => {
+          let is_static = *output_type == CompiledItemType::StaticLib;
 
-      // TODO: Write libraries
-      match *output_data.get_output_type() {
-        CompiledItemType::Executable => {
-          writeln!(&self.cmakelists_file,
-            "add_executable( {}\n\t# SOURCES\n\t\t{} ${{{}}}\n\t# HEADERS\n\t\t${{{}}} ${{{}}}\n)",
+          self.write_defined_type_library(
+            output_data,
             output_name,
-            format!("${{CMAKE_CURRENT_SOURCE_DIR}}/{}", output_data.get_entry_file().replace("./", "")),
-            src_var_name,
-            includes_var_name,
-            template_impls_var_name
+            &src_var_name,
+            &includes_var_name,
+            &template_impls_var_name,
+            &project_include_dir_varname,
+            is_static
           )?;
-          self.write_newline()?;
-
-          writeln!(&self.cmakelists_file,
-            "target_include_directories( {}\n\tPRIVATE ${{{}}}\n)",
-            output_name,
-            &project_include_dir_varname
-          )?;
-          self.write_newline()?;
-
-          writeln!(&self.cmakelists_file,
-            "set_target_properties( {} PROPERTIES\n\tRUNTIME_OUTPUT_DIRECTORY ${{CMAKE_BINARY_DIR}}/bin/${{CMAKE_BUILD_TYPE}}\n)",
-            output_name
-          )?;
-        },
-        _ => {
-          println!("TODO: Write library.");
         }
+        CompiledItemType::Library => {
+          println!("TODO: Write library which can be either STATIC or SHARED (User selects)")
+        },
+        _ => ()
       }
     }
+
+    // Write executables after libraries, because the library targets must exist before the executables
+    // can link to them.
+    for (output_name, output_data) in self.project_data.get_outputs() {
+      match *output_data.get_output_type() {
+        CompiledItemType::Executable => {
+          self.write_executable(
+            output_data,
+            output_name,
+            &src_var_name,
+            &includes_var_name,
+            &template_impls_var_name,
+            &project_include_dir_varname
+          )?;
+        },
+        _ => ()
+      }
+    }
+
+    Ok(())
+  }
+
+  fn write_output_title(&self, output_name: &str) -> io::Result<()> {
+    writeln!(&self.cmakelists_file,
+      "\n# ========== {} ==========",
+      output_name
+    )?;
+    Ok(())
+  }
+
+  fn write_defined_type_library(
+    &self,
+    output_data: &RawCompiledItem,
+    output_name: &str,
+    src_var_name: &str,
+    includes_var_name: &str,
+    template_impls_var_name: &str,
+    project_include_dir_varname: &str,
+    is_static: bool
+  ) -> io::Result<()> {
+    self.write_output_title(output_name)?;
+
+    let lib_type_string: &'static str = if is_static {
+      "STATIC"
+    } else {
+      "SHARED"
+    };
+
+    writeln!(&self.cmakelists_file,
+      "add_library( {} {}\n\t# SOURCES\n\t\t{} ${{{}}}\n\t# HEADERS\n\t\t${{{}}} ${{{}}}\n)",
+      output_name,
+      lib_type_string,
+      format!("${{CMAKE_CURRENT_SOURCE_DIR}}/{}", output_data.get_entry_file().replace("./", "")),
+      src_var_name,
+      includes_var_name,
+      template_impls_var_name
+    )?;
+    self.write_newline()?;
+
+    writeln!(&self.cmakelists_file,
+      "target_include_directories( {}\n\tPUBLIC ${{{}}}\n)",
+      output_name,
+      &project_include_dir_varname
+    )?;
+    self.write_newline()?;
+
+    writeln!(&self.cmakelists_file,
+      "set_target_properties( {} PROPERTIES\
+        \n\tRUNTIME_OUTPUT_DIRECTORY ${{CMAKE_BINARY_DIR}}/bin/${{CMAKE_BUILD_TYPE}}\
+        \n\tLIBRARY_OUTPUT_DIRECTORY ${{CMAKE_BINARY_DIR}}/lib/${{CMAKE_BUILD_TYPE}}\
+        \n\tARCHIVE_OUTPUT_DIRECTORY ${{CMAKE_BINARY_DIR}}/lib/${{CMAKE_BUILD_TYPE}}\
+      \n)",
+      output_name
+    )?;
+
+    Ok(()) 
+  }
+
+  // fn write_toggle_type_library(
+  //   &self,
+  //   output_data: &RawCompiledItem,
+  //   output_name: &str,
+  //   src_var_name: &str,
+  //   includes_var_name: &str,
+  //   template_impls_var_name: &str,
+  //   project_include_dir_varname: &str
+  // ) -> io::Result<()> {
+
+  // }
+
+  fn write_executable(
+    &self,
+    output_data: &RawCompiledItem,
+    output_name: &str,
+    src_var_name: &str,
+    includes_var_name: &str,
+    template_impls_var_name: &str,
+    project_include_dir_varname: &str
+  ) -> io::Result<()> {
+    self.write_output_title(output_name)?;
+
+    writeln!(&self.cmakelists_file,
+      "add_executable( {}\n\t# SOURCES\n\t\t{} ${{{}}}\n\t# HEADERS\n\t\t${{{}}} ${{{}}}\n)",
+      output_name,
+      format!("${{CMAKE_CURRENT_SOURCE_DIR}}/{}", output_data.get_entry_file().replace("./", "")),
+      src_var_name,
+      includes_var_name,
+      template_impls_var_name
+    )?;
+    self.write_newline()?;
+
+    writeln!(&self.cmakelists_file,
+      "target_include_directories( {}\n\tPRIVATE ${{{}}}\n)",
+      output_name,
+      &project_include_dir_varname
+    )?;
+    self.write_newline()?;
+
+    writeln!(&self.cmakelists_file,
+      "set_target_properties( {} PROPERTIES\n\tRUNTIME_OUTPUT_DIRECTORY ${{CMAKE_BINARY_DIR}}/bin/${{CMAKE_BUILD_TYPE}}\n)",
+      output_name
+    )?;
 
     Ok(())
   }

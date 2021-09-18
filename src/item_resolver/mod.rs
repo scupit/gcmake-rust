@@ -67,6 +67,39 @@ pub enum FinalProjectType {
   Subproject(SubprojectOnlyOptions)
 }
 
+fn validate_output_config(project_data: &RawProject) -> Result<(), String> {
+  let mut makes_executable: bool = false;
+  let mut makes_library: bool = false;
+
+  for (output_name, output_data) in project_data.get_output() {
+    if output_data.is_library_type() {
+      if makes_library {
+        return Err(format!("Project \"{}\" contains more than one library output, but should only contain one.", project_data.get_name()));
+      }
+
+      makes_library = true;
+
+      if makes_executable {
+        break;
+      }
+    }
+    else if output_data.is_executable_type() {
+      makes_executable = true;
+
+      if makes_library {
+        break
+      }
+    }
+  }
+
+  return if makes_executable && makes_library {
+    Err(format!("Project \"{}\" should not create both library and executable outputs.", project_data.get_name()))
+  }
+  else {
+    Ok(())
+  }
+}
+
 pub struct FinalProjectData {
   project_type: FinalProjectType,
   project_root: String,
@@ -102,6 +135,9 @@ impl FinalProjectData {
       project_type = FinalProjectType::Full;
     };
 
+    if let Err(err_message) = validate_output_config(&raw_project) {
+      return Err(err_message);
+    }
 
     let project_include_prefix = raw_project.get_include_prefix();
     let project_root: String = cleaned_path_str(&unclean_project_root).to_string();

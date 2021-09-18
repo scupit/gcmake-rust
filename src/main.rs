@@ -15,6 +15,8 @@ use clap::Clap;
 use cli_config::{CommandNew, Opts, SubCommand};
 use project_generator::{create_project_at, configuration::MainFileLanguage};
 
+// TODO: Handle library creation for Static and Shared libraries.
+// Also allow both at once, so the user can select which type is built in the CMake GUI.
 fn main() {
   let opts: Opts = Opts::parse();
 

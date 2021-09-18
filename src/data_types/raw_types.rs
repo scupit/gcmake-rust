@@ -151,9 +151,10 @@ pub struct BuildConfig {
 }
 
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub enum CompiledItemType {
   Executable,
+  Library,
   StaticLib,
   SharedLib
 }
@@ -178,5 +179,21 @@ impl RawCompiledItem {
 
   pub fn get_output_type(&self) -> &CompiledItemType {
     return &self.output_type;
+  }
+
+  pub fn is_library_type(&self) -> bool {
+    match self.output_type {
+      CompiledItemType::Library
+      | CompiledItemType::SharedLib
+      | CompiledItemType::StaticLib => true,
+      CompiledItemType::Executable => false
+    }
+  }
+
+  pub fn is_executable_type(&self) -> bool {
+    match self.output_type {
+      CompiledItemType::Executable => true,
+      _ => false
+    }
   }
 }
