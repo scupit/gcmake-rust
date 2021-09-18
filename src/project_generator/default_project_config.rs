@@ -1,6 +1,6 @@
 use std::{collections::{HashMap, HashSet}, error::Error, fs::create_dir, io::{self, stdin}, iter::FromIterator, path::{Path, PathBuf}};
-use crate::{data_types::raw_types::{BuildConfig, BuildConfigCompilerSpecifier, BuildType, CompiledItemType, CompilerSpecifier, ImplementationLanguage, LanguageConfig, RawCompiledItem, RawProject}, main};
-use self::configuration::{MainFileLanguage, ProjectType};
+use crate::{data_types::raw_types::{BuildConfig, BuildConfigCompilerSpecifier, BuildType, CompiledItemType, CompilerSpecifier, ImplementationLanguage, LanguageConfig, ProjectLike, RawCompiledItem, RawProject, RawSubproject}, main};
+use self::configuration::{MainFileLanguage, ProjectOutputType};
 
 
 pub mod configuration {
@@ -10,9 +10,23 @@ pub mod configuration {
     Cpp
   }
 
-  pub enum ProjectType {
+  pub enum ProjectOutputType {
     Library,
     Executable
+  }
+}
+
+pub enum DefaultProject {
+  MainProject(RawProject),
+  Subproject(RawSubproject)
+}
+
+impl DefaultProject {
+  pub fn unwrap_projectlike(&self) -> Box<&dyn ProjectLike> {
+    match self {
+      Self::MainProject(data) => Box::new(data),
+      Self::Subproject(data) => Box::new(data)
+    }
   }
 }
 
@@ -20,7 +34,7 @@ pub fn get_default_project_config(
   project_root: &Path,
   include_prefix: &str,
   project_lang: &MainFileLanguage,
-  project_type: &ProjectType,
+  project_type: &ProjectOutputType,
   project_description: &str
 ) -> RawProject {
 
@@ -46,12 +60,13 @@ pub fn get_default_project_config(
       ]),
       output: HashMap::from_iter([
         (String::from("Main"), RawCompiledItem {
-          entry_file: String::from(main_file_name(&project_lang)),
+          entry_file: String::from(main_file_name(&project_lang, &project_type)),
           output_type: match project_type {
-            ProjectType::Executable => CompiledItemType::Executable,
+            ProjectOutputType::Executable => CompiledItemType::Executable,
             // TODO: Allow the library type to be selected once type selection is implemented
-            ProjectType::Library => CompiledItemType::StaticLib
-          }
+            ProjectOutputType::Library => CompiledItemType::StaticLib
+          },
+          link: Vec::new()
         })
       ]),
       build_configs: HashMap::from_iter([
@@ -130,11 +145,45 @@ pub fn get_default_project_config(
     }
 }
 
-pub fn main_file_name(project_lang: &MainFileLanguage) -> &'static str {
-  return match *project_lang {
-    MainFileLanguage::C => "main.c",
-    MainFileLanguage::Cpp => "main.cpp"
-  }
+pub fn get_default_subproject_config(
+  project_root: &Path,
+  include_prefix: &str,
+  project_lang: &MainFileLanguage,
+  project_type: &ProjectOutputType,
+  project_description: &str
+) -> RawSubproject {
+  RawSubproject::from(
+    get_default_project_config(
+      project_root,
+      include_prefix,
+      project_lang,
+      project_type,
+      project_description
+    )
+  )
+}
+
+pub fn main_file_name(project_lang: &MainFileLanguage, project_type: &ProjectOutputType) -> String {
+  let extension_prefix: &str;
+  let file_name: &str;
+
+  match *project_type {
+    ProjectOutputType::Executable => {
+      extension_prefix = "c";
+      file_name = "main";
+    },
+    ProjectOutputType::Library => {
+      extension_prefix = "h";
+      file_name = "lib";
+    }
+  };
+
+  let extension_suffix = match *project_lang {
+    MainFileLanguage::C => "",
+    MainFileLanguage::Cpp => "pp"
+  };
+
+  return format!("{}.{}{}", file_name, extension_prefix, extension_suffix);
 }
 
 fn create_string_set<const AMOUNT: usize>(arr: [&str; AMOUNT]) -> HashSet<String> {

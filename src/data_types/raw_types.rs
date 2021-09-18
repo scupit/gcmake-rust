@@ -6,6 +6,13 @@ pub type BuildConfigMap = HashMap<BuildType, BuildTypeOptionMap>;
 
 pub type LanguageMap = HashMap<ImplementationLanguage, LanguageConfig>;
 
+pub trait ProjectLike {
+  fn get_name(&self) -> &str;
+  fn get_include_prefix(&self) -> &str;
+  fn get_description(&self) -> &str;
+  fn get_version(&self) -> &str;
+}
+
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(deny_unknown_fields)]
 pub struct RawProject {
@@ -23,21 +30,31 @@ pub struct RawProject {
   pub build_configs: BuildConfigMap,
 }
 
+impl ProjectLike for RawProject {
+  fn get_include_prefix(&self) -> &str {
+    &self.include_prefix
+  }
+
+  fn get_name(&self) -> &str {
+    &self.name
+  }
+
+  fn get_description(&self) -> &str {
+    &self.description
+  }
+
+  fn get_version(&self) -> &str {
+    &self.version
+  }
+}
+
 impl RawProject {
   pub fn get_subproject_dirnames(&self) -> &Option<HashSet<String>> {
     &self.subprojects
   }
 
-  pub fn get_include_prefix(&self) -> &str {
-    return &self.include_prefix;
-  }
-
   pub fn get_output(&self) -> &HashMap<String, RawCompiledItem> {
     return &self.output;
-  }
-
-  pub fn get_name(&self) -> &str {
-    return &self.name;
   }
 
   pub fn get_build_configs(&self) -> &BuildConfigMap {
@@ -67,6 +84,37 @@ pub struct RawSubproject {
   // global_defines: HashSet<String>,
   output: HashMap<String, RawCompiledItem>,
   subprojects: Option<HashSet<String>>
+}
+
+impl ProjectLike for RawSubproject {
+  fn get_name(&self) -> &str {
+      &self.name
+  }
+  
+  fn get_description(&self) -> &str {
+    &self.description
+  }
+
+  fn get_include_prefix(&self) -> &str {
+    &self.include_prefix
+  }
+
+  fn get_version(&self) -> &str {
+    &self.version
+  }
+}
+
+impl From<RawProject> for RawSubproject {
+  fn from(project_data: RawProject) -> Self {
+    Self {
+      name: project_data.name,
+      include_prefix: project_data.include_prefix,
+      description: project_data.description,
+      version: project_data.version,
+      output: project_data.output,
+      subprojects: project_data.subprojects
+    }
+  }
 }
 
 impl Into<RawProject> for RawSubproject {
@@ -169,7 +217,9 @@ pub enum CompilerSpecifier {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct RawCompiledItem {
   pub output_type: CompiledItemType,
-  pub entry_file: String
+  pub entry_file: String,
+  // Link order can be important. Eventually figure out how to make/use an ordered Set
+  pub link: Vec<String>
 }
 
 impl RawCompiledItem {

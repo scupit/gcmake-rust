@@ -16,12 +16,15 @@ pub struct Opts {
 #[derive(Clap)]
 pub enum SubCommand {
     #[clap(version = "1.0", author = SKY)]
-    New(CommandNew)
+    New(NewProjectCommand)
 }
 
 /// Generate a new project
 #[derive(Clap)]
-pub struct CommandNew {
+pub struct NewProjectCommand {
+    #[clap(long)]
+    pub subproject: bool,
+
     /// Project name, no whitespace
     #[clap(required = true)]
     pub new_project_root: String,
@@ -32,5 +35,10 @@ pub struct CommandNew {
 
     /// Generate a C++ project and skip language prompt.
     #[clap(long)]
-    pub cpp: bool
+    pub cpp: bool,
+
+    #[clap(long)]
+    pub library: bool,
+    #[clap(long)]
+    pub executable: bool
 }

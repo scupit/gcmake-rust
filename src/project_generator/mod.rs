@@ -3,10 +3,11 @@ mod cpp_file_generation;
 mod default_project_config;
 
 pub use default_project_config::configuration;
+use serde::Serialize;
 
 use std::{fs::{File, create_dir, remove_dir_all}, io::{self, ErrorKind, Write, stdin}, path::Path};
 
-use crate::{data_types::raw_types::RawProject, project_generator::{c_file_generation::generate_c_main, cpp_file_generation::generate_cpp_main, default_project_config::{get_default_project_config, main_file_name, configuration::{MainFileLanguage, ProjectType}}}};
+use crate::{data_types::raw_types::RawProject, project_generator::{c_file_generation::generate_c_main, cpp_file_generation::generate_cpp_main, default_project_config::{DefaultProject, configuration::{MainFileLanguage, ProjectOutputType}, get_default_project_config, get_default_subproject_config, main_file_name}}};
 
 const SRC_DIR: &'static str = "src";
 const INCLUDE_DIR: &'static str = "include";
@@ -68,7 +69,12 @@ impl PromptResult {
   }
 }
 
-pub fn create_project_at(new_project_root: &str, project_lang: Option<MainFileLanguage>) -> io::Result<Option<RawProject>> {
+pub fn create_project_at(
+  new_project_root: &str,
+  project_lang: Option<MainFileLanguage>,
+  project_output_type: Option<ProjectOutputType>,
+  is_subproject: bool
+) -> io::Result<Option<DefaultProject>> {
   let project_root = Path::new(new_project_root);
   let mut should_create_project: bool = true;
 
@@ -109,42 +115,74 @@ pub fn create_project_at(new_project_root: &str, project_lang: Option<MainFileLa
       create_dir(extended_path)?;
     }
 
+    let output_type_selection: ProjectOutputType = if let Some(output_selection) = project_output_type {
+      output_selection
+    } else { prompt_for_project_output_type()? };
+
     let lang_selection: MainFileLanguage = if let Some(lang) = project_lang {
       lang
     } else { prompt_for_language()? };
 
     let project_description: String = prompt_for_description()?;
 
-    let project_info = get_default_project_config(
-      &project_root,
-      &include_prefix,
-      &lang_selection,
-      // TODO: Prompt for project type
-      &ProjectType::Executable,
-      &project_description
-    );
+    let project_info: DefaultProject = if is_subproject {
+      DefaultProject::MainProject(
+        get_default_project_config(
+          &project_root,
+          &include_prefix,
+          &lang_selection,
+          &output_type_selection,
+          &project_description
+        )
+      )
+    } else {
+      DefaultProject::Subproject(
+        get_default_subproject_config(
+          &project_root,
+          &include_prefix,
+          &lang_selection,
+          &output_type_selection,
+          &project_description
+        )
+      )
+    };
 
     let cmake_data_file = File::create(format!("{}/cmake_data.yaml", project_root.to_str().unwrap()))?;
 
-    match serde_yaml::to_writer(&cmake_data_file, &project_info) {
-      Ok(_) => println!("Successfully wrote cmake_data.yaml"),
-      Err(err) => return Err(io::Error::new(ErrorKind::Other, err))
+    match &project_info {
+      DefaultProject::MainProject(project_info) => 
+        write_cmake_yaml(&cmake_data_file, project_info)?,
+      DefaultProject::Subproject(project_info) => 
+        write_cmake_yaml(&cmake_data_file, project_info)?
     }
 
     let mut main_file_path = project_root.to_owned();
-    main_file_path.push(main_file_name(&lang_selection));
+    main_file_path.push(main_file_name(&lang_selection, &output_type_selection));
 
     match lang_selection {
-      MainFileLanguage::C => generate_c_main(main_file_path)?,
-      MainFileLanguage::Cpp => generate_cpp_main(main_file_path)?
+      MainFileLanguage::C => generate_c_main(main_file_path, &output_type_selection)?,
+      MainFileLanguage::Cpp => generate_cpp_main(main_file_path, &output_type_selection)?
     }
 
-    println!("Generated {}", main_file_name(&lang_selection));
+    println!("Generated {}", main_file_name(&lang_selection, &output_type_selection));
 
     return Ok(Some(project_info));
   }
 
   Ok(None)
+}
+
+fn write_cmake_yaml<T: Serialize>(
+  cmake_data_file: &File,
+  project_info: &T
+) -> io::Result<()> {
+  match serde_yaml::to_writer(cmake_data_file, project_info) {
+    Ok(_) => {
+      println!("Successfully wrote cmake_data.yaml");
+      Ok(())
+    },
+    Err(err) => return Err(io::Error::new(ErrorKind::Other, err))
+  }
 }
 
 fn prompt_once(prompt: &str) -> io::Result<PromptResult> {
@@ -206,6 +244,27 @@ fn prompt_for_language() -> io::Result<MainFileLanguage> {
       "1" | "C" => MainFileLanguage::C,
       "2" | "C++" => MainFileLanguage::Cpp,
       _ => MainFileLanguage::Cpp
+    })
+  )
+}
+
+fn prompt_for_project_output_type() -> io::Result<ProjectOutputType> {
+  let prompt_result =  prompt_until(
+    "1: Executable\n2: Library\nChoose Project Type (1 or 2): ",
+    |result| if let PromptResult::Custom(value) = result {
+      match value.as_str() {
+        "1" | "Executable" => true,
+        "2" | "Library" => true,
+        _ => false
+      }
+    } else { false }
+  )?;
+
+  return Ok(
+    prompt_result.custom_into(|value| match value.as_str() {
+      "1" | "Executable" => ProjectOutputType::Executable,
+      "2" | "Library" => ProjectOutputType::Library,
+      _ => ProjectOutputType::Executable
     })
   )
 }

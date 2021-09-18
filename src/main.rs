@@ -12,8 +12,10 @@ use logger::exit_error_log;
 use cmakelists_writer::write_cmakelists;
 
 use clap::Clap;
-use cli_config::{CommandNew, Opts, SubCommand};
+use cli_config::{NewProjectCommand, Opts, SubCommand};
 use project_generator::{create_project_at, configuration::MainFileLanguage};
+
+use crate::project_generator::configuration::ProjectOutputType;
 
 // TODO: Handle library creation for Static and Shared libraries.
 // Also allow both at once, so the user can select which type is built in the CMake GUI.
@@ -45,10 +47,14 @@ fn main() {
 }
 
 fn handle_create_project(
-  command: CommandNew,
+  command: NewProjectCommand,
   project_root_dir: &mut String,
   should_generate_cmakelists: &mut bool
 ) {
+  if command.subproject {
+    *project_root_dir = format!("subprojects/{}", project_root_dir);
+  }
+
   let maybe_project_lang: Option<MainFileLanguage> = if command.c {
     Some(MainFileLanguage::C)
   } else if command.cpp {
@@ -57,11 +63,26 @@ fn handle_create_project(
     None
   };
 
-  match create_project_at(&command.new_project_root, maybe_project_lang) {
+  let maybe_project_output_type: Option<ProjectOutputType> = if command.executable {
+    Some(ProjectOutputType::Executable)
+  } else if command.library {
+    Some(ProjectOutputType::Library)
+  } else {
+    None
+  };
+
+  match create_project_at(
+    &command.new_project_root,
+    maybe_project_lang,
+    maybe_project_output_type,
+    command.subproject
+  ) {
     Ok(maybe_project) => match maybe_project {
-      Some(raw_project) => {
-        println!("Project {} created successfully", raw_project.get_name());
-        *project_root_dir = raw_project.name;
+      Some(default_project) => {
+        let project_like = default_project.unwrap_projectlike();
+
+        println!("{} created successfully", project_like.get_name());
+        *project_root_dir = project_like.get_name().to_owned();
       },
       None => {
         println!("Project not created. Skipping CMakeLists generation.");

@@ -1,17 +1,26 @@
 use std::{fs::File, io::{self, Write}, path::{Path}};
 
-const C_MAIN_CONTENT: &'static str =
+use crate::project_generator::configuration::ProjectOutputType;
+
+const C_EXE_MAIN: &'static str =
 "#include <stdio.h>
 
-int main(int argc, const char** argv) {{
+int main(int argc, const char** argv) {
 \tprintf(\"Hello World!\");
 \treturn 0;
-}}
+}
 ";
 
-pub fn generate_c_main<T: AsRef<Path>>(file_path: T) -> io::Result<()> {
+const C_LIB_MAIN: &'static str =
+"//#include \"Your library files\"";
+
+pub fn generate_c_main<T: AsRef<Path>>(file_path: T, project_output_type: &ProjectOutputType) -> io::Result<()> {
   let main_file = File::create(file_path)?;
+
+  match project_output_type {
+    ProjectOutputType::Executable => write!(&main_file, "{}", C_EXE_MAIN)?,
+    ProjectOutputType::Library => write!(&main_file, "{}", C_LIB_MAIN)?,
+  }
   
-  write!(&main_file, "{}", C_MAIN_CONTENT)?;
   Ok(())
 }
