@@ -75,6 +75,18 @@ pub fn create_project_at(
   project_output_type: Option<ProjectOutputType>,
   is_subproject: bool
 ) -> io::Result<Option<DefaultProject>> {
+  let project_name: &str;
+
+  {
+    let start_index: usize = if let Some(last_slash_index) = new_project_root.rfind("/") {
+      last_slash_index + 1
+    } else {
+      0
+    };
+
+    project_name = &new_project_root[start_index..];
+  }
+
   let project_root = Path::new(new_project_root);
   let mut should_create_project: bool = true;
 
@@ -100,7 +112,7 @@ pub fn create_project_at(
       create_dir(extended_path)?;
     }
 
-    let default_prefix = new_project_root
+    let default_prefix = project_name
       .to_uppercase()
       .replace("-", "_");
 
@@ -126,19 +138,19 @@ pub fn create_project_at(
     let project_description: String = prompt_for_description()?;
 
     let project_info: DefaultProject = if is_subproject {
-      DefaultProject::MainProject(
-        get_default_project_config(
-          &project_root,
+      DefaultProject::Subproject(
+        get_default_subproject_config(
+          &project_name,
           &include_prefix,
           &lang_selection,
           &output_type_selection,
           &project_description
         )
-      )
+      ) 
     } else {
-      DefaultProject::Subproject(
-        get_default_subproject_config(
-          &project_root,
+      DefaultProject::MainProject(
+        get_default_project_config(
+          &project_name,
           &include_prefix,
           &lang_selection,
           &output_type_selection,

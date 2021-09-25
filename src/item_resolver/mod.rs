@@ -1,4 +1,5 @@
-mod path_manipulation;
+pub mod path_manipulation;
+
 use std::{borrow::Borrow, collections::{HashMap, HashSet}, fs::{self, DirEntry, read_dir}, io::{self}, os::windows::raw, path::{Path, PathBuf}};
 
 use crate::{data_types::raw_types::*, item_resolver::path_manipulation::cleaned_path_str};

@@ -219,7 +219,7 @@ pub struct RawCompiledItem {
   pub output_type: CompiledItemType,
   pub entry_file: String,
   // Link order can be important. Eventually figure out how to make/use an ordered Set
-  pub link: Vec<String>
+  pub link: Option<Vec<String>>
 }
 
 impl RawCompiledItem {

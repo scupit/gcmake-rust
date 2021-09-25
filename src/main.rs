@@ -5,8 +5,6 @@ mod cmakelists_writer;
 mod cli_config;
 mod project_generator;
 
-use std::io;
-
 use item_resolver::FinalProjectData;
 use logger::exit_error_log;
 use cmakelists_writer::write_cmakelists;
@@ -15,24 +13,26 @@ use clap::Clap;
 use cli_config::{NewProjectCommand, Opts, SubCommand};
 use project_generator::{create_project_at, configuration::MainFileLanguage};
 
-use crate::project_generator::configuration::ProjectOutputType;
+use crate::{item_resolver::path_manipulation::cleaned_path_str, project_generator::configuration::ProjectOutputType};
 
 // TODO: Handle library creation for Static and Shared libraries.
 // Also allow both at once, so the user can select which type is built in the CMake GUI.
 fn main() {
   let opts: Opts = Opts::parse();
 
-  let mut project_root_dir: String = opts.project_root;
+  // Project root is only set by the user when using the default command. When using subcommands or unspecified
+  // in the main command, uses the current working directory.
+  let project_root_dir: String = opts.project_root;
   let mut should_generate_cmakelists: bool = true;
 
   if let Some(subcommand) = opts.subcommand {
     match subcommand {
-      SubCommand::New(command) => handle_create_project(command, &mut project_root_dir, &mut should_generate_cmakelists)
+      SubCommand::New(command) => handle_create_project(command, &project_root_dir, &mut should_generate_cmakelists)
     }
   }
 
   if should_generate_cmakelists {
-    println!("Beginning CMakeLists generation...");
+    println!("\nBeginning CMakeLists generation...");
 
     match FinalProjectData::new(&project_root_dir) {
       Ok(project_data) => {
@@ -44,16 +44,32 @@ fn main() {
       Err(message) => exit_error_log(&message)
     }
   }
+
+  println!("");
 }
 
 fn handle_create_project(
   command: NewProjectCommand,
-  project_root_dir: &mut String,
+  project_root_dir: &String,
   should_generate_cmakelists: &mut bool
 ) {
-  if command.subproject {
-    *project_root_dir = format!("subprojects/{}", project_root_dir);
+  if cleaned_path_str(&command.new_project_name).contains("/") {
+    exit_error_log(&format!(
+      "When generating a project, the project root cannot be a path. However, \"{}\" is a path.",
+      command.new_project_name
+    ));
   }
+
+  let project_root_generating: String = if command.subproject {
+    let new_root = format!("./subprojects/{}", &command.new_project_name);
+    println!("\nCreating subproject in {}\n", new_root);
+
+    new_root
+  }
+  else {
+    println!("\nCreating project in {}\n", project_root_dir);
+    project_root_dir.clone()
+  };
 
   let maybe_project_lang: Option<MainFileLanguage> = if command.c {
     Some(MainFileLanguage::C)
@@ -72,7 +88,7 @@ fn handle_create_project(
   };
 
   match create_project_at(
-    &command.new_project_root,
+    &project_root_generating,
     maybe_project_lang,
     maybe_project_output_type,
     command.subproject
@@ -82,7 +98,15 @@ fn handle_create_project(
         let project_like = default_project.unwrap_projectlike();
 
         println!("{} created successfully", project_like.get_name());
-        *project_root_dir = project_like.get_name().to_owned();
+
+        // TODO: After creating a subproject, add that subproject to the main build file automatically and rewrite it.
+        // This isn't done currently because the default serializer looks messy.
+        if command.subproject {
+          println!(
+            "\nMake sure you add your subproject \"{}\" to the main cmake_data.yaml. This is not yet done automatically.",
+            command.new_project_name
+          );
+        }
       },
       None => {
         println!("Project not created. Skipping CMakeLists generation.");

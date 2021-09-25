@@ -31,7 +31,7 @@ impl DefaultProject {
 }
 
 pub fn get_default_project_config(
-  project_root: &Path,
+  project_name: &str,
   include_prefix: &str,
   project_lang: &MainFileLanguage,
   project_type: &ProjectOutputType,
@@ -39,7 +39,7 @@ pub fn get_default_project_config(
 ) -> RawProject {
 
   RawProject {
-      name: project_root.to_str().unwrap().to_string(),
+      name: project_name.to_string(),
       include_prefix: include_prefix.to_owned(),
       description: String::from(project_description),
       version: String::from("0.0.1"),
@@ -66,7 +66,7 @@ pub fn get_default_project_config(
             // TODO: Allow the library type to be selected once type selection is implemented
             ProjectOutputType::Library => CompiledItemType::StaticLib
           },
-          link: Vec::new()
+          link: None
         })
       ]),
       build_configs: HashMap::from_iter([
@@ -146,7 +146,7 @@ pub fn get_default_project_config(
 }
 
 pub fn get_default_subproject_config(
-  project_root: &Path,
+  project_name: &str,
   include_prefix: &str,
   project_lang: &MainFileLanguage,
   project_type: &ProjectOutputType,
@@ -154,7 +154,7 @@ pub fn get_default_subproject_config(
 ) -> RawSubproject {
   RawSubproject::from(
     get_default_project_config(
-      project_root,
+      project_name,
       include_prefix,
       project_lang,
       project_type,

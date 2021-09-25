@@ -27,7 +27,7 @@ pub struct NewProjectCommand {
 
     /// Project name, no whitespace
     #[clap(required = true)]
-    pub new_project_root: String,
+    pub new_project_name: String,
 
     /// Generate a C project and skip language prompt.
     #[clap(long)]
