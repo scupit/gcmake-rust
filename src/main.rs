@@ -13,7 +13,7 @@ use clap::Clap;
 use cli_config::{NewProjectCommand, Opts, SubCommand};
 use project_generator::{create_project_at, configuration::MainFileLanguage};
 
-use crate::{item_resolver::path_manipulation::cleaned_path_str, project_generator::configuration::ProjectOutputType};
+use crate::{item_resolver::path_manipulation::cleaned_path_str, project_generator::configuration::{OutputLibType, ProjectOutputType}};
 
 // TODO: Handle library creation for Static and Shared libraries.
 // Also allow both at once, so the user can select which type is built in the CMake GUI.
@@ -22,12 +22,15 @@ fn main() {
 
   // Project root is only set by the user when using the default command. When using subcommands or unspecified
   // in the main command, uses the current working directory.
-  let project_root_dir: String = opts.project_root;
+  let mut project_root_dir: String = opts.project_root;
   let mut should_generate_cmakelists: bool = true;
 
   if let Some(subcommand) = opts.subcommand {
     match subcommand {
-      SubCommand::New(command) => handle_create_project(command, &project_root_dir, &mut should_generate_cmakelists)
+      SubCommand::New(command) => handle_create_project(
+        command,
+        &mut project_root_dir,
+        &mut should_generate_cmakelists)
     }
   }
 
@@ -50,7 +53,7 @@ fn main() {
 
 fn handle_create_project(
   command: NewProjectCommand,
-  project_root_dir: &String,
+  project_root_dir: &mut String,
   should_generate_cmakelists: &mut bool
 ) {
   if cleaned_path_str(&command.new_project_name).contains("/") {
@@ -67,8 +70,10 @@ fn handle_create_project(
     new_root
   }
   else {
-    println!("\nCreating project in {}\n", project_root_dir);
-    project_root_dir.clone()
+    let true_project_root = format!("./{}", &command.new_project_name);
+    println!("\nCreating project in {}\n", true_project_root);
+    *project_root_dir = true_project_root.clone();
+    true_project_root
   };
 
   let maybe_project_lang: Option<MainFileLanguage> = if command.c {
@@ -81,8 +86,10 @@ fn handle_create_project(
 
   let maybe_project_output_type: Option<ProjectOutputType> = if command.executable {
     Some(ProjectOutputType::Executable)
-  } else if command.library {
-    Some(ProjectOutputType::Library)
+  } else if command.static_lib {
+    Some(ProjectOutputType::Library(OutputLibType::Static))
+  } else if command.shared_lib {
+    Some(ProjectOutputType::Library(OutputLibType::Shared))
   } else {
     None
   };

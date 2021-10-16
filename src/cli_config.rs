@@ -38,7 +38,9 @@ pub struct NewProjectCommand {
     pub cpp: bool,
 
     #[clap(long)]
-    pub library: bool,
+    pub static_lib: bool,
+    #[clap(long)]
+    pub shared_lib: bool,
     #[clap(long)]
     pub executable: bool
 }

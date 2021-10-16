@@ -1,6 +1,6 @@
 use std::{collections::{HashMap, HashSet}, error::Error, fs::create_dir, io::{self, stdin}, iter::FromIterator, path::{Path, PathBuf}};
 use crate::{data_types::raw_types::{BuildConfig, BuildConfigCompilerSpecifier, BuildType, CompiledItemType, CompilerSpecifier, ImplementationLanguage, LanguageConfig, ProjectLike, RawCompiledItem, RawProject, RawSubproject}, main};
-use self::configuration::{MainFileLanguage, ProjectOutputType};
+use self::configuration::{MainFileLanguage, OutputLibType, ProjectOutputType};
 
 
 pub mod configuration {
@@ -10,8 +10,13 @@ pub mod configuration {
     Cpp
   }
 
+  pub enum OutputLibType {
+    Static,
+    Shared
+  }
+
   pub enum ProjectOutputType {
-    Library,
+    Library(OutputLibType),
     Executable
   }
 }
@@ -64,7 +69,10 @@ pub fn get_default_project_config(
           output_type: match project_type {
             ProjectOutputType::Executable => CompiledItemType::Executable,
             // TODO: Allow the library type to be selected once type selection is implemented
-            ProjectOutputType::Library => CompiledItemType::StaticLib
+            ProjectOutputType::Library(lib_type) => match lib_type {
+              OutputLibType::Static => CompiledItemType::StaticLib,
+              OutputLibType::Shared => CompiledItemType::SharedLib
+            }
           },
           link: None
         })
@@ -172,7 +180,7 @@ pub fn main_file_name(project_lang: &MainFileLanguage, project_type: &ProjectOut
       extension_prefix = "c";
       file_name = "main";
     },
-    ProjectOutputType::Library => {
+    ProjectOutputType::Library(_) => {
       extension_prefix = "h";
       file_name = "lib";
     }

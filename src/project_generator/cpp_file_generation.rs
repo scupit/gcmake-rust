@@ -19,7 +19,7 @@ pub fn generate_cpp_main<T: AsRef<Path>>(file_path: T, project_output_type: &Pro
   
   match project_output_type {
     ProjectOutputType::Executable => write!(&main_file, "{}", CPP_EXE_MAIN)?,
-    ProjectOutputType::Library => write!(&main_file, "{}", CPP_LIB_MAIN)?
+    ProjectOutputType::Library(_) => write!(&main_file, "{}", CPP_LIB_MAIN)?
   }
   Ok(())
 }
