@@ -1,10 +1,10 @@
 use std::{borrow::BorrowMut, collections::{HashMap, HashSet}, fmt::format, fs::File, io::{self, Write}, path::PathBuf};
 
-use crate::{data_types::raw_types::{BuildConfig, BuildConfigCompilerSpecifier, BuildType, CompiledItemType, CompilerSpecifier, ImplementationLanguage, RawCompiledItem}, item_resolver::{FinalProjectData, FinalProjectType}};
+use crate::{data_types::raw_types::{BuildConfig, BuildConfigCompilerSpecifier, BuildType, CompiledItemType, CompilerSpecifier, ImplementationLanguage, RawCompiledItem}, item_resolver::{CompiledOutputItem, FinalProjectData, FinalProjectType}};
 
 pub fn write_cmakelists(project_data: &FinalProjectData) -> io::Result<()> {
-  for project in project_data.get_subprojects() {
-    write_cmakelists(project)?
+  for (_, subproject) in project_data.get_subprojects() {
+    write_cmakelists(subproject)?
   }
 
   CMakeListsWriter::new(project_data)?.write_cmakelists()?;
@@ -77,6 +77,8 @@ impl<'a> CMakeListsWriter<'a> {
       self.project_data.get_project_name()
     )?;
 
+    self.write_newline()?;
+    self.set_basic_var("", "CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS", "true")?;
     // TODO: Set Output directory configuration by config
     // self.set_basic_var("", var_value)
 
@@ -450,6 +452,32 @@ impl<'a> CMakeListsWriter<'a> {
     Ok(())
   }
 
+  fn write_links_for_output(&self, output_name: &str, output_data: &CompiledOutputItem) -> io::Result<()> {
+    if output_data.has_links() {
+      writeln!(&self.cmakelists_file,
+        "\ntarget_link_libraries( {}",
+        output_name
+      )?;
+
+      for (subproject_name, lib_names_linking) in output_data.get_links().as_ref().unwrap() {
+        for lib_name in lib_names_linking {
+          // TODO: Namespace the libs with the subproject include_prefix.
+          // However, I need to implement aliased targets, exports, and install rules first.
+          writeln!(&self.cmakelists_file,
+            "\t{}",
+            lib_name
+          )?;
+        }
+      }
+
+      writeln!(&self.cmakelists_file,
+        ")"
+      )?;
+    }
+
+    Ok(())
+  }
+
   fn write_output_title(&self, output_name: &str) -> io::Result<()> {
     writeln!(&self.cmakelists_file,
       "\n# ========== {} ==========",
@@ -460,7 +488,7 @@ impl<'a> CMakeListsWriter<'a> {
 
   fn write_defined_type_library(
     &self,
-    output_data: &RawCompiledItem,
+    output_data: &CompiledOutputItem,
     output_name: &str,
     src_var_name: &str,
     includes_var_name: &str,
@@ -488,7 +516,7 @@ impl<'a> CMakeListsWriter<'a> {
     self.write_newline()?;
 
     writeln!(&self.cmakelists_file,
-      "target_include_directories( {}\n\tPUBLIC ${{{}}}\n)",
+      "target_include_directories( {}\n\tPUBLIC ${{{}}}\n ${{CMAKE_CURRENT_SOURCE_DIR}}\n)",
       output_name,
       &project_include_dir_varname
     )?;
@@ -502,6 +530,9 @@ impl<'a> CMakeListsWriter<'a> {
       \n)",
       output_name
     )?;
+
+    self.write_newline()?;
+    self.write_links_for_output(output_name, output_data)?;
 
     Ok(()) 
   }
@@ -520,7 +551,7 @@ impl<'a> CMakeListsWriter<'a> {
 
   fn write_executable(
     &self,
-    output_data: &RawCompiledItem,
+    output_data: &CompiledOutputItem,
     output_name: &str,
     src_var_name: &str,
     includes_var_name: &str,
@@ -550,6 +581,9 @@ impl<'a> CMakeListsWriter<'a> {
       "set_target_properties( {} PROPERTIES\n\tRUNTIME_OUTPUT_DIRECTORY ${{CMAKE_BINARY_DIR}}/bin/${{CMAKE_BUILD_TYPE}}\n)",
       output_name
     )?;
+
+    self.write_newline()?;
+    self.write_links_for_output(output_name, output_data)?;
 
     Ok(())
   }

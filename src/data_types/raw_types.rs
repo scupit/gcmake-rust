@@ -199,7 +199,7 @@ pub struct BuildConfig {
 }
 
 
-#[derive(Serialize, Deserialize, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq)]
 pub enum CompiledItemType {
   Executable,
   Library,
@@ -218,7 +218,13 @@ pub enum CompilerSpecifier {
 pub struct RawCompiledItem {
   pub output_type: CompiledItemType,
   pub entry_file: String,
-  // Link order can be important. Eventually figure out how to make/use an ordered Set
+  // Link order can be important. Eventually figure out how to make/use an ordered Set.
+  // Single format: subproject_name::lib_name
+  // Multiple format: subproject_name::{lib_name, another_lib_name}
+
+  // The link format is namespaced like rust imports. subproject_name is the name of 
+  // the library project which contains the library linking to. Eventually you will be able
+  // to link to items inside dependencies as well, once dependency support is added.
   pub link: Option<Vec<String>>
 }
 
