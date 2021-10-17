@@ -1,6 +1,7 @@
 mod data_types;
 mod item_resolver;
 mod logger;
+mod cmake_utils_writer;
 mod cmakelists_writer;
 mod cli_config;
 mod project_generator;
@@ -86,6 +87,8 @@ fn handle_create_project(
 
   let maybe_project_output_type: Option<ProjectOutputType> = if command.executable {
     Some(ProjectOutputType::Executable)
+  } else if command.library {
+    Some(ProjectOutputType::Library(OutputLibType::ToggleStaticOrShared))
   } else if command.static_lib {
     Some(ProjectOutputType::Library(OutputLibType::Static))
   } else if command.shared_lib {

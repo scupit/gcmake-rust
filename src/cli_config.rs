@@ -42,5 +42,7 @@ pub struct NewProjectCommand {
     #[clap(long)]
     pub shared_lib: bool,
     #[clap(long)]
+    pub library: bool,
+    #[clap(long)]
     pub executable: bool
 }

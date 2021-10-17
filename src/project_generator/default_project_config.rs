@@ -12,7 +12,8 @@ pub mod configuration {
 
   pub enum OutputLibType {
     Static,
-    Shared
+    Shared,
+    ToggleStaticOrShared
   }
 
   pub enum ProjectOutputType {
@@ -68,10 +69,10 @@ pub fn get_default_project_config(
           entry_file: String::from(main_file_name(&project_lang, &project_type)),
           output_type: match project_type {
             ProjectOutputType::Executable => CompiledItemType::Executable,
-            // TODO: Allow the library type to be selected once type selection is implemented
             ProjectOutputType::Library(lib_type) => match lib_type {
               OutputLibType::Static => CompiledItemType::StaticLib,
-              OutputLibType::Shared => CompiledItemType::SharedLib
+              OutputLibType::Shared => CompiledItemType::SharedLib,
+              OutputLibType::ToggleStaticOrShared => CompiledItemType::Library
             }
           },
           link: None

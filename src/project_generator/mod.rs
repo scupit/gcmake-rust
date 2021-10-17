@@ -7,7 +7,7 @@ use serde::Serialize;
 
 use std::{fs::{File, create_dir, remove_dir_all}, io::{self, ErrorKind, Write, stdin}, path::Path};
 
-use crate::{data_types::raw_types::RawProject, project_generator::{c_file_generation::generate_c_main, cpp_file_generation::generate_cpp_main, default_project_config::{DefaultProject, configuration::{MainFileLanguage, ProjectOutputType}, get_default_project_config, get_default_subproject_config, main_file_name}}};
+use crate::{project_generator::{c_file_generation::generate_c_main, cpp_file_generation::generate_cpp_main, default_project_config::{DefaultProject, configuration::{MainFileLanguage, ProjectOutputType}, get_default_project_config, get_default_subproject_config, main_file_name}}};
 
 use self::configuration::OutputLibType;
 
@@ -290,11 +290,12 @@ fn prompt_for_project_output_type() -> io::Result<ProjectOutputType> {
 
 fn prompt_for_lib_output_type() -> io::Result<OutputLibType> {
   let prompt_result =  prompt_until(
-    "1: Static\n2: Shared\nChoose Project Type (1 or 2): ",
+    "1: Static\n2: Shared\n3: Toggleable type\nChoose Project Type (1 or 2): ",
     |result| if let PromptResult::Custom(value) = result {
       match value.as_str() {
         "1" | "Static" => true,
         "2" | "Shared" => true,
+        "3" | "Toggleable (can select Static or Shared on configure)" => true,
         _ => false
       }
     } else { false }
@@ -304,6 +305,7 @@ fn prompt_for_lib_output_type() -> io::Result<OutputLibType> {
     prompt_result.custom_into(|value| match value.as_str() {
       "1" | "Static" => OutputLibType::Static,
       "2" | "Shared" => OutputLibType::Shared,
+      "3" | "Toggleable Type" => OutputLibType::ToggleStaticOrShared,
       _ => OutputLibType::Static
     })
   )

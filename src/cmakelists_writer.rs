@@ -1,13 +1,17 @@
-use std::{borrow::BorrowMut, collections::{HashMap, HashSet}, fmt::format, fs::File, io::{self, Write}, path::PathBuf};
+use std::{collections::{HashMap, HashSet}, fs::File, io::{self, Write}, path::{Path, PathBuf}};
 
-use crate::{data_types::raw_types::{BuildConfig, BuildConfigCompilerSpecifier, BuildType, CompiledItemType, CompilerSpecifier, ImplementationLanguage, RawCompiledItem}, item_resolver::{CompiledOutputItem, FinalProjectData, FinalProjectType, path_manipulation::cleaned_path_str}};
+use crate::{cmake_utils_writer::CMakeUtilWriter, data_types::raw_types::{BuildConfig, BuildConfigCompilerSpecifier, BuildType, CompiledItemType, CompilerSpecifier, ImplementationLanguage, RawCompiledItem}, item_resolver::{CompiledOutputItem, FinalProjectData, FinalProjectType, path_manipulation::cleaned_path_str}};
 
 pub fn write_cmakelists(project_data: &FinalProjectData) -> io::Result<()> {
   for (_, subproject) in project_data.get_subprojects() {
     write_cmakelists(subproject)?
   }
 
-  CMakeListsWriter::new(project_data)?.write_cmakelists()?;
+  let cmake_util_path = Path::new(project_data.get_project_root()).join("cmake");
+  let util_writer = CMakeUtilWriter::new(cmake_util_path);
+  util_writer.write_cmake_utils()?;
+
+  CMakeListsWriter::new(project_data, util_writer)?.write_cmakelists()?;
   Ok(())
 }
 
@@ -30,22 +34,26 @@ fn defines_generator_string(build_type: &BuildType, build_config: &BuildConfig) 
 
 struct CMakeListsWriter<'a> {
   project_data: &'a FinalProjectData,
+  util_writer: CMakeUtilWriter,
   cmakelists_file: File
 }
 
 impl<'a> CMakeListsWriter<'a> {
-  fn new(project_data: &'a FinalProjectData) -> io::Result<Self> {
+  fn new(project_data: &'a FinalProjectData, util_writer: CMakeUtilWriter) -> io::Result<Self> {
     let file_name: String = format!("{}/CMakeLists.txt", project_data.get_project_root());
     let cmakelists_file: File = File::create(file_name)?;
 
     Ok(Self {
       project_data,
+      util_writer,
       cmakelists_file
     })
   }
 
   fn write_cmakelists(&self) -> io::Result<()> {
     self.write_project_header()?;
+
+    self.include_utils()?;
 
     if let FinalProjectType::Full = self.project_data.get_project_type() {
       self.write_section_header("Language Configuration")?;
@@ -82,6 +90,16 @@ impl<'a> CMakeListsWriter<'a> {
     // TODO: Set Output directory configuration by config
     // self.set_basic_var("", var_value)
 
+    Ok(())
+  }
+
+  fn include_utils(&self) -> io::Result<()> {
+    for (util_name, _) in self.util_writer.get_utils() {
+      writeln!(&self.cmakelists_file,
+        "include( cmake/{}.cmake )",
+        util_name
+      )?;
+    }
     Ok(())
   }
 
@@ -413,21 +431,25 @@ impl<'a> CMakeListsWriter<'a> {
     // Write libraries first
     for (output_name, output_data) in self.project_data.get_outputs() {
       match output_data.get_output_type() {
-        output_type @ (CompiledItemType::StaticLib | CompiledItemType::SharedLib) => {
-          let is_static = *output_type == CompiledItemType::StaticLib;
-
+        CompiledItemType::StaticLib | CompiledItemType::SharedLib => {
           self.write_defined_type_library(
             output_data,
             output_name,
             &src_var_name,
             &includes_var_name,
             &template_impls_var_name,
-            &project_include_dir_varname,
-            is_static
+            &project_include_dir_varname
           )?;
         }
         CompiledItemType::Library => {
-          println!("TODO: Write library which can be either STATIC or SHARED (User selects)")
+          self.write_toggle_type_library(
+            output_data,
+            output_name,
+            &src_var_name,
+            &includes_var_name,
+            &template_impls_var_name,
+            &project_include_dir_varname
+          )?;
         },
         _ => ()
       }
@@ -461,7 +483,10 @@ impl<'a> CMakeListsWriter<'a> {
         output_name
       )?;
 
-      for (subproject_name, lib_names_linking) in output_data.get_links().as_ref().unwrap() {
+      // TODO: Use subproject name for namespacing once namespaced output targets are implemented.
+      // Or at least use the subproject name to get the subproject, and derive its namespace name
+      // from that.
+      for (_, lib_names_linking) in output_data.get_links().as_ref().unwrap() {
         for lib_name in lib_names_linking {
           // TODO: Namespace the libs with the subproject include_prefix.
           // However, I need to implement aliased targets, exports, and install rules first.
@@ -496,11 +521,10 @@ impl<'a> CMakeListsWriter<'a> {
     includes_var_name: &str,
     template_impls_var_name: &str,
     project_include_dir_varname: &str,
-    is_static: bool
   ) -> io::Result<()> {
     self.write_output_title(output_name)?;
 
-    let lib_type_string: &'static str = if is_static {
+    let lib_type_string: &'static str = if let CompiledItemType::StaticLib = output_data.get_output_type() {
       "STATIC"
     } else {
       "SHARED"
@@ -517,6 +541,54 @@ impl<'a> CMakeListsWriter<'a> {
     )?;
     self.write_newline()?;
 
+    self.write_general_library_data(
+      output_data,
+      output_name,
+      project_include_dir_varname
+    )?;
+
+    Ok(()) 
+  }
+
+  fn write_toggle_type_library(
+    &self,
+    output_data: &CompiledOutputItem,
+    output_name: &str,
+    src_var_name: &str,
+    includes_var_name: &str,
+    template_impls_var_name: &str,
+    project_include_dir_varname: &str
+  ) -> io::Result<()> {
+    self.write_output_title(output_name)?;
+
+    writeln!(&self.cmakelists_file,
+      // TODO: Find a way to get the make_toggle_lib function name at runtime from the CMakeUtilsWriter
+      // struct. This could easily cause hard to track bugs if the function name is changed.
+      "make_toggle_lib( {} {}\n\t# SOURCES\n\t\t{} \"${{{}}}\"\n\t# HEADERS\n\t\t\"${{{}}}\" \"${{{}}}\"\n)",
+      output_name,
+      "STATIC",
+      format!("${{CMAKE_CURRENT_SOURCE_DIR}}/{}", output_data.get_entry_file().replace("./", "")),
+      src_var_name,
+      includes_var_name,
+      template_impls_var_name
+    )?;
+    self.write_newline()?;
+
+    self.write_general_library_data(
+      output_data,
+      output_name,
+      project_include_dir_varname
+    )?;
+
+    Ok(()) 
+  }
+
+  fn write_general_library_data(
+    &self,
+    output_data: &CompiledOutputItem,
+    output_name: &str,
+    project_include_dir_varname: &str
+  ) -> io::Result<()> {
     writeln!(&self.cmakelists_file,
       "target_include_directories( {}\n\tPUBLIC ${{{}}}\n ${{CMAKE_CURRENT_SOURCE_DIR}}\n)",
       output_name,
@@ -535,21 +607,8 @@ impl<'a> CMakeListsWriter<'a> {
 
     self.write_newline()?;
     self.write_links_for_output(output_name, output_data)?;
-
-    Ok(()) 
+    Ok(())
   }
-
-  // fn write_toggle_type_library(
-  //   &self,
-  //   output_data: &RawCompiledItem,
-  //   output_name: &str,
-  //   src_var_name: &str,
-  //   includes_var_name: &str,
-  //   template_impls_var_name: &str,
-  //   project_include_dir_varname: &str
-  // ) -> io::Result<()> {
-
-  // }
 
   fn write_executable(
     &self,

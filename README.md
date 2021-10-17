@@ -54,7 +54,6 @@ with all the project data already there shouldn't be too hard.
 - Add define for when the project is being built as a subproject.
 
 ### Targets
-- Allow user to toggle whether a library is static or shared.
 - Support for header-only libraries.
 - Defines and flags per target.
 - Namespaced output targets
@@ -65,6 +64,10 @@ with all the project data already there shouldn't be too hard.
 
 ## Generation TODO
 - Add ability to generate header, source, and template-impl files. Must support C and C++.
+- Generate *.gitignore* file if it doesn't exist. Ignore:
+  - .vscode/
+  - build/
+- Generate default .clang-format and .clang-tidy files if they don't exist.
 
 ## CLI TODO
 
@@ -72,3 +75,4 @@ with all the project data already there shouldn't be too hard.
 - `dep-graph <target>` command which prints a dependency graph for the given target
 - `show-defines <config-name>` command which prints the defines specified by the buildsystem for a given configuration.
 - `show-flags <config-name>` command which prints the compiler flags specified by the buildsystem for a given configuration.
+- `new clang-format` command which generates a .clang-format if it doesn't exist.
