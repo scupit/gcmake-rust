@@ -12,3 +12,6 @@ serde_yaml = "0.8.17"
 path-clean = "0.1.0"
 clap = "3.0.0-beta.4"
 regex = "1"
+
+[profile.release]
+lto = true

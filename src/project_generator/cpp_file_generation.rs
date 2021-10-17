@@ -8,7 +8,7 @@ const CPP_EXE_MAIN: &'static str =
 int main(int argc, const char** argv) {
 \tstd::cout << \"Hello World\" << std::endl;
 \treturn EXIT_SUCCESS;
-}}
+}
 ";
 
 const CPP_LIB_MAIN: &'static str =
