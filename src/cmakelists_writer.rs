@@ -1,6 +1,6 @@
 use std::{borrow::BorrowMut, collections::{HashMap, HashSet}, fmt::format, fs::File, io::{self, Write}, path::PathBuf};
 
-use crate::{data_types::raw_types::{BuildConfig, BuildConfigCompilerSpecifier, BuildType, CompiledItemType, CompilerSpecifier, ImplementationLanguage, RawCompiledItem}, item_resolver::{CompiledOutputItem, FinalProjectData, FinalProjectType}};
+use crate::{data_types::raw_types::{BuildConfig, BuildConfigCompilerSpecifier, BuildType, CompiledItemType, CompilerSpecifier, ImplementationLanguage, RawCompiledItem}, item_resolver::{CompiledOutputItem, FinalProjectData, FinalProjectType, path_manipulation::cleaned_path_str}};
 
 pub fn write_cmakelists(project_data: &FinalProjectData) -> io::Result<()> {
   for (_, subproject) in project_data.get_subprojects() {
@@ -338,11 +338,13 @@ impl<'a> CMakeListsWriter<'a> {
     cmake_location_prefix: &str,
     file_path_collection: &Vec<PathBuf>
   ) -> io::Result<()> {
+    let cleaned_file_root:String = cleaned_path_str(file_location_root);
+
     writeln!(&self.cmakelists_file, "set( {}", var_name)?;
     for file_path in file_path_collection {
       let fixed_file_path = file_path
         .to_string_lossy()
-        .replace(file_location_root, "");
+        .replace(&cleaned_file_root, "");
 
       writeln!(&self.cmakelists_file, "\t${{{}}}{}", &cmake_location_prefix, fixed_file_path)?;
     }
