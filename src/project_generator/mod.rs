@@ -290,7 +290,7 @@ fn prompt_for_project_output_type() -> io::Result<ProjectOutputType> {
 
 fn prompt_for_lib_output_type() -> io::Result<OutputLibType> {
   let prompt_result =  prompt_until(
-    "1: Static\n2: Shared\n3: Toggleable type\nChoose Project Type (1 or 2): ",
+    "1: Static\n2: Shared\n3: Toggleable type\nChoose Project Type: ",
     |result| if let PromptResult::Custom(value) = result {
       match value.as_str() {
         "1" | "Static" => true,
