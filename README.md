@@ -51,12 +51,13 @@ with all the project data already there shouldn't be too hard.
 ## Configuration TODO
 
 ### General
-- Add define for when the project is being built as a subproject.
+Add way to detect when this project is being built as a subproject.
+(Maybe `CMAKE_SOURCE_DIR` !== `CMAKE_CURRENT_SOURCE_DIR`)
 
 ### Targets
+- **Namespaced output targets**
 - Support for header-only libraries.
 - Defines and flags per target.
-- Namespaced output targets
 
 ### Installation
 - Configure installation
@@ -67,7 +68,11 @@ with all the project data already there shouldn't be too hard.
 - Generate *.gitignore* file if it doesn't exist. Ignore:
   - .vscode/
   - build/
-- Generate default .clang-format and .clang-tidy files if they don't exist.
+
+Support for:
+- `.clang-format`
+- `.clang-tidy`
+- valgrind?
 
 ## CLI TODO
 
@@ -76,3 +81,53 @@ with all the project data already there shouldn't be too hard.
 - `show-defines <config-name>` command which prints the defines specified by the buildsystem for a given configuration.
 - `show-flags <config-name>` command which prints the compiler flags specified by the buildsystem for a given configuration.
 - `new clang-format` command which generates a .clang-format if it doesn't exist.
+
+## External libraries TODO
+Add support for bringing external libraries into the project.
+
+Types of libraries which need support, from easiest to hardest:
+  1. Another gcmake (this project) project
+  2. Project which already has a [pre-written cmake find module](https://cmake.org/cmake/help/v3.22/manual/cmake-modules.7.html#find-modules)
+  3. CMake project which can be added using *add_subdirectory*
+  4. CMake project which can't use add_subdirectory (must be built and installed on the system separately)
+  5. Non-CMake project
+
+### Dependency components
+- Git Repo information (or download URL information)
+- Library name (exact match)
+- Library components (target names)
+
+### Libraries I want to explicitly support for convenience
+
+Pre-written CMake find modules:
+* Boost
+* CURL
+* Curses (ncurses)
+* Doxygen
+* FreeType
+* GLEW
+* OpenGL
+* OpenSSL
+* SDL (not sure why these are listed separately in the docs, I'll have to research that.)
+  * SDL_image
+  * SDL_mixer
+  * SDL_net
+  * SDL_sound
+  * SDL_ttf
+* SQLite (3)
+* wxWidgets
+* Vulkan
+* ZLIB
+
+Other CMake projects:
+* [nlohmann json](https://github.com/nlohmann/json)
+* [SFML](https://www.sfml-dev.org/)
+* [JUCE](https://juce.com/)
+* [yaml-cpp](https://github.com/jbeder/yaml-cpp)
+* [GLFW](https://www.glfw.org/)
+* [OpenCV](https://opencv.org/)
+* [ffmpeg](https://www.ffmpeg.org/)
+* [TensorFlow](https://www.tensorflow.org/)
+* [imgui](https://github.com/ocornut/imgui)
+* [Asio](https://think-async.com/Asio/)
+* [GLM (OpenGL Mathematics)](https://github.com/g-truc/glm)
