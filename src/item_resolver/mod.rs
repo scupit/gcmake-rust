@@ -1,7 +1,7 @@
 pub mod path_manipulation;
 
-use std::{ascii::AsciiExt, borrow::Borrow, collections::{HashMap, HashSet}, fs::{self, DirEntry, read_dir}, io::{self}, os::windows::raw, path::{Path, PathBuf}};
-use crate::{data_types::raw_types::*, item_resolver::path_manipulation::cleaned_path_str};
+use std::{collections::{HashMap, HashSet}, fs::{self, DirEntry, read_dir}, io::{self}, os::windows::raw, path::{Path, PathBuf}};
+use crate::{data_types::{raw_types::*, dependencies::{dep_in::RawPredefinedDependency, dependency_configs::{RawDep, RawSubdirectoryDependency, AllPredefinedDependencies}}}, item_resolver::path_manipulation::cleaned_path_str};
 use self::path_manipulation::{cleaned_path, cleaned_pathbuf};
 use regex::{Captures, Regex};
 
@@ -171,6 +171,92 @@ fn validate_raw_project(project_data: &RawProject) -> Result<(), String> {
   Ok(())
 }
 
+pub enum GitRevisionSpecifier {
+  Tag(String),
+  CommitHash(String)
+}
+
+pub enum DependencyVersion {
+  MinRequired(String),
+  Exact(String)
+}
+
+pub struct FinalGitRepoDescriptor {
+  repo_url: String,
+  download_specifier: GitRevisionSpecifier
+}
+
+// TODO: Construct these in FinalProjectData by merging the
+// definition given by the user with the predefined definition by this library.
+// While doing that, make sure the user spelled the project and library
+// component names right.
+pub struct FinalPredefinedDependency {
+  git_repo: FinalGitRepoDescriptor,
+  // Map of target base name to the namespaced target name used for linking.
+  target_map: HashMap<String, String>
+}
+
+impl FinalPredefinedDependency {
+  pub fn new(
+    dep_config: &AllPredefinedDependencies,
+    dep_name: &str,
+    user_given_config: &RawPredefinedDependency
+  ) -> Result<Self, String> {
+    return match dep_config.find_dependency(dep_name) {
+      Some(dep) => match dep {
+        RawDep::AsSubdirectory(subdir_dep) =>
+          Ok(Self::from_subdir_dep(subdir_dep, user_given_config))
+      }
+      None => Err(format!("Unable to find predefined dependency named '{}'.", dep_name))
+    }
+  }
+
+  pub fn get_linkable_target_name(&self, target_name: &str) -> Option<&str> {
+    self.target_map.get(target_name)
+      .map(|str_ref| &str_ref[..])
+  }
+
+  pub fn has_target_named(&self, target_name: &str) -> bool {
+    self.target_map.get(target_name).is_some()
+  }
+
+  pub fn repo_url(&self) -> &str {
+    &self.git_repo.repo_url
+  }
+
+  pub fn revision(&self) -> &GitRevisionSpecifier {
+    &self.git_repo.download_specifier
+  }
+
+  fn from_subdir_dep(
+    subdir_dep: &RawSubdirectoryDependency,
+    user_given_config: &RawPredefinedDependency
+  ) -> Self {
+    let download_specifier: GitRevisionSpecifier = if let Some(tag_string) = &user_given_config.git_tag {
+      GitRevisionSpecifier::Tag(tag_string.clone())
+    } else {
+      GitRevisionSpecifier::Tag(subdir_dep.git_repo.latest_stable_release_tag.clone())
+    };
+
+    let mut target_map: HashMap<String, String> = HashMap::new();
+
+    for target_name in &subdir_dep.target_names {
+      target_map.insert(
+        target_name.into(),
+        subdir_dep.namespaced_target(target_name).unwrap()
+      );
+    }
+
+    return Self {
+      git_repo: FinalGitRepoDescriptor {
+        repo_url: subdir_dep.git_repo.repo_url.clone(),
+        download_specifier
+      },
+      target_map 
+    }
+  }
+}
+
 pub struct FinalProjectData {
   project_type: FinalProjectType,
   project_root: String,
@@ -184,19 +270,20 @@ pub struct FinalProjectData {
   // subproject_names: HashSet<String>,
   // subprojects: Vec<FinalProjectData>,
   subprojects: HashMap<String, FinalProjectData>,
-  output: HashMap<String, CompiledOutputItem>
+  output: HashMap<String, CompiledOutputItem>,
+  predefined_dependencies: HashMap<String, FinalPredefinedDependency>
 }
 
 impl FinalProjectData {
-  pub fn new(unclean_project_root: &str) -> Result<FinalProjectData, String> {
-    let project_data_result: FinalProjectData = Self::create_new(unclean_project_root, false)?;
+  pub fn new(unclean_project_root: &str, dep_config: &AllPredefinedDependencies) -> Result<FinalProjectData, String> {
+    let project_data_result: FinalProjectData = Self::create_new(unclean_project_root, false, dep_config)?;
 
     project_data_result.validate_correctness()?;
 
     return Ok(project_data_result);
   }
 
-  fn create_new(unclean_project_root: &str, is_subproject: bool) -> Result<FinalProjectData, String> {
+  fn create_new(unclean_project_root: &str, is_subproject: bool, all_dep_config: &AllPredefinedDependencies) -> Result<FinalProjectData, String> {
     // NOTE: Subprojects are still considered whole projects, however they are not allowed to specify
     // top level build configuration data. This means that language data, build configs, etc. are not
     // defined in subprojects, and shouldn't be written. Build configuration related data is inherited
@@ -231,7 +318,10 @@ impl FinalProjectData {
       for subproject_dirname in dirnames {
         let full_subproject_dir = format!("{}/subprojects/{}", &project_root, subproject_dirname);
 
-        subprojects.insert(subproject_dirname.clone(), Self::create_new(&full_subproject_dir, true)?);
+        subprojects.insert(
+          subproject_dirname.clone(),
+          Self::create_new(&full_subproject_dir, true, all_dep_config)?
+        );
       }
     }
 
@@ -239,6 +329,20 @@ impl FinalProjectData {
 
     for (output_name, raw_output_item) in raw_project.get_output() {
       output_items.insert(output_name.to_owned(), CompiledOutputItem::from(raw_output_item)?);
+    }
+
+    let mut predefined_dependencies: HashMap<String, FinalPredefinedDependency> = HashMap::new();
+
+    if let Some(pre_deps) = &raw_project.predefined_dependencies {
+      for (dep_name, user_given_config) in pre_deps {
+        let finalized_dep = FinalPredefinedDependency::new(
+          all_dep_config,
+          dep_name,
+          user_given_config
+        )?;
+
+        predefined_dependencies.insert(dep_name.into(), finalized_dep);
+      }
     }
 
     let mut finalized_project_data = FinalProjectData {
@@ -252,7 +356,8 @@ impl FinalProjectData {
       include_files: Vec::<PathBuf>::new(),
       template_impl_files: Vec::<PathBuf>::new(),
       subprojects,
-      output: output_items
+      output: output_items,
+      predefined_dependencies
     };
 
     match populate_files(Path::new(&finalized_project_data.src_dir), &mut finalized_project_data.src_files) {
@@ -285,28 +390,39 @@ impl FinalProjectData {
         // exist and if they do, that the linked libraries from withing those projects exist
         // as well.
         for (project_name_containing_libraries, lib_names_linking) in link_map {
-          match self.subprojects.get_key_value(project_name_containing_libraries) {
-            // NOTE: matching_subproject_name might be redundant, since it's the same
-            // as project_name_containing_libraries.
-            Some((matching_subproject_name, matching_subproject)) => {
-              for lib_name_linking in lib_names_linking {
-                if !matching_subproject.has_library_output_named(lib_name_linking) {
-                  return Err(format!(
-                    "Output item '{}' in project '{}' tries to link to a nonexistent library '{}' in subproject '{}'.",
-                    output_name,
-                    self.get_project_name(),
-                    lib_name_linking,
-                    matching_subproject_name
-                  ));
-                }
+          if let Some(matching_subproject) = self.subprojects.get(project_name_containing_libraries) {
+            for lib_name_linking in lib_names_linking {
+              if !matching_subproject.has_library_output_named(lib_name_linking) {
+                return Err(format!(
+                  "Output item '{}' in project '{}' tries to link to a nonexistent library '{}' in subproject '{}'.",
+                  output_name,
+                  self.get_project_name(),
+                  lib_name_linking,
+                  project_name_containing_libraries
+                ));
               }
-            },
-            None => return Err(format!(
+            }
+          }
+          else if let Some(final_dep) = self.predefined_dependencies.get(project_name_containing_libraries) {
+            for lib_name_linking in lib_names_linking {
+              if !final_dep.has_target_named(lib_name_linking) {
+                return Err(format!(
+                  "Output item '{}' in project '{}' tries to link to a nonexistent target '{}' in predefined dependency '{}'.",
+                  output_name,
+                  self.get_project_name(),
+                  lib_name_linking,
+                  project_name_containing_libraries
+                ))
+              }
+            }
+          }
+          else {
+            return Err(format!(
               "Output item '{}' in project '{}' tries to link to libraries in a project named '{}', however that project doesn't exist.",
               output_name,
               self.get_project_name(),
               project_name_containing_libraries
-            ))
+            ));
           }
         }
       }
@@ -324,6 +440,10 @@ impl FinalProjectData {
 
   pub fn has_subprojects(&self) -> bool {
     !self.subprojects.is_empty()
+  }
+
+  pub fn has_predefined_dependencies(&self) -> bool {
+    self.predefined_dependencies.len() > 0
   }
 
   pub fn get_subproject_names(&self) -> HashSet<String> {
@@ -386,6 +506,10 @@ impl FinalProjectData {
 
   pub fn get_project_type(&self) -> &FinalProjectType {
     &self.project_type
+  }
+
+  pub fn get_predefined_dependencies(&self) -> &HashMap<String, FinalPredefinedDependency> {
+    &self.predefined_dependencies
   }
 }
 

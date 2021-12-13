@@ -1,6 +1,8 @@
 use std::collections::{HashMap, HashSet};
 use serde::{Serialize, Deserialize};
 
+use super::dependencies::dep_in::RawPredefinedDependency;
+
 pub type BuildTypeOptionMap = HashMap<BuildConfigCompilerSpecifier, BuildConfig>;
 pub type BuildConfigMap = HashMap<BuildType, BuildTypeOptionMap>;
 
@@ -21,12 +23,13 @@ pub struct RawProject {
   pub include_prefix: String,
   pub description: String,
   pub version: String,
+  pub default_build_type: BuildType,
   pub languages: LanguageMap,
   pub supported_compilers: HashSet<CompilerSpecifier>,
-  pub default_build_type: BuildType,
-  pub global_defines: Option<HashSet<String>>,
   pub output: HashMap<String, RawCompiledItem>,
+  pub global_defines: Option<HashSet<String>>,
   pub subprojects: Option<HashSet<String>>,
+  pub predefined_dependencies: Option<HashMap<String, RawPredefinedDependency>>,
   pub build_configs: BuildConfigMap,
 }
 
@@ -75,6 +78,7 @@ impl RawProject {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
+#[serde(deny_unknown_fields)]
 pub struct RawSubproject {
   name: String,
   // If possible, should be the same as the project name
@@ -83,7 +87,8 @@ pub struct RawSubproject {
   version: String,
   // global_defines: HashSet<String>,
   output: HashMap<String, RawCompiledItem>,
-  subprojects: Option<HashSet<String>>
+  subprojects: Option<HashSet<String>>,
+  pub predefined_dependencies: Option<HashMap<String, RawPredefinedDependency>>
 }
 
 impl ProjectLike for RawSubproject {
@@ -112,7 +117,8 @@ impl From<RawProject> for RawSubproject {
       description: project_data.description,
       version: project_data.version,
       output: project_data.output,
-      subprojects: project_data.subprojects
+      subprojects: project_data.subprojects,
+      predefined_dependencies: project_data.predefined_dependencies
     }
   }
 }
@@ -131,18 +137,21 @@ impl Into<RawProject> for RawSubproject {
       build_configs: HashMap::new(),
       global_defines: None,
       output: self.output,
-      subprojects: self.subprojects
+      subprojects: self.subprojects,
+      predefined_dependencies: self.predefined_dependencies
     }
   }
 }
 
 #[derive(Serialize, Deserialize, Debug, Eq, PartialEq, Hash)]
+#[serde(deny_unknown_fields)]
 pub enum ImplementationLanguage {
   C,
   Cpp
 }
 
 #[derive(Serialize, Deserialize, Debug)]
+#[serde(deny_unknown_fields)]
 pub struct LanguageConfig {
   pub default_standard: i8,
   pub allowed_standards: HashSet<i8>
@@ -165,6 +174,7 @@ impl LanguageConfig {
 }
 
 #[derive(Serialize, Deserialize, Debug, Eq, PartialEq, Hash)]
+#[serde(deny_unknown_fields)]
 pub enum BuildType {
   Debug,
   Release,
@@ -184,6 +194,7 @@ impl BuildType {
 }
 
 #[derive(Serialize, Deserialize, Debug, Eq, PartialEq, Hash)]
+#[serde(deny_unknown_fields)]
 pub enum BuildConfigCompilerSpecifier {
   All,
   GCC,
@@ -193,6 +204,7 @@ pub enum BuildConfigCompilerSpecifier {
 
 
 #[derive(Serialize, Deserialize, Debug)]
+#[serde(deny_unknown_fields)]
 pub struct BuildConfig {
   pub flags: Option<HashSet<String>>,
   pub defines: Option<HashSet<String>>
@@ -200,6 +212,7 @@ pub struct BuildConfig {
 
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq)]
+#[serde(deny_unknown_fields)]
 pub enum CompiledItemType {
   Executable,
   Library,
@@ -208,6 +221,7 @@ pub enum CompiledItemType {
 }
 
 #[derive(Serialize, Deserialize, Hash, Debug, Eq, PartialEq, PartialOrd, Ord, Clone, Copy)]
+#[serde(deny_unknown_fields)]
 pub enum CompilerSpecifier {
   GCC,
   MSVC,
@@ -215,6 +229,7 @@ pub enum CompilerSpecifier {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
+#[serde(deny_unknown_fields)]
 pub struct RawCompiledItem {
   pub output_type: CompiledItemType,
   pub entry_file: String,

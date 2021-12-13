@@ -1,6 +1,6 @@
-use std::{collections::{HashMap, HashSet}, fs::File, io::{self, Write}, path::{Path, PathBuf}};
+use std::{collections::{HashMap, HashSet}, fs::File, io::{self, Write}, path::{Path, PathBuf}, borrow::Borrow};
 
-use crate::{cmake_utils_writer::CMakeUtilWriter, data_types::raw_types::{BuildConfig, BuildConfigCompilerSpecifier, BuildType, CompiledItemType, CompilerSpecifier, ImplementationLanguage, RawCompiledItem}, item_resolver::{CompiledOutputItem, FinalProjectData, FinalProjectType, path_manipulation::cleaned_path_str}};
+use crate::{cmake_utils_writer::CMakeUtilWriter, data_types::raw_types::{BuildConfig, BuildConfigCompilerSpecifier, BuildType, CompiledItemType, CompilerSpecifier, ImplementationLanguage, RawCompiledItem}, item_resolver::{CompiledOutputItem, FinalProjectData, FinalProjectType, path_manipulation::cleaned_path_str, GitRevisionSpecifier}, logger::exit_error_log};
 
 pub fn write_cmakelists(project_data: &FinalProjectData) -> io::Result<()> {
   for (_, subproject) in project_data.get_subprojects() {
@@ -55,6 +55,10 @@ impl<'a> CMakeListsWriter<'a> {
 
     self.include_utils()?;
 
+    if self.project_data.has_predefined_dependencies() {
+      self.write_predefined_dependencies()?;
+    }
+
     if let FinalProjectType::Full = self.project_data.get_project_type() {
       self.write_section_header("Language Configuration")?;
       self.write_language_config()?;
@@ -77,7 +81,7 @@ impl<'a> CMakeListsWriter<'a> {
 
   fn write_project_header(&self) -> io::Result<()> {
     // CMake Version header
-    writeln!(&self.cmakelists_file, "cmake_minimum_required( VERSION 3.12 )")?;
+    writeln!(&self.cmakelists_file, "cmake_minimum_required( VERSION 3.19 )")?;
 
     // Project metadata
     writeln!(&self.cmakelists_file,
@@ -94,6 +98,9 @@ impl<'a> CMakeListsWriter<'a> {
   }
 
   fn include_utils(&self) -> io::Result<()> {
+    self.write_newline()?;
+    writeln!(&self.cmakelists_file, "include(FetchContent)")?;
+
     for (util_name, _) in self.util_writer.get_utils() {
       writeln!(&self.cmakelists_file,
         "include( cmake/{}.cmake )",
@@ -201,6 +208,51 @@ impl<'a> CMakeListsWriter<'a> {
       .collect();
 
     self.write_def_list("", &defines_list)?;
+
+    Ok(())
+  }
+
+  fn write_predefined_dependencies(&self) -> io::Result<()> {
+    let mut all_dep_names: Vec<&str> = Vec::new();
+
+    for (dep_name, dep_info) in self.project_data.get_predefined_dependencies() {
+      all_dep_names.push(dep_name);
+
+      writeln!(&self.cmakelists_file,
+        "\nFetchContent_Declare(\n\t{}\n\tSOURCE_DIR ${{CMAKE_CURRENT_SOURCE_DIR}}/dep/{}\n\tGIT_REPOSITORY {}\n\tGIT_PROGRESS TRUE",
+        dep_name,
+        dep_name,
+        dep_info.repo_url()
+      )?;
+      
+      // TODO: Refactor this
+      match dep_info.revision() {
+        GitRevisionSpecifier::Tag(tag_string) => {
+          writeln!(&self.cmakelists_file,
+            "\tGIT_TAG {}",
+            tag_string
+          )?;
+        },
+        GitRevisionSpecifier::CommitHash(hash_string) => {
+          writeln!(&self.cmakelists_file,
+            "\tGIT_TAG {}",
+            hash_string
+          )?;
+        }
+      }
+
+      writeln!(&self.cmakelists_file, ")")?;
+    }
+
+    writeln!(&self.cmakelists_file, "\nFetchContent_MakeAvailable(")?;
+
+    for dep_name in all_dep_names {
+      writeln!(&self.cmakelists_file,
+        "\t{}",
+        dep_name
+      )?;
+    }
+    writeln!(&self.cmakelists_file, ")")?;
 
     Ok(())
   }
@@ -476,25 +528,55 @@ impl<'a> CMakeListsWriter<'a> {
     Ok(())
   }
 
+  fn for_each_linkable_library_name<F>(
+    &self,
+    project_name: &str,
+    lib_names: &Vec<String>,
+    callback: F
+  ) -> io::Result<()>
+    where F: Fn(&str) -> io::Result<()>
+  {
+    if let Some(subproject) = self.project_data.get_subprojects().get(project_name) {
+      for lib_name in lib_names {
+        callback(lib_name)?;
+      }
+    }
+    else if let Some(predefined_dep) = self.project_data.get_predefined_dependencies().get(project_name) {
+      for non_namespaced_name in lib_names {
+        callback(predefined_dep.get_linkable_target_name(non_namespaced_name).unwrap())?;
+      }
+    }
+    else {
+      exit_error_log(&format!("Unable to find project with name {} when linking... this shouldn't happen.", project_name));
+    }
+
+    Ok(())
+  }
+
   fn write_links_for_output(&self, output_name: &str, output_data: &CompiledOutputItem) -> io::Result<()> {
     if output_data.has_links() {
       writeln!(&self.cmakelists_file,
-        "\ntarget_link_libraries( {}",
+        "target_link_libraries( {}",
         output_name
       )?;
 
       // TODO: Use subproject name for namespacing once namespaced output targets are implemented.
       // Or at least use the subproject name to get the subproject, and derive its namespace name
       // from that.
-      for (_, lib_names_linking) in output_data.get_links().as_ref().unwrap() {
-        for lib_name in lib_names_linking {
-          // TODO: Namespace the libs with the subproject include_prefix.
-          // However, I need to implement aliased targets, exports, and install rules first.
-          writeln!(&self.cmakelists_file,
-            "\t{}",
-            lib_name
-          )?;
-        }
+      for (project_name, lib_names_linking) in output_data.get_links().as_ref().unwrap() {
+        self.for_each_linkable_library_name(
+          project_name,
+          lib_names_linking,
+          |lib_name| {
+            // TODO: Namespace the libs with the subproject include_prefix.
+            // However, I need to implement aliased targets, exports, and install rules first.
+            writeln!(&self.cmakelists_file,
+              "\t{}",
+              lib_name
+            )?;
+            Ok(())
+          }
+        )?;
       }
 
       writeln!(&self.cmakelists_file,

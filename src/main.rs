@@ -14,12 +14,17 @@ use clap::Clap;
 use cli_config::{NewProjectCommand, Opts, SubCommand};
 use project_generator::{create_project_at, configuration::MainFileLanguage};
 
-use crate::{item_resolver::path_manipulation::cleaned_path_str, project_generator::configuration::{OutputLibType, ProjectOutputType}};
+use crate::{item_resolver::path_manipulation::cleaned_path_str, project_generator::configuration::{OutputLibType, ProjectOutputType}, data_types::dependencies::supported_dependency_configs};
 
 // TODO: Handle library creation for Static and Shared libraries.
 // Also allow both at once, so the user can select which type is built in the CMake GUI.
 fn main() {
   let opts: Opts = Opts::parse();
+
+  let dep_config = match supported_dependency_configs() {
+    Ok(config) => config,
+    Err(error_message) => exit_error_log(&error_message)
+  };
 
   // Project root is only set by the user when using the default command. When using subcommands or unspecified
   // in the main command, uses the current working directory.
@@ -38,7 +43,7 @@ fn main() {
   if should_generate_cmakelists {
     println!("\nBeginning CMakeLists generation...");
 
-    match FinalProjectData::new(&project_root_dir) {
+    match FinalProjectData::new(&project_root_dir, &dep_config) {
       Ok(project_data) => {
         match write_cmakelists(&project_data) {
           Ok(_) => println!("CMakeLists all written successfully!"),

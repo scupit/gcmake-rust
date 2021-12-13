@@ -78,6 +78,7 @@ pub fn get_default_project_config(
           link: None
         })
       ]),
+      predefined_dependencies: None,
       build_configs: HashMap::from_iter([
         (BuildType::Debug, HashMap::from_iter([
           (BuildConfigCompilerSpecifier::GCC, BuildConfig {
