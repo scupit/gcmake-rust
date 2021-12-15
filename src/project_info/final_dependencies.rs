@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use super::raw_data_in::dependencies::{dependency_configs::{AllPredefinedDependencies, RawDep, RawSubdirectoryDependency}, dep_in::RawPredefinedDependency};
+use super::raw_data_in::dependencies::{internal_dep_config::{AllPredefinedDependencies, RawDep, RawSubdirectoryDependency}, user_given_dep_config::UserGivenPredefinedDependencyConfig};
 
 pub enum GitRevisionSpecifier {
   Tag(String),
@@ -32,7 +32,7 @@ impl FinalPredefinedDependency {
   pub fn new(
     dep_config: &AllPredefinedDependencies,
     dep_name: &str,
-    user_given_config: &RawPredefinedDependency
+    user_given_config: &UserGivenPredefinedDependencyConfig
   ) -> Result<Self, String> {
     return match dep_config.find_dependency(dep_name) {
       Some(dep) => match dep {
@@ -62,7 +62,7 @@ impl FinalPredefinedDependency {
 
   fn from_subdir_dep(
     subdir_dep: &RawSubdirectoryDependency,
-    user_given_config: &RawPredefinedDependency
+    user_given_config: &UserGivenPredefinedDependencyConfig
   ) -> Self {
     let download_specifier: GitRevisionSpecifier = if let Some(tag_string) = &user_given_config.git_tag {
       GitRevisionSpecifier::Tag(tag_string.clone())

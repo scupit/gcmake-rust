@@ -1,10 +1,10 @@
-pub mod dependency_configs;
+pub mod internal_dep_config;
 mod supported_dependencies;
 
-pub mod dep_in;
+pub mod user_given_dep_config;
 
 use supported_dependencies::DEPENDENCIES_YAML_STRING;
-use self::dependency_configs::AllPredefinedDependencies;
+use self::internal_dep_config::AllPredefinedDependencies;
 
 pub fn supported_dependency_configs() -> Result<AllPredefinedDependencies, String> {
   return match serde_yaml::from_str::<AllPredefinedDependencies>(DEPENDENCIES_YAML_STRING) {

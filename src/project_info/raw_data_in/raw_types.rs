@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 use serde::{Serialize, Deserialize};
 
-use super::dependencies::dep_in::RawPredefinedDependency;
+use super::dependencies::user_given_dep_config::UserGivenPredefinedDependencyConfig;
 
 pub type BuildTypeOptionMap = HashMap<BuildConfigCompilerSpecifier, BuildConfig>;
 pub type BuildConfigMap = HashMap<BuildType, BuildTypeOptionMap>;
@@ -29,7 +29,7 @@ pub struct RawProject {
   pub output: HashMap<String, RawCompiledItem>,
   pub global_defines: Option<HashSet<String>>,
   pub subprojects: Option<HashSet<String>>,
-  pub predefined_dependencies: Option<HashMap<String, RawPredefinedDependency>>,
+  pub predefined_dependencies: Option<HashMap<String, UserGivenPredefinedDependencyConfig>>,
   pub build_configs: BuildConfigMap,
 }
 
@@ -88,7 +88,7 @@ pub struct RawSubproject {
   // global_defines: HashSet<String>,
   output: HashMap<String, RawCompiledItem>,
   subprojects: Option<HashSet<String>>,
-  pub predefined_dependencies: Option<HashMap<String, RawPredefinedDependency>>
+  pub predefined_dependencies: Option<HashMap<String, UserGivenPredefinedDependencyConfig>>
 }
 
 impl ProjectLike for RawSubproject {

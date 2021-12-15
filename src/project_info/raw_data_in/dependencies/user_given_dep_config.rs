@@ -2,6 +2,6 @@ use serde::{Serialize, Deserialize};
 
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(deny_unknown_fields)]
-pub struct RawPredefinedDependency {
+pub struct UserGivenPredefinedDependencyConfig {
   pub git_tag: Option<String>
 }
