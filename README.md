@@ -162,7 +162,7 @@ Pre-written CMake find modules:
 - [ ] ZLIB
 
 Other CMake projects:
-- [ ] [nlohmann json](https://github.com/nlohmann/json)
+- [x] [nlohmann json](https://github.com/nlohmann/json)
 - [x] [SFML](https://www.sfml-dev.org/)
 - [ ] [JUCE](https://juce.com/)
 - [ ] [yaml-cpp](https://github.com/jbeder/yaml-cpp)

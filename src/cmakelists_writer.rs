@@ -107,6 +107,10 @@ impl<'a> CMakeListsWriter<'a> {
         util_name
       )?;
     }
+
+    self.write_newline()?;
+    self.set_basic_var("", "FETCHCONTENT_QUIET", "OFF")?;
+
     Ok(())
   }
 
