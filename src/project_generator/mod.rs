@@ -1,81 +1,21 @@
 mod c_file_generation;
 mod cpp_file_generation;
 mod default_project_config;
+mod prompt;
 
 pub use default_project_config::configuration;
 use serde::Serialize;
 
-use std::{fs::{File, create_dir, remove_dir_all}, io::{self, ErrorKind, Write, stdin}, path::Path};
+use std::{fs::{File, create_dir, remove_dir_all}, io::{self, ErrorKind}, path::Path};
 
-use crate::{project_generator::{c_file_generation::generate_c_main, cpp_file_generation::generate_cpp_main, default_project_config::{DefaultProject, configuration::{MainFileLanguage, ProjectOutputType}, get_default_project_config, get_default_subproject_config, main_file_name}}};
+use crate::{project_generator::{c_file_generation::generate_c_main, cpp_file_generation::generate_cpp_main, default_project_config::{DefaultProject, configuration::{MainFileLanguage, ProjectOutputType}, get_default_project_config, get_default_subproject_config, main_file_name}, prompt::{prompt_once, prompt_for_project_output_type, prompt_for_language, prompt_for_description}}};
 
-use self::configuration::OutputLibType;
+use self::{prompt::{prompt_until_boolean, PromptResult}};
 
 const SRC_DIR: &'static str = "src";
 const INCLUDE_DIR: &'static str = "include";
 const TEMPLATE_IMPL_DIR: &'static str = "template_impls";
 
-#[derive(Debug)]
-enum PromptResult {
-  Yes,
-  No,
-  Custom(String),
-  Empty
-}
-
-impl PromptResult {
-  fn unwrap_or(self, empty_replacement: String) -> String {
-    return match self {
-      Self::Yes => "y".to_owned(),
-      Self::No => "n".to_owned(),
-      Self::Custom(value) => value,
-      Self::Empty => empty_replacement
-    }
-  }
-
-  fn custom_into<T, F>(self, converter: F) -> T 
-    where F: FnOnce(String) -> T
-  {
-    return converter(self.unwrap_custom())
-  }
-
-  fn custom_into_io_result<T, F>(self, converter: F) -> io::Result<T>
-    where F: FnOnce(String) -> io::Result<T>
-  {
-    return converter(self.unwrap_custom())
-  }
-
-  fn unwrap_custom(self) -> String {
-    if let Self::Custom(value) = self {
-      return value;
-    }
-
-    panic!("Cannot unwrap a PrompResult which is not a Custom value.");
-  }
-
-  fn is_yes_or_no(&self) -> bool {
-    return match *self {
-      Self::Yes | Self::No => true,
-      _ => false
-    }
-  }
-
-  fn is_custom(&self) -> bool {
-    return if let Self::Custom(_) = &self {
-      true
-    }
-    else { false }
-  }
-
-  fn from_str(string: &str) -> PromptResult {
-    match string.trim() {
-      "" => PromptResult::Empty,
-      "y" => PromptResult::Yes,
-      "n" => PromptResult::No,
-      custom_value => PromptResult::Custom(custom_value.to_string())
-    }
-  }
-}
 
 pub fn create_project_at(
   new_project_root: &str,
@@ -203,114 +143,4 @@ fn write_cmake_yaml<T: Serialize>(
     },
     Err(err) => return Err(io::Error::new(ErrorKind::Other, err))
   }
-}
-
-fn prompt_once(prompt: &str) -> io::Result<PromptResult> {
-  let mut buffer = String::new();
-
-  print!("{}", prompt);
-  io::stdout().flush()?;
-
-  stdin().read_line(&mut buffer)?;
-  return Ok(PromptResult::from_str(buffer.trim()))
-}
-
-fn prompt_until<T>(prompt: &str, predicate: T) -> io::Result<PromptResult>
-  where T: Fn(&PromptResult) -> bool
-{
-  let mut buffer = String::new();
-
-  print!("{}", prompt);
-  io::stdout().flush()?;
-
-  stdin().read_line(&mut buffer)?;
-  let mut result: PromptResult = PromptResult::from_str(buffer.trim());
-
-  while !predicate(&result) {
-    buffer.clear();
-
-    print!("{}", prompt);
-    io::stdout().flush()?;
-
-    stdin().read_line(&mut buffer)?;
-    result = PromptResult::from_str(buffer.trim());
-  }
-
-  return Ok(result)
-}
-
-fn prompt_until_boolean(prompt: &str) -> io::Result<PromptResult> {
-  prompt_until(prompt, |result| result.is_yes_or_no())
-}
-
-fn prompt_until_value(prompt: &str) -> io::Result<PromptResult> {
-  prompt_until(prompt, |result| result.is_custom())
-}
-
-// TODO: Refactor these multi-option prompts into an actual system. This is ugly and confusing.
-fn prompt_for_language() -> io::Result<MainFileLanguage> {
-  let prompt_result =  prompt_until(
-    "1: C\n2: C++\nChoose Language (1 or 2): ",
-    |result| if let PromptResult::Custom(value) = result {
-      match value.as_str() {
-        "1" | "C" => true,
-        "2" | "C++" => true,
-        _ => false
-      }
-    } else { false }
-  )?;
-
-  return Ok(
-    prompt_result.custom_into(|value| match value.as_str() {
-      "1" | "C" => MainFileLanguage::C,
-      "2" | "C++" => MainFileLanguage::Cpp,
-      _ => MainFileLanguage::Cpp
-    })
-  )
-}
-
-fn prompt_for_project_output_type() -> io::Result<ProjectOutputType> {
-  let prompt_result =  prompt_until(
-    "1: Executable\n2: Library\nChoose Project Type (1 or 2): ",
-    |result| if let PromptResult::Custom(value) = result {
-      match value.as_str() {
-        "1" | "Executable" => true,
-        "2" | "Library" => true,
-        _ => false
-      }
-    } else { false }
-  )?;
-
-  return prompt_result.custom_into_io_result(|value| match value.as_str() {
-    "1" | "Executable" => Ok(ProjectOutputType::Executable),
-    "2" | "Library" => Ok(ProjectOutputType::Library(prompt_for_lib_output_type()?)),
-    _ => Ok(ProjectOutputType::Executable)
-  })
-}
-
-fn prompt_for_lib_output_type() -> io::Result<OutputLibType> {
-  let prompt_result =  prompt_until(
-    "1: Static\n2: Shared\n3: Toggleable type\nChoose Project Type: ",
-    |result| if let PromptResult::Custom(value) = result {
-      match value.as_str() {
-        "1" | "Static" => true,
-        "2" | "Shared" => true,
-        "3" | "Toggleable (can select Static or Shared on configure)" => true,
-        _ => false
-      }
-    } else { false }
-  )?;
-
-  return Ok(
-    prompt_result.custom_into(|value| match value.as_str() {
-      "1" | "Static" => OutputLibType::Static,
-      "2" | "Shared" => OutputLibType::Shared,
-      "3" | "Toggleable Type" => OutputLibType::ToggleStaticOrShared,
-      _ => OutputLibType::Static
-    })
-  )
-}
-
-fn prompt_for_description() -> io::Result<String> {
-  Ok(prompt_until_value("Description: ")?.unwrap_custom())
 }
