@@ -1,6 +1,6 @@
 use std::{collections::{HashMap, HashSet}, fs::File, io::{self, Write}, path::{Path, PathBuf}};
 
-use crate::{cmake_utils_writer::CMakeUtilWriter, project_info::{final_project_data::{FinalProjectData, FinalProjectType, CompiledOutputItem}, path_manipulation::cleaned_path_str, final_dependencies::GitRevisionSpecifier, raw_data_in::{BuildType, BuildConfig, ImplementationLanguage, BuildConfigCompilerSpecifier, CompilerSpecifier, CompiledItemType}}, logger::exit_error_log};
+use crate::{cmake_utils_writer::CMakeUtilWriter, project_info::{final_project_data::{FinalProjectData}, path_manipulation::cleaned_path_str, final_dependencies::GitRevisionSpecifier, raw_data_in::{BuildType, BuildConfig, ImplementationLanguage, BuildConfigCompilerSpecifier, CompilerSpecifier, CompiledItemType}, FinalProjectType, CompiledOutputItem}, logger::exit_error_log};
 
 pub fn write_cmakelists(project_data: &FinalProjectData) -> io::Result<()> {
   for (_, subproject) in project_data.get_subprojects() {
