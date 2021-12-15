@@ -1,7 +1,7 @@
 use std::{collections::{HashMap, HashSet}, fs::{self}, io::{self}, path::{Path, PathBuf}};
 use regex::{Captures, Regex};
 
-use super::{path_manipulation::{cleaned_pathbuf, cleaned_path_str}, raw_data_in::{raw_types::{RawProject, RawSubproject, BuildConfigMap, BuildType, LanguageMap, CompiledItemType, RawCompiledItem, ProjectLike}, dependencies::internal_dep_config::AllPredefinedDependencies}, final_dependencies::FinalPredefinedDependency};
+use super::{path_manipulation::{cleaned_pathbuf, cleaned_path_str}, final_dependencies::FinalPredefinedDependency, raw_data_in::{RawProject, RawSubproject, ProjectLike, dependencies::internal_dep_config::AllPredefinedDependencies, BuildConfigMap, BuildType, LanguageMap, CompiledItemType, RawCompiledItem}};
 
 fn yaml_names_from_dir(project_root: &str) -> Vec<PathBuf> {
   let cmake_data_path: PathBuf = Path::new(project_root)

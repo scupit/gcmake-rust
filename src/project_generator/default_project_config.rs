@@ -1,5 +1,6 @@
 use std::{collections::{HashMap, HashSet}, iter::FromIterator};
-use crate::project_info::raw_data_in::raw_types::{RawProject, RawSubproject, ProjectLike, CompilerSpecifier, ImplementationLanguage, LanguageConfig, RawCompiledItem, CompiledItemType, BuildType, BuildConfigCompilerSpecifier, BuildConfig};
+
+use crate::project_info::raw_data_in::{RawProject, RawSubproject, ProjectLike, CompilerSpecifier, ImplementationLanguage, LanguageConfig, RawCompiledItem, CompiledItemType, BuildType, BuildConfigCompilerSpecifier, BuildConfig};
 
 use self::configuration::{MainFileLanguage, OutputLibType, ProjectOutputType};
 
