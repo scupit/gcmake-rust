@@ -21,6 +21,15 @@ as_subdirectory:
       # sfml-main is only available when building for windows
       - main
 
+  nlohmann_json:
+    git_repo:
+      repo_url: git@github.com:ArthurSonzogni/nlohmann_json_cmake_fetchcontent.git
+      latest_stable_release_tag: "v3.10.4"
+    namespace_config:
+      used_in_cmake_yaml: nlohmann_json
+      cmakelists_linking: "nlohmann_json::"
+    target_names:
+      - nlohmann_json
 
   # JUCE:
   #   find_package_config:
