@@ -1,7 +1,7 @@
-use std::{collections::{HashMap, HashSet}, error::Error, fs::create_dir, io::{self, stdin}, iter::FromIterator, path::{Path, PathBuf}};
-use crate::{data_types::raw_types::{BuildConfig, BuildConfigCompilerSpecifier, BuildType, CompiledItemType, CompilerSpecifier, ImplementationLanguage, LanguageConfig, ProjectLike, RawCompiledItem, RawProject, RawSubproject}, main};
-use self::configuration::{MainFileLanguage, OutputLibType, ProjectOutputType};
+use std::{collections::{HashMap, HashSet}, iter::FromIterator};
+use crate::project_info::raw_data_in::raw_types::{RawProject, RawSubproject, ProjectLike, CompilerSpecifier, ImplementationLanguage, LanguageConfig, RawCompiledItem, CompiledItemType, BuildType, BuildConfigCompilerSpecifier, BuildConfig};
 
+use self::configuration::{MainFileLanguage, OutputLibType, ProjectOutputType};
 
 pub mod configuration {
   #[derive(Clone, Copy)]

@@ -1,6 +1,6 @@
-use std::{collections::{HashMap, HashSet}, fs::File, io::{self, Write}, path::{Path, PathBuf}, borrow::Borrow};
+use std::{collections::{HashMap, HashSet}, fs::File, io::{self, Write}, path::{Path, PathBuf}};
 
-use crate::{cmake_utils_writer::CMakeUtilWriter, data_types::raw_types::{BuildConfig, BuildConfigCompilerSpecifier, BuildType, CompiledItemType, CompilerSpecifier, ImplementationLanguage, RawCompiledItem}, item_resolver::{CompiledOutputItem, FinalProjectData, FinalProjectType, path_manipulation::cleaned_path_str, GitRevisionSpecifier}, logger::exit_error_log};
+use crate::{cmake_utils_writer::CMakeUtilWriter, project_info::{final_project_data::{FinalProjectData, FinalProjectType, CompiledOutputItem}, path_manipulation::cleaned_path_str, raw_data_in::raw_types::{BuildType, BuildConfig, ImplementationLanguage, BuildConfigCompilerSpecifier, CompilerSpecifier, CompiledItemType}, final_dependencies::GitRevisionSpecifier}, logger::exit_error_log};
 
 pub fn write_cmakelists(project_data: &FinalProjectData) -> io::Result<()> {
   for (_, subproject) in project_data.get_subprojects() {
@@ -536,7 +536,7 @@ impl<'a> CMakeListsWriter<'a> {
   ) -> io::Result<()>
     where F: Fn(&str) -> io::Result<()>
   {
-    if let Some(subproject) = self.project_data.get_subprojects().get(project_name) {
+    if let Some(_subproject) = self.project_data.get_subprojects().get(project_name) {
       for lib_name in lib_names {
         callback(lib_name)?;
       }

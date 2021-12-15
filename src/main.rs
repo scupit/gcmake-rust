@@ -1,20 +1,20 @@
-mod data_types;
-mod item_resolver;
+mod project_info;
 mod logger;
 mod cmake_utils_writer;
 mod cmakelists_writer;
 mod cli_config;
 mod project_generator;
 
-use item_resolver::FinalProjectData;
 use logger::exit_error_log;
 use cmakelists_writer::write_cmakelists;
 
 use clap::Clap;
 use cli_config::{NewProjectCommand, Opts, SubCommand};
-use project_generator::{create_project_at, configuration::MainFileLanguage};
+use project_generator::{create_project_at, configuration::{MainFileLanguage, ProjectOutputType, OutputLibType}};
+use project_info::path_manipulation::cleaned_path_str;
 
-use crate::{item_resolver::path_manipulation::cleaned_path_str, project_generator::configuration::{OutputLibType, ProjectOutputType}, data_types::dependencies::supported_dependency_configs};
+use crate::project_info::{final_project_data::FinalProjectData, raw_data_in::dependencies::supported_dependency_configs};
+
 
 // TODO: Handle library creation for Static and Shared libraries.
 // Also allow both at once, so the user can select which type is built in the CMake GUI.

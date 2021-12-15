@@ -184,7 +184,7 @@ pub enum BuildType {
 
 impl BuildType {
   pub fn name_string(&self) -> &'static str {
-    match *self {
+    match self {
       Self::Debug => "Debug",
       Self::Release => "Release",
       Self::MinSizeRel => "MinSizeRel",
