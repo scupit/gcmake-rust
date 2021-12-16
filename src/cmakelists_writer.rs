@@ -93,12 +93,12 @@ impl<'a> CMakeListsWriter<'a> {
       self.write_subproject_includes()?;
     }
 
-    self.write_section_header("Outputs")?;
-
     if self.project_data.has_prebuild_script() {
+      self.write_section_header("Pre-build script configuration")?;
       self.write_prebuild_script_use()?;
     }
 
+    self.write_section_header("Outputs")?;
     self.write_outputs()?;
     Ok(())
   }
@@ -153,9 +153,11 @@ impl<'a> CMakeListsWriter<'a> {
           "set_target_properties( {} PROPERTIES\n\tRUNTIME_OUTPUT_DIRECTORY ${{CMAKE_BINARY_DIR}}/bin/${{CMAKE_BUILD_TYPE}}/pre-build\n)",
           script_target_name
         )?;
-
         self.write_newline()?;
+
         self.write_target_compile_options_for_output(script_target_name, exe_info)?;
+        self.write_newline()?;
+
         self.write_links_for_output(script_target_name, exe_info)?;
         self.write_newline()?;
 
