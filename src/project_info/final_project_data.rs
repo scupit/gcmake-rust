@@ -28,7 +28,13 @@ fn resolve_prebuild_script(project_root: &str, pre_build_config: &PreBuildConfig
 pub struct FinalProjectData {
   project_type: FinalProjectType,
   project_root: String,
-  project: RawProject,
+  // project: RawProject,
+  project_name: String,
+  build_config_map: BuildConfigMap,
+  default_build_config: BuildType,
+  language_config_map: LanguageMap,
+  global_defines: Option<HashSet<String>>,
+  include_prefix: String,
   src_dir: String,
   include_dir: String,
   template_impls_dir: String,
@@ -86,10 +92,16 @@ impl FinalProjectData {
     if let Some(dirnames) = raw_project.get_subproject_dirnames() {
       for subproject_dirname in dirnames {
         let full_subproject_dir = format!("{}/subprojects/{}", &project_root, subproject_dirname);
+        let mut new_subproject: FinalProjectData = Self::create_new(&full_subproject_dir, true, all_dep_config)?;
+
+        // Subprojects must inherit these from their parent project in order to properly
+        // set compiler flags and other properties per output item.
+        new_subproject.build_config_map = raw_project.build_configs.clone();
+        new_subproject.language_config_map = raw_project.languages.clone();
 
         subprojects.insert(
           subproject_dirname.clone(),
-          Self::create_new(&full_subproject_dir, true, all_dep_config)?
+          new_subproject
         );
       }
     }
@@ -122,9 +134,14 @@ impl FinalProjectData {
     )?;
 
     let mut finalized_project_data = FinalProjectData {
+      project_name: raw_project.name,
+      include_prefix: raw_project.include_prefix,
+      global_defines: raw_project.global_defines,
+      build_config_map: raw_project.build_configs,
+      default_build_config: raw_project.default_build_type,
+      language_config_map: raw_project.languages,
       project_type,
       project_root,
-      project: raw_project,
       src_dir,
       include_dir,
       template_impls_dir,
@@ -285,15 +302,11 @@ impl FinalProjectData {
   }
 
   pub fn get_include_prefix(&self) -> &str {
-    return self.project.get_include_prefix();
+    &self.include_prefix
   }
 
   pub fn get_project_name(&self) -> &str {
-    return self.project.get_name();
-  }
-
-  pub fn get_raw_project(&self) -> &RawProject {
-    return &self.project;
+    &self.project_name
   }
 
   pub fn get_src_dir(&self) -> &str {
@@ -309,19 +322,19 @@ impl FinalProjectData {
   }
 
   pub fn get_build_configs(&self) -> &BuildConfigMap {
-    self.project.get_build_configs()
+    &self.build_config_map
   }
 
   pub fn get_default_build_config(&self) -> &BuildType {
-    self.project.get_default_build_config()
+    &self.default_build_config
   }
 
   pub fn get_language_info(&self) -> &LanguageMap {
-    self.project.get_langauge_info()
+    &self.language_config_map
   }
 
   pub fn get_global_defines(&self) -> &Option<HashSet<String>> {
-    self.project.get_global_defines()
+    &self.global_defines
   }
   
   pub fn get_subprojects(&self) -> &HashMap<String, FinalProjectData> {

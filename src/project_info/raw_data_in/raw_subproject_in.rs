@@ -11,7 +11,6 @@ pub struct RawSubproject {
   include_prefix: String,
   description: String,
   version: String,
-  // global_defines: HashSet<String>,
   prebuild_config: Option<PreBuildConfigIn>,
   output: HashMap<String, RawCompiledItem>,
   subprojects: Option<HashSet<String>>,
@@ -20,7 +19,7 @@ pub struct RawSubproject {
 
 impl ProjectLike for RawSubproject {
   fn get_name(&self) -> &str {
-      &self.name
+    &self.name
   }
   
   fn get_description(&self) -> &str {

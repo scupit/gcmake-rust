@@ -78,7 +78,7 @@ impl RawProject {
   }
 }
 
-#[derive(Serialize, Deserialize, Debug, Eq, PartialEq, Hash)]
+#[derive(Serialize, Deserialize, Debug, Eq, PartialEq, Hash, Clone)]
 #[serde(deny_unknown_fields)]
 pub enum ImplementationLanguage {
   C,
@@ -91,7 +91,7 @@ pub struct PreBuildConfigIn {
   pub link: Option<Vec<String>>
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(deny_unknown_fields)]
 pub struct LanguageConfig {
   pub default_standard: i8,
@@ -114,7 +114,7 @@ impl LanguageConfig {
   }
 }
 
-#[derive(Serialize, Deserialize, Debug, Eq, PartialEq, Hash)]
+#[derive(Serialize, Deserialize, Debug, Eq, PartialEq, Hash, Clone)]
 #[serde(deny_unknown_fields)]
 pub enum BuildType {
   Debug,
@@ -134,7 +134,7 @@ impl BuildType {
   }
 }
 
-#[derive(Serialize, Deserialize, Debug, Eq, PartialEq, Hash)]
+#[derive(Serialize, Deserialize, Debug, Eq, PartialEq, Hash, Clone)]
 #[serde(deny_unknown_fields)]
 pub enum BuildConfigCompilerSpecifier {
   All,
@@ -144,7 +144,7 @@ pub enum BuildConfigCompilerSpecifier {
 }
 
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(deny_unknown_fields)]
 pub struct BuildConfig {
   pub flags: Option<HashSet<String>>,

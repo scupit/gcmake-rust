@@ -69,6 +69,7 @@ impl<'a> CMakeListsWriter<'a> {
   }
 
   fn write_cmakelists(&self) -> io::Result<()> {
+    let project_type: &FinalProjectType = self.project_data.get_project_type();
     self.write_project_header()?;
 
     self.include_utils()?;
@@ -77,13 +78,13 @@ impl<'a> CMakeListsWriter<'a> {
       self.write_predefined_dependencies()?;
     }
 
-    if let FinalProjectType::Full = self.project_data.get_project_type() {
+    if let FinalProjectType::Full = project_type {
       self.write_section_header("Language Configuration")?;
       self.write_language_config()?;
-
-      self.write_section_header("Build Configurations")?;
-      self.write_build_config_section()?;
     }
+
+    self.write_section_header("Build Configurations")?;
+    self.write_build_config_section(project_type)?;
 
     // NOTE: All subprojects must be added after build configuration in order to
     // ensure they inherit all build configuration options.
@@ -320,7 +321,7 @@ impl<'a> CMakeListsWriter<'a> {
     Ok(())
   }
 
-  fn write_build_configs(&self) -> io::Result<()> {
+  fn write_build_configs(&self, project_type: &FinalProjectType) -> io::Result<()> {
     /*
       Compiler
         - <Build/Release...>
@@ -379,14 +380,17 @@ impl<'a> CMakeListsWriter<'a> {
         }
 
           
-        let definitions_generator_string: HashSet<String> = config_map
-          .iter()
-          .map(|(build_type, build_config)| defines_generator_string(build_type, build_config) )
-          .filter(|def| def.is_some())
-          .map(|def| def.unwrap())
-          .collect();
+        if let FinalProjectType::Full = project_type {
+          let definitions_generator_string: HashSet<String> = config_map
+            .iter()
+            .map(|(build_type, build_config)| defines_generator_string(build_type, build_config) )
+            .filter(|def| def.is_some())
+            .map(|def| def.unwrap())
+            .collect();
 
-        self.write_def_list("\t", &definitions_generator_string)?;
+          self.write_def_list("\t", &definitions_generator_string)?;
+
+        }
 
         has_written_a_config = true;
         if_prefix = "else";
@@ -399,43 +403,45 @@ impl<'a> CMakeListsWriter<'a> {
     Ok(())
   }
 
-  fn write_build_config_section(&self) -> io::Result<()> {
+  fn write_build_config_section(&self, project_type: &FinalProjectType) -> io::Result<()> {
     self.write_newline()?;
+    
+    if let FinalProjectType::Full = project_type {
+      if let Some(def_list) = self.project_data.get_global_defines() {
+        self.write_def_list("", def_list)?;
+      }
 
-    if let Some(def_list) = self.project_data.get_global_defines() {
-      self.write_def_list("", def_list)?;
+      let config_names: Vec<&'static str> = self.project_data.get_build_configs()
+        .iter()
+        .map(|(build_type, _)| build_type.name_string())
+        .collect();
+
+      writeln!(&self.cmakelists_file, "\nget_property(isMultiConfigGenerator GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)")?;
+
+      writeln!(&self.cmakelists_file,
+        "\nif( NOT isMultiConfigGenerator )"
+      )?;
+
+      writeln!(&self.cmakelists_file,
+        "\tset_property( CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS {} )",
+        config_names.join(" ")
+      )?;
+
+      writeln!(&self.cmakelists_file,
+        "\n\tif( \"${{CMAKE_BUILD_TYPE}}\" STREQUAL \"\")\n\t\tset( CMAKE_BUILD_TYPE \"{}\" CACHE STRING \"Project Build configuration\" FORCE )\n\tendif()",
+        self.project_data.get_default_build_config().name_string()
+      )?;
+
+      self.write_newline()?;
+      self.write_message("\t", "Building configuration: ${CMAKE_BUILD_TYPE}")?;
+      writeln!(&self.cmakelists_file, "endif()")?;
+
+      self.write_newline()?;
     }
-
-    let config_names: Vec<&'static str> = self.project_data.get_build_configs()
-      .iter()
-      .map(|(build_type, _)| build_type.name_string())
-      .collect();
-
-    writeln!(&self.cmakelists_file, "\nget_property(isMultiConfigGenerator GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)")?;
-
-    writeln!(&self.cmakelists_file,
-      "\nif( NOT isMultiConfigGenerator )"
-    )?;
-
-    writeln!(&self.cmakelists_file,
-      "\tset_property( CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS {} )",
-      config_names.join(" ")
-    )?;
-
-    writeln!(&self.cmakelists_file,
-      "\n\tif( \"${{CMAKE_BUILD_TYPE}}\" STREQUAL \"\")\n\t\tset( CMAKE_BUILD_TYPE \"{}\" CACHE STRING \"Project Build configuration\" FORCE )\n\tendif()",
-      self.project_data.get_default_build_config().name_string()
-    )?;
-
-    self.write_newline()?;
-    self.write_message("\t", "Building configuration: ${CMAKE_BUILD_TYPE}")?;
-    writeln!(&self.cmakelists_file, "endif()")?;
-
-    self.write_newline()?;
 
     self.write_global_config_specific_defines()?;
     self.write_newline()?;
-    self.write_build_configs()?;
+    self.write_build_configs(project_type)?;
     
     Ok(())
   }
