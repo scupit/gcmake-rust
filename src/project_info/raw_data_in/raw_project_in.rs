@@ -94,24 +94,7 @@ pub struct PreBuildConfigIn {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(deny_unknown_fields)]
 pub struct LanguageConfig {
-  pub default_standard: i8,
-  pub allowed_standards: HashSet<i8>
-}
-
-impl LanguageConfig {
-  pub fn get_sorted_standards(&self) -> Vec<String> {
-    let mut temp: Vec<i8> = self.allowed_standards
-      .iter()
-      .map(|num| *num)
-      .collect();
-
-    temp.sort();
-
-    return temp
-      .iter()
-      .map(|standard_num| standard_num.to_string())
-      .collect()
-  }
+  pub standard: i8
 }
 
 #[derive(Serialize, Deserialize, Debug, Eq, PartialEq, Hash, Clone)]

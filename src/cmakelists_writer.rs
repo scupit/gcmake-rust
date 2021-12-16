@@ -191,41 +191,29 @@ impl<'a> CMakeListsWriter<'a> {
     for (lang, lang_config) in self.project_data.get_language_info() {
       self.write_newline()?;
 
-      match *lang {
+      match lang {
         ImplementationLanguage::C => {
           self.set_basic_var(
             "",
-            "CMAKE_C_STANDARD",
-            &format!("{} CACHE STRING \"C Compiler Standard\"", &lang_config.default_standard)
+            "PROJECT_C_LANGUAGE_STANDARD",
+            &lang_config.standard.to_string()
           )?;
 
-          writeln!(&self.cmakelists_file,
-            "set_property( CACHE CMAKE_C_STANDARD PROPERTY STRINGS {} )",
-            lang_config.get_sorted_standards().join(" ")
-          )?;
+          // TODO: Only write these messages if the project is toplevel.
+          // CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR
+          self.write_message("", "Using at least C${PROJECT_C_LANGUAGE_STANDARD} standard")?;
         }
         ImplementationLanguage::Cpp => {
           self.set_basic_var(
             "",
-            "CMAKE_CXX_STANDARD",
-            &format!("{} CACHE STRING \"CXX Compiler Standard\"", &lang_config.default_standard)
+            "PROJECT_CXX_LANGUAGE_STANDARD",
+            &lang_config.standard.to_string()
           )?;
 
-          writeln!(&self.cmakelists_file,
-            "set_property( CACHE CMAKE_CXX_STANDARD PROPERTY STRINGS {} )",
-            lang_config.get_sorted_standards().join(" ")
-          )?;
+          self.write_message("", "Using at least C++${PROJECT_CXX_LANGUAGE_STANDARD} standard")?;
         }
       }
     }
-
-    self.write_newline()?;
-    self.set_basic_var("", "CMAKE_C_STANDARD_REQUIRED", "ON")?;
-    self.set_basic_var("", "CMAKE_C_EXTENSIONS", "OFF")?;
-
-    self.write_newline()?;
-    self.set_basic_var("", "CMAKE_CXX_STANDARD_REQUIRED", "ON")?;
-    self.set_basic_var("", "CMAKE_CXX_EXTENSIONS", "OFF")?;
 
     Ok(())
   }
@@ -610,6 +598,7 @@ impl<'a> CMakeListsWriter<'a> {
     output_name: &str,
     output_data: &CompiledOutputItem
   ) -> io::Result<()> {
+    // Compiler flags
     writeln!(&self.cmakelists_file,
       "target_compile_options( {}\n\tPRIVATE ",
       output_name
@@ -622,6 +611,19 @@ impl<'a> CMakeListsWriter<'a> {
         config.name_string().to_uppercase()
       )?;
     }
+
+    writeln!(&self.cmakelists_file,
+      ")"
+    )?;
+
+    // Language standard and extensions config
+    writeln!(&self.cmakelists_file,
+      "target_compile_features( {}\n\tPRIVATE ",
+      output_name
+    )?;
+
+    writeln!(&self.cmakelists_file, "\t\tc_std_${{PROJECT_C_LANGUAGE_STANDARD}}")?;
+    writeln!(&self.cmakelists_file, "\t\tcxx_std_${{PROJECT_CXX_LANGUAGE_STANDARD}}")?;
 
     writeln!(&self.cmakelists_file,
       ")"
@@ -761,7 +763,7 @@ impl<'a> CMakeListsWriter<'a> {
     project_include_dir_varname: &str
   ) -> io::Result<()> {
     writeln!(&self.cmakelists_file,
-      "target_include_directories( {}\n\tPUBLIC ${{{}}}\n ${{CMAKE_CURRENT_SOURCE_DIR}}\n)",
+      "target_include_directories( {}\n\tPUBLIC ${{{}}}\n\t${{CMAKE_CURRENT_SOURCE_DIR}}\n)",
       output_name,
       &project_include_dir_varname
     )?;

@@ -58,12 +58,10 @@ pub fn get_default_project_config(
       prebuild_config: None,
       languages: HashMap::from_iter([
         (ImplementationLanguage::C, LanguageConfig {
-          allowed_standards: HashSet::from_iter([99, 11, 17]),
-          default_standard: 99
+          standard: 11
         }),
         (ImplementationLanguage::Cpp, LanguageConfig {
-          allowed_standards: HashSet::from_iter([11, 14, 17, 20]),
-          default_standard: 17
+          standard: 17
         })
       ]),
       output: HashMap::from_iter([
