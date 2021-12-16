@@ -1,6 +1,6 @@
 use std::{collections::{HashMap, HashSet}, iter::FromIterator};
 
-use crate::project_info::raw_data_in::{RawProject, RawSubproject, ProjectLike, CompilerSpecifier, ImplementationLanguage, LanguageConfig, RawCompiledItem, CompiledItemType, BuildType, BuildConfigCompilerSpecifier, BuildConfig};
+use crate::project_info::raw_data_in::{RawProject, RawSubproject, ProjectLike, CompilerSpecifier, RawCompiledItem, CompiledItemType, BuildType, BuildConfigCompilerSpecifier, BuildConfig, SingleLanguageConfig, LanguageConfigMap};
 
 use self::configuration::{MainFileLanguage, OutputLibType, ProjectOutputType};
 
@@ -56,14 +56,14 @@ pub fn get_default_project_config(
         CompilerSpecifier::MSVC,
       ]),
       prebuild_config: None,
-      languages: HashMap::from_iter([
-        (ImplementationLanguage::C, LanguageConfig {
+      languages: LanguageConfigMap {
+        C: SingleLanguageConfig {
           standard: 11
-        }),
-        (ImplementationLanguage::Cpp, LanguageConfig {
+        },
+        Cpp: SingleLanguageConfig {
           standard: 17
-        })
-      ]),
+        }
+      },
       output: HashMap::from_iter([
         (String::from("Main"), RawCompiledItem {
           entry_file: String::from(main_file_name(&project_lang, &project_type)),

@@ -1,6 +1,6 @@
 use std::{collections::{HashMap, HashSet}, path::{Path, PathBuf}};
 
-use super::{path_manipulation::{cleaned_path_str, cleaned_pathbuf, relative_to_project_root}, final_dependencies::FinalPredefinedDependency, raw_data_in::{RawProject, RawSubproject, ProjectLike, dependencies::internal_dep_config::AllPredefinedDependencies, BuildConfigMap, BuildType, LanguageMap, CompiledItemType, PreBuildConfigIn, ImplementationLanguage}, final_project_configurables::{FinalProjectType, SubprojectOnlyOptions}, CompiledOutputItem, helpers::{create_subproject_data, create_project_data, validate_raw_project, populate_files, find_prebuild_script, PrebuildScriptFile}, PreBuildScript};
+use super::{path_manipulation::{cleaned_path_str, relative_to_project_root}, final_dependencies::FinalPredefinedDependency, raw_data_in::{RawProject, ProjectLike, dependencies::internal_dep_config::AllPredefinedDependencies, BuildConfigMap, BuildType, LanguageConfigMap, CompiledItemType, PreBuildConfigIn, ImplementationLanguage}, final_project_configurables::{FinalProjectType, SubprojectOnlyOptions}, CompiledOutputItem, helpers::{create_subproject_data, create_project_data, validate_raw_project, populate_files, find_prebuild_script, PrebuildScriptFile}, PreBuildScript};
 
 fn resolve_prebuild_script(project_root: &str, pre_build_config: &PreBuildConfigIn) -> Result<Option<PreBuildScript>, String> {
   let merged_script_config = if let Some(script_file) = find_prebuild_script(project_root) {
@@ -32,7 +32,7 @@ pub struct FinalProjectData {
   project_name: String,
   build_config_map: BuildConfigMap,
   default_build_config: BuildType,
-  language_config_map: LanguageMap,
+  language_config_map: LanguageConfigMap,
   global_defines: Option<HashSet<String>>,
   include_prefix: String,
   src_dir: String,
@@ -236,17 +236,19 @@ impl FinalProjectData {
   }
 
   fn ensure_language_config_correctness(&self) -> Result<(), String> {
-    for (language, config) in self.get_language_info() {
-      match language {
-        ImplementationLanguage::C => match config.standard {
-          99 | 11 | 17 => (),
-          standard => return Err(format!("C Language standard must be one of [99, 11, 17], but {} was given", standard))
-        },
-        ImplementationLanguage::Cpp => match config.standard {
-          11 | 14 | 17 | 20 => (),
-          standard => return Err(format!("C++ Language standard must be one of [11, 14, 17, 20], but {} was given", standard))
-        }
-      }
+    let LanguageConfigMap {
+      C,
+      Cpp
+    } = self.get_language_info();
+
+    match C.standard {
+      99 | 11 | 17 => (),
+      standard => return Err(format!("C Language standard must be one of [99, 11, 17], but {} was given", standard))
+    }
+
+    match Cpp.standard {
+      11 | 14 | 17 | 20 => (),
+      standard => return Err(format!("C++ Language standard must be one of [11, 14, 17, 20], but {} was given", standard))
     }
 
     Ok(())
@@ -348,7 +350,7 @@ impl FinalProjectData {
     &self.default_build_config
   }
 
-  pub fn get_language_info(&self) -> &LanguageMap {
+  pub fn get_language_info(&self) -> &LanguageConfigMap {
     &self.language_config_map
   }
 

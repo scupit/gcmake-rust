@@ -1,6 +1,6 @@
 use std::{collections::{HashMap, HashSet}, fs::File, io::{self, Write}, path::{Path, PathBuf}};
 
-use crate::{cmake_utils_writer::CMakeUtilWriter, project_info::{final_project_data::{FinalProjectData}, path_manipulation::cleaned_path_str, final_dependencies::GitRevisionSpecifier, raw_data_in::{BuildType, BuildConfig, ImplementationLanguage, BuildConfigCompilerSpecifier, CompilerSpecifier, CompiledItemType}, FinalProjectType, CompiledOutputItem, PreBuildScript}, logger::exit_error_log};
+use crate::{cmake_utils_writer::CMakeUtilWriter, project_info::{final_project_data::{FinalProjectData}, path_manipulation::cleaned_path_str, final_dependencies::GitRevisionSpecifier, raw_data_in::{BuildType, BuildConfig, ImplementationLanguage, BuildConfigCompilerSpecifier, CompilerSpecifier, CompiledItemType, LanguageConfigMap}, FinalProjectType, CompiledOutputItem, PreBuildScript}, logger::exit_error_log};
 
 pub fn write_cmakelists(project_data: &FinalProjectData) -> io::Result<()> {
   for (_, subproject) in project_data.get_subprojects() {
@@ -152,7 +152,7 @@ impl<'a> CMakeListsWriter<'a> {
         self.write_properties_for_output(
           script_target_name,
           &HashMap::from([
-            (String::from("RUNTIME_OUTPUT_DIRECTORY"), String::from("${{CMAKE_BINARY_DIR}}/bin/${{CMAKE_BUILD_TYPE}}/pre-build")),
+            (String::from("RUNTIME_OUTPUT_DIRECTORY"), String::from("${CMAKE_BINARY_DIR}/bin/${CMAKE_BUILD_TYPE}/pre-build")),
             (String::from("C_EXTENSIONS"), String::from("OFF")),
             (String::from("CXX_EXTENSIONS"), String::from("OFF"))
           ])
@@ -193,33 +193,31 @@ impl<'a> CMakeListsWriter<'a> {
   }
 
   fn write_language_config(&self) -> io::Result<()> {
-    for (lang, lang_config) in self.project_data.get_language_info() {
-      self.write_newline()?;
+    let LanguageConfigMap {
+      C,
+      Cpp
+    } = self.project_data.get_language_info();
 
-      match lang {
-        ImplementationLanguage::C => {
-          self.set_basic_var(
-            "",
-            "PROJECT_C_LANGUAGE_STANDARD",
-            &lang_config.standard.to_string()
-          )?;
+    // Write C info
+    self.write_newline()?;
+    self.set_basic_var(
+      "",
+      "PROJECT_C_LANGUAGE_STANDARD",
+      &C.standard.to_string()
+    )?;
 
-          // TODO: Only write these messages if the project is toplevel.
-          // CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR
-          self.write_message("", "Using at least C${PROJECT_C_LANGUAGE_STANDARD} standard")?;
-        }
-        ImplementationLanguage::Cpp => {
-          self.set_basic_var(
-            "",
-            "PROJECT_CXX_LANGUAGE_STANDARD",
-            &lang_config.standard.to_string()
-          )?;
+    // TODO: Only write these messages if the project is toplevel.
+    // CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR
+    self.write_message("", "Using at least C${PROJECT_C_LANGUAGE_STANDARD} standard")?;
 
-          self.write_message("", "Using at least C++${PROJECT_CXX_LANGUAGE_STANDARD} standard")?;
-        }
-      }
-    }
+    // Write C++ Info
+    self.set_basic_var(
+      "",
+      "PROJECT_CXX_LANGUAGE_STANDARD",
+      &Cpp.standard.to_string()
+    )?;
 
+    self.write_message("", "Using at least C++${PROJECT_CXX_LANGUAGE_STANDARD} standard")?;
     Ok(())
   }
 

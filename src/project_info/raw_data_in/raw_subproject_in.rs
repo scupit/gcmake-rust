@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 use serde::{Serialize, Deserialize};
 
-use super::{dependencies::user_given_dep_config::UserGivenPredefinedDependencyConfig, raw_project_in::{RawCompiledItem, ProjectLike, RawProject, BuildType}, PreBuildConfigIn};
+use super::{dependencies::user_given_dep_config::UserGivenPredefinedDependencyConfig, raw_project_in::{RawCompiledItem, ProjectLike, RawProject, BuildType}, PreBuildConfigIn, SingleLanguageConfig, LanguageConfigMap};
 
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(deny_unknown_fields)]
@@ -58,10 +58,20 @@ impl Into<RawProject> for RawSubproject {
       include_prefix: self.include_prefix,
       description: self.description,
       version: self.version,
-      languages: HashMap::new(),
+      // NOTE: This language config is only a placeholder. Subprojects will inherit
+      // language info from their parent project.
+      languages: LanguageConfigMap {
+        C: SingleLanguageConfig {
+          standard: 11
+        },
+        Cpp: SingleLanguageConfig {
+          standard: 17
+        }
+      },
       supported_compilers: HashSet::new(),
       default_build_type: BuildType::Debug,
       prebuild_config: self.prebuild_config,
+      // Build configs are also inherited from the parent project.
       build_configs: HashMap::new(),
       global_defines: None,
       output: self.output,

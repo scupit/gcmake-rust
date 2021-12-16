@@ -5,7 +5,13 @@ use super::dependencies::user_given_dep_config::UserGivenPredefinedDependencyCon
 
 pub type BuildTypeOptionMap = HashMap<BuildConfigCompilerSpecifier, BuildConfig>;
 pub type BuildConfigMap = HashMap<BuildType, BuildTypeOptionMap>;
-pub type LanguageMap = HashMap<ImplementationLanguage, LanguageConfig>;
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(deny_unknown_fields)]
+pub struct LanguageConfigMap {
+  pub C: SingleLanguageConfig,
+  pub Cpp: SingleLanguageConfig
+}
 
 pub trait ProjectLike {
   fn get_name(&self) -> &str;
@@ -24,7 +30,7 @@ pub struct RawProject {
   pub description: String,
   pub version: String,
   pub default_build_type: BuildType,
-  pub languages: LanguageMap,
+  pub languages: LanguageConfigMap,
   pub prebuild_config: Option<PreBuildConfigIn>,
   pub supported_compilers: HashSet<CompilerSpecifier>,
   pub output: HashMap<String, RawCompiledItem>,
@@ -69,7 +75,7 @@ impl RawProject {
     &self.default_build_type
   }
 
-  pub fn get_langauge_info(&self) -> &LanguageMap {
+  pub fn get_langauge_info(&self) -> &LanguageConfigMap {
     &self.languages
   }
 
@@ -93,7 +99,7 @@ pub struct PreBuildConfigIn {
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(deny_unknown_fields)]
-pub struct LanguageConfig {
+pub struct SingleLanguageConfig {
   pub standard: i8
 }
 
