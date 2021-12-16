@@ -32,6 +32,20 @@ fn defines_generator_string(build_type: &BuildType, build_config: &BuildConfig) 
   }
 }
 
+fn flattened_flags_string(maybe_flags: &Option<HashSet<String>>) -> String {
+  return match maybe_flags {
+    Some(flags) => {
+      let flattened_string: String = flags.iter()
+        .map(|flag| &flag[..])
+        .collect::<Vec<&str>>()
+        .join(" ");
+
+      format!(" {} ", flattened_string)
+    },
+    None => String::from(" ")
+  }
+}
+
 struct CMakeListsWriter<'a> {
   project_data: &'a FinalProjectData,
   util_writer: CMakeUtilWriter,
@@ -139,7 +153,10 @@ impl<'a> CMakeListsWriter<'a> {
           script_target_name
         )?;
 
+        self.write_newline()?;
+        self.write_target_compile_options_for_output(script_target_name, exe_info)?;
         self.write_links_for_output(script_target_name, exe_info)?;
+        self.write_newline()?;
 
         writeln!(&self.cmakelists_file,
           "use_executable_prebuild_script( {} )",
@@ -352,26 +369,13 @@ impl<'a> CMakeListsWriter<'a> {
 
         for (config_name, build_config) in config_map {
           // Write flags per compiler for each config.
-          let mut flags_string: String = build_config.flags
-            .as_ref()
-            .unwrap_or(&HashSet::new())
-            .iter()
-            .map(|flag| &flag[..])
-            .collect::<Vec<&str>>()
-            .join(" ");
-          
-          flags_string = format!("\"{}\" ", flags_string);
+          let flags_string: String = flattened_flags_string(&build_config.flags);
+          let uppercase_config_name: String = config_name.name_string().to_uppercase();
 
           self.set_basic_var("\t",
-            &format!("CMAKE_C_FLAGS_{}", config_name.name_string().to_uppercase()),
+            &format!("{}_BASE_FLAGS", uppercase_config_name),
             &flags_string
           )?;
-
-          self.set_basic_var("\t",
-            &format!("CMAKE_CXX_FLAGS_{}", config_name.name_string().to_uppercase()),
-            &flags_string
-          )?;
-          self.write_newline()?;
         }
 
           
@@ -396,12 +400,6 @@ impl<'a> CMakeListsWriter<'a> {
   }
 
   fn write_build_config_section(&self) -> io::Result<()> {
-    self.write_newline()?;
-
-    // We will use configuration specific values to populate these later. However, they must be set
-    // to empty because the configuration specific values only append to these variables.
-    self.set_basic_var("", "CMAKE_C_FLAGS", "")?;
-    self.set_basic_var("", "CMAKE_CXX_FLAGS", "")?;
     self.write_newline()?;
 
     if let Some(def_list) = self.project_data.get_global_defines() {
@@ -599,6 +597,31 @@ impl<'a> CMakeListsWriter<'a> {
     Ok(())
   }
 
+  fn write_target_compile_options_for_output(
+    &self,
+    output_name: &str,
+    output_data: &CompiledOutputItem
+  ) -> io::Result<()> {
+    writeln!(&self.cmakelists_file,
+      "target_compile_options( {}\n\tPRIVATE ",
+      output_name
+    )?;
+
+    for (config, _) in self.project_data.get_build_configs() {
+      writeln!(&self.cmakelists_file,
+        "\t\t\"$<$<CONFIG:{}>:${{{}_BASE_FLAGS}}>\"",
+        config.name_string(),
+        config.name_string().to_uppercase()
+      )?;
+    }
+
+    writeln!(&self.cmakelists_file,
+      ")"
+    )?;
+
+    Ok(())
+  }
+
   fn write_links_for_output(&self, output_name: &str, output_data: &CompiledOutputItem) -> io::Result<()> {
     if output_data.has_links() {
       writeln!(&self.cmakelists_file,
@@ -747,6 +770,7 @@ impl<'a> CMakeListsWriter<'a> {
     self.write_newline()?;
 
     self.write_depends_on_pre_build(output_name)?;
+    self.write_target_compile_options_for_output(output_name, output_data)?;
     self.write_newline()?;
 
     self.write_links_for_output(output_name, output_data)?;
@@ -788,10 +812,10 @@ impl<'a> CMakeListsWriter<'a> {
     self.write_newline()?;
 
     self.write_depends_on_pre_build(output_name)?;
+    self.write_target_compile_options_for_output(output_name, output_data)?;
     self.write_newline()?;
 
     self.write_links_for_output(output_name, output_data)?;
-
     Ok(())
   }
 }
