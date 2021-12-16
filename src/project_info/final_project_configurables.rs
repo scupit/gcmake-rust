@@ -16,13 +16,35 @@ pub struct LinkInfo {
   pub library_names: Vec<String>
 }
 
+pub enum PreBuildScript {
+  Exe(CompiledOutputItem),
+  Python(String)
+}
+
 pub struct CompiledOutputItem {
   pub output_type: CompiledItemType,
   pub entry_file: String,
-  links: Option<HashMap<String, Vec<String>>>
+  pub links: Option<HashMap<String, Vec<String>>>
 }
 
 impl CompiledOutputItem {
+  pub fn make_link_map(raw_links: &Vec<String>) -> Result<HashMap<String, Vec<String>>, String> {
+    let mut links_by_project: HashMap<String, Vec<String>> = HashMap::new();
+    
+    for link_str in raw_links {
+      let LinkInfo { from_project_name, mut library_names } = get_link_info(link_str)?;
+
+      if let Some(lib_list) = links_by_project.get_mut(&from_project_name) {
+        lib_list.append(&mut library_names)
+      }
+      else {
+        links_by_project.insert(from_project_name, library_names);
+      }
+    }
+
+    // final_output_item.links = Some(links_by_project);
+    return Ok(links_by_project);
+  }
   pub fn from(raw_output_item: &RawCompiledItem) -> Result<CompiledOutputItem, String> {
     let mut final_output_item = CompiledOutputItem {
       output_type: raw_output_item.output_type,
@@ -31,23 +53,7 @@ impl CompiledOutputItem {
     };
 
     if let Some(raw_links) = &raw_output_item.link {
-      let mut links_by_project: HashMap<String, Vec<String>> = HashMap::new();
-      
-      for link_str in raw_links {
-        match get_link_info(link_str) {
-          Ok(LinkInfo { from_project_name, mut library_names }) => {
-            if let Some(lib_list) = links_by_project.get_mut(&from_project_name) {
-              lib_list.append(&mut library_names)
-            }
-            else {
-              links_by_project.insert(from_project_name, library_names);
-            }
-          },
-          Err(message) => return Err(message)
-        }
-      }
-
-      final_output_item.links = Some(links_by_project);
+      final_output_item.links = Some(Self::make_link_map(raw_links)?);
     }
 
     return Ok(final_output_item);

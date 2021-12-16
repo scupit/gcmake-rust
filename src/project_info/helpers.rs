@@ -2,16 +2,46 @@ use std::{path::{PathBuf, Path}, fs, io};
 
 use regex::{Captures, Regex};
 
-use super::{raw_data_in::{RawProject, RawSubproject, ProjectLike}, path_manipulation::cleaned_pathbuf, final_project_configurables::LinkInfo};
+use super::{raw_data_in::{RawProject, RawSubproject, ProjectLike}, path_manipulation::cleaned_pathbuf, final_project_configurables::LinkInfo, PreBuildScript};
+
+fn file_variants(
+  project_root: &str,
+  file_name_no_extensions: &str,
+  possible_extensions: Vec<&str>
+) -> Vec<PathBuf> {
+  let base_file_path: PathBuf = Path::new(project_root).join(file_name_no_extensions);
+
+  return possible_extensions
+    .iter()
+    .map(|extension| base_file_path.with_extension(extension))
+    .collect();
+}
 
 pub fn yaml_names_from_dir(project_root: &str) -> Vec<PathBuf> {
-  let cmake_data_path: PathBuf = Path::new(project_root)
-    .join("cmake_data");
+  return file_variants(project_root, "cmake_data", vec!["yaml", "yml"]);
+}
 
-  return vec![
-    cmake_data_path.with_extension("yaml"), // ...../cmake_data.yaml
-    cmake_data_path.with_extension("yml") // ...../cmake_data.yml
-  ];
+pub enum PrebuildScriptFile {
+  Exe(PathBuf),
+  Python(PathBuf)
+}
+
+pub fn find_prebuild_script(project_root: &str) -> Option<PrebuildScriptFile> {
+  let pre_build_file_base_name: &str = "pre-build";
+
+  for possible_exe_file in file_variants(project_root, pre_build_file_base_name, vec!["c", "cxx", "cpp"]) {
+    if Path::exists(possible_exe_file.as_path()) {
+      return Some(PrebuildScriptFile::Exe(cleaned_pathbuf(possible_exe_file)));
+    }
+  }
+
+  for possible_python_file in file_variants(project_root, pre_build_file_base_name, vec!["py"]) {
+    if Path::exists(possible_python_file.as_path()) {
+      return Some(PrebuildScriptFile::Python(cleaned_pathbuf(possible_python_file)));
+    }
+  }
+
+  return None
 }
 
 pub fn create_project_data(project_root: &str) -> Result<RawProject, String> {

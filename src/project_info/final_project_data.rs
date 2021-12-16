@@ -1,6 +1,29 @@
 use std::{collections::{HashMap, HashSet}, path::{Path, PathBuf}};
 
-use super::{path_manipulation::{cleaned_path_str}, final_dependencies::FinalPredefinedDependency, raw_data_in::{RawProject, RawSubproject, ProjectLike, dependencies::internal_dep_config::AllPredefinedDependencies, BuildConfigMap, BuildType, LanguageMap, CompiledItemType, RawCompiledItem}, final_project_configurables::{FinalProjectType, SubprojectOnlyOptions}, CompiledOutputItem, helpers::{create_subproject_data, create_project_data, validate_raw_project, populate_files}};
+use super::{path_manipulation::{cleaned_path_str, cleaned_pathbuf, relative_to_project_root}, final_dependencies::FinalPredefinedDependency, raw_data_in::{RawProject, RawSubproject, ProjectLike, dependencies::internal_dep_config::AllPredefinedDependencies, BuildConfigMap, BuildType, LanguageMap, CompiledItemType, PreBuildConfigIn}, final_project_configurables::{FinalProjectType, SubprojectOnlyOptions}, CompiledOutputItem, helpers::{create_subproject_data, create_project_data, validate_raw_project, populate_files, find_prebuild_script, PrebuildScriptFile}, PreBuildScript};
+
+fn resolve_prebuild_script(project_root: &str, pre_build_config: &PreBuildConfigIn) -> Result<Option<PreBuildScript>, String> {
+  let merged_script_config = if let Some(script_file) = find_prebuild_script(project_root) {
+    Some(match script_file {
+      PrebuildScriptFile::Exe(entry_file_pathbuf) => {
+        PreBuildScript::Exe(CompiledOutputItem {
+          output_type: CompiledItemType::Executable,
+          entry_file: relative_to_project_root(project_root, entry_file_pathbuf),
+          links: match &pre_build_config.link {
+            Some(raw_links) => Some(CompiledOutputItem::make_link_map(raw_links)?),
+            None => None
+          }
+        })
+      },
+      PrebuildScriptFile::Python(python_file_pathbuf) => PreBuildScript::Python(
+        relative_to_project_root(project_root, python_file_pathbuf)
+      )
+    })
+  }
+  else { None };
+
+  return Ok(merged_script_config);
+}
 
 pub struct FinalProjectData {
   project_type: FinalProjectType,
@@ -16,7 +39,8 @@ pub struct FinalProjectData {
   // subprojects: Vec<FinalProjectData>,
   subprojects: HashMap<String, FinalProjectData>,
   output: HashMap<String, CompiledOutputItem>,
-  predefined_dependencies: HashMap<String, FinalPredefinedDependency>
+  predefined_dependencies: HashMap<String, FinalPredefinedDependency>,
+  prebuild_script: Option<PreBuildScript>
 }
 
 impl FinalProjectData {
@@ -90,6 +114,13 @@ impl FinalProjectData {
       }
     }
 
+    let prebuild_script = resolve_prebuild_script(
+      &project_root,
+      raw_project.prebuild_config.as_ref().unwrap_or(&PreBuildConfigIn {
+        link: None
+      })
+    )?;
+
     let mut finalized_project_data = FinalProjectData {
       project_type,
       project_root,
@@ -102,7 +133,8 @@ impl FinalProjectData {
       template_impl_files: Vec::<PathBuf>::new(),
       subprojects,
       output: output_items,
-      predefined_dependencies
+      predefined_dependencies,
+      prebuild_script
     };
 
     match populate_files(Path::new(&finalized_project_data.src_dir), &mut finalized_project_data.src_files) {
@@ -123,24 +155,33 @@ impl FinalProjectData {
     return Ok(finalized_project_data);
   }
 
-  fn validate_correctness(&self) -> Result<(), String> {
-    for (_, subproject) in &self.subprojects {
-      subproject.validate_correctness()?;
-    }
-
-    for (output_name, output_item) in &self.output {
-      if let Some(link_map) = output_item.get_links() {
-        // Each library linked to an output item should be member of a subproject or dependency
-        // project. This loop checks that each of the referenced sub/dependency project names
-        // exist and if they do, that the linked libraries from withing those projects exist
-        // as well.
-        for (project_name_containing_libraries, lib_names_linking) in link_map {
-          if let Some(matching_subproject) = self.subprojects.get(project_name_containing_libraries) {
+  fn ensure_links_are_valid(
+    &self,
+    item_name: &str,
+    links: &Option<HashMap<String, Vec<String>>>,
+    is_prebuild_script: bool
+  ) -> Result<(), String> {
+    if let Some(link_map) = links {
+      // Each library linked to an output item should be member of a subproject or dependency
+      // project. This loop checks that each of the referenced sub/dependency project names
+      // exist and if they do, that the linked libraries from withing those projects exist
+      // as well.
+      for (project_name_containing_libraries, lib_names_linking) in link_map {
+        // Check if it's linked to a subproject
+        if let Some(matching_subproject) = self.subprojects.get(project_name_containing_libraries) {
+          if is_prebuild_script {
+            return Err(format!(
+              "{}'s pre-build script tried to link to a library in subproject '{}', but pre-build scripts can't link to subprojects.",
+              self.get_project_name(),
+              matching_subproject.get_project_name()
+            ));
+          }
+          else {
             for lib_name_linking in lib_names_linking {
               if !matching_subproject.has_library_output_named(lib_name_linking) {
                 return Err(format!(
                   "Output item '{}' in project '{}' tries to link to a nonexistent library '{}' in subproject '{}'.",
-                  output_name,
+                  item_name,
                   self.get_project_name(),
                   lib_name_linking,
                   project_name_containing_libraries
@@ -148,28 +189,58 @@ impl FinalProjectData {
               }
             }
           }
-          else if let Some(final_dep) = self.predefined_dependencies.get(project_name_containing_libraries) {
-            for lib_name_linking in lib_names_linking {
-              if !final_dep.has_target_named(lib_name_linking) {
-                return Err(format!(
-                  "Output item '{}' in project '{}' tries to link to a nonexistent target '{}' in predefined dependency '{}'.",
-                  output_name,
-                  self.get_project_name(),
-                  lib_name_linking,
-                  project_name_containing_libraries
-                ))
-              }
+        }
+        // Check if it's linked to a predefined dependency
+        else if let Some(final_dep) = self.predefined_dependencies.get(project_name_containing_libraries) {
+          for lib_name_linking in lib_names_linking {
+            if !final_dep.has_target_named(lib_name_linking) {
+              return Err(format!(
+                "Output item '{}' in project '{}' tries to link to a nonexistent target '{}' in predefined dependency '{}'.",
+                item_name,
+                self.get_project_name(),
+                lib_name_linking,
+                project_name_containing_libraries
+              ))
             }
           }
-          else {
-            return Err(format!(
-              "Output item '{}' in project '{}' tries to link to libraries in a project named '{}', however that project doesn't exist.",
-              output_name,
-              self.get_project_name(),
-              project_name_containing_libraries
-            ));
-          }
         }
+        else {
+          return Err(format!(
+            "Output item '{}' in project '{}' tries to link to libraries in a project named '{}', however that project doesn't exist.",
+            item_name,
+            self.get_project_name(),
+            project_name_containing_libraries
+          ));
+        }
+      }
+    }
+
+    Ok(())
+  }
+
+  fn validate_correctness(&self) -> Result<(), String> {
+    for (_, subproject) in &self.subprojects {
+      subproject.validate_correctness()?;
+    }
+
+    for (output_name, output_item) in &self.output {
+      self.ensure_links_are_valid(
+        output_name,
+        output_item.get_links(),
+        false
+      )?
+    }
+
+    if let Some(existing_script) = &self.prebuild_script {
+      match existing_script {
+        PreBuildScript::Exe(script_exe_config) => {
+          self.ensure_links_are_valid(
+            &format!("{}'s pre-build script", self.get_project_name()),
+            script_exe_config.get_links(),
+            true
+          )?;
+        },
+        PreBuildScript::Python(_) => return Err(format!("Python pre-build scripts are not supported yet."))
       }
     }
 
@@ -181,6 +252,10 @@ impl FinalProjectData {
       Some(output_item) => output_item.is_library_type(),
       None => false
     }
+  }
+
+  pub fn has_prebuild_script(&self) -> bool {
+    self.prebuild_script.is_some()
   }
 
   pub fn has_subprojects(&self) -> bool {
@@ -199,6 +274,10 @@ impl FinalProjectData {
 
   pub fn get_outputs(&self) -> &HashMap<String, CompiledOutputItem> {
     &self.output
+  }
+
+  pub fn get_prebuild_script(&self) -> &Option<PreBuildScript> {
+    &self.prebuild_script
   }
 
   pub fn get_project_root(&self) -> &str {

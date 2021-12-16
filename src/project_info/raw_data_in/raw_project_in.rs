@@ -25,6 +25,7 @@ pub struct RawProject {
   pub version: String,
   pub default_build_type: BuildType,
   pub languages: LanguageMap,
+  pub prebuild_config: Option<PreBuildConfigIn>,
   pub supported_compilers: HashSet<CompilerSpecifier>,
   pub output: HashMap<String, RawCompiledItem>,
   pub global_defines: Option<HashSet<String>>,
@@ -82,6 +83,12 @@ impl RawProject {
 pub enum ImplementationLanguage {
   C,
   Cpp
+}
+
+#[derive(Serialize, Deserialize, Debug, Eq, PartialEq, Hash)]
+#[serde(deny_unknown_fields)]
+pub struct PreBuildConfigIn {
+  pub link: Option<Vec<String>>
 }
 
 #[derive(Serialize, Deserialize, Debug)]

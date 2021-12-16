@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 use serde::{Serialize, Deserialize};
 
-use super::{dependencies::user_given_dep_config::UserGivenPredefinedDependencyConfig, raw_project_in::{RawCompiledItem, ProjectLike, RawProject, BuildType}};
+use super::{dependencies::user_given_dep_config::UserGivenPredefinedDependencyConfig, raw_project_in::{RawCompiledItem, ProjectLike, RawProject, BuildType}, PreBuildConfigIn};
 
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(deny_unknown_fields)]
@@ -12,6 +12,7 @@ pub struct RawSubproject {
   description: String,
   version: String,
   // global_defines: HashSet<String>,
+  prebuild_config: Option<PreBuildConfigIn>,
   output: HashMap<String, RawCompiledItem>,
   subprojects: Option<HashSet<String>>,
   pub predefined_dependencies: Option<HashMap<String, UserGivenPredefinedDependencyConfig>>
@@ -42,6 +43,7 @@ impl From<RawProject> for RawSubproject {
       include_prefix: project_data.include_prefix,
       description: project_data.description,
       version: project_data.version,
+      prebuild_config: project_data.prebuild_config,
       output: project_data.output,
       subprojects: project_data.subprojects,
       predefined_dependencies: project_data.predefined_dependencies
@@ -60,6 +62,7 @@ impl Into<RawProject> for RawSubproject {
       languages: HashMap::new(),
       supported_compilers: HashSet::new(),
       default_build_type: BuildType::Debug,
+      prebuild_config: self.prebuild_config,
       build_configs: HashMap::new(),
       global_defines: None,
       output: self.output,

@@ -11,7 +11,8 @@ impl CMakeUtilWriter {
     return Self {
       cmake_utils_path,
       utils: HashMap::from_iter([
-        ("toggle-lib-util", TOGGLE_LIB_UTIL_TEXT)
+        ("toggle-lib-util", TOGGLE_LIB_UTIL_TEXT),
+        ("exe-prebuild-util", EXE_PREBUILD_UTIL_TEXT)
       ])
     }
   }
@@ -66,5 +67,19 @@ r#"function( make_toggle_lib
   elseif( ${lib_name}_LIB_TYPE STREQUAL SHARED )
     add_library( ${lib_name} SHARED ${all_lib_files})
   endif()
+endfunction()
+"#;
+
+const EXE_PREBUILD_UTIL_TEXT: &'static str = 
+r#"function( use_executable_prebuild_script
+  target_name
+)
+  add_custom_target( ${PROJECT_NAME}-pre-build-step
+    ALL
+    COMMAND ${target_name}
+    DEPENDS ${target_name}
+    COMMENT "Running ${PROJECT_NAME} pre-build script"
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+  )
 endfunction()
 "#;

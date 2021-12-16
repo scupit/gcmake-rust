@@ -55,6 +55,7 @@ pub fn get_default_project_config(
         CompilerSpecifier::Clang,
         CompilerSpecifier::MSVC,
       ]),
+      prebuild_config: None,
       languages: HashMap::from_iter([
         (ImplementationLanguage::C, LanguageConfig {
           allowed_standards: HashSet::from_iter([99, 11, 17]),

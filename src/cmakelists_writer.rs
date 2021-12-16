@@ -1,6 +1,6 @@
 use std::{collections::{HashMap, HashSet}, fs::File, io::{self, Write}, path::{Path, PathBuf}};
 
-use crate::{cmake_utils_writer::CMakeUtilWriter, project_info::{final_project_data::{FinalProjectData}, path_manipulation::cleaned_path_str, final_dependencies::GitRevisionSpecifier, raw_data_in::{BuildType, BuildConfig, ImplementationLanguage, BuildConfigCompilerSpecifier, CompilerSpecifier, CompiledItemType}, FinalProjectType, CompiledOutputItem}, logger::exit_error_log};
+use crate::{cmake_utils_writer::CMakeUtilWriter, project_info::{final_project_data::{FinalProjectData}, path_manipulation::cleaned_path_str, final_dependencies::GitRevisionSpecifier, raw_data_in::{BuildType, BuildConfig, ImplementationLanguage, BuildConfigCompilerSpecifier, CompilerSpecifier, CompiledItemType}, FinalProjectType, CompiledOutputItem, PreBuildScript}, logger::exit_error_log};
 
 pub fn write_cmakelists(project_data: &FinalProjectData) -> io::Result<()> {
   for (_, subproject) in project_data.get_subprojects() {
@@ -50,6 +50,10 @@ impl<'a> CMakeListsWriter<'a> {
     })
   }
 
+  fn should_write_pre_build_script(&self) -> bool {
+    self.project_data.has_prebuild_script()
+  }
+
   fn write_cmakelists(&self) -> io::Result<()> {
     self.write_project_header()?;
 
@@ -75,6 +79,11 @@ impl<'a> CMakeListsWriter<'a> {
     }
 
     self.write_section_header("Outputs")?;
+
+    if self.project_data.has_prebuild_script() {
+      self.write_prebuild_script_use()?;
+    }
+
     self.write_outputs()?;
     Ok(())
   }
@@ -111,6 +120,34 @@ impl<'a> CMakeListsWriter<'a> {
     self.write_newline()?;
     self.set_basic_var("", "FETCHCONTENT_QUIET", "OFF")?;
 
+    Ok(())
+  }
+
+  fn write_prebuild_script_use(&self) -> io::Result<()> {
+    match self.project_data.get_prebuild_script().as_ref().unwrap() {
+      PreBuildScript::Exe(exe_info) => {
+        let script_target_name: &str = "pre-build-script-${PROJECT_NAME}";
+
+        writeln!(&self.cmakelists_file,
+          "add_executable( {} ${{CMAKE_CURRENT_SOURCE_DIR}}{} )",
+          script_target_name,
+          exe_info.get_entry_file()
+        )?;
+
+        writeln!(&self.cmakelists_file,
+          "set_target_properties( {} PROPERTIES\n\tRUNTIME_OUTPUT_DIRECTORY ${{CMAKE_BINARY_DIR}}/bin/${{CMAKE_BUILD_TYPE}}/pre-build\n)",
+          script_target_name
+        )?;
+
+        self.write_links_for_output(script_target_name, exe_info)?;
+
+        writeln!(&self.cmakelists_file,
+          "use_executable_prebuild_script( {} )",
+          script_target_name
+        )?;
+      },
+      PreBuildScript::Python(_) => exit_error_log("Error: Python build script not implemented yet. It's coming soon.")
+    }
     Ok(())
   }
 
@@ -599,6 +636,18 @@ impl<'a> CMakeListsWriter<'a> {
     Ok(())
   }
 
+  fn write_depends_on_pre_build(&self, output_name: &str) -> io::Result<()> {
+    if self.project_data.has_prebuild_script() {
+      writeln!(&self.cmakelists_file,
+        // TODO: Move pre-build macro target name into its own variable (in this source code)
+        "add_dependencies( {} ${{PROJECT_NAME}}-pre-build-step )",
+        output_name
+      )?;
+    }
+
+    Ok(())
+  }
+
   fn write_defined_type_library(
     &self,
     output_data: &CompiledOutputItem,
@@ -606,7 +655,7 @@ impl<'a> CMakeListsWriter<'a> {
     src_var_name: &str,
     includes_var_name: &str,
     template_impls_var_name: &str,
-    project_include_dir_varname: &str,
+    project_include_dir_varname: &str
   ) -> io::Result<()> {
     self.write_output_title(output_name)?;
 
@@ -690,8 +739,11 @@ impl<'a> CMakeListsWriter<'a> {
       \n)",
       output_name
     )?;
-
     self.write_newline()?;
+
+    self.write_depends_on_pre_build(output_name)?;
+    self.write_newline()?;
+
     self.write_links_for_output(output_name, output_data)?;
     Ok(())
   }
@@ -728,8 +780,11 @@ impl<'a> CMakeListsWriter<'a> {
       "set_target_properties( {} PROPERTIES\n\tRUNTIME_OUTPUT_DIRECTORY ${{CMAKE_BINARY_DIR}}/bin/${{CMAKE_BUILD_TYPE}}\n)",
       output_name
     )?;
-
     self.write_newline()?;
+
+    self.write_depends_on_pre_build(output_name)?;
+    self.write_newline()?;
+
     self.write_links_for_output(output_name, output_data)?;
 
     Ok(())
