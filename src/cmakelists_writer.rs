@@ -149,10 +149,15 @@ impl<'a> CMakeListsWriter<'a> {
           exe_info.get_entry_file()
         )?;
 
-        writeln!(&self.cmakelists_file,
-          "set_target_properties( {} PROPERTIES\n\tRUNTIME_OUTPUT_DIRECTORY ${{CMAKE_BINARY_DIR}}/bin/${{CMAKE_BUILD_TYPE}}/pre-build\n)",
-          script_target_name
+        self.write_properties_for_output(
+          script_target_name,
+          &HashMap::from([
+            (String::from("RUNTIME_OUTPUT_DIRECTORY"), String::from("${{CMAKE_BINARY_DIR}}/bin/${{CMAKE_BUILD_TYPE}}/pre-build")),
+            (String::from("C_EXTENSIONS"), String::from("OFF")),
+            (String::from("CXX_EXTENSIONS"), String::from("OFF"))
+          ])
         )?;
+
         self.write_newline()?;
 
         self.write_target_compile_options_for_output(script_target_name, exe_info)?;
@@ -615,6 +620,7 @@ impl<'a> CMakeListsWriter<'a> {
     writeln!(&self.cmakelists_file,
       ")"
     )?;
+    self.write_newline()?;
 
     // Language standard and extensions config
     writeln!(&self.cmakelists_file,
@@ -663,6 +669,28 @@ impl<'a> CMakeListsWriter<'a> {
       )?;
     }
 
+    Ok(())
+  }
+
+  fn write_properties_for_output(
+    &self,
+    output_name: &str,
+    property_map: &HashMap<String, String>
+  ) -> io::Result<()> {
+    writeln!(&self.cmakelists_file,
+      "set_target_properties( {} PROPERTIES",
+      output_name
+    )?;
+
+    for (prop_name, prop_value) in property_map {
+      writeln!(&self.cmakelists_file,
+        "\t{} {}",
+        prop_name,
+        prop_value
+      )?;
+    }
+
+    writeln!(&self.cmakelists_file, ")")?;
     Ok(())
   }
 
@@ -769,13 +797,15 @@ impl<'a> CMakeListsWriter<'a> {
     )?;
     self.write_newline()?;
 
-    writeln!(&self.cmakelists_file,
-      "set_target_properties( {} PROPERTIES\
-        \n\tRUNTIME_OUTPUT_DIRECTORY ${{CMAKE_BINARY_DIR}}/bin/${{CMAKE_BUILD_TYPE}}\
-        \n\tLIBRARY_OUTPUT_DIRECTORY ${{CMAKE_BINARY_DIR}}/lib/${{CMAKE_BUILD_TYPE}}\
-        \n\tARCHIVE_OUTPUT_DIRECTORY ${{CMAKE_BINARY_DIR}}/lib/${{CMAKE_BUILD_TYPE}}\
-      \n)",
-      output_name
+    self.write_properties_for_output(
+      output_name,
+      &HashMap::from([
+        (String::from("RUNTIME_OUTPUT_DIRECTORY"), String::from("${CMAKE_BINARY_DIR}/bin/${CMAKE_BUILD_TYPE}")),
+        (String::from("LIBRARY_OUTPUT_DIRECTORY"), String::from("${CMAKE_BINARY_DIR}/lib/${CMAKE_BUILD_TYPE}")),
+        (String::from("ARCHIVE_OUTPUT_DIRECTORY"), String::from("${CMAKE_BINARY_DIR}/lib/${CMAKE_BUILD_TYPE}")),
+        (String::from("C_EXTENSIONS"), String::from("OFF")),
+        (String::from("CXX_EXTENSIONS"), String::from("OFF"))
+      ])
     )?;
     self.write_newline()?;
 
@@ -815,9 +845,13 @@ impl<'a> CMakeListsWriter<'a> {
     )?;
     self.write_newline()?;
 
-    writeln!(&self.cmakelists_file,
-      "set_target_properties( {} PROPERTIES\n\tRUNTIME_OUTPUT_DIRECTORY ${{CMAKE_BINARY_DIR}}/bin/${{CMAKE_BUILD_TYPE}}\n)",
-      output_name
+    self.write_properties_for_output(
+      output_name,
+      &HashMap::from([
+        (String::from("RUNTIME_OUTPUT_DIRECTORY"), String::from("${CMAKE_BINARY_DIR}/bin/${CMAKE_BUILD_TYPE}")),
+        (String::from("C_EXTENSIONS"), String::from("OFF")),
+        (String::from("CXX_EXTENSIONS"), String::from("OFF"))
+      ])
     )?;
     self.write_newline()?;
 
