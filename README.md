@@ -65,10 +65,10 @@ Support for:
 
 ### Refactoring
 
-- [ ] Unify file path cleaning, so that paths are always relative to the project root, in the project root, and have no leading slashes. Ex: `pre-build.cpp`
+- [ ] Unify file path cleaning, so that paths are always relative to the project root, in the project root, and have no leading slashes. Ex: `pre-build.cpp` instead of `/pre-build.cpp`
 
 ### Pre-build script
-- [ ] Add support for a pre-build C++ script. The script should be automatically built and run before
+- [x] Add support for a pre-build C++, C, or Python 3 script. The script should be automatically built and run before
 each recompilation.
 
 ### Targets
