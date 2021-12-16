@@ -240,7 +240,7 @@ impl FinalProjectData {
             true
           )?;
         },
-        PreBuildScript::Python(_) => return Err(format!("Python pre-build scripts are not supported yet."))
+        PreBuildScript::Python(_) => ()
       }
     }
 

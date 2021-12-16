@@ -146,7 +146,12 @@ impl<'a> CMakeListsWriter<'a> {
           script_target_name
         )?;
       },
-      PreBuildScript::Python(_) => exit_error_log("Error: Python build script not implemented yet. It's coming soon.")
+      PreBuildScript::Python(python_script_path) => {
+        writeln!(&self.cmakelists_file,
+          "use_python_prebuild_script( ${{CMAKE_CURRENT_SOURCE_DIR}}/{} )",
+          python_script_path
+        )?;
+      }
     }
     Ok(())
   }
