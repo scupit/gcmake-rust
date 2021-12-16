@@ -129,7 +129,7 @@ impl<'a> CMakeListsWriter<'a> {
         let script_target_name: &str = "pre-build-script-${PROJECT_NAME}";
 
         writeln!(&self.cmakelists_file,
-          "add_executable( {} ${{CMAKE_CURRENT_SOURCE_DIR}}{} )",
+          "add_executable( {} ${{CMAKE_CURRENT_SOURCE_DIR}}/{} )",
           script_target_name,
           exe_info.get_entry_file()
         )?;

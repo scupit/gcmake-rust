@@ -10,8 +10,20 @@ pub fn cleaned_pathbuf(file_path: PathBuf) -> PathBuf {
 }
 
 pub fn relative_to_project_root(project_root: &str, file_path: PathBuf) -> String {
+  let replacer: String = if project_root == "." {
+    "./".to_owned()
+  }
+  else if project_root.ends_with("/") {
+    project_root.to_owned()
+  }
+  else {
+    let mut owned: String = project_root.to_owned();
+    owned.push_str("/");
+    owned
+  };
+
   return file_path
     .to_string_lossy()
     .to_string()
-    .replace(project_root, "");
+    .replace(&replacer, "");
 }
