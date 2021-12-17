@@ -64,10 +64,6 @@ impl<'a> CMakeListsWriter<'a> {
     })
   }
 
-  fn should_write_pre_build_script(&self) -> bool {
-    self.project_data.has_prebuild_script()
-  }
-
   fn write_cmakelists(&self) -> io::Result<()> {
     let project_type: &FinalProjectType = self.project_data.get_project_type();
     self.write_project_header()?;
@@ -93,10 +89,11 @@ impl<'a> CMakeListsWriter<'a> {
       self.write_subproject_includes()?;
     }
 
-    if self.project_data.has_prebuild_script() {
-      self.write_section_header("Pre-build script configuration")?;
-      self.write_prebuild_script_use()?;
-    }
+    self.write_section_header("Pre-build script configuration")?;
+    self.write_prebuild_script_use()?;
+
+    self.write_section_header("'resources' build-time directory copier")?;
+    self.write_resource_dir_copier()?;
 
     self.write_section_header("Outputs")?;
     self.write_outputs()?;
@@ -139,45 +136,58 @@ impl<'a> CMakeListsWriter<'a> {
   }
 
   fn write_prebuild_script_use(&self) -> io::Result<()> {
-    match self.project_data.get_prebuild_script().as_ref().unwrap() {
-      PreBuildScript::Exe(exe_info) => {
-        let script_target_name: &str = "pre-build-script-${PROJECT_NAME}";
+    writeln!(&self.cmakelists_file, "initialize_prebuild_step()\n")?;
+    
+    if let Some(prebuild_script) = self.project_data.get_prebuild_script() {
+      match prebuild_script {
+        PreBuildScript::Exe(exe_info) => {
+          let script_target_name: &str = "pre-build-script-${PROJECT_NAME}";
 
-        writeln!(&self.cmakelists_file,
-          "add_executable( {} ${{CMAKE_CURRENT_SOURCE_DIR}}/{} )",
-          script_target_name,
-          exe_info.get_entry_file()
-        )?;
+          writeln!(&self.cmakelists_file,
+            "add_executable( {} ${{CMAKE_CURRENT_SOURCE_DIR}}/{} )",
+            script_target_name,
+            exe_info.get_entry_file()
+          )?;
 
-        self.write_properties_for_output(
-          script_target_name,
-          &HashMap::from([
-            (String::from("RUNTIME_OUTPUT_DIRECTORY"), String::from("${CMAKE_BINARY_DIR}/bin/${CMAKE_BUILD_TYPE}/pre-build")),
-            (String::from("C_EXTENSIONS"), String::from("OFF")),
-            (String::from("CXX_EXTENSIONS"), String::from("OFF"))
-          ])
-        )?;
+          self.write_properties_for_output(
+            script_target_name,
+            &HashMap::from([
+              (String::from("RUNTIME_OUTPUT_DIRECTORY"), String::from("${CMAKE_BINARY_DIR}/bin/${CMAKE_BUILD_TYPE}/pre-build")),
+              (String::from("C_EXTENSIONS"), String::from("OFF")),
+              (String::from("CXX_EXTENSIONS"), String::from("OFF"))
+            ])
+          )?;
 
-        self.write_newline()?;
+          self.write_newline()?;
 
-        self.write_target_compile_options_for_output(script_target_name, exe_info)?;
-        self.write_newline()?;
+          self.write_target_compile_options_for_output(script_target_name, exe_info)?;
+          self.write_newline()?;
 
-        self.write_links_for_output(script_target_name, exe_info)?;
-        self.write_newline()?;
+          self.write_links_for_output(script_target_name, exe_info)?;
+          self.write_newline()?;
 
-        writeln!(&self.cmakelists_file,
-          "use_executable_prebuild_script( {} )",
-          script_target_name
-        )?;
-      },
-      PreBuildScript::Python(python_script_path) => {
-        writeln!(&self.cmakelists_file,
-          "use_python_prebuild_script( ${{CMAKE_CURRENT_SOURCE_DIR}}/{} )",
-          python_script_path
-        )?;
+          writeln!(&self.cmakelists_file,
+            "use_executable_prebuild_script( {} )",
+            script_target_name
+          )?;
+        },
+        PreBuildScript::Python(python_script_path) => {
+          writeln!(&self.cmakelists_file,
+            "use_python_prebuild_script( ${{CMAKE_CURRENT_SOURCE_DIR}}/{} )",
+            python_script_path
+          )?;
+        }
       }
     }
+
+    Ok(())
+  }
+
+  fn write_resource_dir_copier(&self) -> io::Result<()> {
+    writeln!(&self.cmakelists_file,
+      "copy_resource_dir_if_exists(\n\t${{CMAKE_CURRENT_SOURCE_DIR}}/resources\n\t${{CMAKE_BINARY_DIR}}/bin/${{CMAKE_BUILD_TYPE}}/resources\n\t${{PROJECT_NAME}}-pre-build-step\n)"
+    )?;
+
     Ok(())
   }
 
@@ -701,13 +711,11 @@ impl<'a> CMakeListsWriter<'a> {
   }
 
   fn write_depends_on_pre_build(&self, output_name: &str) -> io::Result<()> {
-    if self.project_data.has_prebuild_script() {
-      writeln!(&self.cmakelists_file,
-        // TODO: Move pre-build macro target name into its own variable (in this source code)
-        "add_dependencies( {} ${{PROJECT_NAME}}-pre-build-step )",
-        output_name
-      )?;
-    }
+    writeln!(&self.cmakelists_file,
+      // TODO: Move pre-build macro target name into its own variable (in this source code)
+      "add_dependencies( {} ${{PROJECT_NAME}}-pre-build-step )",
+      output_name
+    )?;
 
     Ok(())
   }

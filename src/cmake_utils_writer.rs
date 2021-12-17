@@ -12,8 +12,8 @@ impl CMakeUtilWriter {
       cmake_utils_path,
       utils: HashMap::from_iter([
         ("toggle-lib-util", TOGGLE_LIB_UTIL_TEXT),
-        ("exe-prebuild-util", EXE_PREBUILD_UTIL_TEXT),
-        ("python-prebuild-util", PYTHON_PREBUILD_UTIL_TEXT)
+        ("pre-build-configuration-utils", PREBUILD_STEP_UTILS_TEXT),
+        ("resource-copy-util", RESOURCE_COPY_UTIL_TEXT)
       ])
     }
   }
@@ -71,30 +71,37 @@ r#"function( make_toggle_lib
 endfunction()
 "#;
 
-const EXE_PREBUILD_UTIL_TEXT: &'static str = 
-r#"function( use_executable_prebuild_script
-  target_name
-)
+const PREBUILD_STEP_UTILS_TEXT: &'static str =
+r#"function( initialize_prebuild_step )
   add_custom_target( ${PROJECT_NAME}-pre-build-step
     ALL
-    COMMAND ${target_name}
-    DEPENDS ${target_name}
+    COMMENT "Beginning pre-build processing"
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+  )
+endfunction()
+
+function( use_executable_prebuild_script
+  pre_build_executable_target
+)
+  add_custom_command(
+    TARGET ${PROJECT_NAME}-pre-build-step
+    PRE_BUILD
+    COMMAND ${pre_build_executable_target}
     COMMENT "Running ${PROJECT_NAME} pre-build executable script"
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
   )
 endfunction()
-"#;
 
-const PYTHON_PREBUILD_UTIL_TEXT: &'static str = 
-r#"function( use_python_prebuild_script
+function( use_python_prebuild_script
   python_prebuild_file
 )
   include( FindPython3 )
   find_package( Python3 COMPONENTS Interpreter )
 
   if( ${Python3_FOUND} AND ${Python3_Interpreter_FOUND} )
-    add_custom_target( ${PROJECT_NAME}-pre-build-step
-      ALL
+    add_custom_command(
+      TARGET ${PROJECT_NAME}-pre-build-step
+      PRE_BUILD
       COMMAND Python3::Interpreter ${python_prebuild_file}
       COMMENT "Running ${PROJECT_NAME} pre-build python script"
       WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
@@ -105,6 +112,25 @@ r#"function( use_python_prebuild_script
     else()
       message( FATAL_ERROR "Unable to find a valid Python 3 configuration when configuring project ${PROJECT_NAME}" )
     endif()
+  endif()
+endfunction()
+"#;
+
+const RESOURCE_COPY_UTIL_TEXT: &'static str =
+r#"function( copy_resource_dir_if_exists
+  resources_dir
+  build_time_resource_dir_location
+  pre_build_step_target
+)
+  if( EXISTS ${resources_dir} )
+    add_custom_command(
+      TARGET ${PROJECT_NAME}-pre-build-step
+      PRE_BUILD
+      COMMAND ${CMAKE_COMMAND}
+        -E copy_directory ${resources_dir} ${build_time_resource_dir_location}
+      COMMENT "Copying ${PROJECT_NAME} resources"
+      VERBATIM
+    )
   endif()
 endfunction()
 "#;
