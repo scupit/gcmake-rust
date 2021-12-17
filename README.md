@@ -128,21 +128,6 @@ Types of libraries which need support, from easiest to hardest:
   4. CMake project which can't use add_subdirectory (must be built and installed on the system separately)
   5. Non-CMake projects which can be downloaded
 
-### Dependency components
-Given:
-- Version info {Optional}
-- Git Repo information {Optional}
-- Other URL download information {Optional}
-- Library name (exact match)
-- Library component names (Library or target names, or a mix if that happens somewhere)
-
-Received:
-  - Whether or not the library was found
-  - Version info
-  - Library/target names
-    - Directories where the libraries may reside
-  - Include dirs (if applciable)
-
 ### Libraries I want to explicitly support for convenience
 
 Pre-written CMake find modules:
