@@ -32,7 +32,7 @@ pub struct RawProject {
   pub default_build_type: BuildType,
   pub languages: LanguageConfigMap,
   pub prebuild_config: Option<PreBuildConfigIn>,
-  pub supported_compilers: HashSet<CompilerSpecifier>,
+  pub supported_compilers: HashSet<SpecificCompilerSpecifier>,
   pub output: HashMap<String, RawCompiledItem>,
   pub global_defines: Option<HashSet<String>>,
   pub subprojects: Option<HashSet<String>>,
@@ -132,6 +132,17 @@ pub enum BuildConfigCompilerSpecifier {
   Clang
 }
 
+impl BuildConfigCompilerSpecifier {
+  pub fn to_specific(&self) -> Option<SpecificCompilerSpecifier> {
+    return match *self {
+      Self::All => None,
+      Self::GCC => Some(SpecificCompilerSpecifier::GCC),
+      Self::Clang => Some(SpecificCompilerSpecifier::Clang),
+      Self::MSVC => Some(SpecificCompilerSpecifier::MSVC)
+    }
+  }
+}
+
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(deny_unknown_fields)]
@@ -152,10 +163,20 @@ pub enum CompiledItemType {
 
 #[derive(Serialize, Deserialize, Hash, Debug, Eq, PartialEq, PartialOrd, Ord, Clone, Copy)]
 #[serde(deny_unknown_fields)]
-pub enum CompilerSpecifier {
+pub enum SpecificCompilerSpecifier {
   GCC,
   MSVC,
   Clang
+}
+
+impl SpecificCompilerSpecifier {
+  pub fn name_string(&self) -> &str {
+    return match *self {
+      Self::GCC => "GCC",
+      Self::Clang => "Clang",
+      Self::MSVC => "MSVC"
+    }
+  }
 }
 
 #[derive(Serialize, Deserialize, Debug)]

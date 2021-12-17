@@ -1,6 +1,6 @@
 use std::{collections::{HashMap, HashSet}, fs::File, io::{self, Write}, path::{Path, PathBuf}};
 
-use crate::{cmake_utils_writer::CMakeUtilWriter, project_info::{final_project_data::{FinalProjectData}, path_manipulation::cleaned_path_str, final_dependencies::GitRevisionSpecifier, raw_data_in::{BuildType, BuildConfig, ImplementationLanguage, BuildConfigCompilerSpecifier, CompilerSpecifier, CompiledItemType, LanguageConfigMap}, FinalProjectType, CompiledOutputItem, PreBuildScript}, logger::exit_error_log};
+use crate::{cmake_utils_writer::CMakeUtilWriter, project_info::{final_project_data::{FinalProjectData}, path_manipulation::cleaned_path_str, final_dependencies::GitRevisionSpecifier, raw_data_in::{BuildType, BuildConfig, ImplementationLanguage, BuildConfigCompilerSpecifier, SpecificCompilerSpecifier, CompiledItemType, LanguageConfigMap}, FinalProjectType, CompiledOutputItem, PreBuildScript}, logger::exit_error_log};
 
 pub fn write_cmakelists(project_data: &FinalProjectData) -> io::Result<()> {
   for (_, subproject) in project_data.get_subprojects() {
@@ -322,14 +322,14 @@ impl<'a> CMakeListsWriter<'a> {
           - defines
     */
 
-    let mut simplified_map: HashMap<CompilerSpecifier, HashMap<&BuildType, &BuildConfig>> = HashMap::new();
+    let mut simplified_map: HashMap<SpecificCompilerSpecifier, HashMap<&BuildType, &BuildConfig>> = HashMap::new();
 
     for (build_type, build_config) in self.project_data.get_build_configs() {
       for (build_config_compiler, specific_config) in build_config {
-        let converted_compiler_specifier: CompilerSpecifier = match *build_config_compiler {
-          BuildConfigCompilerSpecifier::GCC => CompilerSpecifier::GCC,
-          BuildConfigCompilerSpecifier::Clang => CompilerSpecifier::Clang,
-          BuildConfigCompilerSpecifier::MSVC => CompilerSpecifier::MSVC,
+        let converted_compiler_specifier: SpecificCompilerSpecifier = match *build_config_compiler {
+          BuildConfigCompilerSpecifier::GCC => SpecificCompilerSpecifier::GCC,
+          BuildConfigCompilerSpecifier::Clang => SpecificCompilerSpecifier::Clang,
+          BuildConfigCompilerSpecifier::MSVC => SpecificCompilerSpecifier::MSVC,
           BuildConfigCompilerSpecifier::All => continue
         };
 
@@ -350,9 +350,9 @@ impl<'a> CMakeListsWriter<'a> {
       if !config_map.is_empty() {
         // TODO: Make these strings global, otherwise a simple change to any name could mess all these up.
         let compiler_check_string: &str = match compiler {
-          CompilerSpecifier::GCC => "${CMAKE_C_COMPILER_ID} MATCHES \"GNU\" OR ${CMAKE_CXX_COMPILER_ID} MATCHES \"GNU\"",
-          CompilerSpecifier::Clang => "${CMAKE_C_COMPILER_ID} MATCHES \"Clang\" OR ${CMAKE_CXX_COMPILER_ID} MATCHES \"Clang\"",
-          CompilerSpecifier::MSVC => "${MSVC}"
+          SpecificCompilerSpecifier::GCC => "${CMAKE_C_COMPILER_ID} MATCHES \"GNU\" OR ${CMAKE_CXX_COMPILER_ID} MATCHES \"GNU\"",
+          SpecificCompilerSpecifier::Clang => "${CMAKE_C_COMPILER_ID} MATCHES \"Clang\" OR ${CMAKE_CXX_COMPILER_ID} MATCHES \"Clang\"",
+          SpecificCompilerSpecifier::MSVC => "${MSVC}"
         };
 
         writeln!(&self.cmakelists_file,

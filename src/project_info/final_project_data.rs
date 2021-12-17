@@ -1,6 +1,6 @@
 use std::{collections::{HashMap, HashSet}, path::{Path, PathBuf}};
 
-use super::{path_manipulation::{cleaned_path_str, relative_to_project_root}, final_dependencies::FinalPredefinedDependency, raw_data_in::{RawProject, ProjectLike, dependencies::internal_dep_config::AllPredefinedDependencies, BuildConfigMap, BuildType, LanguageConfigMap, CompiledItemType, PreBuildConfigIn, ImplementationLanguage}, final_project_configurables::{FinalProjectType, SubprojectOnlyOptions}, CompiledOutputItem, helpers::{create_subproject_data, create_project_data, validate_raw_project, populate_files, find_prebuild_script, PrebuildScriptFile}, PreBuildScript};
+use super::{path_manipulation::{cleaned_path_str, relative_to_project_root}, final_dependencies::FinalPredefinedDependency, raw_data_in::{RawProject, ProjectLike, dependencies::internal_dep_config::AllPredefinedDependencies, BuildConfigMap, BuildType, LanguageConfigMap, CompiledItemType, PreBuildConfigIn, ImplementationLanguage, SpecificCompilerSpecifier, BuildConfigCompilerSpecifier}, final_project_configurables::{FinalProjectType, SubprojectOnlyOptions}, CompiledOutputItem, helpers::{create_subproject_data, create_project_data, validate_raw_project, populate_files, find_prebuild_script, PrebuildScriptFile}, PreBuildScript};
 
 fn resolve_prebuild_script(project_root: &str, pre_build_config: &PreBuildConfigIn) -> Result<Option<PreBuildScript>, String> {
   let merged_script_config = if let Some(script_file) = find_prebuild_script(project_root) {
@@ -29,6 +29,7 @@ pub struct FinalProjectData {
   project_type: FinalProjectType,
   project_root: String,
   // project: RawProject,
+  supported_compilers: HashSet<SpecificCompilerSpecifier>,
   project_name: String,
   build_config_map: BuildConfigMap,
   default_build_config: BuildType,
@@ -98,6 +99,7 @@ impl FinalProjectData {
         // set compiler flags and other properties per output item.
         new_subproject.build_config_map = raw_project.build_configs.clone();
         new_subproject.language_config_map = raw_project.languages.clone();
+        new_subproject.supported_compilers = raw_project.supported_compilers.clone();
 
         subprojects.insert(
           subproject_dirname.clone(),
@@ -140,6 +142,7 @@ impl FinalProjectData {
       build_config_map: raw_project.build_configs,
       default_build_config: raw_project.default_build_type,
       language_config_map: raw_project.languages,
+      supported_compilers: raw_project.supported_compilers,
       project_type,
       project_root,
       src_dir,
@@ -254,12 +257,36 @@ impl FinalProjectData {
     Ok(())
   }
 
+  fn ensure_build_config_correctness(&self) -> Result<(), String> {
+    for (build_type, by_compiler_map) in self.get_build_configs() {
+      for (config_compiler, _) in by_compiler_map {
+        if let Some(specific_compiler) = config_compiler.to_specific() {
+          if !self.supported_compilers.contains(&specific_compiler) {
+            let compiler_name: &str = specific_compiler.name_string();
+
+            return Err(format!(
+              "Config Issue: '{}' build config defines a section for {}, but {} is not in the supported_compilers list. To fix, either remove the {} section or add {} to the supported_compilers list for this project.",
+              build_type.name_string(),
+              compiler_name,
+              compiler_name,
+              compiler_name,
+              compiler_name
+            ));
+          }
+        }
+      }
+    }
+
+    Ok(())
+  }
+
   fn validate_correctness(&self) -> Result<(), String> {
     for (_, subproject) in &self.subprojects {
       subproject.validate_correctness()?;
     }
 
     self.ensure_language_config_correctness()?;
+    self.ensure_build_config_correctness()?;
 
     for (output_name, output_item) in &self.output {
       self.ensure_links_are_valid(
