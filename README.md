@@ -70,6 +70,7 @@ Support for:
 ### Pre-build script
 - [x] Add support for a pre-build C++, C, or Python 3 script. The script should be automatically built and run before
 each recompilation.
+- [x] `resources` directory in each project root is copied into the build tree before the actual build. **TODO: need to be 100% sure this runs after the pre-build scripts somehow. Maybe run it as POST_BUILD on the pre-build target.**
 
 ### Targets
 - [ ] **Namespaced output targets**
@@ -153,6 +154,7 @@ Pre-written CMake find modules:
 Other CMake projects:
 - [x] [nlohmann json](https://github.com/nlohmann/json)
 - [x] [SFML](https://www.sfml-dev.org/)
+- [x] [fmt](https://github.com/fmtlib/fmt)
 - [ ] [JUCE](https://juce.com/)
 - [ ] [yaml-cpp](https://github.com/jbeder/yaml-cpp)
 - [ ] [GLFW](https://www.glfw.org/)

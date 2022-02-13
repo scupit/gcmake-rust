@@ -31,6 +31,16 @@ as_subdirectory:
     target_names:
       - nlohmann_json
 
+  fmt:
+    git_repo:
+      repo_url: git@github.com:fmtlib/fmt.git
+      latest_stable_release_tag: "8.1.1"
+    namespace_config:
+      used_in_cmake_yaml: fmt
+      cmakelists_linking: "fmt::"
+    target_names:
+      - fmt
+
   # JUCE:
   #   find_package_config:
   #     targets_retain_namespace: true
