@@ -9,9 +9,10 @@ pub fn write_code_files(
   file_guard: &FileGuardStyle,
   project_info: &FinalProjectData,
   language: &FileCreationLang
-) -> io::Result<()> {
+) -> io::Result<Vec<PathBuf>> {
   let mut maybe_template_impl: Option<PathBuf> = None;
   let mut maybe_header: Option<PathBuf> = None;
+  let mut maybe_source: Option<PathBuf> = None;
 
   if which_generating.generating_template_impl {
     maybe_template_impl = Some(
@@ -30,21 +31,29 @@ pub fn write_code_files(
         file_guard,
         shared_file_info,
         language,
-        maybe_template_impl
+        &maybe_template_impl
       )?
     );
   }
 
   if which_generating.generating_source {
-    write_source(
-      project_info,
-      shared_file_info,
-      language,
-      maybe_header
-    )?;
+    maybe_source = Some(
+      write_source(
+        project_info,
+        shared_file_info,
+        language,
+        &maybe_header
+      )?
+    );
   }
 
-  Ok(())
+  Ok(
+    vec![maybe_header, maybe_source, maybe_template_impl]
+      .into_iter()
+      .filter(|item| item.is_some())
+      .map(|item| item.unwrap())
+      .collect()
+  )
 }
 
 fn ensure_directory_structure_helper(code_dir: &str, leading_dir_structure: &str) -> io::Result<PathBuf> {
@@ -111,7 +120,7 @@ fn write_header(
   file_guard: &FileGuardStyle,
   file_info: &SharedFileInfo,
   language: &FileCreationLang,
-  maybe_template_impl: Option<PathBuf>
+  maybe_template_impl: &Option<PathBuf>
 ) -> io::Result<PathBuf> {
   // Ensure the directory structure exists
   let file_path = ensure_directory_structure(
@@ -157,8 +166,8 @@ fn write_source(
   project_info: &FinalProjectData,
   file_info: &SharedFileInfo,
   language: &FileCreationLang,
-  maybe_header: Option<PathBuf>
-) -> io::Result<()> {
+  maybe_header: &Option<PathBuf>
+) -> io::Result<PathBuf> {
   // Ensure the directory structure exists
   let file_path = ensure_directory_structure(
     project_info.get_src_dir(),
@@ -166,7 +175,7 @@ fn write_source(
     extension_for(CodeFileType::Source(language.clone()))
   )?;
 
-  let source_file = File::create(file_path)?;
+  let source_file = File::create(&file_path)?;
 
   if let Some(header_file) = maybe_header {
     writeln!(
@@ -176,7 +185,7 @@ fn write_source(
     )?;
   }
 
-  Ok(())
+  Ok(file_path)
 }
 
 fn write_template_impl(

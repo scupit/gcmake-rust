@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use crate::{project_info::final_project_data::FinalProjectData, cli_config::CreateFilesCommand};
 use self::{file_creation_info::{FileTypeGeneratingInfo, validate_which_generating, SharedFileInfo, validate_shared_file_info, FileGuardStyle}, code_file_writer::{write_code_files, extension_for, CodeFileType}};
@@ -35,8 +35,8 @@ pub fn handle_create_files(
   };
 
   let maybe_existing_files = [
-    (project_data.get_src_dir(), extension_for(CodeFileType::Source(command.language.clone()))),
     (project_data.get_include_dir(), extension_for(CodeFileType::Header(command.language.clone()))),
+    (project_data.get_src_dir(), extension_for(CodeFileType::Source(command.language.clone()))),
     (project_data.get_template_impl_dir(), extension_for(CodeFileType::TemplateImpl(command.language.clone()))),
   ]
     .map(|(code_root, extension)| format!(
@@ -56,7 +56,7 @@ pub fn handle_create_files(
     }
   }
 
-  let writer_result: Result<(), _> = write_code_files(
+  let writer_result: Result<Vec<PathBuf>, _> = write_code_files(
     &which_generating,
     &shared_file_info,
     &file_guard,
@@ -64,8 +64,16 @@ pub fn handle_create_files(
     &command.language
   );
 
-  if let Err(error) = writer_result {
-    return Err(error.to_string());
+  match writer_result {
+    Ok(created_files) => {
+      for file_path in created_files {
+        println!(
+          "Created: {}",
+          file_path.to_str().unwrap()
+        );
+      }
+    }
+    Err(error) => return Err(error.to_string())
   }
 
   Ok(())
