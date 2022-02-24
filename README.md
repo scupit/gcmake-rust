@@ -99,7 +99,7 @@ each recompilation.
 
 ### Generation TODO
 
-- [ ] Add ability to generate header, source, and template-impl files. Must support C and C++.
+- [x] Add ability to generate header, source, and template-impl files. Must support C and C++.
 - [ ] Generate *.gitignore* file if it doesn't exist. Ignore:
   - .vscode/
   - build/
