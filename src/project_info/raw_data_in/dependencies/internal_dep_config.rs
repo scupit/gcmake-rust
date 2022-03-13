@@ -35,8 +35,7 @@ pub struct NamespaceConfig {
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct GitRepoConfig {
-  pub repo_url: String,
-  pub latest_stable_release_tag: String
+  pub repo_url: String
 }
 
 // A predefined dependency which exists within the project build tree.

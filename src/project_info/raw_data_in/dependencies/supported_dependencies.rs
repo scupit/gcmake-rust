@@ -9,7 +9,6 @@ as_subdirectory:
   SFML:
     git_repo:
       repo_url: git@github.com:SFML/SFML.git
-      latest_stable_release_tag: "2.5.1"
     namespace_config:
       used_in_cmake_yaml: SFML
       cmakelists_linking: sfml-
@@ -25,7 +24,6 @@ as_subdirectory:
   nlohmann_json:
     git_repo:
       repo_url: git@github.com:ArthurSonzogni/nlohmann_json_cmake_fetchcontent.git
-      latest_stable_release_tag: "v3.10.4"
     namespace_config:
       used_in_cmake_yaml: nlohmann_json
       cmakelists_linking: "nlohmann_json::"
@@ -35,7 +33,6 @@ as_subdirectory:
   fmt:
     git_repo:
       repo_url: git@github.com:fmtlib/fmt.git
-      latest_stable_release_tag: "8.1.1"
     namespace_config:
       used_in_cmake_yaml: fmt
       cmakelists_linking: "fmt::"

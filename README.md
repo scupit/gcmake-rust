@@ -104,6 +104,8 @@ each recompilation.
   - .vscode/
   - build/
 - [ ] Ability to specify linked dependencies as a map of project names, each with its own dependency list.
+- [ ] Use `-Werror` in new project flags list.
+- [ ] (MAYBE) Add all warning flags to Release builds as well.
 
 Support for:
 
@@ -131,6 +133,7 @@ supports, the cheat sheet should detail:
 
 ### External libraries TODO
 
+- [x] Remove default `latest_stable_release_tag` in dependency yaml configuration. This project shouldn't manage default lib versions.
 - [ ] Add support for bringing external libraries into the project.
 
 #### IMPORTANT NOTE

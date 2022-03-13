@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use super::raw_data_in::dependencies::{internal_dep_config::{AllPredefinedDependencies, RawDep, RawSubdirectoryDependency}, user_given_dep_config::UserGivenPredefinedDependencyConfig};
+use super::raw_data_in::dependencies::{internal_dep_config::{AllPredefinedDependencies, RawDep, RawSubdirectoryDependency}, user_given_dep_config::{UserGivenPredefinedDependencyConfig, self}};
 
 pub enum GitRevisionSpecifier {
   Tag(String),
@@ -37,7 +37,7 @@ impl FinalPredefinedDependency {
     return match dep_config.find_dependency(dep_name) {
       Some(dep) => match dep {
         RawDep::AsSubdirectory(subdir_dep) =>
-          Ok(Self::from_subdir_dep(subdir_dep, user_given_config))
+          Self::from_subdir_dep(subdir_dep, user_given_config, dep_name)
       }
       None => Err(format!("Unable to find predefined dependency named '{}'.", dep_name))
     }
@@ -62,12 +62,17 @@ impl FinalPredefinedDependency {
 
   fn from_subdir_dep(
     subdir_dep: &RawSubdirectoryDependency,
-    user_given_config: &UserGivenPredefinedDependencyConfig
-  ) -> Self {
+    user_given_config: &UserGivenPredefinedDependencyConfig,
+    dep_name: &str
+  ) -> Result<Self, String> {
     let download_specifier: GitRevisionSpecifier = if let Some(tag_string) = &user_given_config.git_tag {
       GitRevisionSpecifier::Tag(tag_string.clone())
-    } else {
-      GitRevisionSpecifier::Tag(subdir_dep.git_repo.latest_stable_release_tag.clone())
+    }
+    else if let Some(hash_string) = &user_given_config.commit_hash {
+      GitRevisionSpecifier::Tag(hash_string.clone())
+    }
+    else {
+      return Err(format!("Must specify either a commit_hash or git_tag for dependency '{}'", dep_name));
     };
 
     let mut target_map: HashMap<String, String> = HashMap::new();
@@ -79,12 +84,14 @@ impl FinalPredefinedDependency {
       );
     }
 
-    return Self {
-      git_repo: FinalGitRepoDescriptor {
-        repo_url: subdir_dep.git_repo.repo_url.clone(),
-        download_specifier
-      },
-      target_map 
-    }
+    return Ok(
+      Self {
+        git_repo: FinalGitRepoDescriptor {
+          repo_url: subdir_dep.git_repo.repo_url.clone(),
+          download_specifier
+        },
+        target_map 
+      }
+    )
   }
 }
