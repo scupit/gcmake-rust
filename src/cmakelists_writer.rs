@@ -15,6 +15,10 @@ pub fn write_cmakelists(project_data: &FinalProjectData) -> io::Result<()> {
   Ok(())
 }
 
+fn namespaced_target_name(prefix: &str, target_name: &str) -> String {
+  return format!("{}::{}", prefix, target_name);
+}
+
 fn defines_generator_string(build_type: &BuildType, build_config: &BuildConfig) -> Option<String> {
   if let Some(defines) = build_config.defines.as_ref() {
     let defines_list = defines.iter()
@@ -748,6 +752,12 @@ impl<'a> CMakeListsWriter<'a> {
     )?;
     self.write_newline()?;
 
+    writeln!(&self.cmakelists_file,
+      "add_library( {} ALIAS {} )\n",
+      namespaced_target_name(self.project_data.get_include_prefix(), output_name),
+      output_name
+    )?;
+
     self.write_general_library_data(
       output_data,
       output_name,
@@ -843,6 +853,12 @@ impl<'a> CMakeListsWriter<'a> {
       template_impls_var_name
     )?;
     self.write_newline()?;
+
+    writeln!(&self.cmakelists_file,
+      "add_executable( {} ALIAS {} )\n",
+      namespaced_target_name(self.project_data.get_include_prefix(), output_name),
+      output_name
+    )?;
 
     writeln!(&self.cmakelists_file,
       "target_include_directories( {}\n\tPRIVATE ${{{}}}\n)",

@@ -69,7 +69,7 @@ impl FinalPredefinedDependency {
       GitRevisionSpecifier::Tag(tag_string.clone())
     }
     else if let Some(hash_string) = &user_given_config.commit_hash {
-      GitRevisionSpecifier::Tag(hash_string.clone())
+      GitRevisionSpecifier::CommitHash(hash_string.clone())
     }
     else {
       return Err(format!("Must specify either a commit_hash or git_tag for dependency '{}'", dep_name));
