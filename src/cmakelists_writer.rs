@@ -2,6 +2,12 @@ use std::{collections::{HashMap, HashSet}, fs::File, io::{self, Write}, path::{P
 
 use crate::{cmake_utils_writer::CMakeUtilWriter, project_info::{final_project_data::{FinalProjectData}, path_manipulation::cleaned_path_str, final_dependencies::GitRevisionSpecifier, raw_data_in::{BuildType, BuildConfig, ImplementationLanguage, BuildConfigCompilerSpecifier, SpecificCompilerSpecifier, CompiledItemType, LanguageConfigMap}, FinalProjectType, CompiledOutputItem, PreBuildScript}, logger::exit_error_log};
 
+const runtime_export_dir: &'static str = "${CMAKE_INSTALL_PREFIX}/bin";
+const lib_export_dir: &'static str = "${CMAKE_INSTALL_PREFIX}/lib";
+
+const RUNTIME_BUILD_DIR: &'static str = "${CMAKE_BINARY_DIR}/bin/${CMAKE_BUILD_TYPE}";
+const LIB_BUILD_DIR: &'static str = "${CMAKE_BINARY_DIR}/lib/${CMAKE_BUILD_TYPE}";
+
 pub fn write_cmakelists(project_data: &FinalProjectData) -> io::Result<()> {
   for (_, subproject) in project_data.get_subprojects() {
     write_cmakelists(subproject)?
@@ -73,6 +79,9 @@ impl<'a> CMakeListsWriter<'a> {
     self.write_project_header()?;
 
     self.include_utils()?;
+    self.write_newline()?;
+
+    self.write_toplevel_tweaks()?;
 
     if self.project_data.has_predefined_dependencies() {
       self.write_predefined_dependencies()?;
@@ -122,6 +131,20 @@ impl<'a> CMakeListsWriter<'a> {
     Ok(())
   }
 
+  fn write_toplevel_tweaks(&self) -> io::Result<()> {
+    writeln!(&self.cmakelists_file,
+      "if( \"${{CMAKE_CURRENT_SOURCE_DIR}}\" STREQUAL \"${{CMAKE_SOURCE_DIR}}\" )"
+    )?;
+
+    self.set_basic_var("\t", "CMAKE_RUNTIME_OUTPUT_DIRECTORY", RUNTIME_BUILD_DIR)?;
+
+    // Not sure if this one is needed yet.
+    // self.set_basic_var("\t", "CMAKE_LIBRARY_OUTPUT_DIRECTORY", LIB_BUILD_DIR);
+
+    writeln!(&self.cmakelists_file, "endif()")?;
+    Ok(())
+  }
+
   fn include_utils(&self) -> io::Result<()> {
     self.write_newline()?;
     writeln!(&self.cmakelists_file, "include(FetchContent)")?;
@@ -156,7 +179,7 @@ impl<'a> CMakeListsWriter<'a> {
           self.write_properties_for_output(
             script_target_name,
             &HashMap::from([
-              (String::from("RUNTIME_OUTPUT_DIRECTORY"), String::from("${CMAKE_BINARY_DIR}/bin/${CMAKE_BUILD_TYPE}/pre-build")),
+              (String::from("RUNTIME_OUTPUT_DIRECTORY"), String::from(RUNTIME_BUILD_DIR)),
               (String::from("C_EXTENSIONS"), String::from("OFF")),
               (String::from("CXX_EXTENSIONS"), String::from("OFF"))
             ])
@@ -816,9 +839,9 @@ impl<'a> CMakeListsWriter<'a> {
     self.write_properties_for_output(
       output_name,
       &HashMap::from([
-        (String::from("RUNTIME_OUTPUT_DIRECTORY"), String::from("${CMAKE_BINARY_DIR}/bin/${CMAKE_BUILD_TYPE}")),
-        (String::from("LIBRARY_OUTPUT_DIRECTORY"), String::from("${CMAKE_BINARY_DIR}/lib/${CMAKE_BUILD_TYPE}")),
-        (String::from("ARCHIVE_OUTPUT_DIRECTORY"), String::from("${CMAKE_BINARY_DIR}/lib/${CMAKE_BUILD_TYPE}")),
+        (String::from("RUNTIME_OUTPUT_DIRECTORY"), String::from(RUNTIME_BUILD_DIR)),
+        (String::from("LIBRARY_OUTPUT_DIRECTORY"), String::from(LIB_BUILD_DIR)),
+        (String::from("ARCHIVE_OUTPUT_DIRECTORY"), String::from(LIB_BUILD_DIR)),
         (String::from("C_EXTENSIONS"), String::from("OFF")),
         (String::from("CXX_EXTENSIONS"), String::from("OFF"))
       ])
@@ -870,7 +893,7 @@ impl<'a> CMakeListsWriter<'a> {
     self.write_properties_for_output(
       output_name,
       &HashMap::from([
-        (String::from("RUNTIME_OUTPUT_DIRECTORY"), String::from("${CMAKE_BINARY_DIR}/bin/${CMAKE_BUILD_TYPE}")),
+        (String::from("RUNTIME_OUTPUT_DIRECTORY"), String::from(RUNTIME_BUILD_DIR)),
         (String::from("C_EXTENSIONS"), String::from("OFF")),
         (String::from("CXX_EXTENSIONS"), String::from("OFF"))
       ])
