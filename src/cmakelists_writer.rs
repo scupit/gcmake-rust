@@ -2,8 +2,8 @@ use std::{collections::{HashMap, HashSet}, fs::File, io::{self, Write}, path::{P
 
 use crate::{cmake_utils_writer::CMakeUtilWriter, project_info::{final_project_data::{FinalProjectData}, path_manipulation::cleaned_path_str, final_dependencies::GitRevisionSpecifier, raw_data_in::{BuildType, BuildConfig, ImplementationLanguage, BuildConfigCompilerSpecifier, SpecificCompilerSpecifier, CompiledItemType, LanguageConfigMap}, FinalProjectType, CompiledOutputItem, PreBuildScript}, logger::exit_error_log};
 
-const runtime_export_dir: &'static str = "${CMAKE_INSTALL_PREFIX}/bin";
-const lib_export_dir: &'static str = "${CMAKE_INSTALL_PREFIX}/lib";
+const runtime_install_dir: &'static str = "${CMAKE_INSTALL_PREFIX}/bin";
+const lib_install_dir: &'static str = "${CMAKE_INSTALL_PREFIX}/lib";
 
 const RUNTIME_BUILD_DIR: &'static str = "${CMAKE_BINARY_DIR}/bin/${CMAKE_BUILD_TYPE}";
 const LIB_BUILD_DIR: &'static str = "${CMAKE_BINARY_DIR}/lib/${CMAKE_BUILD_TYPE}";
@@ -115,7 +115,9 @@ impl<'a> CMakeListsWriter<'a> {
 
   fn write_project_header(&self) -> io::Result<()> {
     // CMake Version header
-    writeln!(&self.cmakelists_file, "cmake_minimum_required( VERSION 3.19 )")?;
+    // As of writing, latest version is 3.23. This version is required because it added
+    // FILE_SET for headers, which makes installing header files much easier.
+    writeln!(&self.cmakelists_file, "cmake_minimum_required( VERSION 3.23 )")?;
 
     // Project metadata
     writeln!(&self.cmakelists_file,
@@ -173,7 +175,7 @@ impl<'a> CMakeListsWriter<'a> {
           writeln!(&self.cmakelists_file,
             "add_executable( {} ${{CMAKE_CURRENT_SOURCE_DIR}}/{} )",
             script_target_name,
-            exe_info.get_entry_file()
+            exe_info.get_entry_file().replace("./", "")
           )?;
 
           self.write_properties_for_output(
@@ -525,6 +527,7 @@ impl<'a> CMakeListsWriter<'a> {
     let template_impls_root_varname: String = format!("{}_TEMPLATE_IMPLS_ROOT", project_name);
     
     let project_include_dir_varname: String = format!("{}_INCLUDE_DIR", project_name);
+    let installable_targets_varname: String = format!("{}_INSTALLABLE_TARGETS", project_name);
 
     let src_var_name: String = format!("{}_SOURCES", project_name);
     let includes_var_name: String = format!("{}_HEADERS", project_name);
@@ -532,10 +535,12 @@ impl<'a> CMakeListsWriter<'a> {
 
     self.write_newline()?;
 
+    // Variables shared between all targets in the current project
     self.set_basic_var("", &src_root_varname, &format!("${{CMAKE_CURRENT_SOURCE_DIR}}/src/{}", include_prefix))?;
     self.set_basic_var("", &include_root_varname, &format!("${{CMAKE_CURRENT_SOURCE_DIR}}/include/{}", include_prefix))?;
     self.set_basic_var("", &template_impls_root_varname, &format!("${{CMAKE_CURRENT_SOURCE_DIR}}/template_impls/{}", include_prefix))?;
     self.set_basic_var("", &project_include_dir_varname, "${CMAKE_CURRENT_SOURCE_DIR}/include")?;
+    self.set_basic_var("", &installable_targets_varname, "\"\"")?;
 
     self.write_newline()?;
 
@@ -760,33 +765,26 @@ impl<'a> CMakeListsWriter<'a> {
   ) -> io::Result<()> {
     self.write_output_title(output_name)?;
 
-    let lib_type_string: &'static str = if let CompiledItemType::StaticLib = output_data.get_output_type() {
-      "STATIC"
-    } else {
-      "SHARED"
+    let lib_type_string: &'static str = match output_data.get_output_type() {
+      CompiledItemType::StaticLib => "STATIC",
+      CompiledItemType::SharedLib => "SHARED",
+      _ => panic!("Defined type library does not have a static or shared output type.")
     };
 
     writeln!(&self.cmakelists_file,
-      "add_library( {} {}\n\t# SOURCES\n\t\t{} ${{{}}}\n\t# HEADERS\n\t\t${{{}}} ${{{}}}\n)",
+      "add_library( {} {} )",
       output_name,
-      lib_type_string,
-      format!("${{CMAKE_CURRENT_SOURCE_DIR}}/{}", output_data.get_entry_file().replace("./", "")),
-      src_var_name,
-      includes_var_name,
-      template_impls_var_name
+      lib_type_string
     )?;
     self.write_newline()?;
-
-    writeln!(&self.cmakelists_file,
-      "add_library( {} ALIAS {} )\n",
-      namespaced_target_name(self.project_data.get_include_prefix(), output_name),
-      output_name
-    )?;
 
     self.write_general_library_data(
       output_data,
       output_name,
-      project_include_dir_varname
+      project_include_dir_varname,
+      includes_var_name,
+      template_impls_var_name,
+      src_var_name
     )?;
 
     Ok(()) 
@@ -806,20 +804,19 @@ impl<'a> CMakeListsWriter<'a> {
     writeln!(&self.cmakelists_file,
       // TODO: Find a way to get the make_toggle_lib function name at runtime from the CMakeUtilsWriter
       // struct. This could easily cause hard to track bugs if the function name is changed.
-      "make_toggle_lib( {} {}\n\t# SOURCES\n\t\t{} \"${{{}}}\"\n\t# HEADERS\n\t\t\"${{{}}}\" \"${{{}}}\"\n)",
+      "make_toggle_lib( {} {} )",
       output_name,
-      "STATIC",
-      format!("${{CMAKE_CURRENT_SOURCE_DIR}}/{}", output_data.get_entry_file().replace("./", "")),
-      src_var_name,
-      includes_var_name,
-      template_impls_var_name
+      "STATIC"
     )?;
     self.write_newline()?;
 
     self.write_general_library_data(
       output_data,
       output_name,
-      project_include_dir_varname
+      project_include_dir_varname,
+      includes_var_name,
+      template_impls_var_name,
+      src_var_name
     )?;
 
     Ok(()) 
@@ -829,10 +826,23 @@ impl<'a> CMakeListsWriter<'a> {
     &self,
     output_data: &CompiledOutputItem,
     output_name: &str,
-    project_include_dir_varname: &str
+    project_include_dir_varname: &str,
+    includes_var_name: &str,
+    template_impls_var_name: &str,
+    src_var_name: &str
   ) -> io::Result<()> {
+
     writeln!(&self.cmakelists_file,
-      "target_include_directories( {}\n\tPUBLIC ${{{}}}\n\t${{CMAKE_CURRENT_SOURCE_DIR}}\n)",
+      "apply_lib_files( {} \"${{CMAKE_CURRENT_SOURCE_DIR}}/{}\" \"${{{}}}\" \"${{{}}}\" \"${{{}}}\" )",
+      output_name,
+      output_data.get_entry_file().replace("./", ""),
+      src_var_name,
+      includes_var_name,
+      template_impls_var_name
+    )?;
+
+    writeln!(&self.cmakelists_file,
+      "target_include_directories( {}\n\tPUBLIC \"${{{}}}\"\n\t\"${{CMAKE_CURRENT_SOURCE_DIR}}\"\n)",
       output_name,
       &project_include_dir_varname
     )?;
@@ -870,20 +880,19 @@ impl<'a> CMakeListsWriter<'a> {
     self.write_output_title(output_name)?;
 
     writeln!(&self.cmakelists_file,
-      "add_executable( {}\n\t# SOURCES\n\t\t{} ${{{}}}\n\t# HEADERS\n\t\t${{{}}} ${{{}}}\n)",
+      "add_executable( {} )",
+      output_name
+    )?;
+
+    writeln!(&self.cmakelists_file,
+      "apply_exe_files( {} \"${{CMAKE_CURRENT_SOURCE_DIR}}/{}\" \"${{{}}}\" \"${{{}}}\" \"${{{}}}\" )",
       output_name,
-      format!("${{CMAKE_CURRENT_SOURCE_DIR}}/{}", output_data.get_entry_file().replace("./", "")),
+      output_data.get_entry_file().replace("./", ""),
       src_var_name,
       includes_var_name,
       template_impls_var_name
     )?;
     self.write_newline()?;
-
-    writeln!(&self.cmakelists_file,
-      "add_executable( {} ALIAS {} )\n",
-      namespaced_target_name(self.project_data.get_include_prefix(), output_name),
-      output_name
-    )?;
 
     writeln!(&self.cmakelists_file,
       "target_include_directories( {}\n\tPRIVATE ${{{}}}\n)",

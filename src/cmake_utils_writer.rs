@@ -13,7 +13,8 @@ impl CMakeUtilWriter {
       utils: HashMap::from_iter([
         ("toggle-lib-util", TOGGLE_LIB_UTIL_TEXT),
         ("pre-build-configuration-utils", PREBUILD_STEP_UTILS_TEXT),
-        ("resource-copy-util", RESOURCE_COPY_UTIL_TEXT)
+        ("resource-copy-util", RESOURCE_COPY_UTIL_TEXT),
+        ("general-utils", GENERAL_FUNCTIONS_UTIL_TEXT),
       ])
     }
   }
@@ -41,15 +42,48 @@ impl CMakeUtilWriter {
   }
 }
 
+const GENERAL_FUNCTIONS_UTIL_TEXT: &'static str = 
+r#"function( apply_exe_files
+  exe_target
+  entry_file
+  sources
+  headers
+  template_impls
+)
+  set( all_sources "${entry_file};${sources}" )
+  target_sources( ${exe_target} PUBLIC "${all_sources}" )
+
+  list( JOIN headers template_impls all_headers )
+
+  if( NOT "${all_headers}" STREQUAL "" )
+    target_sources( ${exe_target} PUBLIC FILE_SET HEADERS FILES "${all_headers}" )
+  endif()
+endfunction()
+
+function( apply_lib_files
+  lib_target
+  entry_file
+  sources
+  headers
+  template_impls
+)
+  if( NOT "${sources}" STREQUAL "" )
+    target_sources( ${lib_target} PUBLIC "${sources}" )
+  endif()
+
+  set( all_headers "${entry_file}" )
+  list( JOIN all_headers headers all_headers )
+  list( JOIN all_headers template_impls all_headers )
+
+  target_sources( ${lib_target} PUBLIC FILE_SET HEADERS FILES "${all_headers}" )
+endfunction()
+"#;
+
 
 const TOGGLE_LIB_UTIL_TEXT: &'static str = 
 r#"function( make_toggle_lib
   lib_name
   default_lib_type
-  lib_entry_file
-  lib_sources
-  lib_headers
-  lib_template_impls
 )
   if (NOT "${default_lib_type}" STREQUAL "STATIC" AND NOT "${default_lib_type}" STREQUAL "SHARED")
     message( FATAL_ERROR "Invalid default lib type '${default_lib_type}' given to type toggleable library ${lib_name}" )
@@ -61,12 +95,10 @@ r#"function( make_toggle_lib
 
   set_property( CACHE ${lib_name}_LIB_TYPE PROPERTY STRINGS "STATIC" "SHARED" )
 
-  set( all_lib_files ${lib_entry_file} ${lib_sources} ${lib_headers} ${lib_template_impls} )
-
   if ( ${lib_name}_LIB_TYPE STREQUAL STATIC )
-    add_library( ${lib_name} STATIC ${all_lib_files})
+    add_library( ${lib_name} STATIC )
   elseif( ${lib_name}_LIB_TYPE STREQUAL SHARED )
-    add_library( ${lib_name} SHARED ${all_lib_files})
+    add_library( ${lib_name} SHARED )
   endif()
 endfunction()
 "#;
