@@ -281,6 +281,13 @@ impl FinalProjectData {
   }
 
   fn validate_correctness(&self) -> Result<(), String> {
+    if self.get_project_name().contains(' ') {
+      return Err(format!(
+        "Project name cannot contain spaces, but does (Currently: {})",
+        self.get_project_name()
+      ));
+    }
+
     for (_, subproject) in &self.subprojects {
       subproject.validate_correctness()?;
     }

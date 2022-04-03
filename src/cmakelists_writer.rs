@@ -210,6 +210,8 @@ impl<'a> CMakeListsWriter<'a> {
     Ok(())
   }
 
+  // TODO: Change how this works. Currently, all files and folders in all resource dirs are merged into
+  // a single toplevel one. This is bound to cause issues due to files overwriting each other. 
   fn write_resource_dir_copier(&self) -> io::Result<()> {
     writeln!(&self.cmakelists_file,
       "copy_resource_dir_if_exists(\n\t${{CMAKE_CURRENT_SOURCE_DIR}}/resources\n\t${{CMAKE_BINARY_DIR}}/bin/${{CMAKE_BUILD_TYPE}}/resources\n\t${{PROJECT_NAME}}-pre-build-step\n)"
