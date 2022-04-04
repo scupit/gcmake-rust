@@ -2,27 +2,22 @@ use std::{collections::{HashMap, HashSet}, fs::File, io::{self, Write}, path::{P
 
 use crate::{cmake_utils_writer::CMakeUtilWriter, project_info::{final_project_data::{FinalProjectData}, path_manipulation::cleaned_path_str, final_dependencies::GitRevisionSpecifier, raw_data_in::{BuildType, BuildConfig, ImplementationLanguage, BuildConfigCompilerSpecifier, SpecificCompilerSpecifier, CompiledItemType, LanguageConfigMap}, FinalProjectType, CompiledOutputItem, PreBuildScript}, logger::exit_error_log};
 
-const runtime_install_dir: &'static str = "${CMAKE_INSTALL_PREFIX}/bin";
-const lib_install_dir: &'static str = "${CMAKE_INSTALL_PREFIX}/lib";
-
 const RUNTIME_BUILD_DIR: &'static str = "${CMAKE_BINARY_DIR}/bin/${CMAKE_BUILD_TYPE}";
 const LIB_BUILD_DIR: &'static str = "${CMAKE_BINARY_DIR}/lib/${CMAKE_BUILD_TYPE}";
 
-pub fn write_cmakelists(project_data: &FinalProjectData) -> io::Result<()> {
+pub fn configure_cmake(project_data: &FinalProjectData) -> io::Result<()> {
   for (_, subproject) in project_data.get_subprojects() {
-    write_cmakelists(subproject)?
+    configure_cmake(subproject)?
   }
 
   let cmake_util_path = Path::new(project_data.get_project_root()).join("cmake");
   let util_writer = CMakeUtilWriter::new(cmake_util_path);
   util_writer.write_cmake_utils()?;
 
-  CMakeListsWriter::new(project_data, util_writer)?.write_cmakelists()?;
+  let cmake_configurer = CMakeListsWriter::new(project_data, util_writer)?;
+  cmake_configurer.write_cmakelists()?;
+  cmake_configurer.write_cmake_config_in()?;
   Ok(())
-}
-
-fn namespaced_target_name(prefix: &str, target_name: &str) -> String {
-  return format!("{}::{}", prefix, target_name);
 }
 
 fn defines_generator_string(build_type: &BuildType, build_config: &BuildConfig) -> Option<String> {
@@ -59,19 +54,33 @@ fn flattened_flags_string(maybe_flags: &Option<HashSet<String>>) -> String {
 struct CMakeListsWriter<'a> {
   project_data: &'a FinalProjectData,
   util_writer: CMakeUtilWriter,
-  cmakelists_file: File
+  cmakelists_file: File,
+  cmake_config_in_file: File,
+  installable_targets_varname: String
 }
 
 impl<'a> CMakeListsWriter<'a> {
   fn new(project_data: &'a FinalProjectData, util_writer: CMakeUtilWriter) -> io::Result<Self> {
-    let file_name: String = format!("{}/CMakeLists.txt", project_data.get_project_root());
-    let cmakelists_file: File = File::create(file_name)?;
+    let cmakelists_file_name: String = format!("{}/CMakeLists.txt", project_data.get_project_root());
+    let cmake_config_in_file_name: String = format!("{}/Config.cmake.in", project_data.get_project_root());
 
     Ok(Self {
       project_data,
       util_writer,
-      cmakelists_file
+      cmakelists_file: File::create(cmakelists_file_name)?,
+      cmake_config_in_file: File::create(cmake_config_in_file_name)?,
+      installable_targets_varname: format!("{}_INSTALLABLE_TARGETS", project_data.get_project_name())
     })
+  }
+
+  fn write_cmake_config_in(&self) -> io::Result<()> {
+    writeln!(&self.cmake_config_in_file, "@PACKAGE_INIT@\n")?;
+    writeln!(&self.cmake_config_in_file,
+      "include( \"${{CMAKE_CURRENT_LIST_DIR}}/{}Targets.cmake\" )",
+      self.project_data.get_project_name()
+    )?;
+    
+    Ok(())
   }
 
   fn write_cmakelists(&self) -> io::Result<()> {
@@ -110,6 +119,10 @@ impl<'a> CMakeListsWriter<'a> {
 
     self.write_section_header("Outputs")?;
     self.write_outputs()?;
+
+    self.write_section_header("Installation and Export configuration")?;
+    self.write_installation_and_exports()?;
+
     Ok(())
   }
 
@@ -119,16 +132,16 @@ impl<'a> CMakeListsWriter<'a> {
     // FILE_SET for headers, which makes installing header files much easier.
     writeln!(&self.cmakelists_file, "cmake_minimum_required( VERSION 3.23 )")?;
 
+
     // Project metadata
     writeln!(&self.cmakelists_file,
-      "project( {} )",
-      self.project_data.get_project_name()
+      "project( {} VERSION {} )",
+      self.project_data.get_project_name(),
+      self.project_data.version.to_string()
     )?;
 
     self.write_newline()?;
     self.set_basic_var("", "CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS", "true")?;
-    // TODO: Set Output directory configuration by config
-    // self.set_basic_var("", var_value)
 
     Ok(())
   }
@@ -139,9 +152,7 @@ impl<'a> CMakeListsWriter<'a> {
     )?;
 
     self.set_basic_var("\t", "CMAKE_RUNTIME_OUTPUT_DIRECTORY", RUNTIME_BUILD_DIR)?;
-
-    // Not sure if this one is needed yet.
-    // self.set_basic_var("\t", "CMAKE_LIBRARY_OUTPUT_DIRECTORY", LIB_BUILD_DIR);
+    self.set_basic_var("\t", "CMAKE_LIBRARY_OUTPUT_DIRECTORY", LIB_BUILD_DIR)?;
 
     writeln!(&self.cmakelists_file, "endif()")?;
     Ok(())
@@ -527,7 +538,6 @@ impl<'a> CMakeListsWriter<'a> {
     let template_impls_root_varname: String = format!("{}_TEMPLATE_IMPLS_ROOT", project_name);
     
     let project_include_dir_varname: String = format!("{}_INCLUDE_DIR", project_name);
-    let installable_targets_varname: String = format!("{}_INSTALLABLE_TARGETS", project_name);
 
     let src_var_name: String = format!("{}_SOURCES", project_name);
     let includes_var_name: String = format!("{}_HEADERS", project_name);
@@ -540,7 +550,7 @@ impl<'a> CMakeListsWriter<'a> {
     self.set_basic_var("", &include_root_varname, &format!("${{CMAKE_CURRENT_SOURCE_DIR}}/include/{}", include_prefix))?;
     self.set_basic_var("", &template_impls_root_varname, &format!("${{CMAKE_CURRENT_SOURCE_DIR}}/template_impls/{}", include_prefix))?;
     self.set_basic_var("", &project_include_dir_varname, "${CMAKE_CURRENT_SOURCE_DIR}/include")?;
-    self.set_basic_var("", &installable_targets_varname, "\"\"")?;
+    self.set_basic_var("", &self.installable_targets_varname, "\"\"")?;
 
     self.write_newline()?;
 
@@ -831,6 +841,12 @@ impl<'a> CMakeListsWriter<'a> {
     template_impls_var_name: &str,
     src_var_name: &str
   ) -> io::Result<()> {
+    writeln!(&self.cmakelists_file,
+      "list( APPEND {} {} )",
+      &self.installable_targets_varname,
+      output_name
+    )?;
+    self.write_newline()?;
 
     writeln!(&self.cmakelists_file,
       "apply_lib_files( {} \"${{CMAKE_CURRENT_SOURCE_DIR}}/{}\" \"${{{}}}\" \"${{{}}}\" \"${{{}}}\" )",
@@ -842,7 +858,7 @@ impl<'a> CMakeListsWriter<'a> {
     )?;
 
     writeln!(&self.cmakelists_file,
-      "target_include_directories( {}\n\tPUBLIC \"${{{}}}\"\n\t\"${{CMAKE_CURRENT_SOURCE_DIR}}\"\n)",
+      "apply_include_dirs( {} COMPILED_LIB \"${{{}}}\" )",
       output_name,
       &project_include_dir_varname
     )?;
@@ -885,6 +901,12 @@ impl<'a> CMakeListsWriter<'a> {
     )?;
 
     writeln!(&self.cmakelists_file,
+      "list( APPEND {} {} )",
+      &self.installable_targets_varname,
+      output_name
+    )?;
+
+    writeln!(&self.cmakelists_file,
       "apply_exe_files( {} \"${{CMAKE_CURRENT_SOURCE_DIR}}/{}\" \"${{{}}}\" \"${{{}}}\" \"${{{}}}\" )",
       output_name,
       output_data.get_entry_file().replace("./", ""),
@@ -895,10 +917,11 @@ impl<'a> CMakeListsWriter<'a> {
     self.write_newline()?;
 
     writeln!(&self.cmakelists_file,
-      "target_include_directories( {}\n\tPRIVATE ${{{}}}\n)",
+      "apply_include_dirs( {} EXE \"${{{}}}\" )",
       output_name,
       &project_include_dir_varname
     )?;
+
     self.write_newline()?;
 
     self.write_properties_for_output(
@@ -916,6 +939,18 @@ impl<'a> CMakeListsWriter<'a> {
     self.write_newline()?;
 
     self.write_links_for_output(output_name, output_data)?;
+    Ok(())
+  }
+
+  // See this page for help and a good example:
+  // https://cmake.org/cmake/help/latest/guide/tutorial/Adding%20Export%20Configuration.html
+  fn write_installation_and_exports(&self) -> io::Result<()> {
+    writeln!(&self.cmakelists_file,
+      "configure_installation(\n\t\"{}\"\n\t\"${{{}}}\"\n)",
+      self.project_data.get_project_name(),
+      &self.installable_targets_varname
+    )?;
+
     Ok(())
   }
 }

@@ -15,6 +15,7 @@ impl CMakeUtilWriter {
         ("pre-build-configuration-utils", PREBUILD_STEP_UTILS_TEXT),
         ("resource-copy-util", RESOURCE_COPY_UTIL_TEXT),
         ("general-utils", GENERAL_FUNCTIONS_UTIL_TEXT),
+        ("installation-utils", INSTALLATION_CONFIGURE_TEXT)
       ])
     }
   }
@@ -43,7 +44,16 @@ impl CMakeUtilWriter {
 }
 
 const GENERAL_FUNCTIONS_UTIL_TEXT: &'static str = 
-r#"function( apply_exe_files
+r#"function( get_without_source_dir_prefix
+  all_files
+  receiving_var
+)
+  string( REPLACE "${CMAKE_CURRENT_SOURCE_DIR}/" "" with_removed_prefix "${all_files}" )
+  string( REPLACE "./" "" with_removed_prefix "${with_removed_prefix}" )
+  set( ${receiving_var} "${with_removed_prefix}" PARENT_SCOPE )
+endfunction()
+
+function( apply_exe_files
   exe_target
   entry_file
   sources
@@ -51,12 +61,24 @@ r#"function( apply_exe_files
   template_impls
 )
   set( all_sources "${entry_file};${sources}" )
-  target_sources( ${exe_target} PUBLIC "${all_sources}" )
+  get_without_source_dir_prefix( "${all_sources}" all_sources_install_interface )
+
+  target_sources( ${exe_target} PUBLIC
+    "$<BUILD_INTERFACE:${all_sources}>"
+    "$<INSTALL_INTERFACE:${all_sources_install_interface}>"
+  )
 
   list( JOIN headers template_impls all_headers )
 
   if( NOT "${all_headers}" STREQUAL "" )
-    target_sources( ${exe_target} PUBLIC FILE_SET HEADERS FILES "${all_headers}" )
+    string( REPLACE "${CMAKE_CURRENT_SOURCE_DIR}/" "" install_interface_all_headers "${all_headers}")
+    get_without_source_dir_prefix( "${all_headers}" all_headers_install_interface )
+
+    target_sources( ${exe_target} PUBLIC FILE_SET HEADERS
+      FILES
+        "$<BUILD_INTERFACE:${all_headers}>"
+        "$<INSTALL_INTERFACE:${all_headers_install_interface}>"
+    )
   endif()
 endfunction()
 
@@ -68,14 +90,44 @@ function( apply_lib_files
   template_impls
 )
   if( NOT "${sources}" STREQUAL "" )
-    target_sources( ${lib_target} PUBLIC "${sources}" )
+    get_without_source_dir_prefix( "${sources}" all_sources_install_interface )
+    target_sources( ${lib_target} PUBLIC
+      "$<BUILD_INTERFACE:${sources}>"
+      "$<INSTALL_INTERFACE:${all_sources_install_interface}>"
+    )
   endif()
 
   set( all_headers "${entry_file}" )
   list( JOIN all_headers headers all_headers )
   list( JOIN all_headers template_impls all_headers )
 
-  target_sources( ${lib_target} PUBLIC FILE_SET HEADERS FILES "${all_headers}" )
+  get_without_source_dir_prefix( "${all_headers}" all_headers_install_interface )
+
+  target_sources( ${lib_target} PUBLIC FILE_SET HEADERS
+    FILES
+      "$<BUILD_INTERFACE:${all_headers}>"
+      "$<INSTALL_INTERFACE:${all_headers_install_interface}>"
+  )
+endfunction()
+
+function( apply_include_dirs
+  target
+  target_type
+  project_include_dir
+)
+  if( "${target_type}" STREQUAL "COMPILED_LIB" )
+    set( BUILD_INTERFACE_INCLUDE_DIRS "${CMAKE_CURRENT_SOURCE_DIR};${project_include_dir}")
+  elseif( "${target_type}" STREQUAL "EXE" )
+    set( BUILD_INTERFACE_INCLUDE_DIRS "${project_include_dir}")
+  else()
+    message( FATAL_ERROR "Invalid target_type '${target_type}' given to function 'apply_include_dirs'" )
+  endif()
+
+  target_include_directories( ${target}
+    PUBLIC
+      "$<BUILD_INTERFACE:${BUILD_INTERFACE_INCLUDE_DIRS}>"
+      "$<INSTALL_INTERFACE:include/${PROJECT_NAME}>"
+  )
 endfunction()
 "#;
 
@@ -164,5 +216,55 @@ r#"function( copy_resource_dir_if_exists
       VERBATIM
     )
   endif()
+endfunction()
+"#;
+
+const INSTALLATION_CONFIGURE_TEXT: &'static str = r#"function( configure_installation
+  project_version
+  targets_installing
+)
+  if( NOT "${targets_installing}" STREQUAL "" )
+    install( TARGETS ${targets_installing}
+      EXPORT ${PROJECT_NAME}Targets
+      RUNTIME 
+        DESTINATION bin
+      LIBRARY
+        DESTINATION lib
+      ARCHIVE
+        DESTINATION lib/static
+      FILE_SET HEADERS
+        DESTINATION .
+    )
+  
+    install( EXPORT ${PROJECT_NAME}Targets
+      FILE ${PROJECT_NAME}Targets.cmake
+      DESTINATION "lib/cmake/${PROJECT_NAME}"
+    )
+
+    include( CMakePackageConfigHelpers )
+
+    configure_package_config_file( "${CMAKE_CURRENT_SOURCE_DIR}/Config.cmake.in"
+      "${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}Config.cmake"
+      INSTALL_DESTINATION "lib/cmake"
+    )
+
+    # TODO: Allow configuration of COMPATIBILITY
+    write_basic_package_version_file(
+      "${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}ConfigVersion.cmake"
+      VERSION "${PROJECT_VERSION}"
+      COMPATIBILITY AnyNewerVersion
+    )
+
+    install( FILES 
+      "${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}Config.cmake"
+      "${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}ConfigVersion.cmake"
+      DESTINATION "lib/cmake/${PROJECT_NAME}"
+    )
+
+    export( EXPORT ${PROJECT_NAME}Targets
+      FILE "${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}Targets.cmake"
+    )
+  endif()
+
 endfunction()
 "#;

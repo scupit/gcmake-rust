@@ -7,7 +7,7 @@ mod project_generator;
 mod program_actions;
 
 use logger::exit_error_log;
-use cmakelists_writer::write_cmakelists;
+use cmakelists_writer::configure_cmake;
 
 use clap::Clap;
 use cli_config::{Opts, SubCommand};
@@ -53,7 +53,7 @@ fn main() {
     println!("\nBeginning CMakeLists generation...");
 
     get_project_info_then(&project_root_dir, &dep_config, |project_data| {
-      match write_cmakelists(&project_data) {
+      match configure_cmake(&project_data) {
         Ok(_) => println!("CMakeLists all written successfully!"),
         Err(err) => println!("{:?}", err)
       }

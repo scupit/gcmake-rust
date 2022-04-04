@@ -1,6 +1,48 @@
-use std::{collections::{HashMap, HashSet}, path::{Path, PathBuf}};
+use std::{collections::{HashMap, HashSet}, path::{Path, PathBuf}, convert::TryInto, os::windows::raw};
 
 use super::{path_manipulation::{cleaned_path_str, relative_to_project_root}, final_dependencies::FinalPredefinedDependency, raw_data_in::{RawProject, ProjectLike, dependencies::internal_dep_config::AllPredefinedDependencies, BuildConfigMap, BuildType, LanguageConfigMap, CompiledItemType, PreBuildConfigIn, ImplementationLanguage, SpecificCompilerSpecifier, BuildConfigCompilerSpecifier}, final_project_configurables::{FinalProjectType, SubprojectOnlyOptions}, CompiledOutputItem, helpers::{create_subproject_data, create_project_data, validate_raw_project, populate_files, find_prebuild_script, PrebuildScriptFile}, PreBuildScript};
+
+pub struct ThreePartVersion (u32, u32, u32);
+
+impl ThreePartVersion {
+  pub fn to_string(&self) -> String {
+    let Self (major, minor, patch) = self;
+
+    format!("{}.{}.{}", major, minor, patch)
+  }
+
+  /*
+    Allowed input formats:
+      - v0.0.1
+      - 0.0.1
+  */
+  pub fn from_str(full_version_string: &str) -> Option<Self> {
+    let usable_version_string = if full_version_string.starts_with('v')
+      { &full_version_string[1..] }
+      else { full_version_string };
+
+    let mut version_nums: Vec<Result<u32, _>> = usable_version_string
+      .split('.')
+      .map(|section| section.parse::<u32>())
+      .collect();
+
+    if version_nums.len() != 3 {
+      return None;
+    }
+
+    for maybe_num in &version_nums {
+      if maybe_num.is_err() {
+        return None;
+      }
+    }
+
+    return Some(Self(
+      version_nums.remove(0).unwrap(),
+      version_nums.remove(0).unwrap(),
+      version_nums.remove(0).unwrap()
+    ));
+  }
+}
 
 fn resolve_prebuild_script(project_root: &str, pre_build_config: &PreBuildConfigIn) -> Result<Option<PreBuildScript>, String> {
   let merged_script_config = if let Some(script_file) = find_prebuild_script(project_root) {
@@ -28,6 +70,7 @@ fn resolve_prebuild_script(project_root: &str, pre_build_config: &PreBuildConfig
 pub struct FinalProjectData {
   project_type: FinalProjectType,
   project_root: String,
+  pub version: ThreePartVersion,
   // project: RawProject,
   supported_compilers: HashSet<SpecificCompilerSpecifier>,
   project_name: String,
@@ -135,8 +178,18 @@ impl FinalProjectData {
       })
     )?;
 
+    let maybe_version: Option<ThreePartVersion> = ThreePartVersion::from_str(raw_project.get_version());
+
+    if maybe_version.is_none() {
+      return Err(format!(
+        "Invalid project version '{}' given. Version must be formatted like a normal three-part version (ex: 1.0.0), and may be prefixed with the letter 'v'.",
+        raw_project.get_version()
+      ));
+    }
+
     let mut finalized_project_data = FinalProjectData {
       project_name: raw_project.name,
+      version: maybe_version.unwrap(),
       include_prefix: raw_project.include_prefix,
       global_defines: raw_project.global_defines,
       build_config_map: raw_project.build_configs,
