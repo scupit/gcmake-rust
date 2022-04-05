@@ -236,8 +236,9 @@ impl<'a> CMakeListsWriter<'a> {
   fn write_subproject_includes(&self) -> io::Result<()> {
     for subproject_name in self.project_data.get_subproject_names() {
       writeln!( &self.cmakelists_file,
-        "add_subdirectory( ${{CMAKE_CURRENT_SOURCE_DIR}}/subprojects/{} )",
-        subproject_name
+        "configure_subproject(\n\t\"${{CMAKE_CURRENT_SOURCE_DIR}}/subprojects/{}\"\n\t{}\n)",
+        subproject_name,
+        &self.installable_targets_varname
       )?;
     }
 
@@ -550,7 +551,7 @@ impl<'a> CMakeListsWriter<'a> {
     self.set_basic_var("", &include_root_varname, &format!("${{CMAKE_CURRENT_SOURCE_DIR}}/include/{}", include_prefix))?;
     self.set_basic_var("", &template_impls_root_varname, &format!("${{CMAKE_CURRENT_SOURCE_DIR}}/template_impls/{}", include_prefix))?;
     self.set_basic_var("", &project_include_dir_varname, "${CMAKE_CURRENT_SOURCE_DIR}/include")?;
-    self.set_basic_var("", &self.installable_targets_varname, "\"\"")?;
+    self.set_basic_var("", "PROJECT_INCLUDE_PREFIX", &format!("\"{}\"", self.project_data.get_include_prefix()))?;
 
     self.write_newline()?;
 
@@ -842,7 +843,8 @@ impl<'a> CMakeListsWriter<'a> {
     src_var_name: &str
   ) -> io::Result<()> {
     writeln!(&self.cmakelists_file,
-      "list( APPEND {} {} )",
+      "set( {} \"${{{}}};{}\" )",
+      &self.installable_targets_varname,
       &self.installable_targets_varname,
       output_name
     )?;
@@ -899,22 +901,14 @@ impl<'a> CMakeListsWriter<'a> {
       "add_executable( {} )",
       output_name
     )?;
+    self.write_newline()?;
 
     writeln!(&self.cmakelists_file,
-      "list( APPEND {} {} )",
+      "set( {} \"${{{}}};{}\" )",
+      &self.installable_targets_varname,
       &self.installable_targets_varname,
       output_name
     )?;
-
-    writeln!(&self.cmakelists_file,
-      "apply_exe_files( {} \"${{CMAKE_CURRENT_SOURCE_DIR}}/{}\" \"${{{}}}\" \"${{{}}}\" \"${{{}}}\" )",
-      output_name,
-      output_data.get_entry_file().replace("./", ""),
-      src_var_name,
-      includes_var_name,
-      template_impls_var_name
-    )?;
-    self.write_newline()?;
 
     writeln!(&self.cmakelists_file,
       "apply_include_dirs( {} EXE \"${{{}}}\" )",
@@ -922,6 +916,14 @@ impl<'a> CMakeListsWriter<'a> {
       &project_include_dir_varname
     )?;
 
+    writeln!(&self.cmakelists_file,
+      "apply_exe_files( {}\n\t\"${{CMAKE_CURRENT_SOURCE_DIR}}/{}\"\n\t\"${{{}}}\"\n\t\"${{{}}}\"\n\t\"${{{}}}\"\n)",
+      output_name,
+      output_data.get_entry_file().replace("./", ""),
+      src_var_name,
+      includes_var_name,
+      template_impls_var_name
+    )?;
     self.write_newline()?;
 
     self.write_properties_for_output(
@@ -946,10 +948,31 @@ impl<'a> CMakeListsWriter<'a> {
   // https://cmake.org/cmake/help/latest/guide/tutorial/Adding%20Export%20Configuration.html
   fn write_installation_and_exports(&self) -> io::Result<()> {
     writeln!(&self.cmakelists_file,
-      "configure_installation(\n\t\"{}\"\n\t\"${{{}}}\"\n)",
-      self.project_data.get_project_name(),
+      "clean_list( \"${{{}}}\" {} )",
+      &self.installable_targets_varname,
       &self.installable_targets_varname
     )?;
+
+    match &self.project_data.get_project_type() {
+      FinalProjectType::Full => {
+        writeln!(&self.cmakelists_file,
+          "configure_installation(\n\t\"{}\"\n\t\"${{{}}}\"\n)",
+          self.project_data.get_project_name(),
+          &self.installable_targets_varname
+        )?;
+
+      writeln!( &self.cmakelists_file,
+        "message( \"Full target list: ${{{}}}\")",
+        &self.installable_targets_varname
+      )?;
+      },
+      FinalProjectType::Subproject(_) => {
+        writeln!(&self.cmakelists_file,
+          "raise_target_list( \"${{{}}}\" )",
+          &self.installable_targets_varname
+        )?;
+      }
+    }
 
     Ok(())
   }

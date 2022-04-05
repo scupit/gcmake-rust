@@ -336,8 +336,15 @@ impl FinalProjectData {
   fn validate_correctness(&self) -> Result<(), String> {
     if self.get_project_name().contains(' ') {
       return Err(format!(
-        "Project name cannot contain spaces, but does (Currently: {})",
+        "Project name cannot contain spaces, but does. (Currently: {})",
         self.get_project_name()
+      ));
+    }
+
+    if self.get_include_prefix().contains(' ') {
+      return Err(format!(
+        "Project 'include prefix' cannot contain spaces, but does. (Currently: {})",
+        self.get_include_prefix()
       ));
     }
 
