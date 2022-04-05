@@ -10,6 +10,8 @@ impl CMakeUtilWriter {
   pub fn new(cmake_utils_path: PathBuf) -> Self {
     return Self {
       cmake_utils_path,
+      // TODO: Make all these their own *.cmake files, so they are easier to maintain.
+      // Load them here using a pre-build script.
       utils: HashMap::from_iter([
         ("toggle-lib-util", TOGGLE_LIB_UTIL_TEXT),
         ("pre-build-configuration-utils", PREBUILD_STEP_UTILS_TEXT),

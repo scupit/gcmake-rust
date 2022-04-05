@@ -1,19 +1,17 @@
 mod project_info;
 mod logger;
-mod cmake_utils_writer;
-mod cmakelists_writer;
+mod file_writers;
 mod cli_config;
 mod project_generator;
 mod program_actions;
 
 use logger::exit_error_log;
-use cmakelists_writer::configure_cmake;
 
 use clap::Clap;
 use cli_config::{Opts, SubCommand};
 use program_actions::*;
 
-use crate::project_info::{final_project_data::FinalProjectData, raw_data_in::dependencies::{supported_dependency_configs, internal_dep_config::AllPredefinedDependencies}};
+use crate::{project_info::{raw_data_in::dependencies::{supported_dependency_configs, internal_dep_config::AllPredefinedDependencies}}, file_writers::write_configurations};
 
 
 // TODO: Handle library creation for Static and Shared libraries.
@@ -50,13 +48,18 @@ fn main() {
   }
 
   if should_generate_cmakelists {
-    println!("\nBeginning CMakeLists generation...");
-
     get_project_info_then(&project_root_dir, &dep_config, |project_data| {
-      match configure_cmake(&project_data) {
-        Ok(_) => println!("CMakeLists all written successfully!"),
-        Err(err) => println!("{:?}", err)
-      }
+      write_configurations(
+        &project_data,
+        |config_name| println!("Beginning {} configuration step...", config_name),
+        |(config_name, config_result)| match config_result {
+          Ok(_) => println!("{} configuration written successfully!", config_name),
+          Err(err) => {
+            println!("Writing {} configuration failed with error:", config_name);
+            println!("{:?}", err)
+          }
+        }
+      ); 
     });
   }
 

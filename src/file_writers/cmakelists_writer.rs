@@ -1,13 +1,13 @@
 use std::{collections::{HashMap, HashSet}, fs::File, io::{self, Write}, path::{Path, PathBuf}};
 
-use crate::{cmake_utils_writer::CMakeUtilWriter, project_info::{final_project_data::{FinalProjectData}, path_manipulation::cleaned_path_str, final_dependencies::GitRevisionSpecifier, raw_data_in::{BuildType, BuildConfig, ImplementationLanguage, BuildConfigCompilerSpecifier, SpecificCompilerSpecifier, CompiledItemType, LanguageConfigMap}, FinalProjectType, CompiledOutputItem, PreBuildScript}, logger::exit_error_log};
+use crate::{file_writers::cmake_utils_writer::CMakeUtilWriter, project_info::{final_project_data::{FinalProjectData}, path_manipulation::cleaned_path_str, final_dependencies::GitRevisionSpecifier, raw_data_in::{BuildType, BuildConfig, BuildConfigCompilerSpecifier, SpecificCompilerSpecifier, CompiledItemType, LanguageConfigMap}, FinalProjectType, CompiledOutputItem, PreBuildScript}, logger::exit_error_log};
 
 const RUNTIME_BUILD_DIR: &'static str = "${CMAKE_BINARY_DIR}/bin/${CMAKE_BUILD_TYPE}";
 const LIB_BUILD_DIR: &'static str = "${CMAKE_BINARY_DIR}/lib/${CMAKE_BUILD_TYPE}";
 
 pub fn configure_cmake(project_data: &FinalProjectData) -> io::Result<()> {
   for (_, subproject) in project_data.get_subprojects() {
-    configure_cmake(subproject)?
+    configure_cmake(subproject)?;
   }
 
   let cmake_util_path = Path::new(project_data.get_project_root()).join("cmake");
@@ -608,18 +608,15 @@ impl<'a> CMakeListsWriter<'a> {
     // Write executables after libraries, because the library targets must exist before the executables
     // can link to them.
     for (output_name, output_data) in self.project_data.get_outputs() {
-      match *output_data.get_output_type() {
-        CompiledItemType::Executable => {
-          self.write_executable(
-            output_data,
-            output_name,
-            &src_var_name,
-            &includes_var_name,
-            &template_impls_var_name,
-            &project_include_dir_varname
-          )?;
-        },
-        _ => ()
+      if let CompiledItemType::Executable = output_data.get_output_type() {
+        self.write_executable(
+          output_data,
+          output_name,
+          &src_var_name,
+          &includes_var_name,
+          &template_impls_var_name,
+          &project_include_dir_varname
+        )?;
       }
     }
 
