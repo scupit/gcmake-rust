@@ -532,7 +532,7 @@ impl<'a> CMakeListsWriter<'a> {
 
   fn write_outputs(&self) -> io::Result<()> {
     let project_name: &str = self.project_data.get_project_name();
-    let include_prefix: &str = self.project_data.get_include_prefix();
+    let include_prefix: &str = self.project_data.get_full_include_prefix();
 
     let src_root_varname: String = format!("{}_SRC_ROOT", project_name);
     let include_root_varname: String = format!("{}_HEADER_ROOT", project_name);
@@ -551,7 +551,7 @@ impl<'a> CMakeListsWriter<'a> {
     self.set_basic_var("", &include_root_varname, &format!("${{CMAKE_CURRENT_SOURCE_DIR}}/include/{}", include_prefix))?;
     self.set_basic_var("", &template_impls_root_varname, &format!("${{CMAKE_CURRENT_SOURCE_DIR}}/template_impls/{}", include_prefix))?;
     self.set_basic_var("", &project_include_dir_varname, "${CMAKE_CURRENT_SOURCE_DIR}/include")?;
-    self.set_basic_var("", "PROJECT_INCLUDE_PREFIX", &format!("\"{}\"", self.project_data.get_include_prefix()))?;
+    self.set_basic_var("", "PROJECT_INCLUDE_PREFIX", &format!("\"{}\"", self.project_data.get_full_include_prefix()))?;
 
     self.write_newline()?;
 

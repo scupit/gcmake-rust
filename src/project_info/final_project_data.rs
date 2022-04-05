@@ -1,6 +1,8 @@
-use std::{collections::{HashMap, HashSet}, path::{Path, PathBuf}, convert::TryInto, os::windows::raw};
+use std::{collections::{HashMap, HashSet}, path::{Path, PathBuf}, io, rc::Rc, ops::Sub, env };
 
-use super::{path_manipulation::{cleaned_path_str, relative_to_project_root}, final_dependencies::FinalPredefinedDependency, raw_data_in::{RawProject, ProjectLike, dependencies::internal_dep_config::AllPredefinedDependencies, BuildConfigMap, BuildType, LanguageConfigMap, CompiledItemType, PreBuildConfigIn, ImplementationLanguage, SpecificCompilerSpecifier, BuildConfigCompilerSpecifier}, final_project_configurables::{FinalProjectType, SubprojectOnlyOptions}, CompiledOutputItem, helpers::{create_subproject_data, create_project_data, validate_raw_project, populate_files, find_prebuild_script, PrebuildScriptFile}, PreBuildScript};
+use crate::project_info::path_manipulation::cleaned_pathbuf;
+
+use super::{path_manipulation::{cleaned_path_str, relative_to_project_root, find_first_dir_named, absolute_path}, final_dependencies::FinalPredefinedDependency, raw_data_in::{RawProject, ProjectLike, dependencies::internal_dep_config::AllPredefinedDependencies, BuildConfigMap, BuildType, LanguageConfigMap, CompiledItemType, PreBuildConfigIn, ImplementationLanguage, SpecificCompilerSpecifier, BuildConfigCompilerSpecifier, ProjectMetadata}, final_project_configurables::{FinalProjectType, SubprojectOnlyOptions}, CompiledOutputItem, helpers::{create_subproject_data, create_project_data, validate_raw_project, populate_files, find_prebuild_script, PrebuildScriptFile, parse_project_metadata}, PreBuildScript};
 
 pub struct ThreePartVersion (u32, u32, u32);
 
@@ -67,9 +69,47 @@ fn resolve_prebuild_script(project_root: &str, pre_build_config: &PreBuildConfig
   return Ok(merged_script_config);
 }
 
+pub struct UseableFinalProjectDataGroup {
+  pub root_project: Rc<FinalProjectData>,
+  pub operating_on: Option<Rc<FinalProjectData>>
+}
+
+fn project_level(
+  clean_path_root: &str,
+  include_prefix: &str
+) -> io::Result<Option<usize>> {
+  let search_dir: String = format!("{}/include", clean_path_root);
+
+  if let Some(dirty_include_path) = find_first_dir_named(Path::new(&search_dir), include_prefix)? {
+    let include_path: PathBuf = cleaned_pathbuf(dirty_include_path);
+    let path_components: Vec<_> = include_path.components().collect();
+
+    let include_position: usize = include_path.components()
+      .position(|section| section.as_os_str().to_str().unwrap() == "include")
+      .unwrap();
+
+    let level: usize = path_components.len() - include_position - 2;
+
+    println!("include_path path: {}", include_path.to_str().unwrap());
+    println!(
+      "include pos: {}, num comps: {}, level: {}",
+      include_position,
+      path_components.len(),
+      level
+    );
+    
+    return Ok(Some(level));
+  }
+  
+  Ok(None)
+}
+
+type SubprojectMap = HashMap<String, Rc<FinalProjectData>>;
+
 pub struct FinalProjectData {
   project_type: FinalProjectType,
   project_root: String,
+  absolute_project_root: PathBuf,
   pub version: ThreePartVersion,
   // project: RawProject,
   supported_compilers: HashSet<SpecificCompilerSpecifier>,
@@ -78,7 +118,8 @@ pub struct FinalProjectData {
   default_build_config: BuildType,
   language_config_map: LanguageConfigMap,
   global_defines: Option<HashSet<String>>,
-  include_prefix: String,
+  base_include_prefix: String,
+  full_include_prefix: String,
   src_dir: String,
   include_dir: String,
   template_impls_dir: String,
@@ -87,22 +128,76 @@ pub struct FinalProjectData {
   pub template_impl_files: Vec<PathBuf>,
   // subproject_names: HashSet<String>,
   // subprojects: Vec<FinalProjectData>,
-  subprojects: HashMap<String, FinalProjectData>,
+  subprojects: SubprojectMap,
   output: HashMap<String, CompiledOutputItem>,
   predefined_dependencies: HashMap<String, FinalPredefinedDependency>,
   prebuild_script: Option<PreBuildScript>
 }
 
 impl FinalProjectData {
-  pub fn new(unclean_project_root: &str, dep_config: &AllPredefinedDependencies) -> Result<FinalProjectData, String> {
-    let project_data_result: FinalProjectData = Self::create_new(unclean_project_root, false, dep_config)?;
 
-    project_data_result.validate_correctness()?;
+  pub fn new<'a>(
+    unclean_given_root: &str,
+    dep_config: &AllPredefinedDependencies
+  ) -> Result<UseableFinalProjectDataGroup, String> {
+    let metadata: ProjectMetadata = parse_project_metadata(unclean_given_root)?;
+    let cleaned_given_root: String = cleaned_path_str(unclean_given_root);
 
-    return Ok(project_data_result);
+    let level: usize = match project_level(cleaned_given_root.as_str(), &metadata.include_prefix) {
+      Err(err) => return Err(format!("Error when trying to find project level: {}", err.to_string())),
+      Ok(maybe_level) => match maybe_level {
+        Some(value) => value,
+        None => return Err(format!(
+          "Unable to find valid include directory with prefix {} in {}",
+          &metadata.include_prefix,
+          &cleaned_given_root
+        ))
+      }
+    };
+
+    let mut real_project_root_using: PathBuf = PathBuf::from(&cleaned_given_root);
+
+    if level > 0 {
+      // Current project is <level> levels deep. Need to go back <level> * 2 dirs, since subprojects
+      // are nested in the 'subprojects/<subproject name>' directory
+      for _ in 0..(level * 2) {
+        real_project_root_using.push("..");
+      }
+
+      real_project_root_using = real_project_root_using;
+    }
+
+
+    let root_project: Rc<FinalProjectData> = Rc::new(Self::create_new(
+      real_project_root_using.to_str().unwrap(),
+      None,
+      dep_config
+    )?);
+
+    root_project.validate_correctness()?;
+
+    return Ok(UseableFinalProjectDataGroup {
+      operating_on: Self::find_with_root(
+        &absolute_path(cleaned_given_root)?,
+        Rc::clone(&root_project)
+      ),
+      root_project,
+    });
   }
 
-  fn create_new(unclean_project_root: &str, is_subproject: bool, all_dep_config: &AllPredefinedDependencies) -> Result<FinalProjectData, String> {
+  // pub fn new(unclean_project_root: &str, dep_config: &AllPredefinedDependencies) -> Result<FinalProjectData, String> {
+  //   let project_data_result: FinalProjectData = Self::create_new(unclean_project_root, None, dep_config)?;
+
+  //   project_data_result.validate_correctness()?;
+
+  //   return Ok(project_data_result);
+  // }
+
+  fn create_new(
+    unclean_project_root: &str,
+    parent_include_prefix: Option<&str>,
+    all_dep_config: &AllPredefinedDependencies
+  ) -> Result<FinalProjectData, String> {
     // NOTE: Subprojects are still considered whole projects, however they are not allowed to specify
     // top level build configuration data. This means that language data, build configs, etc. are not
     // defined in subprojects, and shouldn't be written. Build configuration related data is inherited
@@ -110,7 +205,7 @@ impl FinalProjectData {
     let raw_project: RawProject;
     let project_type: FinalProjectType;
 
-    if is_subproject {
+    if parent_include_prefix.is_some() {
       raw_project = create_subproject_data(&unclean_project_root)?.into();
       project_type = FinalProjectType::Subproject(SubprojectOnlyOptions { })
     } else {
@@ -122,21 +217,30 @@ impl FinalProjectData {
       return Err(err_message);
     }
 
-    let project_include_prefix = raw_project.get_include_prefix();
+    let full_include_prefix: String = if let Some(parent_prefix) = parent_include_prefix {
+      format!("{}/{}", parent_prefix, raw_project.get_include_prefix()) 
+    } else {
+      raw_project.get_include_prefix().to_string()
+    };
+
     let project_root: String = cleaned_path_str(&unclean_project_root).to_string();
 
-    let src_dir = format!("{}/src/{}", &project_root, project_include_prefix);
-    let include_dir = format!("{}/include/{}", &project_root, project_include_prefix);
-    let template_impls_dir = format!("{}/template-impl/{}", &project_root, project_include_prefix);
+    let src_dir = format!("{}/src/{}", &project_root, &full_include_prefix);
+    let include_dir = format!("{}/include/{}", &project_root, &full_include_prefix);
+    let template_impls_dir = format!("{}/template-impl/{}", &project_root, &full_include_prefix);
 
-    let mut subprojects: HashMap<String, FinalProjectData> = HashMap::new();
+    let mut subprojects: SubprojectMap = HashMap::new();
     // let mut subprojects: Vec<FinalProjectData> = Vec::new();
     // let mut subproject_names: HashSet<String> = HashSet::new();
 
     if let Some(dirnames) = raw_project.get_subproject_dirnames() {
       for subproject_dirname in dirnames {
         let full_subproject_dir = format!("{}/subprojects/{}", &project_root, subproject_dirname);
-        let mut new_subproject: FinalProjectData = Self::create_new(&full_subproject_dir, true, all_dep_config)?;
+        let mut new_subproject: FinalProjectData = Self::create_new(
+          &full_subproject_dir,
+          Some(&full_include_prefix),
+          all_dep_config
+        )?;
 
         // Subprojects must inherit these from their parent project in order to properly
         // set compiler flags and other properties per output item.
@@ -146,7 +250,7 @@ impl FinalProjectData {
 
         subprojects.insert(
           subproject_dirname.clone(),
-          new_subproject
+          Rc::new(new_subproject)
         );
       }
     }
@@ -188,15 +292,17 @@ impl FinalProjectData {
     }
 
     let mut finalized_project_data = FinalProjectData {
-      project_name: raw_project.name,
+      project_name: raw_project.name.to_string(),
       version: maybe_version.unwrap(),
-      include_prefix: raw_project.include_prefix,
+      full_include_prefix,
+      base_include_prefix: raw_project.get_include_prefix().to_string(),
       global_defines: raw_project.global_defines,
       build_config_map: raw_project.build_configs,
       default_build_config: raw_project.default_build_type,
       language_config_map: raw_project.languages,
       supported_compilers: raw_project.supported_compilers,
       project_type,
+      absolute_project_root: absolute_path(&project_root)?,
       project_root,
       src_dir,
       include_dir,
@@ -226,6 +332,23 @@ impl FinalProjectData {
     }
 
     return Ok(finalized_project_data);
+  }
+
+  // Visit the toplevel root project and all its subprojects.
+  fn find_with_root(
+    absolute_root: &PathBuf,
+    project: Rc<FinalProjectData>
+  ) -> Option<Rc<FinalProjectData>> {
+    if project.absolute_project_root == *absolute_root {
+      return Some(project);
+    }
+
+    for (_, subproject) in &project.subprojects {
+      if let Some(matching_project) = Self::find_with_root(absolute_root, Rc::clone(subproject)) {
+        return Some(matching_project);
+      }
+    }
+    None
   }
 
   fn ensure_links_are_valid(
@@ -341,10 +464,10 @@ impl FinalProjectData {
       ));
     }
 
-    if self.get_include_prefix().contains(' ') {
+    if self.get_full_include_prefix().contains(' ') {
       return Err(format!(
         "Project 'include prefix' cannot contain spaces, but does. (Currently: {})",
-        self.get_include_prefix()
+        self.get_full_include_prefix()
       ));
     }
 
@@ -416,8 +539,16 @@ impl FinalProjectData {
     &self.project_root
   }
 
-  pub fn get_include_prefix(&self) -> &str {
-    &self.include_prefix
+  pub fn get_absolute_project_root(&self) -> &str {
+    &self.absolute_project_root.to_str().unwrap()
+  }
+
+  pub fn get_base_include_prefix(&self) -> &str {
+    &self.base_include_prefix
+  }
+
+  pub fn get_full_include_prefix(&self) -> &str {
+    &self.full_include_prefix
   }
 
   pub fn get_project_name(&self) -> &str {
@@ -452,7 +583,7 @@ impl FinalProjectData {
     &self.global_defines
   }
   
-  pub fn get_subprojects(&self) -> &HashMap<String, FinalProjectData> {
+  pub fn get_subprojects(&self) -> &SubprojectMap {
     &self.subprojects
   }
 

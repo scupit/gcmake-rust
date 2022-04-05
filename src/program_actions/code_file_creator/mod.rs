@@ -25,7 +25,7 @@ pub fn handle_create_files(
   else {
     let guard_specifier_string: String = format!(
       "H_{}_{}",
-      project_data.get_include_prefix(),
+      project_data.get_full_include_prefix(),
       &shared_file_info.shared_name
     )
       .to_uppercase()

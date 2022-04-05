@@ -110,7 +110,7 @@ fn to_include_path(
   // .../any/path/PROJECT_INCLUDE_PREFIX/path/to/file.extension
   let path_string: &str = file_path.to_str().unwrap();
   let first_needed_index: usize =
-    path_string.find(&format!("{}/", project_include_prefix)).unwrap();
+    path_string.find(&format!("/{}/", project_include_prefix)).unwrap();
     
   String::from(&path_string[first_needed_index..])
 }
@@ -151,7 +151,7 @@ fn write_header(
     writeln!(
       &header_file,
       "#include \"{}\"",
-      to_include_path(project_info.get_include_prefix(), &template_impl_file)
+      to_include_path(project_info.get_base_include_prefix(), &template_impl_file)
     )?;
   }
 
@@ -181,7 +181,7 @@ fn write_source(
     writeln!(
       &source_file,
       "#include \"{}\"",
-      to_include_path(project_info.get_include_prefix(), &header_file)
+      to_include_path(project_info.get_full_include_prefix(), &header_file)
     )?;
   }
 

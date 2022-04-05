@@ -2,7 +2,7 @@ use std::{path::{PathBuf, Path}, fs, io};
 
 use regex::{Captures, Regex};
 
-use super::{raw_data_in::{RawProject, RawSubproject, ProjectLike}, path_manipulation::cleaned_pathbuf, final_project_configurables::LinkInfo, PreBuildScript};
+use super::{raw_data_in::{RawProject, RawSubproject, ProjectLike, ProjectMetadata}, path_manipulation::cleaned_pathbuf, final_project_configurables::LinkInfo};
 
 fn file_variants(
   project_root: &str,
@@ -44,11 +44,11 @@ pub fn find_prebuild_script(project_root: &str) -> Option<PrebuildScriptFile> {
   return None
 }
 
-pub fn create_project_data(project_root: &str) -> Result<RawProject, String> {
+fn yaml_parse_helper<T: serde::de::DeserializeOwned>(project_root: &str) -> Result<T, String> {
   for possible_cmake_data_file in yaml_names_from_dir(project_root) {
     if let io::Result::Ok(cmake_data_yaml_string) = fs::read_to_string(possible_cmake_data_file) {
 
-      return match serde_yaml::from_str::<RawProject>(&cmake_data_yaml_string) {
+      return match serde_yaml::from_str::<T>(&cmake_data_yaml_string) {
         Ok(serialized_project) => Ok(serialized_project),
         Err(error) => Err(error.to_string())
       }
@@ -58,18 +58,16 @@ pub fn create_project_data(project_root: &str) -> Result<RawProject, String> {
   return Err(format!("Unable to find a cmake_data.yaml or cmake_data.yml file in {}", project_root));
 }
 
+pub fn parse_project_metadata(project_root: &str) -> Result<ProjectMetadata, String> {
+  yaml_parse_helper(project_root)
+}
+
+pub fn create_project_data(project_root: &str) -> Result<RawProject, String> {
+  yaml_parse_helper(project_root)
+}
+
 pub fn create_subproject_data(project_root: &str) -> Result<RawSubproject, String> {
-  for possible_cmake_data_file in yaml_names_from_dir(project_root) {
-    if let io::Result::Ok(cmake_data_yaml_string) = fs::read_to_string(possible_cmake_data_file) {
-
-      return match serde_yaml::from_str::<RawSubproject>(&cmake_data_yaml_string) {
-        Ok(serialized_project) => Ok(serialized_project),
-        Err(error) => Err(error.to_string())
-      }
-    }
-  }
-
-  return Err(format!("Unable to find a cmake_data.yaml or cmake_data.yml file in {}", project_root));
+  yaml_parse_helper(project_root)
 }
 
 pub fn populate_files(dir: &Path, file_list: &mut Vec<PathBuf>) -> io::Result<()> {
