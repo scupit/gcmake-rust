@@ -62,7 +62,6 @@ fn ensure_directory_structure_helper(code_dir: &str, leading_dir_structure: &str
       .join(leading_dir_structure)
   );
 
-
   fs::create_dir_all(&full_project_path)?;
   Ok(full_project_path)
 }
@@ -103,16 +102,12 @@ pub fn extension_for(file_type: CodeFileType) -> &'static str {
   }
 }
 
-fn to_include_path(
-  project_include_prefix: &str,
-  file_path: &PathBuf
+fn to_file_include_path(
+  project: &FinalProjectData,
+  file_including: &PathBuf
 ) -> String {
-  // .../any/path/PROJECT_INCLUDE_PREFIX/path/to/file.extension
-  let path_string: &str = file_path.to_str().unwrap();
-  let first_needed_index: usize =
-    path_string.find(&format!("/{}/", project_include_prefix)).unwrap();
-    
-  String::from(&path_string[first_needed_index..])
+  let file_name: &str = file_including.file_name().unwrap().to_str().unwrap();
+  return format!("{}/{}", project.get_full_include_prefix(), file_name);
 }
 
 fn write_header(
@@ -151,7 +146,7 @@ fn write_header(
     writeln!(
       &header_file,
       "#include \"{}\"",
-      to_include_path(project_info.get_base_include_prefix(), &template_impl_file)
+      to_file_include_path(project_info, template_impl_file)
     )?;
   }
 
@@ -181,7 +176,7 @@ fn write_source(
     writeln!(
       &source_file,
       "#include \"{}\"",
-      to_include_path(project_info.get_full_include_prefix(), &header_file)
+      to_file_include_path(project_info, &header_file)
     )?;
   }
 

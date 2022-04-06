@@ -53,11 +53,15 @@ fn main() {
       ),
       SubCommand::GenFile(command) => {
         get_project_info_then(&given_root_dir, &dep_config, |project_data_group| {
-          print_project_info(project_data_group);
-          // match handle_create_files(project_data, &command) {
-          //   Ok(_) => println!("Files written successfully!"),
-          //   Err(error_message) => exit_error_log(&error_message)
-          // }
+          // print_project_info(project_data_group);
+          if let None = project_data_group.operating_on {
+            exit_error_log("Tried to create files while not operating on a project. Make sure you are inside a project directory containing a cmake_data.{yaml|yml} file.")
+          }
+
+          match handle_create_files(&project_data_group.operating_on.unwrap(), &command) {
+            Ok(_) => println!("Files written successfully!"),
+            Err(error_message) => exit_error_log(&error_message)
+          }
         })
       }
     }

@@ -1,4 +1,4 @@
-use std::path::{Path, PathBuf};
+use std::{path::{Path, PathBuf}, rc::Rc};
 
 use crate::{project_info::final_project_data::FinalProjectData, cli_config::CreateFilesCommand};
 use self::{file_creation_info::{FileTypeGeneratingInfo, validate_which_generating, SharedFileInfo, validate_shared_file_info, FileGuardStyle}, code_file_writer::{write_code_files, extension_for, CodeFileType}};
@@ -7,7 +7,7 @@ mod code_file_writer;
 mod file_creation_info;
 
 pub fn handle_create_files(
-  project_data: FinalProjectData,
+  project_data: &Rc<FinalProjectData>,
   command: &CreateFilesCommand
 ) -> Result<(), String> {
   let which_generating: FileTypeGeneratingInfo = FileTypeGeneratingInfo::new(&command.file_types)?;
@@ -25,7 +25,7 @@ pub fn handle_create_files(
   else {
     let guard_specifier_string: String = format!(
       "H_{}_{}",
-      project_data.get_full_include_prefix(),
+      project_data.get_base_include_prefix(),
       &shared_file_info.shared_name
     )
       .to_uppercase()
