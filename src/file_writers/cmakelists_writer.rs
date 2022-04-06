@@ -957,11 +957,6 @@ impl<'a> CMakeListsWriter<'a> {
           self.project_data.get_project_name(),
           &self.installable_targets_varname
         )?;
-
-      writeln!( &self.cmakelists_file,
-        "message( \"Full target list: ${{{}}}\")",
-        &self.installable_targets_varname
-      )?;
       },
       FinalProjectType::Subproject(_) => {
         writeln!(&self.cmakelists_file,

@@ -12,7 +12,7 @@ int main(int argc, const char** argv) {
 ";
 
 const CPP_LIB_MAIN: &'static str =
-"//#include \"Your lib files\"";
+"// #include \"Your lib files\"";
 
 pub fn generate_cpp_main<T: AsRef<Path>>(file_path: T, project_output_type: &ProjectOutputType) -> io::Result<()> {
   let main_file = File::create(file_path)?;

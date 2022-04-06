@@ -1,4 +1,4 @@
-use std::{path::{PathBuf, Path}, fs::{self, DirEntry}, io, env, os::windows::prelude::AsRawHandle};
+use std::{path::{PathBuf, Path}, fs::{self, DirEntry}, io, env};
 
 pub fn cleaned_path_str(file_path: &str) -> String {
   return path_clean::clean(&file_path.replace("\\", "/"));

@@ -6,9 +6,9 @@ mod prompt;
 pub use default_project_config::configuration;
 use serde::Serialize;
 
-use std::{fs::{File, create_dir, remove_dir_all}, io::{self, ErrorKind}, path::Path};
+use std::{fs::{File, remove_dir_all, create_dir_all, create_dir}, io::{self, ErrorKind}, path::Path};
 
-use crate::{project_generator::{c_file_generation::generate_c_main, cpp_file_generation::generate_cpp_main, default_project_config::{DefaultProject, configuration::{MainFileLanguage, ProjectOutputType}, get_default_project_config, get_default_subproject_config, main_file_name}, prompt::{prompt_once, prompt_for_project_output_type, prompt_for_language, prompt_for_description}}};
+use crate::{project_generator::{c_file_generation::generate_c_main, cpp_file_generation::generate_cpp_main, default_project_config::{DefaultProject, configuration::{MainFileLanguage, ProjectOutputType}, get_default_project_config, get_default_subproject_config, main_file_name}, prompt::{prompt_once, prompt_for_project_output_type, prompt_for_language, prompt_for_description}}, program_actions::ProjectTypeCreating};
 
 use self::{prompt::{prompt_until_boolean, PromptResult}};
 
@@ -19,18 +19,16 @@ const TEMPLATE_IMPL_DIR: &'static str = "template_impls";
 
 pub fn create_project_at(
   new_project_root: &str,
+  project_type_creating: ProjectTypeCreating,
   project_lang: Option<MainFileLanguage>,
-  project_output_type: Option<ProjectOutputType>,
-  is_subproject: bool
+  project_output_type: Option<ProjectOutputType>
 ) -> io::Result<Option<DefaultProject>> {
   let project_name: &str;
 
   {
-    let start_index: usize = if let Some(last_slash_index) = new_project_root.rfind("/") {
-      last_slash_index + 1
-    } else {
-      0
-    };
+    let start_index: usize = if let Some(last_slash_index) = new_project_root.rfind("/")
+      { last_slash_index + 1 }
+      else { 0 };
 
     project_name = &new_project_root[start_index..];
   }
@@ -57,57 +55,47 @@ pub fn create_project_at(
     for nested_dir in [SRC_DIR, INCLUDE_DIR, TEMPLATE_IMPL_DIR, "subprojects"] {
       let mut extended_path = project_root.to_path_buf();
       extended_path.push(nested_dir);
-      create_dir(extended_path)?;
+      create_dir_all(extended_path)?;
     }
 
     let default_prefix = project_name
       .to_uppercase()
       .replace("-", "_");
 
-    let include_prefix = prompt_once(
+    let mut include_prefix = prompt_once(
       &format!("include prefix ({}): ", &default_prefix)
     )?.unwrap_or(default_prefix);
+
+    if let ProjectTypeCreating::Subproject(current_project_context) = &project_type_creating {
+      include_prefix = current_project_context.nested_include_prefix(&include_prefix);
+    }
 
     for source_code_dir in [SRC_DIR, INCLUDE_DIR, TEMPLATE_IMPL_DIR] {
       let mut extended_path = project_root.to_path_buf();
       extended_path.push(source_code_dir);
       extended_path.push(&include_prefix);
-      create_dir(extended_path)?;
+      create_dir_all(extended_path)?;
     }
 
-    let output_type_selection: ProjectOutputType = if let Some(output_selection) = project_output_type {
-      output_selection
-    } else { prompt_for_project_output_type()? };
+    let output_type_selection: ProjectOutputType = project_output_type
+      .unwrap_or(prompt_for_project_output_type()?);
 
-    let lang_selection: MainFileLanguage = if let Some(lang) = project_lang {
-      lang
-    } else { prompt_for_language()? };
-
+    let lang_selection: MainFileLanguage = project_lang.unwrap_or(prompt_for_language()?);
     let project_description: String = prompt_for_description()?;
 
-    let project_info: DefaultProject = if is_subproject {
-      DefaultProject::Subproject(
-        get_default_subproject_config(
-          &project_name,
-          &include_prefix,
-          &lang_selection,
-          &output_type_selection,
-          &project_description
-        )
-      ) 
-    } else {
-      DefaultProject::MainProject(
-        get_default_project_config(
-          &project_name,
-          &include_prefix,
-          &lang_selection,
-          &output_type_selection,
-          &project_description
-        )
-      )
-    };
+    let project_info: DefaultProject = build_default_project_info(
+      &project_type_creating,
+      project_name,
+      &include_prefix,
+      &lang_selection,
+      &output_type_selection,
+      &project_description
+    );
 
-    let cmake_data_file = File::create(format!("{}/cmake_data.yaml", project_root.to_str().unwrap()))?;
+    let cmake_data_file = File::create(
+      format!("{}/cmake_data.yaml",
+      project_root.to_str().unwrap())
+    )?;
 
     match &project_info {
       DefaultProject::MainProject(project_info) => 
@@ -130,6 +118,38 @@ pub fn create_project_at(
   }
 
   Ok(None)
+}
+
+fn build_default_project_info(
+  project_type_creating: &ProjectTypeCreating,
+  project_name: &str,
+  include_prefix: &str,
+  lang_selection: &MainFileLanguage,
+  output_type_selection: &ProjectOutputType,
+  project_description: &str
+) -> DefaultProject {
+  if let ProjectTypeCreating::Subproject(_) = project_type_creating {
+    DefaultProject::Subproject(
+      get_default_subproject_config(
+        &project_name,
+        &include_prefix,
+        &lang_selection,
+        &output_type_selection,
+        &project_description
+      )
+    ) 
+  }
+  else {
+    DefaultProject::MainProject(
+      get_default_project_config(
+        &project_name,
+        &include_prefix,
+        &lang_selection,
+        &output_type_selection,
+        &project_description
+      )
+    )
+  }
 }
 
 fn write_cmake_yaml<T: Serialize>(

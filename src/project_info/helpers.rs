@@ -2,7 +2,7 @@ use std::{path::{PathBuf, Path}, fs, io};
 
 use regex::{Captures, Regex};
 
-use super::{raw_data_in::{RawProject, RawSubproject, ProjectLike, ProjectMetadata}, path_manipulation::cleaned_pathbuf, final_project_configurables::LinkInfo};
+use super::{raw_data_in::{RawProject, RawSubproject, ProjectLike, ProjectMetadata}, path_manipulation::cleaned_pathbuf, final_project_configurables::LinkInfo, final_project_data::ProjectLoadFailureReason};
 
 fn file_variants(
   project_root: &str,
@@ -44,29 +44,34 @@ pub fn find_prebuild_script(project_root: &str) -> Option<PrebuildScriptFile> {
   return None
 }
 
-fn yaml_parse_helper<T: serde::de::DeserializeOwned>(project_root: &str) -> Result<T, String> {
+type YamlParseResult<T> = Result<T, ProjectLoadFailureReason>;
+
+fn yaml_parse_helper<T: serde::de::DeserializeOwned>(project_root: &str) -> YamlParseResult<T> {
   for possible_cmake_data_file in yaml_names_from_dir(project_root) {
     if let io::Result::Ok(cmake_data_yaml_string) = fs::read_to_string(possible_cmake_data_file) {
 
       return match serde_yaml::from_str::<T>(&cmake_data_yaml_string) {
         Ok(serialized_project) => Ok(serialized_project),
-        Err(error) => Err(error.to_string())
+        Err(error) => Err(ProjectLoadFailureReason::Other(error.to_string()))
       }
     }
   }
 
-  return Err(format!("Unable to find a cmake_data.yaml or cmake_data.yml file in {}", project_root));
+  return Err(ProjectLoadFailureReason::MissingYaml(format!(
+    "Unable to find a cmake_data.yaml or cmake_data.yml file in {}",
+    project_root
+  )));
 }
 
-pub fn parse_project_metadata(project_root: &str) -> Result<ProjectMetadata, String> {
+pub fn parse_project_metadata(project_root: &str) -> YamlParseResult<ProjectMetadata> {
   yaml_parse_helper(project_root)
 }
 
-pub fn create_project_data(project_root: &str) -> Result<RawProject, String> {
+pub fn create_project_data(project_root: &str) -> YamlParseResult<RawProject> {
   yaml_parse_helper(project_root)
 }
 
-pub fn create_subproject_data(project_root: &str) -> Result<RawSubproject, String> {
+pub fn create_subproject_data(project_root: &str) -> YamlParseResult<RawSubproject> {
   yaml_parse_helper(project_root)
 }
 
@@ -147,7 +152,7 @@ pub fn validate_output_config(project_data: &RawProject) -> Result<(), String> {
   let mut makes_executable: bool = false;
   let mut makes_library: bool = false;
 
-  for (output_name, output_data) in project_data.get_output() {
+  for (_output_name, output_data) in project_data.get_output() {
     if output_data.is_library_type() {
       if makes_library {
         return Err(format!("Project \"{}\" contains more than one library output, but should only contain one.", project_data.get_name()));

@@ -1,8 +1,8 @@
-use std::{collections::{HashMap, HashSet}, path::{Path, PathBuf}, io, rc::Rc, ops::Sub, env };
+use std::{collections::{HashMap, HashSet}, path::{Path, PathBuf}, io, rc::Rc};
 
 use crate::project_info::path_manipulation::cleaned_pathbuf;
 
-use super::{path_manipulation::{cleaned_path_str, relative_to_project_root, find_first_dir_named, absolute_path}, final_dependencies::FinalPredefinedDependency, raw_data_in::{RawProject, ProjectLike, dependencies::internal_dep_config::AllPredefinedDependencies, BuildConfigMap, BuildType, LanguageConfigMap, CompiledItemType, PreBuildConfigIn, ImplementationLanguage, SpecificCompilerSpecifier, BuildConfigCompilerSpecifier, ProjectMetadata}, final_project_configurables::{FinalProjectType, SubprojectOnlyOptions}, CompiledOutputItem, helpers::{create_subproject_data, create_project_data, validate_raw_project, populate_files, find_prebuild_script, PrebuildScriptFile, parse_project_metadata}, PreBuildScript};
+use super::{path_manipulation::{cleaned_path_str, relative_to_project_root, find_first_dir_named, absolute_path}, final_dependencies::FinalPredefinedDependency, raw_data_in::{RawProject, ProjectLike, dependencies::internal_dep_config::AllPredefinedDependencies, BuildConfigMap, BuildType, LanguageConfigMap, CompiledItemType, PreBuildConfigIn, SpecificCompilerSpecifier, ProjectMetadata}, final_project_configurables::{FinalProjectType, SubprojectOnlyOptions}, CompiledOutputItem, helpers::{create_subproject_data, create_project_data, validate_raw_project, populate_files, find_prebuild_script, PrebuildScriptFile, parse_project_metadata}, PreBuildScript};
 
 pub struct ThreePartVersion (u32, u32, u32);
 
@@ -90,13 +90,13 @@ fn project_level(
 
     let level: usize = path_components.len() - include_position - 2;
 
-    println!("include_path path: {}", include_path.to_str().unwrap());
-    println!(
-      "include pos: {}, num comps: {}, level: {}",
-      include_position,
-      path_components.len(),
-      level
-    );
+    // println!("include_path path: {}", include_path.to_str().unwrap());
+    // println!(
+    //   "include pos: {}, num comps: {}, level: {}",
+    //   include_position,
+    //   path_components.len(),
+    //   level
+    // );
     
     return Ok(Some(level));
   }
@@ -105,6 +105,20 @@ fn project_level(
 }
 
 type SubprojectMap = HashMap<String, Rc<FinalProjectData>>;
+
+pub enum ProjectLoadFailureReason {
+  MissingYaml(String),
+  Other(String)
+}
+
+impl ProjectLoadFailureReason {
+  pub fn extract_message(self) -> String {
+    match self {
+      Self::MissingYaml(msg) => msg,
+      Self::Other(msg) => msg
+    }
+  }
+}
 
 pub struct FinalProjectData {
   project_type: FinalProjectType,
@@ -139,19 +153,21 @@ impl FinalProjectData {
   pub fn new<'a>(
     unclean_given_root: &str,
     dep_config: &AllPredefinedDependencies
-  ) -> Result<UseableFinalProjectDataGroup, String> {
+  ) -> Result<UseableFinalProjectDataGroup, ProjectLoadFailureReason> {
     let metadata: ProjectMetadata = parse_project_metadata(unclean_given_root)?;
     let cleaned_given_root: String = cleaned_path_str(unclean_given_root);
 
     let level: usize = match project_level(cleaned_given_root.as_str(), &metadata.include_prefix) {
-      Err(err) => return Err(format!("Error when trying to find project level: {}", err.to_string())),
+      Err(err) => return Err(ProjectLoadFailureReason::Other(
+        format!("Error when trying to find project level: {}", err.to_string())
+      )),
       Ok(maybe_level) => match maybe_level {
         Some(value) => value,
-        None => return Err(format!(
+        None => return Err(ProjectLoadFailureReason::Other(format!(
           "Unable to find valid include directory with prefix {} in {}",
           &metadata.include_prefix,
           &cleaned_given_root
-        ))
+        )))
       }
     };
 
@@ -174,11 +190,13 @@ impl FinalProjectData {
       dep_config
     )?);
 
-    root_project.validate_correctness()?;
+    root_project.validate_correctness()
+      .map_err(ProjectLoadFailureReason::Other)?;
 
     return Ok(UseableFinalProjectDataGroup {
       operating_on: Self::find_with_root(
-        &absolute_path(cleaned_given_root)?,
+        &absolute_path(cleaned_given_root)
+          .map_err(ProjectLoadFailureReason::Other)?,
         Rc::clone(&root_project)
       ),
       root_project,
@@ -197,7 +215,7 @@ impl FinalProjectData {
     unclean_project_root: &str,
     parent_include_prefix: Option<&str>,
     all_dep_config: &AllPredefinedDependencies
-  ) -> Result<FinalProjectData, String> {
+  ) -> Result<FinalProjectData, ProjectLoadFailureReason> {
     // NOTE: Subprojects are still considered whole projects, however they are not allowed to specify
     // top level build configuration data. This means that language data, build configs, etc. are not
     // defined in subprojects, and shouldn't be written. Build configuration related data is inherited
@@ -214,7 +232,7 @@ impl FinalProjectData {
     };
 
     if let Err(err_message) = validate_raw_project(&raw_project) {
-      return Err(err_message);
+      return Err(ProjectLoadFailureReason::Other(err_message));
     }
 
     let full_include_prefix: String = if let Some(parent_prefix) = parent_include_prefix {
@@ -258,7 +276,11 @@ impl FinalProjectData {
     let mut output_items: HashMap<String, CompiledOutputItem> = HashMap::new();
 
     for (output_name, raw_output_item) in raw_project.get_output() {
-      output_items.insert(output_name.to_owned(), CompiledOutputItem::from(raw_output_item)?);
+      output_items.insert(
+        output_name.to_owned(),
+        CompiledOutputItem::from(raw_output_item)
+          .map_err(ProjectLoadFailureReason::Other)?
+      );
     }
 
     let mut predefined_dependencies: HashMap<String, FinalPredefinedDependency> = HashMap::new();
@@ -269,7 +291,8 @@ impl FinalProjectData {
           all_dep_config,
           dep_name,
           user_given_config
-        )?;
+        )
+          .map_err(ProjectLoadFailureReason::Other)?;
 
         predefined_dependencies.insert(dep_name.into(), finalized_dep);
       }
@@ -280,15 +303,15 @@ impl FinalProjectData {
       raw_project.prebuild_config.as_ref().unwrap_or(&PreBuildConfigIn {
         link: None
       })
-    )?;
+    ).map_err(ProjectLoadFailureReason::Other)?;
 
     let maybe_version: Option<ThreePartVersion> = ThreePartVersion::from_str(raw_project.get_version());
 
     if maybe_version.is_none() {
-      return Err(format!(
+      return Err(ProjectLoadFailureReason::Other(format!(
         "Invalid project version '{}' given. Version must be formatted like a normal three-part version (ex: 1.0.0), and may be prefixed with the letter 'v'.",
         raw_project.get_version()
-      ));
+      )));
     }
 
     let mut finalized_project_data = FinalProjectData {
@@ -302,7 +325,8 @@ impl FinalProjectData {
       language_config_map: raw_project.languages,
       supported_compilers: raw_project.supported_compilers,
       project_type,
-      absolute_project_root: absolute_path(&project_root)?,
+      absolute_project_root: absolute_path(&project_root)
+        .map_err(ProjectLoadFailureReason::Other)?,
       project_root,
       src_dir,
       include_dir,
@@ -316,20 +340,23 @@ impl FinalProjectData {
       prebuild_script
     };
 
-    match populate_files(Path::new(&finalized_project_data.src_dir), &mut finalized_project_data.src_files) {
-      Err(err) => return Err(err.to_string()),
-      _ => ()
-    }
+    populate_files(
+      Path::new(&finalized_project_data.src_dir),
+      &mut finalized_project_data.src_files
+    )
+      .map_err(|err| ProjectLoadFailureReason::Other(err.to_string()))?;
 
-    match populate_files(Path::new(&finalized_project_data.include_dir), &mut finalized_project_data.include_files) {
-      Err(err) => return Err(err.to_string()),
-      _ => ()
-    }
+    populate_files(
+      Path::new(&finalized_project_data.include_dir),
+      &mut finalized_project_data.include_files
+    )
+      .map_err(|err| ProjectLoadFailureReason::Other(err.to_string()))?;
 
-    match populate_files(Path::new(&finalized_project_data.template_impls_dir), &mut finalized_project_data.template_impl_files) {
-      Err(err) => return Err(err.to_string()),
-      _ => ()
-    }
+    populate_files(
+      Path::new(&finalized_project_data.template_impls_dir),
+      &mut finalized_project_data.template_impl_files
+    )
+      .map_err(|err| ProjectLoadFailureReason::Other(err.to_string()))?;
 
     return Ok(finalized_project_data);
   }
@@ -500,6 +527,10 @@ impl FinalProjectData {
     }
 
     Ok(())
+  }
+
+  pub fn nested_include_prefix(&self, next_include_prefix: &str) -> String {
+    return format!("{}/{}", &self.full_include_prefix, next_include_prefix);
   }
 
   pub fn has_library_output_named(&self, lib_name: &str) -> bool {
