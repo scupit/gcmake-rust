@@ -2,7 +2,7 @@ use std::{collections::{HashMap, HashSet}, path::{Path, PathBuf}, io, rc::Rc};
 
 use crate::project_info::path_manipulation::cleaned_pathbuf;
 
-use super::{path_manipulation::{cleaned_path_str, relative_to_project_root, find_first_dir_named, absolute_path}, final_dependencies::FinalPredefinedDependency, raw_data_in::{RawProject, ProjectLike, dependencies::internal_dep_config::AllPredefinedDependencies, BuildConfigMap, BuildType, LanguageConfigMap, CompiledItemType, PreBuildConfigIn, SpecificCompilerSpecifier, ProjectMetadata}, final_project_configurables::{FinalProjectType, SubprojectOnlyOptions}, CompiledOutputItem, helpers::{create_subproject_data, create_project_data, validate_raw_project, populate_files, find_prebuild_script, PrebuildScriptFile, parse_project_metadata}, PreBuildScript};
+use super::{path_manipulation::{cleaned_path_str, relative_to_project_root, find_first_dir_named, absolute_path}, final_dependencies::{FinalPredefinedDependency, FinalGCMakeDependency, GCMakeDependencyStatus}, raw_data_in::{RawProject, ProjectLike, dependencies::internal_dep_config::AllPredefinedDependencies, BuildConfigMap, BuildType, LanguageConfigMap, CompiledItemType, PreBuildConfigIn, SpecificCompilerSpecifier, ProjectMetadata}, final_project_configurables::{FinalProjectType, SubprojectOnlyOptions}, CompiledOutputItem, helpers::{create_subproject_data, create_project_data, validate_raw_project, populate_files, find_prebuild_script, PrebuildScriptFile, parse_project_metadata}, PreBuildScript};
 
 pub struct ThreePartVersion (u32, u32, u32);
 
@@ -120,6 +120,16 @@ impl ProjectLoadFailureReason {
   }
 }
 
+pub enum DependencySearchMode {
+  AsParent,
+  AsSubproject
+}
+
+struct ParentProjectInfo {
+  include_prefix: String,
+  target_namespace_prefix: String
+}
+
 pub struct FinalProjectData {
   project_type: FinalProjectType,
   project_root: String,
@@ -145,12 +155,14 @@ pub struct FinalProjectData {
   subprojects: SubprojectMap,
   output: HashMap<String, CompiledOutputItem>,
   predefined_dependencies: HashMap<String, FinalPredefinedDependency>,
-  prebuild_script: Option<PreBuildScript>
+  gcmake_dependency_projects: HashMap<String, FinalGCMakeDependency>,
+  prebuild_script: Option<PreBuildScript>,
+  target_namespace_prefix: String
 }
 
 impl FinalProjectData {
 
-  pub fn new<'a>(
+  pub fn new(
     unclean_given_root: &str,
     dep_config: &AllPredefinedDependencies
   ) -> Result<UseableFinalProjectDataGroup, ProjectLoadFailureReason> {
@@ -213,7 +225,7 @@ impl FinalProjectData {
 
   fn create_new(
     unclean_project_root: &str,
-    parent_include_prefix: Option<&str>,
+    parent_project_info: Option<ParentProjectInfo>,
     all_dep_config: &AllPredefinedDependencies
   ) -> Result<FinalProjectData, ProjectLoadFailureReason> {
     // NOTE: Subprojects are still considered whole projects, however they are not allowed to specify
@@ -223,7 +235,7 @@ impl FinalProjectData {
     let raw_project: RawProject;
     let project_type: FinalProjectType;
 
-    if parent_include_prefix.is_some() {
+    if parent_project_info.is_some() {
       raw_project = create_subproject_data(&unclean_project_root)?.into();
       project_type = FinalProjectType::Subproject(SubprojectOnlyOptions { })
     } else {
@@ -235,11 +247,21 @@ impl FinalProjectData {
       return Err(ProjectLoadFailureReason::Other(err_message));
     }
 
-    let full_include_prefix: String = if let Some(parent_prefix) = parent_include_prefix {
-      format!("{}/{}", parent_prefix, raw_project.get_include_prefix()) 
-    } else {
-      raw_project.get_include_prefix().to_string()
-    };
+    let full_include_prefix: String;
+    let target_namespace_prefix: String;
+
+    if let Some(parent_project) = parent_project_info {
+      full_include_prefix = format!(
+        "{}/{}",
+        parent_project.include_prefix,
+        raw_project.get_include_prefix()
+      );
+      target_namespace_prefix = parent_project.target_namespace_prefix;
+    }
+    else {
+      full_include_prefix = raw_project.get_include_prefix().to_string();
+      target_namespace_prefix = raw_project.get_name().to_string();
+    }
 
     let project_root: String = cleaned_path_str(&unclean_project_root).to_string();
 
@@ -256,7 +278,10 @@ impl FinalProjectData {
         let full_subproject_dir = format!("{}/subprojects/{}", &project_root, subproject_dirname);
         let mut new_subproject: FinalProjectData = Self::create_new(
           &full_subproject_dir,
-          Some(&full_include_prefix),
+          Some(ParentProjectInfo {
+            include_prefix: full_include_prefix.clone(),
+            target_namespace_prefix: target_namespace_prefix.clone()
+          }),
           all_dep_config
         )?;
 
@@ -269,6 +294,32 @@ impl FinalProjectData {
         subprojects.insert(
           subproject_dirname.clone(),
           Rc::new(new_subproject)
+        );
+      }
+    }
+
+    let mut gcmake_dependency_projects: HashMap<String, FinalGCMakeDependency> = HashMap::new();
+
+    if let Some(gcmake_dep_map) = &raw_project.gcmake_dependencies {
+      for (dep_name, dep_config) in gcmake_dep_map {
+        let dep_path: String = format!("{}/dep/{}", &project_root, &dep_name);
+
+        let maybe_dep_project: Option<Rc<FinalProjectData>> = if Path::new(&dep_path).exists() {
+          Some(Rc::new(Self::create_new(
+            &dep_path,
+            None,
+            all_dep_config
+          )?))
+        }
+        else { None };
+
+        gcmake_dependency_projects.insert(
+          dep_name.clone(),
+          FinalGCMakeDependency::new(
+            &dep_name,
+            dep_config,
+            maybe_dep_project
+          ).map_err(ProjectLoadFailureReason::Other)?
         );
       }
     }
@@ -294,7 +345,7 @@ impl FinalProjectData {
         )
           .map_err(ProjectLoadFailureReason::Other)?;
 
-        predefined_dependencies.insert(dep_name.into(), finalized_dep);
+        predefined_dependencies.insert(dep_name.clone(), finalized_dep);
       }
     }
 
@@ -337,7 +388,9 @@ impl FinalProjectData {
       subprojects,
       output: output_items,
       predefined_dependencies,
-      prebuild_script
+      gcmake_dependency_projects,
+      prebuild_script,
+      target_namespace_prefix
     };
 
     populate_files(
@@ -419,6 +472,19 @@ impl FinalProjectData {
             if !final_dep.has_target_named(lib_name_linking) {
               return Err(format!(
                 "Output item '{}' in project '{}' tries to link to a nonexistent target '{}' in predefined dependency '{}'.",
+                item_name,
+                self.get_project_name(),
+                lib_name_linking,
+                project_name_containing_libraries
+              ))
+            }
+          }
+        }
+        else if let Some(final_gcmake_dep) = self.gcmake_dependency_projects.get(project_name_containing_libraries) {
+          for lib_name_linking in lib_names_linking {
+            if final_gcmake_dep.get_linkable_target_name(lib_name_linking)?.is_none() {
+              return Err(format!(
+                "Output item '{}' in project '{}' tries to link to a nonexistent target '{}' in gcmake dependency '{}'.",
                 item_name,
                 self.get_project_name(),
                 lib_name_linking,
@@ -552,6 +618,104 @@ impl FinalProjectData {
     self.predefined_dependencies.len() > 0
   }
 
+  pub fn has_gcmake_dependencies(&self) -> bool {
+    self.gcmake_dependency_projects.len() > 0
+  }
+
+  // TODO: Subject to change once find_package (using dependencies already installed on system)
+  // support is added.
+  pub fn has_any_fetcontent_dependencies(&self) -> bool {
+    self.has_gcmake_dependencies() || self.has_predefined_dependencies()
+  }
+
+  pub fn fetchcontent_dep_names(&self) -> impl Iterator<Item = &String> {
+    return self.predefined_dependencies.keys()
+      .chain(self.gcmake_dependency_projects.keys())
+  }
+
+  // These are guaranteed to be valid since all links are checked when gcmake configures the project.
+  // TODO: Refactor this. It can probably be more efficient.
+  pub fn get_namespaced_library_target_names(
+    &self,
+    search_mode: DependencySearchMode,
+    namespace_prefix: &str,
+    target_names: &Vec<String>,
+  ) -> Result<Option<Vec<String>>, String> {
+    if let DependencySearchMode::AsParent = search_mode {
+      if let Some(predef_dep) = self.predefined_dependencies.get(namespace_prefix) {
+        return Ok(Some(
+          target_names
+            .iter()
+            .map(|base_name|
+              predef_dep.get_linkable_target_name(base_name)
+                .unwrap()
+                .to_string()
+            )
+            .collect()
+        ))
+      }
+
+      if let Some(gcmake_dep) = self.gcmake_dependency_projects.get(namespace_prefix) {
+        let mut namespaced_list: Vec<String> = Vec::new();
+        
+        for base_name in target_names {
+            namespaced_list.push(
+              gcmake_dep
+                .get_linkable_target_name(base_name)?
+                .unwrap()
+            );
+        }
+
+        return Ok(Some(namespaced_list));
+      }
+    }
+
+    if let Some(matching_subproject) = self.subprojects.get(namespace_prefix) {
+      let mut namespaced_list: Vec<String> = Vec::new();
+      
+      for base_name in target_names {
+          namespaced_list.push(
+            matching_subproject
+              .get_namespaced_public_linkable_target_name(base_name)?
+              .unwrap()
+          );
+      }
+
+      return Ok(Some(namespaced_list));      
+    }
+
+    Ok(None)
+  }
+
+  pub fn prefix_with_namespace(&self, name: &str) -> String {
+    format!("{}::{}", self.target_namespace_prefix, name)
+  }
+
+  pub fn get_namespaced_public_linkable_target_name(&self, base_name: &str) -> Result<Option<String>, String> {
+    if let Some(output) = self.output.get(base_name) {
+      return if output.is_library_type() {
+        Ok(Some(self.prefix_with_namespace(base_name)))
+      }
+      else {
+        Err(format!(
+          "Tried to link to executable target '{}' ({}) in project '{}' (project namespace: {}), but you can only link to library targets.",
+          base_name,
+          self.prefix_with_namespace(base_name),
+          self.get_project_name(),
+          &self.target_namespace_prefix
+        ))
+      }
+    }
+
+    for (_, subproject) in self.get_subprojects() {
+      if let Some(namespaced_target_name) = subproject.get_namespaced_public_linkable_target_name(base_name)? {
+        return Ok(Some(namespaced_target_name));
+      }
+    }
+
+    Ok(None)
+  }
+
   pub fn get_subproject_names(&self) -> HashSet<String> {
     self.subprojects.iter()
       .map(|(subproject_name, _)| subproject_name.to_owned())
@@ -624,6 +788,10 @@ impl FinalProjectData {
 
   pub fn get_predefined_dependencies(&self) -> &HashMap<String, FinalPredefinedDependency> {
     &self.predefined_dependencies
+  }
+
+  pub fn get_gcmake_dependencies(&self) -> &HashMap<String, FinalGCMakeDependency> {
+    &self.gcmake_dependency_projects
   }
 }
 

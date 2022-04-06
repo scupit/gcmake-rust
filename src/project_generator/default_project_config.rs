@@ -44,114 +44,114 @@ pub fn get_default_project_config(
   project_type: &ProjectOutputType,
   project_description: &str
 ) -> RawProject {
-
   RawProject {
-      name: project_name.to_string(),
-      include_prefix: include_prefix.to_owned(),
-      description: String::from(project_description),
-      version: String::from("0.0.1"),
-      supported_compilers: HashSet::from_iter([
-        SpecificCompilerSpecifier::GCC,
-        SpecificCompilerSpecifier::Clang,
-        SpecificCompilerSpecifier::MSVC,
-      ]),
-      prebuild_config: None,
-      languages: LanguageConfigMap {
-        C: SingleLanguageConfig {
-          standard: 11
-        },
-        Cpp: SingleLanguageConfig {
-          standard: 17
-        }
+    name: project_name.to_string(),
+    include_prefix: include_prefix.to_owned(),
+    description: String::from(project_description),
+    version: String::from("0.0.1"),
+    supported_compilers: HashSet::from_iter([
+      SpecificCompilerSpecifier::GCC,
+      SpecificCompilerSpecifier::Clang,
+      SpecificCompilerSpecifier::MSVC,
+    ]),
+    prebuild_config: None,
+    languages: LanguageConfigMap {
+      C: SingleLanguageConfig {
+        standard: 11
       },
-      output: HashMap::from_iter([
-        (String::from("Main"), RawCompiledItem {
-          entry_file: String::from(main_file_name(&project_lang, &project_type)),
-          output_type: match project_type {
-            ProjectOutputType::Executable => CompiledItemType::Executable,
-            ProjectOutputType::Library(lib_type) => match lib_type {
-              OutputLibType::Static => CompiledItemType::StaticLib,
-              OutputLibType::Shared => CompiledItemType::SharedLib,
-              OutputLibType::ToggleStaticOrShared => CompiledItemType::Library
-            }
-          },
-          link: None
+      Cpp: SingleLanguageConfig {
+        standard: 17
+      }
+    },
+    output: HashMap::from_iter([
+      (String::from("Main"), RawCompiledItem {
+        entry_file: String::from(main_file_name(&project_lang, &project_type)),
+        output_type: match project_type {
+          ProjectOutputType::Executable => CompiledItemType::Executable,
+          ProjectOutputType::Library(lib_type) => match lib_type {
+            OutputLibType::Static => CompiledItemType::StaticLib,
+            OutputLibType::Shared => CompiledItemType::SharedLib,
+            OutputLibType::ToggleStaticOrShared => CompiledItemType::Library
+          }
+        },
+        link: None
+      })
+    ]),
+    predefined_dependencies: None,
+    gcmake_dependencies: None,
+    build_configs: HashMap::from_iter([
+      (BuildType::Debug, HashMap::from_iter([
+        (BuildConfigCompilerSpecifier::GCC, BuildConfig {
+          flags: Some(create_string_set([ "-Og", "-g", "-Wall", "-Wextra", "-Wconversion", "-Wuninitialized", "-pedantic", "-pedantic-errors"])),
+          defines: None
+        }),
+        (BuildConfigCompilerSpecifier::Clang, BuildConfig {
+          flags: Some(create_string_set([ "-Og", "-g", "-Wall", "-Wextra", "-Wconversion", "-Wuninitialized", "-pedantic", "-pedantic-errors"])),
+          defines: None
+        }),
+        (BuildConfigCompilerSpecifier::MSVC, BuildConfig {
+          flags: Some(create_string_set([ "/Od", "/W4", "/DEBUG" ])),
+          defines: None
         })
-      ]),
-      predefined_dependencies: None,
-      build_configs: HashMap::from_iter([
-        (BuildType::Debug, HashMap::from_iter([
-          (BuildConfigCompilerSpecifier::GCC, BuildConfig {
-            flags: Some(create_string_set([ "-Og", "-g", "-Wall", "-Wextra", "-Wconversion", "-Wuninitialized", "-pedantic", "-pedantic-errors"])),
-            defines: None
-          }),
-          (BuildConfigCompilerSpecifier::Clang, BuildConfig {
-            flags: Some(create_string_set([ "-Og", "-g", "-Wall", "-Wextra", "-Wconversion", "-Wuninitialized", "-pedantic", "-pedantic-errors"])),
-            defines: None
-          }),
-          (BuildConfigCompilerSpecifier::MSVC, BuildConfig {
-            flags: Some(create_string_set([ "/Od", "/W4", "/DEBUG" ])),
-            defines: None
-          })
-        ])),
-        (BuildType::Release, HashMap::from_iter([
-          (BuildConfigCompilerSpecifier::All, BuildConfig {
-            flags: None,
-            defines: Some(create_string_set(["NDEBUG"]))
-          }),
-          (BuildConfigCompilerSpecifier::GCC, BuildConfig {
-            flags: Some(create_string_set([ "-O3", "-s"])),
-            defines: None
-          }),
-          (BuildConfigCompilerSpecifier::Clang, BuildConfig {
-            flags: Some(create_string_set([ "-O3", "-Wl,-s"])),
-            defines: None
-          }),
-          (BuildConfigCompilerSpecifier::MSVC, BuildConfig {
-            flags: Some(create_string_set([ "/O2" ])),
-            defines: None
-          })
-        ])),
-        (BuildType::MinSizeRel, HashMap::from_iter([
-          (BuildConfigCompilerSpecifier::All, BuildConfig {
-            flags: None,
-            defines: Some(create_string_set(["NDEBUG"]))
-          }),
-          (BuildConfigCompilerSpecifier::GCC, BuildConfig {
-            flags: Some(create_string_set([ "-Os", "-s"])),
-            defines: None
-          }),
-          (BuildConfigCompilerSpecifier::Clang, BuildConfig {
-            flags: Some(create_string_set([ "-Os", "-Wl,-s"])),
-            defines: None
-          }),
-          (BuildConfigCompilerSpecifier::MSVC, BuildConfig {
-            flags: Some(create_string_set([ "/O1" ])),
-            defines: None
-          })
-        ])),
-        (BuildType::RelWithDebInfo, HashMap::from_iter([
-          (BuildConfigCompilerSpecifier::All, BuildConfig {
-            flags: None,
-            defines: Some(create_string_set(["NDEBUG"]))
-          }),
-          (BuildConfigCompilerSpecifier::GCC, BuildConfig {
-            flags: Some(create_string_set([ "-O2", "-g"])),
-            defines: None
-          }),
-          (BuildConfigCompilerSpecifier::Clang, BuildConfig {
-            flags: Some(create_string_set([ "-O2", "-g"])),
-            defines: None
-          }),
-          (BuildConfigCompilerSpecifier::MSVC, BuildConfig {
-            flags: Some(create_string_set([ "/O2", "/DEBUG" ])),
-            defines: None
-          })
-        ]))
-      ]),
-      default_build_type: BuildType::Debug,
-      global_defines: None,
-      subprojects: None
+      ])),
+      (BuildType::Release, HashMap::from_iter([
+        (BuildConfigCompilerSpecifier::All, BuildConfig {
+          flags: None,
+          defines: Some(create_string_set(["NDEBUG"]))
+        }),
+        (BuildConfigCompilerSpecifier::GCC, BuildConfig {
+          flags: Some(create_string_set([ "-O3", "-s"])),
+          defines: None
+        }),
+        (BuildConfigCompilerSpecifier::Clang, BuildConfig {
+          flags: Some(create_string_set([ "-O3", "-Wl,-s"])),
+          defines: None
+        }),
+        (BuildConfigCompilerSpecifier::MSVC, BuildConfig {
+          flags: Some(create_string_set([ "/O2" ])),
+          defines: None
+        })
+      ])),
+      (BuildType::MinSizeRel, HashMap::from_iter([
+        (BuildConfigCompilerSpecifier::All, BuildConfig {
+          flags: None,
+          defines: Some(create_string_set(["NDEBUG"]))
+        }),
+        (BuildConfigCompilerSpecifier::GCC, BuildConfig {
+          flags: Some(create_string_set([ "-Os", "-s"])),
+          defines: None
+        }),
+        (BuildConfigCompilerSpecifier::Clang, BuildConfig {
+          flags: Some(create_string_set([ "-Os", "-Wl,-s"])),
+          defines: None
+        }),
+        (BuildConfigCompilerSpecifier::MSVC, BuildConfig {
+          flags: Some(create_string_set([ "/O1" ])),
+          defines: None
+        })
+      ])),
+      (BuildType::RelWithDebInfo, HashMap::from_iter([
+        (BuildConfigCompilerSpecifier::All, BuildConfig {
+          flags: None,
+          defines: Some(create_string_set(["NDEBUG"]))
+        }),
+        (BuildConfigCompilerSpecifier::GCC, BuildConfig {
+          flags: Some(create_string_set([ "-O2", "-g"])),
+          defines: None
+        }),
+        (BuildConfigCompilerSpecifier::Clang, BuildConfig {
+          flags: Some(create_string_set([ "-O2", "-g"])),
+          defines: None
+        }),
+        (BuildConfigCompilerSpecifier::MSVC, BuildConfig {
+          flags: Some(create_string_set([ "/O2", "/DEBUG" ])),
+          defines: None
+        })
+      ]))
+    ]),
+    default_build_type: BuildType::Debug,
+    global_defines: None,
+    subprojects: None
     }
 }
 

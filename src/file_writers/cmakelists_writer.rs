@@ -1,6 +1,6 @@
 use std::{collections::{HashMap, HashSet}, fs::File, io::{self, Write}, path::{Path, PathBuf}};
 
-use crate::{file_writers::cmake_utils_writer::CMakeUtilWriter, project_info::{final_project_data::{FinalProjectData}, path_manipulation::cleaned_path_str, final_dependencies::GitRevisionSpecifier, raw_data_in::{BuildType, BuildConfig, BuildConfigCompilerSpecifier, SpecificCompilerSpecifier, CompiledItemType, LanguageConfigMap}, FinalProjectType, CompiledOutputItem, PreBuildScript}, logger::exit_error_log};
+use crate::{file_writers::cmake_utils_writer::CMakeUtilWriter, project_info::{final_project_data::{FinalProjectData, DependencySearchMode}, path_manipulation::cleaned_path_str, final_dependencies::GitRevisionSpecifier, raw_data_in::{BuildType, BuildConfig, BuildConfigCompilerSpecifier, SpecificCompilerSpecifier, CompiledItemType, LanguageConfigMap}, FinalProjectType, CompiledOutputItem, PreBuildScript}, logger::exit_error_log};
 
 const RUNTIME_BUILD_DIR: &'static str = "${CMAKE_BINARY_DIR}/bin/${CMAKE_BUILD_TYPE}";
 const LIB_BUILD_DIR: &'static str = "${CMAKE_BINARY_DIR}/lib/${CMAKE_BUILD_TYPE}";
@@ -96,6 +96,14 @@ impl<'a> CMakeListsWriter<'a> {
       self.write_predefined_dependencies()?;
     }
 
+    if self.project_data.has_gcmake_dependencies() {
+      self.write_gcmake_dependencies()?;
+    }
+
+    if self.project_data.has_any_fetcontent_dependencies() {
+      self.write_fetchcontent_makeavailable()?;
+    }
+
     if let FinalProjectType::Full = project_type {
       self.write_section_header("Language Configuration")?;
       self.write_language_config()?;
@@ -132,7 +140,6 @@ impl<'a> CMakeListsWriter<'a> {
     // FILE_SET for headers, which makes installing header files much easier.
     writeln!(&self.cmakelists_file, "cmake_minimum_required( VERSION 3.23 )")?;
 
-
     // Project metadata
     writeln!(&self.cmakelists_file,
       "project( {} VERSION {} )",
@@ -160,7 +167,10 @@ impl<'a> CMakeListsWriter<'a> {
 
   fn include_utils(&self) -> io::Result<()> {
     self.write_newline()?;
-    writeln!(&self.cmakelists_file, "include(FetchContent)")?;
+
+    if self.project_data.has_any_fetcontent_dependencies() {
+      writeln!(&self.cmakelists_file, "include(FetchContent)")?;
+    }
 
     for (util_name, _) in self.util_writer.get_utils() {
       writeln!(&self.cmakelists_file,
@@ -323,11 +333,7 @@ impl<'a> CMakeListsWriter<'a> {
   }
 
   fn write_predefined_dependencies(&self) -> io::Result<()> {
-    let mut all_dep_names: Vec<&str> = Vec::new();
-
     for (dep_name, dep_info) in self.project_data.get_predefined_dependencies() {
-      all_dep_names.push(dep_name);
-
       writeln!(&self.cmakelists_file,
         "\nFetchContent_Declare(\n\t{}\n\tSOURCE_DIR ${{CMAKE_CURRENT_SOURCE_DIR}}/dep/{}\n\tGIT_REPOSITORY {}\n\tGIT_PROGRESS TRUE",
         dep_name,
@@ -354,9 +360,44 @@ impl<'a> CMakeListsWriter<'a> {
       writeln!(&self.cmakelists_file, ")")?;
     }
 
+    Ok(())
+  }
+
+  fn write_gcmake_dependencies(&self) -> io::Result<()> {
+    for (dep_name, dep_info) in self.project_data.get_gcmake_dependencies() {
+      writeln!(&self.cmakelists_file,
+        "\nFetchContent_Declare(\n\t{}\n\tSOURCE_DIR ${{CMAKE_CURRENT_SOURCE_DIR}}/dep/{}\n\tGIT_REPOSITORY {}\n\tGIT_PROGRESS TRUE",
+        dep_name,
+        dep_name,
+        dep_info.repo_url()
+      )?;
+      
+      // TODO: Refactor this
+      match dep_info.revision() {
+        GitRevisionSpecifier::Tag(tag_string) => {
+          writeln!(&self.cmakelists_file,
+            "\tGIT_TAG {}",
+            tag_string
+          )?;
+        },
+        GitRevisionSpecifier::CommitHash(hash_string) => {
+          writeln!(&self.cmakelists_file,
+            "\tGIT_TAG {}",
+            hash_string
+          )?;
+        }
+      }
+
+      writeln!(&self.cmakelists_file, ")")?;
+    }
+
+    Ok(()) 
+  }
+
+  fn write_fetchcontent_makeavailable(&self) -> io::Result<()> {
     writeln!(&self.cmakelists_file, "\nFetchContent_MakeAvailable(")?;
 
-    for dep_name in all_dep_names {
+    for dep_name in self.project_data.fetchcontent_dep_names() {
       writeln!(&self.cmakelists_file,
         "\t{}",
         dep_name
@@ -623,31 +664,6 @@ impl<'a> CMakeListsWriter<'a> {
     Ok(())
   }
 
-  fn for_each_linkable_library_name<F>(
-    &self,
-    project_name: &str,
-    lib_names: &Vec<String>,
-    callback: F
-  ) -> io::Result<()>
-    where F: Fn(&str) -> io::Result<()>
-  {
-    if let Some(_subproject) = self.project_data.get_subprojects().get(project_name) {
-      for lib_name in lib_names {
-        callback(lib_name)?;
-      }
-    }
-    else if let Some(predefined_dep) = self.project_data.get_predefined_dependencies().get(project_name) {
-      for non_namespaced_name in lib_names {
-        callback(predefined_dep.get_linkable_target_name(non_namespaced_name).unwrap())?;
-      }
-    }
-    else {
-      exit_error_log(&format!("Unable to find project with name {} when linking... this shouldn't happen.", project_name));
-    }
-
-    Ok(())
-  }
-
   fn write_target_compile_options_for_output(
     &self,
     output_name: &str,
@@ -688,8 +704,12 @@ impl<'a> CMakeListsWriter<'a> {
     Ok(())
   }
 
-  fn write_links_for_output(&self, output_name: &str, output_data: &CompiledOutputItem) -> io::Result<()> {
-    if output_data.has_links() {
+  fn write_links_for_output(
+    &self,
+    output_name: &str,
+    output_data: &CompiledOutputItem
+  ) -> io::Result<()> {
+    if let Some(output_link_map) = output_data.get_links() {
       writeln!(&self.cmakelists_file,
         "target_link_libraries( {}",
         output_name
@@ -698,20 +718,26 @@ impl<'a> CMakeListsWriter<'a> {
       // TODO: Use subproject name for namespacing once namespaced output targets are implemented.
       // Or at least use the subproject name to get the subproject, and derive its namespace name
       // from that.
-      for (project_name, lib_names_linking) in output_data.get_links().as_ref().unwrap() {
-        self.for_each_linkable_library_name(
-          project_name,
-          lib_names_linking,
-          |lib_name| {
-            // TODO: Namespace the libs with the subproject include_prefix.
-            // However, I need to implement aliased targets, exports, and install rules first.
-            writeln!(&self.cmakelists_file,
-              "\t{}",
-              lib_name
-            )?;
-            Ok(())
+      for (project_name, lib_names_linking) in output_link_map {
+        let maybe_matching_namespaced_lib_names: Option<Vec<String>> =
+          self.project_data.get_namespaced_library_target_names(
+            DependencySearchMode::AsParent,
+            project_name,
+            lib_names_linking
+          )
+          .map_err(|msg| io::Error::new(io::ErrorKind::Other, msg))?;
+
+        match maybe_matching_namespaced_lib_names {
+          None => unreachable!("No link libraries were found even though they were defined. This code shouldn't be reached, since library existence is checked when project is configured."),
+          Some(namespaced_lib_names) => {
+            for namespaced_lib_name in namespaced_lib_names {
+              writeln!(&self.cmakelists_file,
+                "\t{}",
+                namespaced_lib_name
+              )?;
+            }
           }
-        )?;
+        }
       }
 
       writeln!(&self.cmakelists_file,
@@ -784,7 +810,6 @@ impl<'a> CMakeListsWriter<'a> {
       output_name,
       lib_type_string
     )?;
-    self.write_newline()?;
 
     self.write_general_library_data(
       output_data,
@@ -816,7 +841,6 @@ impl<'a> CMakeListsWriter<'a> {
       output_name,
       "STATIC"
     )?;
-    self.write_newline()?;
 
     self.write_general_library_data(
       output_data,
@@ -839,6 +863,13 @@ impl<'a> CMakeListsWriter<'a> {
     template_impls_var_name: &str,
     src_var_name: &str
   ) -> io::Result<()> {
+    writeln!(&self.cmakelists_file,
+      "add_library( {} ALIAS {} )",
+      self.project_data.prefix_with_namespace(output_name),
+      output_name
+    )?;
+    self.write_newline()?;
+
     writeln!(&self.cmakelists_file,
       "set( {} \"${{{}}};{}\" )",
       &self.installable_targets_varname,

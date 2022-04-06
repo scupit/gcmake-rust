@@ -58,6 +58,13 @@ with all the project data already there shouldn't be too hard.
 
 There are a whole bunch of things which need doing. This is the place to list them.
 
+- Rename `predefined_dependencies` to something more intuitive. These dependencies are not gcmake projects,
+  but can be configured to work with gcmake by providing a 'yaml dependency glue' config. Those glue configs
+  should be contained in a separate repository, should function as a sort of "registry" updateable by the
+  gcmake tool.
+- Set fetchcontent_quiet to true after first config if all subprojects/dependencies are cloned correctly.
+  That way git info doesn't clog up the output prompt each configure.
+
 ### Configuration TODO
 
 #### General
@@ -73,13 +80,15 @@ Support for:
 
 #### Refactoring
 
-- [ ] Unify file path cleaning, so that paths are always relative to the project root, in the project root, and have no leading slashes. Ex: `pre-build.cpp` instead of `/pre-build.cpp`
+- [ ] Unify file path cleaning, so that paths are always relative to the project root, in the project root,
+      and have no leading slashes. Ex: `pre-build.cpp` instead of `/pre-build.cpp`
 
 #### Pre-build script
 
-- [x] Add support for a pre-build C++, C, or Python 3 script. The script should be automatically built and run before
-each recompilation.
-- [x] `resources` directory in each project root is copied into the build tree before the actual build. **TODO: need to be 100% sure this runs after the pre-build scripts somehow. Maybe run it as POST_BUILD on the pre-build target.**
+- [x] Add support for a pre-build C++, C, or Python 3 script. The script should be automatically built and
+      run before each recompilation.
+- [x] `resources` directory in each project root is copied into the build tree before the actual build.
+      **TODO: need to be 100% sure this runs after the pre-build scripts somehow. Maybe run it as POST_BUILD on the pre-build target.**
 
 #### Targets
 
@@ -93,9 +102,9 @@ each recompilation.
 
 #### Installation
 
-- [ ] Configure installation
-- [ ] Export configuration (figure out how this is different from installation)
-- [ ] Automatically create a CMake package config file (\<projectName>Config.cmake)
+- [x] Configure installation
+- [x] Export configuration (figure out how this is different from installation)
+- [x] Automatically create a CMake package config file (\<projectName>Config.cmake)
 
 ### Generation TODO
 
@@ -125,6 +134,8 @@ supports, the cheat sheet should detail:
 
 ### CLI TODO
 
+- [ ] `show-available` command which shows available targets per subproject and dependency (with namespace)
+      which are available for the specified project to link to.
 - [ ] `dep-graph` command which prints a dependency graph per output target
 - [ ] `dep-graph <target>` command which prints a dependency graph for the given target
 - [ ] `show-defines <config-name>` command which prints the defines specified by the buildsystem for a given configuration.

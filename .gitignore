@@ -2,3 +2,4 @@ autogen-test-project/
 
 .vscode/
 /target
+install-gcmake.ps1

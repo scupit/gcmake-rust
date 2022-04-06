@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 use serde::{Serialize, Deserialize};
 
-use super::dependencies::user_given_dep_config::UserGivenPredefinedDependencyConfig;
+use super::dependencies::user_given_dep_config::{UserGivenPredefinedDependencyConfig, UserGivenGCMakeProjectDependency};
 
 pub type BuildTypeOptionMap = HashMap<BuildConfigCompilerSpecifier, BuildConfig>;
 pub type BuildConfigMap = HashMap<BuildType, BuildTypeOptionMap>;
@@ -37,6 +37,7 @@ pub struct RawProject {
   pub global_defines: Option<HashSet<String>>,
   pub subprojects: Option<HashSet<String>>,
   pub predefined_dependencies: Option<HashMap<String, UserGivenPredefinedDependencyConfig>>,
+  pub gcmake_dependencies: Option<HashMap<String, UserGivenGCMakeProjectDependency>>,
   pub build_configs: BuildConfigMap,
 }
 

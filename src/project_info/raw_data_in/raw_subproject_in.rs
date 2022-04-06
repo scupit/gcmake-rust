@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 use serde::{Serialize, Deserialize};
 
-use super::{dependencies::user_given_dep_config::UserGivenPredefinedDependencyConfig, raw_project_in::{RawCompiledItem, ProjectLike, RawProject, BuildType}, PreBuildConfigIn, SingleLanguageConfig, LanguageConfigMap};
+use super::{dependencies::user_given_dep_config::{UserGivenPredefinedDependencyConfig, UserGivenGCMakeProjectDependency}, raw_project_in::{RawCompiledItem, ProjectLike, RawProject, BuildType}, PreBuildConfigIn, SingleLanguageConfig, LanguageConfigMap};
 
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(deny_unknown_fields)]
@@ -14,7 +14,8 @@ pub struct RawSubproject {
   prebuild_config: Option<PreBuildConfigIn>,
   output: HashMap<String, RawCompiledItem>,
   subprojects: Option<HashSet<String>>,
-  pub predefined_dependencies: Option<HashMap<String, UserGivenPredefinedDependencyConfig>>
+  pub predefined_dependencies: Option<HashMap<String, UserGivenPredefinedDependencyConfig>>,
+  pub gcmake_dependencies: Option<HashMap<String, UserGivenGCMakeProjectDependency>>
 }
 
 impl ProjectLike for RawSubproject {
@@ -45,7 +46,8 @@ impl From<RawProject> for RawSubproject {
       prebuild_config: project_data.prebuild_config,
       output: project_data.output,
       subprojects: project_data.subprojects,
-      predefined_dependencies: project_data.predefined_dependencies
+      predefined_dependencies: project_data.predefined_dependencies,
+      gcmake_dependencies: project_data.gcmake_dependencies
     }
   }
 }
@@ -76,7 +78,8 @@ impl Into<RawProject> for RawSubproject {
       global_defines: None,
       output: self.output,
       subprojects: self.subprojects,
-      predefined_dependencies: self.predefined_dependencies
+      predefined_dependencies: self.predefined_dependencies,
+      gcmake_dependencies: self.gcmake_dependencies
     }
   }
 }
