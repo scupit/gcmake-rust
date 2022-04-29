@@ -19,7 +19,7 @@ pub enum SubCommand {
     #[clap()]
     New(NewProjectCommand),
 
-    /// Generate code files
+    /// Generate code files in-tree.
     #[clap()]
     GenFile(CreateFilesCommand)
 }
@@ -66,9 +66,9 @@ pub struct CreateFilesCommand {
   /// Name of the generated file relative to any code folder.
   /// Example: Assuming file_types == hs (header and source generated)
   /// and language == cpp,
-  /// "SomeClass" turns into "include/<PROJECT_NAME>/SomeClass.hpp" and "src/<PROJECT_NAME>/SomeClass.cpp" 
-  /// while "nested/SomeClass" turns into "include/<PROJECT_NAME>/nested/SomeClass.hpp" and
-  /// "src/<PROJECT_NAME>/nested/SomeClass.cpp" 
+  /// "SomeClass" turns into "include/<FULL_INCLUDE_PREFIX>/SomeClass.hpp" and "src/<FULL_INCLUDE_PREFIX>/SomeClass.cpp" 
+  /// while "nested/SomeClass" turns into "include/<FULL_INCLUDE_PREFIX>/nested/SomeClass.hpp" and
+  /// "src/<FULL_INCLUDE_PREFIX>/nested/SomeClass.cpp" 
   #[clap(required = true)]
   pub file_name: String,
 

@@ -1,202 +1,35 @@
 # gcmake-rust
 
-TODO: Finish the README
+`gcmake-rust` is a C/C++ project management and configuration tool.
 
-## Project goals
+## Documentation Links
 
-Configuration file: `cmake_data.yaml`
+**TODO:** Add separate docs on *cmake_data.yaml* and each helper module in *cmake/*.
 
-Used to generate: `CMakeLists.txt`.
+## About
 
-**This project has three goals**:
+`gcmake-rust` aims to be an opinionated C/C++ project configuration tool which covers
+most general and common use cases.
 
-1. Provide a simple, readable, and intuitive build configuration format for general C and C++ projects.
-2. Use a uniform project structure
-3. Provide simple project management tools, such as project generation and file creation.
+`gcmake-rust` currently provides the ability to:
 
-CMake is a fantastic tool which covers almost all bases. However, writing a CMakeLists.txt is tedious, and
-maintaining one well can become difficult due to the unintuitive syntax. I don't need all the configuration
-options CMake has to offer for most projects either. *I wanted a tool that would allow me to abstract over
-CMake for "the general case"*, so that projects could be easily created and configured without hassle in
-an easily readable manner.
+1. Create new full C/C++ projects and subprojects.
+2. Generate header, source, and template-impl files in-tree.
+3. Generate a full working CMake configuration for an entire project tree, including dependencies
+and subprojects.
 
-### In short
+## Common Uses
 
-The goal is to make a build-facilitation project that covers general use-cases, and just works.
+> This section assumes the `gcmake-rust` execuatable is aliased to `gcmake`.
 
-## How to use
+`gcmake --help` shows toplevel help info.
 
-`gcmake-rust help` or `gcmake-rust --help` will describe how to use the tool.
+`gcmake <command> --help` for command-specific info.
 
-`gcmake-rust new <project-name>` will walk you through generating a new project. The new project
-will contain an *cmake_data.yaml* to be used as a starting point, as well as a *CMakeLists.txt* file generated
-using the yaml file.
+`gcmake [path-to-project]` configures the project in the given path and writes CMake configurations for the entire
+project tree (excluding subdirectories).  If no path is provided, the current working directory is used.
 
-Run `gcmake-rust` in the project root to generate CMakeLists.txt for the project and its subprojects
-using *cmake_data.yaml*. You can also use `gcmake-rust <project-root-dir>` to do the same from
-outside the project root.
+`gcmake new <project-name>` steps you through the project initializer prompts and creates a new C/C++ project.
 
-## cmake_data.yaml
-
-### TODO: Document the configuration of cmake_data.yaml in another markdown file
-
-**Linking format**:
-
-- ProjectName::LibName
-- ProjectName::{ FirstLibName, SecondLibName, ... }
-
-Subprojects cannot currently be linked to each other. This restriction makes generating CMakeLists.txt easier
-by preventing circular dependencies. However, this might change in the future.
-
-The linking restriction might change because it is sometimes useful to link a general purpose
-subproject to other subprojects. Think formatting libraries, project-wide macros, etc. If a subproject
-can reference its parent project, then it should be able to link with *other subprojects in the parent project only.*
-In doing this, I'll also have to check for circular dependencies. Luckily making a dependency graph
-with all the project data already there shouldn't be too hard.
-
-## TODO
-
-There are a whole bunch of things which need doing. This is the place to list them.
-
-- Rename `predefined_dependencies` to something more intuitive. These dependencies are not gcmake projects,
-  but can be configured to work with gcmake by providing a 'yaml dependency glue' config. Those glue configs
-  should be contained in a separate repository, should function as a sort of "registry" updateable by the
-  gcmake tool.
-- Set fetchcontent_quiet to true after first config if all subprojects/dependencies are cloned correctly.
-  That way git info doesn't clog up the output prompt each configure.
-
-### Configuration TODO
-
-#### General
-
-Add way to detect when this project is being built as a subproject.
-(Maybe `CMAKE_SOURCE_DIR` !== `CMAKE_CURRENT_SOURCE_DIR`)
-
-Support for:
-
-- Intel C/C++ compiler
-- NVidia CUDA compiler?
-- Emscripten?
-
-#### Refactoring
-
-- [ ] Unify file path cleaning, so that paths are always relative to the project root, in the project root,
-      and have no leading slashes. Ex: `pre-build.cpp` instead of `/pre-build.cpp`
-
-#### Pre-build script
-
-- [x] Add support for a pre-build C++, C, or Python 3 script. The script should be automatically built and
-      run before each recompilation.
-- [x] `resources` directory in each project root is copied into the build tree before the actual build.
-      **TODO: need to be 100% sure this runs after the pre-build scripts somehow. Maybe run it as POST_BUILD on the pre-build target.**
-
-#### Targets
-
-- [ ] **Namespaced output targets**
-- [ ] Support for header-only libraries.
-- [ ] Defines and flags per target.
-
-#### Testing
-
-- [ ] Add support for automated testing with CMake's built-in ctest.
-
-#### Installation
-
-- [x] Configure installation
-- [x] Export configuration (figure out how this is different from installation)
-- [x] Automatically create a CMake package config file (\<projectName>Config.cmake)
-
-### Generation TODO
-
-- [x] Add ability to generate header, source, and template-impl files. Must support C and C++.
-- [ ] Generate *.gitignore* file if it doesn't exist. Ignore:
-  - .vscode/
-  - build/
-- [ ] Ability to specify linked dependencies as a map of project names, each with its own dependency list.
-- [ ] Use `-Werror` in new project flags list.
-- [ ] (MAYBE) Add all warning flags to Release builds as well.
-
-Support for:
-
-- [ ] `.clang-format`
-- [ ] `.clang-tidy`
-- [ ] valgrind? (not sure if this needs a configuration file or not, needs research)
-
-#### Compiler Cheat Sheet
-
-- [ ] It would be great to have a cheat sheet full of per-compiler details. For each compiler this project
-supports, the cheat sheet should detail:
-  - [ ] Common and useful compiler flags, with explanations
-  - [ ] Common and useful linker flags, if necessary
-  - [ ] Commonly used defines, with explanations
-  - [ ] An example list of flags for use as a starting point, per build configuration
-  - [ ] An example list of defines for use as a starting point, per build configuration
-
-### CLI TODO
-
-- [ ] `show-available` command which shows available targets per subproject and dependency (with namespace)
-      which are available for the specified project to link to.
-- [ ] `dep-graph` command which prints a dependency graph per output target
-- [ ] `dep-graph <target>` command which prints a dependency graph for the given target
-- [ ] `show-defines <config-name>` command which prints the defines specified by the buildsystem for a given configuration.
-- [ ] `show-flags <config-name>` command which prints the compiler flags specified by the buildsystem for a given configuration.
-- [ ] `new clang-format` command which generates a .clang-format if it doesn't exist.
-
-### External libraries TODO
-
-- [x] Remove default `latest_stable_release_tag` in dependency yaml configuration. This project shouldn't manage default lib versions.
-- [ ] Add support for bringing external libraries into the project.
-
-#### IMPORTANT NOTE
-
-**Currently, supported external libraries can only be linked statically. Need to add support for**
-**copying shared libraries to the correct location.**
-
-Types of libraries which need support, from easiest to hardest:
-
-  1. Another gcmake (this project) project
-  2. Project which already has a [pre-written cmake find module](https://cmake.org/cmake/help/v3.22/manual/cmake-modules.7.html#find-modules)
-  3. CMake project which can be added using *add_subdirectory*
-  4. CMake project which can't use add_subdirectory (must be built and installed on the system separately)
-  5. Non-CMake projects which can be downloaded
-
-### Libraries I want to explicitly support for convenience
-
-Pre-written CMake find modules:
-
-- [ ] Boost
-- [ ] CURL
-- [ ] Curses (ncurses)
-- [ ] Doxygen
-- [ ] FreeType
-- [ ] GLEW
-- [ ] OpenGL
-- [ ] OpenSSL
-- [ ] SDL (not sure why these are listed separately in the docs, I'll have to research that.)
-  - [ ] SDL_image
-  - [ ] SDL_mixer
-  - [ ] SDL_net
-  - [ ] SDL_sound
-  - [ ] SDL_ttf
-- [ ] SQLite (3)
-- [ ] wxWidgets
-- [ ] Vulkan
-- [ ] ZLIB
-
-Other CMake projects:
-
-- [x] [nlohmann json](https://github.com/nlohmann/json)
-- [x] [SFML](https://www.sfml-dev.org/)
-- [x] [fmt](https://github.com/fmtlib/fmt)
-- [ ] [JUCE](https://juce.com/)
-- [ ] [yaml-cpp](https://github.com/jbeder/yaml-cpp)
-- [ ] [GLFW](https://www.glfw.org/)
-- [ ] [OpenCV](https://opencv.org/)
-- [ ] [ffmpeg](https://www.ffmpeg.org/)
-- [ ] [TensorFlow](https://www.tensorflow.org/)
-- [ ] [imgui](https://github.com/ocornut/imgui)
-- [ ] [GLM (OpenGL Mathematics)](https://github.com/g-truc/glm)
-
-Non-CMake projects:
-
-- [ ] [Asio](https://think-async.com/Asio/)
+`gcmake new --subproject <project-name>` checks if the current working directory is a GCMake-rust project. If it is, then runs the same
+project configuration process as above and creates the project in *subprojects/\<project-name\>*.
