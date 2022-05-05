@@ -6,44 +6,6 @@
 the configuration elements and project metadata which cannot be inferred from the
 project structure itself.
 
-## Data Type Reference
-
-Reference for special values in cmake_data.yaml. Most of these "special values" are
-just strings which only allow certain values..
-
-### Build Type Specifier
-
-Name of a build configuration (case sensitive). Allowed values are:
-
-- `Debug`
-- `Release`
-- `MinSizeRel`
-- `RelWithDebInfo`
-
-### Language Specifier
-
-*Case sensitive* name of a programming language used by the project.
-
-- `C`
-- `Cpp`
-
-### Compiler Specifier
-
-*Case sensitive* name of a compiler which can be used with `gcmake-rust` projects.
-
-- `MSVC`
-- `GCC`
-- `Clang`
-
-### Compiler Selection Specifier
-
-*Case sensitive* name of a compiler listed in cmake_data.yaml [supported_compilers](#supportedcompilers), or `All`.
-This value is used to declare which compiler options are being configured, and is used as a map key for
-[single build config configuration](#build-config-options)
-
-- `All`
-- Any single [compiler specifier](#compiler-specifier)
-
 ## General Project Information
 
 These options are for basic project information, such as the project name, description, and include prefix.
@@ -52,7 +14,7 @@ These options are for basic project information, such as the project name, descr
 
 ### name
 
-**REQUIRED** `String`
+> **REQUIRED** `String`
 
 Name of the project. Cannot contain spaces.
 
@@ -63,7 +25,7 @@ name: the-project-name
 
 ### include_prefix
 
-**REQUIRED** `String`
+> **REQUIRED** `String`
 
 The project's 'include prefix' directory name. Cannot contain spaces.
 
@@ -123,7 +85,7 @@ matching the include directory structure of the project.
 
 ### description
 
-**REQUIRED** `String`
+> **REQUIRED** `String`
 
 A succinct text description of the project. This currently has no effect on project generation and
 exists for documentation purposes only.
@@ -137,7 +99,7 @@ description: "Your project description!"
 
 ### version
 
-**REQUIRED** `String`
+> **REQUIRED** `String`
 
 The sectioned major, minor, and patch version of your project, separated by periods.
 may optionally be prefixed with a *v*.
@@ -151,7 +113,7 @@ version: "v1.0.1"
 
 ### supported_compilers
 
-**REQUIRED** `List<`[CompilerSpecifier](#compiler-specifier)`>`
+> **REQUIRED** `List<`[CompilerSpecifier](#compiler-specifier)`>`
 
 The list of compilers which this project is guaranteed to support. Compiler-specific build configuration
 options can only be added for compilers explicitly listed in this list.
@@ -168,7 +130,7 @@ supported_compilers:
 
 ### default_build_type
 
-**REQUIRED** [BuildTypeSpecifier](#build-type-specifier)
+> **REQUIRED** [BuildTypeSpecifier](#build-type-specifier)
 
 The project's default build type. This build type is automatically selected when the project is configured
 using CMake, if a build type has not already been selected.
@@ -184,7 +146,7 @@ default_build_type: Debug
 
 ### build_configs
 
-**REQUIRED** `Map<`[BuildTypeSpecifier](#build-type-specifier)`, BuildConfigMap>`
+> **REQUIRED** `Map<`[BuildTypeSpecifier](#build-type-specifier)`, BuildConfigMap>`
 
 ``` yaml
 ---
@@ -253,7 +215,7 @@ build_configs:
 
 ## languages
 
-**REQUIRED** `Map<`[LanguageSpecifier](#language-specifier)`,` [LanguageConfig](#language-configuration-options)`>`
+> **REQUIRED** `Map<`[LanguageSpecifier](#language-specifier)`,` [LanguageConfig](#language-configuration-options)`>`
 
 The language configuration options for this project. Currently, both `C` and `Cpp` configurations
 are required even if one of the languages isn't used.
@@ -273,7 +235,7 @@ languages:
 
 #### standard
 
-**REQUIRED** `Integer`
+> **REQUIRED** `Integer`
 
 The language standard which outputs (and files) in the project will be built with.
 This sets the standard for the current project and subproject, but does not change the
@@ -287,4 +249,269 @@ Cpp: [11, 14, 17, 20]
 
 ## output
 
-> TODO: This is going to be a long section
+> **REQUIRED** `Map<String,` [OutputItemConfig](#TODO)`>`
+
+The compiled outputs to be produced by the project, mapped by name.
+
+``` yaml
+# Executable project example
+# ---------------------------------------- 
+# Produces two executables: my-exe and another-exe
+output:
+  my-exe:
+    output_type: Executable
+    entry_file: main.cpp
+  another:
+    output_type: Executable
+    entry_file: another.cpp
+```
+
+``` yaml
+# Library project example
+# ---------------------------------------- 
+# Produces a library called very-useful.
+# Explanations on the different library output_type options are provided later in this section.
+output:
+  my-awesome-library:
+    output_type: Library
+    # output_type: SharedLib
+    # output_type: StaticLib
+    entry_file: main.cpp
+```
+
+### Output Rules and Constraints
+
+**A single project may either produce a single library or any number of executables, not both.**
+However, subprojects are not required to produce the same output type as their parent project.
+
+> This forces projects to be "modularized" into subprojects, and enforces 'separation of concerns'
+> on the project level. As a result, this structure rule also eliminates inter-project circular dependencies.
+
+For example, when writing a library it may be useful to provide one or more executables which
+make use of the library's functionality. Such a project could be laid out as follows:
+
+``` txt
+parent_project/ -> Executables
+  L-- subprojects/
+      L-- library_subproject/ -> Library
+```
+
+The parent project makes use of the library produced by its library_subproject. Both the library
+and executables are produced by the project.
+
+### output_type
+
+> **REQUIRED** [OutputTypeSpecifier](#output-type-specifier)
+
+Specifies what the output item should actually produce.
+
+If a [library output type](#library-output-types)
+is specified, then the project is assumed to be a library project and can only contain that library output.
+Otherwise if an [executable output type](#executable-output-types) is specified, then the project is considered
+to be an an executable project and can contain any number of *executable* outputs. A full explanation of these
+rules is given in the [output rules and constraints](#output-rules-and-constraints) section.
+
+For a list and description of all available output types, see the [OutputTypeSpecifier](#output-type-specifier)
+section.
+
+#### Library Project Output Example
+
+``` yaml
+# A library output item is declared. That means this is a library project, so the project can only
+# contain a single library target.
+output:
+  my-awesome-library:
+    # Static or shared library. The type is selected at CMake configure time.
+    output_type: Library
+    entry_file: lib.hpp
+
+    # Shared library
+    # output_type: SharedLib
+
+    # Static library
+    # output_type: StaticLib
+```
+
+#### Executable Project Output Example
+
+``` yaml
+# At least one executable output item is declared. That means this is an executable project,
+# and the project can contain many executables if desired.
+output:
+  my-awesome-executable:
+    output_type: Executable
+    entry_file: main.cpp
+  other:
+    output_type: Executable
+    entry_file: other.cpp
+```
+
+### output entry_file
+
+> **REQUIRED** `String`
+
+The output's entry file, relative to the root directory.
+
+For an executable output, this is the main file (usually `main.c` or `main.cpp`). For a library output,
+the entry file should include the library's entire public interface. Entry files should ideally be placed
+in the project's root directory.
+
+The library entry file is currently required for convenience, as it allows the "entire library" to be
+included with a single header. However, in the future it will be used as a convenient way to create a
+precompiled header for the entire library.
+
+#### Output Entry File Suggestions
+
+1. Place entry files in the project root.
+2. Executable entry files should contain the word `main`. Examples include `main.cpp` or `another-main.c`.
+3. Library entry file name should match the project/subproject name. Example: a library called *mind-reader*
+should have an entry file called `mind-reader.hpp`. This makes it clear which project the entry file is being
+included from.
+
+#### Output Entry File Config Examples
+
+``` yaml
+output:
+  my-awesome-executable:
+    output_type: Executable
+    entry_file: main.cpp
+  another:
+    output_type: Executable
+    entry_file: another-main.cpp
+```
+
+``` yaml
+output:
+  my-awesome-library:
+    output_type: Library
+    entry_file: my-awesome-library.hpp
+```
+
+### output link
+
+> Optional `List<`[LinkSpecifier](#link-specifier)`>`
+
+The list of libraries to link to the output item. Libraries must be namespaced with their
+"project" name. See the [link specifier section](#link-specifier) for a full in-depth
+explanation.
+
+Link specifiers can be written in one of two formats:
+
+1. `dependency-name::library-name`
+2. `dependency-name::{ first-library-name, second-library-name, etc }`
+
+Where *dependency name is explicitly listed in cmake_data.yaml* as one of:
+
+- [subprojects](./missing_link.md)
+- [predefined_dependencies](./missing_link.md)
+- [gcmake_dependencies](./missing_link.md)
+
+``` yaml
+subprojects:
+  - nested-lib
+predefined_dependencies:
+  SFML:
+    git_tag: "2.5.1"
+  nlohmann_json:
+    git_tag: "v3.10.4"
+gcmake_dependencies:
+  gcmake-test-project:
+    repo_url: "git@github.com:scupit/gcmake-test-project.git"
+    commit_hash: "ee752d23db561793511b5723750ebab9b78ef78e"
+output:
+  my-complex-exe:
+    output_type: Executable
+    entry_file: main.cpp
+    link:
+      # Notice that the left side of each link specifier exactly matches
+      # a name listed in one of the dependency section above.
+      - nested-lib::file-helper
+      - nlohmann_json::nlohmann_json
+      - SFML::{ system, window, main }
+      - gcmake-test-project::{ dll-lib, toggle-lib }
+```
+
+### output flags
+
+**TODO:** Implement flags specific to output items.
+
+### output defines
+
+**TODO:** Implement compiler defines specific to output items.
+
+## Data Type Reference
+
+Reference for special values in cmake_data.yaml. Most of these "special values" are
+just restricted strings.
+
+### Build Type Specifier
+
+Name of a build configuration (case sensitive). Allowed values are:
+
+- `Debug`
+- `Release`
+- `MinSizeRel`
+- `RelWithDebInfo`
+
+### Language Specifier
+
+*Case sensitive* name of a programming language used by the project.
+
+- `C`
+- `Cpp`
+
+### Compiler Specifier
+
+*Case sensitive* name of a compiler which can be used with `gcmake-rust` projects.
+
+- `MSVC`
+- `GCC`
+- `Clang`
+
+### Compiler Selection Specifier
+
+*Case sensitive* name of a compiler listed in cmake_data.yaml [supported_compilers](#supportedcompilers), or `All`.
+This value is used to declare which compiler options are being configured, and is used as a map key for
+[single build config configuration](#build-config-options)
+
+- `All`
+- Any single [compiler specifier](#compiler-specifier)
+
+### Output Type Specifier
+
+*Case sensitive* type of an output item produced by the project. See [output_type](#outputtype) for
+usage details.
+
+> Header-only libraries are currently not supported, but should be added in the near future (once I figure out
+> a good way to create them using CMake).
+
+#### Executable Output types
+
+- `Executable`: An executable binary
+
+#### Library output types
+
+- `Library`: Either a static or shared library. The type is selected at CMake configure time.
+- `StaticLib`: A static library
+- `SharedLib`: A shared libary (DLL)
+
+### Link Specifier
+
+A specially formatted String describing which libraries to [link to an output item](#output-link) or
+[link to a pre-build script](./missing_link.md). Link specifiers can be written in two formats:
+
+1. `project_name::library_name`
+2. `project_name::{ first_library, second_library, etc }`
+
+**project_name** is the *case sensitive* name of a subproject or dependency defined on the current project,
+which is explicitly listed in one of the project properties:
+
+- [subprojects](./missing_link.md)
+- [predefined_dependencies](./missing_link.md)
+- [gcmake_dependencies](./missing_link.md)
+
+**library_name** (or each library name in the list) is the *case sensitive* name of a library/target exposed
+by the given project or dependency.
+
+> In the future, the [`show linkable`](./TODO.md#show) command will print a list of dependencies which can
+> be linked to the current project. **However, this has yet to be implemented.**

@@ -22,6 +22,9 @@ Support for:
 - NVidia CUDA compiler?
 - Emscripten?
 
+- [ ] Add "library group" project type which allows building multiple libraries in the same
+project, organized as *components*. See [SFML](https://github.com/SFML/SFML) for a good example of this.
+
 ### Quality of Life
 
 - [ ] Add color printing. This will make output so much nicer to read through.
@@ -91,8 +94,9 @@ The command set for viewing dependency graph info.
 
 #### show
 
-- [ ] `show available` shows available targets per subproject and dependency (with namespace)
-        which are available for the specified project to link to.
+- [ ] `show linkable` shows available targets per subproject and dependency for the current project.
+        Allow a `--from <project-or-dep-name>` flag to specify that only targets/libraries from
+        the given subproject/dependency should be printed.
 - [ ] `show defines <config-name>` prints the defines specified by the buildsystem for a
         given configuration.
 - [ ] `show flags <config-name>` prints the compiler flags specified by the buildsystem for
@@ -101,8 +105,9 @@ The command set for viewing dependency graph info.
 - [ ] `show structure <project-path>` prints the full structure of a project, starting from the toplevel
         one. The given project should be marked.
 
+#### new
 
-- [ ] `new clang-format` command which generates a .clang-format if it doesn't exist.
+- [ ] `new clang-format` command which generates a default .clang-format if it doesn't exist.
 
 ### External libraries TODO
 
