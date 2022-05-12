@@ -561,7 +561,53 @@ gcmake-dependencies:
 
 ### predefined-dependencies
 
-> **TODO:** Write this section.
+> Optional `Map<String,` [PredefinedDependencyData](#predefined-dependency-data-object)`>`
+
+Specifies *non-gcmake* dependencies (Boost, SFML, nlohmann_json, etc.). Dependencies imported using this
+method must have an existing [predefined dependency configuration](./predefined_dependency_doc.md).
+
+> If you are looking to add dependencies to your project, this is probably the method you want.
+
+A non-gcmake dependency is a library which either:
+
+- Uses CMake and can be cloned from a Git repository.
+- *OR* is already installed on the system and can be found using a
+  [CMake "Find Module"](https://cmake.org/cmake/help/latest/manual/cmake-modules.7.html#find-modules)
+
+``` yaml
+predefined_dependencies:
+  SFML:
+    git_tag: "2.5.1"
+    # commit_hash: "2f11710abc5aa478503a7ff3f9e654bd2078ebab"
+  nlohmann_json:
+    git_tag: "v3.10.4"
+
+# Linking example
+output:
+  my-awesome-exe:
+    output_type: Executable
+    entry_file: main.cpp
+    link:
+      - SFML::{ system, window, main }
+      - nlohmann_json::nlohmann_json
+```
+
+#### Predefined Dependency Data Object
+
+The required configuration for a listed [predefined dependency](#predefined-dependencies).
+
+- `git_tag`: The version tag the repo should be cloned at. Must be a string, and may contain a leading *'v'*.
+              **REQUIRED if commit_hash is not specified**.
+- `commit_hash`: The commit hash the repo should be cloned at. **REQUIRED if git_tag is not specified**.
+
+``` yaml
+predefined_dependencies:
+  SFML:
+    # git_tag: "2.5.1"
+    commit_hash: "2f11710abc5aa478503a7ff3f9e654bd2078ebab"
+  nlohmann_json:
+    git_tag: "v3.10.4"
+```
 
 ## Data Type Reference
 
@@ -630,9 +676,9 @@ A specially formatted String describing which libraries to [link to an output it
 **project_name** is the *case sensitive* name of a subproject or dependency defined on the current project,
 which is explicitly listed in one of the project properties:
 
-- [subprojects](./missing_link.md)
-- [predefined_dependencies](./missing_link.md)
-- [gcmake_dependencies](./missing_link.md)
+- [subprojects](#subprojects)
+- [gcmake_dependencies](#gcmake-dependencies)
+- [predefined_dependencies](predefined_dependency_doc.md)
 
 **library_name** (or each library name in the list) is the *case sensitive* name of a library/target exposed
 by the given project or dependency.
