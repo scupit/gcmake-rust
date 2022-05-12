@@ -6,6 +6,9 @@
 the configuration elements and project metadata which cannot be inferred from the
 project structure itself.
 
+See the [GCMake Test Project](https://github.com/scupit/gcmake-test-project) for a fully working
+*cmake_data.yaml* example.
+
 ## General Project Information
 
 These options are for basic project information, such as the project name, description, and include prefix.
@@ -438,6 +441,127 @@ output:
 ### output defines
 
 **TODO:** Implement compiler defines specific to output items.
+
+## Using Dependencies
+
+The `gcmake-rust` project defines a dependency as *"a project or group of functionality
+which is required to build the toplevel project in its entirety"*.
+
+There are three types of dependencies a project can have:
+
+1. [**Subproject**](#subprojects): Subprojects are considered local dependencies of the main project
+    even though they exist in (and are built as part of) the same project tree.
+2. [**GCMake Dependency**](#gcmake-dependencies): A project which also use the `gcmake-rust` *cmake_data.yaml*
+    config system.
+3. [**Predefined Dependency**](#predefined-dependencies): A dependency which was made available to `gcmake-rust`
+    using the [predefined dependency compatibility layer](./predefined_dependency_doc.md).
+    For now this is either a CMake project, or a library already installed on the system which has an
+    existing CMake "find module" written for it.
+    (TODO: Change the name 'predefined dependency' to something more fitting and intuitive).
+
+### subprojects
+
+> Optional `List<String>`
+
+A list of *case sensitive* directory names present in the project's *subprojects/* directory. Listing a
+subproject here "imports" it into the project. Once a subproject is imported, it is built as part of the
+main project and its libraries are made available to link to.
+
+> Wait, but subprojects already exist in a single directory and can be retrieved automatically.
+> Isn't manually writing them redundant, extra work?
+
+In some sense, yes. Listing subprojects explicitly is redundant. However, doing so serves these two purposes:
+
+1. The explicit list acts as a "whitelist". It ensures that only the listed projects will be used, and that
+any change to a subproject directory name will be detected and reported upon running *gcmake*.
+(The subproject will be detected as missing due to the name change.)
+
+2. The subproject is immediately identifiable as a link namespace.
+
+For example, when skimming through the *cmake_data.yaml*, seeing a listed subproject named `my-awesome-lib`
+shows the reader that the subproject *subprojects/my-awesome-lib* exists (or should exist) and is built
+as part of the main project. They can also assume `my-awesome-lib` can be used for linking; ie:
+`my-awesome-lib::its-library`.
+
+For more information on linking, see the [output link](#output-link) section.
+
+``` yaml
+# project-root/
+#   L-- subprojects/
+#       L-- my-awesome-lib/
+#       L-- another-subproject/
+subprojects:
+  - my-awesome-lib
+  - another-subproject
+
+# Example use in linking
+output:
+  my-exe:
+    output_type: Executable
+    entry_file: main.cpp
+    link:
+      - my-awesome-lib::{ its-library, its-other-library }
+```
+
+### gcmake-dependencies
+
+> Optional `Map<String,` [GCMakeDependencyData](#gcmake-dependency-data-object)`>`
+
+Specifies other `gcmake-rust` C/C++ projects to be consumed by this project as dependencies.
+These will be cloned into *dep/\<given project name\>*. For an explanation of all dependency
+types, see [Using Dependencies](#using-dependencies).
+
+> **NOTE:** The additional validation provided by `gcmake-rust` only works on these libraries
+> once they are cloned. This means **an initial CMake configuration run should be done in order**
+> **to clone the repository** before running *gcmake*, when possible.
+>
+> When adding a gcmake-dependency to your project, do these steps in order.
+>
+> 1. *Add the dependency to* `gcmake-dependencies` *list*, then run `gcmake`. This adds the appropriate
+>     FetchContent section to the CMakeLists.txt so that CMake will know to clone the repository.
+> 2. *Configure (or reconfigure) the CMake build.* This causes the repository to be cloned in its
+>     respective *dep/* location in the project tree.
+> 3. *Run* `gcmake` once more. Now that the dependency repository is cloned, `gcmake` is able to carry out its
+>     additional validation steps on the dependency project.
+
+``` yaml
+gcmake-dependencies:
+  my-other-gcmake-project:
+    repo_url: git@github.com:some-user/my-other-gcmake-project.git
+    git_tag: v1.1.0
+    # Either git_tag or git_hash must be specified.
+    # commit_hash: ee752d23db561793511b5723750ebab9b78ef78e
+
+# Linking example
+output:
+  my-exe:
+    output_type: Executable
+    entry_file: main.cpp
+    link:
+      - my-other-gcmake-project::its-lib
+```
+
+#### GCMake Dependency Data Object
+
+The required configuration for a specified [gcmake dependency](#gcmake-dependencies).
+
+- `repo_url`: **REQUIRED** url location of the dependency repository.
+- `git_tag`: The version tag the repo should be cloned at. Must be a string, and may contain a leading *'v'*.
+              **REQUIRED if commit_hash is not specified**.
+- `commit_hash`: The commit hash the repo should be cloned at. **REQUIRED if git_tag is not specified**.
+
+``` yaml
+gcmake-dependencies:
+  my-other-gcmake-project:
+    repo_url: git@github.com:some-user/my-other-gcmake-project.git
+    git_tag: v1.1.0
+    # Either git_tag or git_hash must be specified.
+    # commit_hash: ee752d23db561793511b5723750ebab9b78ef78e
+```
+
+### predefined-dependencies
+
+> **TODO:** Write this section.
 
 ## Data Type Reference
 
