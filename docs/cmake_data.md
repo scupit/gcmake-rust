@@ -151,10 +151,18 @@ default_build_type: Debug
 
 > **REQUIRED** `Map<`[BuildTypeSpecifier](#build-type-specifier)`, BuildConfigMap>`
 
+This is the place to configure the project's build configurations. These configurations
+apply to the project and its subprojects.
+
+**At least one [build configuration type](#build-type-specifier) is required to be specified.**
+It doesn't matter which is specified. You can also define a configuration for all four build types.
+Most projects are given both a *Debug* and a *Release* configuration.
+
 ``` yaml
 ---
-# This is important. If GCC and Clang are not listed here, then trying to set
-# compiler specific options for GCC and Clang in build_configs will cause an error.
+# This is important. If GCC and Clang are not listed in supported_compilers, then trying to set
+# compiler specific options for GCC and Clang in build_configs will cause a "compiler not supported
+# by this project" error.
 supported_compilers:
   - GCC
   - Clang
@@ -172,6 +180,13 @@ build_configs:
     Clang:
       defines:
         - DEFINED_ONLY_FOR_CLANG
+  Release:
+    All:
+      defines:
+        - RELEASE_ONLY_DEFINE
+    GCC:
+      flags:
+        - "-O2"
 ```
 
 Each build configuration (Debug, Release, etc.) can define different attributes per compiler, or for any compiler
@@ -188,6 +203,8 @@ Once a compiler (or `All`) is selected, these options can be set on it:
 #### build_configs 'defines'
 
 A list of defines added to the build for the given configuration. Do not write them with a leading `-D`.
+
+See [compiler defines](#compiler-define) for more formatting information.
 
 ``` yaml
 build_configs:
@@ -214,6 +231,20 @@ build_configs:
     GCC:
       flags:
         - "-O2"
+```
+
+### global_defines
+
+> Optional `List<String>`
+
+A list of compiler defines to be globally added to the entire build.
+
+See the [compiler defines reference](#compiler-define) for formatting information.
+
+``` yaml
+global_defines:
+  - NDEBUG
+  - MY_VALUE="Is awesome"
 ```
 
 ## languages
@@ -629,6 +660,37 @@ Name of a build configuration (case sensitive). Allowed values are:
 
 - `C`
 - `Cpp`
+
+### Compiler Define
+
+A definition added to the build at compile time.
+
+> When writing a define, *make sure to omit the leading* `-D`. For example, instead of writing
+> `-DNDEBUG` as you would when passing *NDEBUG* as a CLI argument, just write `NDEBUG`.
+
+Compiler defines can currently be added [globally](#globaldefines) and
+[per build configuration](#buildconfigs-defines).
+
+``` yaml
+# Formatting examples
+# ----------------------------------------
+
+# Equivalent to -DSOME_THING on the command line.
+- SOME_THING
+# Equivalent to -DSOME_BOOLEAN=1 on the command line.
+- SOME_BOOLEAN=1
+# Equivalent to -DSOME_INT=12 on the command line.
+- SOME_INT=12
+# Equivalent to -DSOME_STRING='Something is defined here' on the command line.
+- SOME_STRING="Something is defined here"
+```
+
+``` yaml
+# Example using global_defines
+global_defines:
+  - NDEBUG
+  - MY_CONSTANT="Very Cool"
+```
 
 ### Compiler Specifier
 
