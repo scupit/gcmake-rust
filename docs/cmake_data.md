@@ -13,8 +13,6 @@ See the [GCMake Test Project](https://github.com/scupit/gcmake-test-project) for
 
 These options are for basic project information, such as the project name, description, and include prefix.
 
-> **TODO:** document cmake_data.yaml options for both regular projects and subprojects.
-
 ### name
 
 > **REQUIRED** `String`
@@ -638,6 +636,64 @@ predefined_dependencies:
     commit_hash: "2f11710abc5aa478503a7ff3f9e654bd2078ebab"
   nlohmann_json:
     git_tag: "v3.10.4"
+```
+
+## Pre-build Scripts
+
+`gcmake-rust` supports pre-build scripts!
+
+Pre-build scripts are used to execute some code just before the project's outputs are built.
+They will most commonly be used to generate files needed for the build process.
+
+There are a few guidelines which all pre-build scripts adhere to or must follow:
+
+1. **Pre-build scripts must be placed in the project root.**
+2. Only one pre-build script can be used per project root.
+3. Pre-build scripts can only be a single file.
+4. *When a script is run by the build system*, its
+    [current working directory](https://en.wikipedia.org/wiki/Working_directory) is the project root.
+
+After adding a pre-build script in the project root, run `gcmake-rust`. The tool will automatically detect your
+*pre-build.(py|c|cpp)* file and make it part of the build process.
+
+### Python Pre-build Script Specifics
+
+> File: `pre-build.py`
+
+**Python scripts must be written in Python 3**. A Python 3 interpreter also needs to be available on the system
+in a location where CMake can find it.
+
+### C/C++ Pre-build Script Specifics
+
+> File: `pre-build.c` or `pre-build.cpp`
+
+C/C++ pre-build scripts *must be written using the same*
+*[C/C++ standard the project is configured with](./cmake_data.md#standard)*.
+
+``` yaml
+# For this project language configuration
+# pre-build.c must conform to C99, OR
+# pre-build.cpp must conform to C++17.
+languages:
+  C:    { standard: 99 }
+  Cpp:  { standard: 17 }
+```
+
+#### Linking Libraries to the C/C++ Pre-build Script
+
+Libraries can be linked to the pre-build script in the
+[same way they are linked to outputs](./cmake_data.md#output-link).
+
+See the [link specifier section](./cmake_data.md#link-specifier) for formatting and more general information
+on link specifiers.
+
+``` yaml
+prebuild_config:
+  link:
+    - nlohmann_json::nlohmann_json
+    - my-subproject::{ first-lib, second-lib }
+subprojects:
+  - my-subproject
 ```
 
 ## Data Type Reference

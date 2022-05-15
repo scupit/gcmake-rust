@@ -1,12 +1,9 @@
-# gcmake-rust
+# Overview
 
-`gcmake-rust` is a C/C++ project management and configuration tool.
+This "project overview" page is essentially the same as the [README](/README.md).
+It's here to explain the basic functionality of this project and describe its common uses.
 
-## Documentation Links
-
-Documentation is found in [docs/Docs_Home.md](docs/Docs_Home.md).
-
-## About
+## About gcmake-rust
 
 `gcmake-rust` aims to be an intuitive, opinionated C/C++ project configuration tool which covers
 most general and common use cases.
@@ -18,9 +15,18 @@ most general and common use cases.
 3. Generate a full working CMake configuration for an entire project tree, including dependencies
 and subprojects.
 
+## Example Project
+
+See the [gcmake-test-project](https://github.com/scupit/gcmake-test-project) for a full example
+of a working gcmake project.
+
+## Suggestions
+
+Aliasing `gcmake-rust` executable to just `gcmake` is recommended. `gcmake` is shorter and easier to remember.
+
 ## Common Uses
 
-> This section assumes the `gcmake-rust` execuatable is aliased to `gcmake`.
+> **NOTE:** This section assumes the `gcmake-rust` executable is aliased to `gcmake`.
 
 `gcmake --help` shows toplevel help info.
 
@@ -31,5 +37,6 @@ project tree (excluding subdirectories).  If no path is provided, the current wo
 
 `gcmake new <project-name>` steps you through the project initializer prompts and creates a new C/C++ project.
 
-`gcmake new --subproject <project-name>` checks if the current working directory is a GCMake-rust project. If it is, then runs the same
-project configuration process as above and creates the project in *subprojects/\<project-name\>*.
+`gcmake new --subproject <project-name>` checks if the current working directory is a GCMake-rust project.
+If it is, then runs the same project configuration process as above and creates the project in
+*subprojects/\<project-name\>*.

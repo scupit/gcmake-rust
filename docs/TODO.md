@@ -27,7 +27,7 @@ project, organized as *components*. See [SFML](https://github.com/SFML/SFML) for
 
 ### Quality of Life
 
-- [ ] Add color printing. This will make output so much nicer to read through.
+- [ ] Add color printing. This will make output so much nicer to read.
 
 ### Refactoring
 
@@ -94,6 +94,8 @@ The command set for viewing dependency graph info.
 
 #### show
 
+The command set for viewing project metadata.
+
 - [ ] `show linkable` shows available targets per subproject and dependency for the current project.
         Allow a `--from <project-or-dep-name>` flag to specify that only targets/libraries from
         the given subproject/dependency should be printed.
@@ -104,6 +106,12 @@ The command set for viewing dependency graph info.
 - [ ] `show metadata <project-path>` prints metadata for a project.
 - [ ] `show structure <project-path>` prints the full structure of a project, starting from the toplevel
         one. The given project should be marked.
+
+#### check
+
+- [ ] `check config` displays whether the cmake_data.yaml is correct and works with the current project.
+- [ ] `check cmake-version` gets the current CMake version and the required CMake version, and whether
+        the current CMake version is new enough.
 
 #### new
 
