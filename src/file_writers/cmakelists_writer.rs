@@ -1,6 +1,6 @@
 use std::{collections::{HashMap, HashSet}, fs::File, io::{self, Write}, path::{Path, PathBuf}};
 
-use crate::{file_writers::cmake_utils_writer::CMakeUtilWriter, project_info::{final_project_data::{FinalProjectData, DependencySearchMode}, path_manipulation::cleaned_path_str, final_dependencies::GitRevisionSpecifier, raw_data_in::{BuildType, BuildConfig, BuildConfigCompilerSpecifier, SpecificCompilerSpecifier, CompiledItemType, LanguageConfigMap}, FinalProjectType, CompiledOutputItem, PreBuildScript}, logger::exit_error_log};
+use crate::{file_writers::cmake_utils_writer::CMakeUtilWriter, project_info::{final_project_data::{FinalProjectData, DependencySearchMode}, path_manipulation::cleaned_path_str, final_dependencies::GitRevisionSpecifier, raw_data_in::{BuildType, BuildConfig, BuildConfigCompilerSpecifier, SpecificCompilerSpecifier, CompiledItemType, LanguageConfigMap}, FinalProjectType, CompiledOutputItem, PreBuildScript}};
 
 const RUNTIME_BUILD_DIR: &'static str = "${CMAKE_BINARY_DIR}/bin/${CMAKE_BUILD_TYPE}";
 const LIB_BUILD_DIR: &'static str = "${CMAKE_BINARY_DIR}/lib/${CMAKE_BUILD_TYPE}";
@@ -37,7 +37,7 @@ fn defines_generator_string(build_type: &BuildType, build_config: &BuildConfig) 
   }
 }
 
-fn flattened_flags_string(maybe_flags: &Option<HashSet<String>>) -> String {
+fn flattened_compiler_flags_string(maybe_flags: &Option<HashSet<String>>) -> String {
   return match maybe_flags {
     Some(flags) => {
       let flattened_string: String = flags.iter()
@@ -46,6 +46,20 @@ fn flattened_flags_string(maybe_flags: &Option<HashSet<String>>) -> String {
         .join(" ");
 
       format!(" {} ", flattened_string)
+    },
+    None => String::from(" ")
+  }
+}
+
+fn flattened_linker_flags_string(maybe_flags: &Option<HashSet<String>>) -> String {
+  return match maybe_flags {
+    Some(linker_flags) => {
+      let comma_separated_flags: String = linker_flags.iter()
+        .map(|flag| flag.trim())
+        .collect::<Vec<&str>>()
+        .join(",");
+
+      format!("\"LINKER:{}\"", comma_separated_flags)
     },
     None => String::from(" ")
   }
@@ -210,6 +224,7 @@ impl<'a> CMakeListsWriter<'a> {
 
           self.write_newline()?;
 
+          self.write_target_link_options_for_output(script_target_name, exe_info)?;
           self.write_target_compile_options_for_output(script_target_name, exe_info)?;
           self.write_newline()?;
 
@@ -456,13 +471,18 @@ impl<'a> CMakeListsWriter<'a> {
         )?;
 
         for (config_name, build_config) in config_map {
-          // Write flags per compiler for each config.
-          let flags_string: String = flattened_flags_string(&build_config.flags);
           let uppercase_config_name: String = config_name.name_string().to_uppercase();
 
+          // Write compiler flags per compiler for each config.
           self.set_basic_var("\t",
-            &format!("{}_BASE_FLAGS", uppercase_config_name),
-            &flags_string
+            &format!("{}_LOCAL_COMPILER_FLAGS", uppercase_config_name),
+            &flattened_compiler_flags_string(&build_config.compiler_flags)
+          )?;
+
+          // Write linker flags per "compiler" for each config
+          self.set_basic_var("\t",
+            &format!("{}_LOCAL_LINKER_FLAGS", uppercase_config_name),
+            &flattened_linker_flags_string(&build_config.linker_flags)
           )?;
         }
 
@@ -664,10 +684,37 @@ impl<'a> CMakeListsWriter<'a> {
     Ok(())
   }
 
+  fn write_target_link_options_for_output(
+    &self,
+    output_name: &str,
+    _output_data: &CompiledOutputItem
+  ) -> io::Result<()> {
+    // Linker flags
+    writeln!(&self.cmakelists_file,
+      "target_link_options( {}\n\tPRIVATE ",
+      output_name
+    )?;
+
+    for (config, _) in self.project_data.get_build_configs() {
+      writeln!(&self.cmakelists_file,
+        "\t\t\"$<$<CONFIG:{}>:${{{}_LOCAL_LINKER_FLAGS}}>\"",
+        config.name_string(),
+        config.name_string().to_uppercase()
+      )?;
+    }
+
+    writeln!(&self.cmakelists_file,
+      ")"
+    )?;
+    self.write_newline()?;
+
+    Ok(())
+  }
+
   fn write_target_compile_options_for_output(
     &self,
     output_name: &str,
-    output_data: &CompiledOutputItem
+    _output_data: &CompiledOutputItem
   ) -> io::Result<()> {
     // Compiler flags
     writeln!(&self.cmakelists_file,
@@ -677,7 +724,7 @@ impl<'a> CMakeListsWriter<'a> {
 
     for (config, _) in self.project_data.get_build_configs() {
       writeln!(&self.cmakelists_file,
-        "\t\t\"$<$<CONFIG:{}>:${{{}_BASE_FLAGS}}>\"",
+        "\t\t\"$<$<CONFIG:{}>:${{{}_LOCAL_COMPILER_FLAGS}}>\"",
         config.name_string(),
         config.name_string().to_uppercase()
       )?;
@@ -907,6 +954,7 @@ impl<'a> CMakeListsWriter<'a> {
     self.write_newline()?;
 
     self.write_depends_on_pre_build(output_name)?;
+    self.write_target_link_options_for_output(output_name, output_data)?;
     self.write_target_compile_options_for_output(output_name, output_data)?;
     self.write_newline()?;
 
@@ -965,6 +1013,7 @@ impl<'a> CMakeListsWriter<'a> {
     self.write_newline()?;
 
     self.write_depends_on_pre_build(output_name)?;
+    self.write_target_link_options_for_output(output_name, output_data)?;
     self.write_target_compile_options_for_output(output_name, output_data)?;
     self.write_newline()?;
 

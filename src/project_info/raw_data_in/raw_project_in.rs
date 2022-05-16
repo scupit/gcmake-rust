@@ -148,7 +148,8 @@ impl BuildConfigCompilerSpecifier {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(deny_unknown_fields)]
 pub struct BuildConfig {
-  pub flags: Option<HashSet<String>>,
+  pub compiler_flags: Option<HashSet<String>>,
+  pub linker_flags: Option<HashSet<String>>,
   pub defines: Option<HashSet<String>>
 }
 
