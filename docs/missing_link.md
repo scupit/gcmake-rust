@@ -1,7 +1,7 @@
 # Missing Link
 
 This is a "404" page for the gcmake-rust documentation. It's essentially a placeholder for links
-to pages which have not been written yet.
+to pages or sections which have not been written yet.
 
 A documentation link will bring you to this page for one of two reasons:
 

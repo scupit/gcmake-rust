@@ -1,13 +1,14 @@
 # cmake_data.yaml
 
-> This is the documentation page for the **cmake_data.yaml** file.
+This is the documentation page for the **cmake_data.yaml** configuration file.
 
 `cmake_data.yaml` is the configuration file for GCMake projects. It is used to describe
 the configuration elements and project metadata which cannot be inferred from the
 project structure itself.
 
 See the [GCMake Test Project](https://github.com/scupit/gcmake-test-project) for a fully working
-*cmake_data.yaml* example.
+complex *cmake_data.yaml* example. Alternatively, [generate a new project](overview.md#common-uses)
+for a fully functional base project.
 
 ## General Project Information
 
@@ -17,7 +18,7 @@ These options are for basic project information, such as the project name, descr
 
 > **REQUIRED** `String`
 
-Name of the project. Cannot contain spaces.
+Name of the project. *Cannot contain spaces*.
 
 ``` yaml
 ---
@@ -28,7 +29,7 @@ name: the-project-name
 
 > **REQUIRED** `String`
 
-The project's 'include prefix' directory name. Cannot contain spaces.
+The project's 'include prefix' directory name. *Cannot contain spaces*.
 
 ``` yaml
 ---
@@ -73,13 +74,14 @@ For example, assuming:
 
 - Toplevel project: `TOPLEVEL_INCLUDE_PREFIX`
 - Subproject: `SUBPROJECT_INCLUDE_PREFIX`
-- Nested subproject: `NESTED_INCLUDE_PREFIX`
+- Nested subproject (inside the subproject): `NESTED_INCLUDE_PREFIX`
 
 Files would be included like so:
 
 - Toplevel project: `TOPLEVEL_INCLUDE_PREFIX/SomeFile.hpp`
 - Subproject: `TOPLEVEL_INCLUDE_PREFIX/SUBPROJECT_INCLUDE_PREFIX/SubFile.hpp`
-- Nested subproject: `TOPLEVEL_INCLUDE_PREFIX/SUBPROJECT_INCLUDE_PREFIX/NESTED_INCLUDE_PREFIX/DeepFile.hpp`
+- Nested subproject (inside the subproject):
+  `TOPLEVEL_INCLUDE_PREFIX/SUBPROJECT_INCLUDE_PREFIX/NESTED_INCLUDE_PREFIX/DeepFile.hpp`
 
 And the *src*, *include*, and *template-impl* directories in those projects should contain subdirectories
 matching the include directory structure of the project.

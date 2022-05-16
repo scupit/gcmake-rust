@@ -2,9 +2,9 @@
 
 `gcmake-rust` is a C/C++ project management and configuration tool.
 
-## Documentation Links
+## Documentation
 
-Documentation is found in [docs/Docs_Home.md](docs/Docs_Home.md).
+Documentation for this project is found in [docs/Docs_Home.md](docs/Docs_Home.md).
 
 ## About
 
@@ -18,9 +18,21 @@ most general and common use cases.
 3. Generate a full working CMake configuration for an entire project tree, including dependencies
 and subprojects.
 
+## Getting Started
+
+1. Clone the repository: `git clone --recurse-submodules git@github.com:scupit/gcmake-rust.git`
+2. `cd` into the cloned repository.
+3. Switch to the master branch with `git checkout master`.
+4. Create an optimized build using `cargo build --release`.
+5. The resulting executable will be located at *target/release/gcmake-rust.exe*.
+    Make it available on your [system PATH](https://en.wikipedia.org/wiki/PATH_(variable)).
+6. Optionally, alias `gcmake-rust` to just `gcmake`.
+7. Create a new project with `gcmake new 'your-project-name-here'`. After stepping through the
+    initializer, you now have a fully functioning gcmake (and CMake) project!
+
 ## Common Uses
 
-> This section assumes the `gcmake-rust` execuatable is aliased to `gcmake`.
+> This section assumes the `gcmake-rust` executable is aliased to `gcmake`.
 
 `gcmake --help` shows toplevel help info.
 

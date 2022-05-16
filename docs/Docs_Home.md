@@ -1,6 +1,11 @@
 # gcmake-rust Documentation Home
 
-For an example project, see [gcmake-test-project](https://github.com/scupit/gcmake-test-project).
+This is the documentation home page for `gcmake-rust`.
+
+See [gcmake-test-project](https://github.com/scupit/gcmake-test-project) for an in-depth existing
+project example. To create a new working project, see the [new project command](overview.md#common-uses).
+These are great ways to get a feel for how the tool, project structure, and [cmake_data.yaml](cmake_data.md)
+configuration work together.
 
 ## Table of Contents
 
@@ -11,5 +16,12 @@ For an example project, see [gcmake-test-project](https://github.com/scupit/gcma
 
 ## Quick Links
 
+- [Getting started](/README.md#getting-started)
+- [Creating a new project](overview.md#common-uses)
+- [gcmake-test-project: an example project](https://github.com/scupit/gcmake-test-project)
 - [Adding a pre-build script](cmake_data.md#pre-build-script)
-- Create a [new project](overview.md#common-uses)
+- ["Include prefix" accumulation](cmake_data.md#prefix-accumulation)
+- [Output item rules and constraints](cmake_data.md#output-rules-and-constraints)
+- [Linking to an output](cmake_data.md#output-link)
+- [Managing dependencies](cmake_data.md#using-dependencies)
+- [Subprojects (nested projects)](cmake_data.md#subprojects)

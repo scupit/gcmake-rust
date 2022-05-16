@@ -22,7 +22,11 @@ of a working gcmake project.
 
 ## Suggestions
 
-Aliasing `gcmake-rust` executable to just `gcmake` is recommended. `gcmake` is shorter and easier to remember.
+See [the README](/README.md) for build information and help [getting started](/README.md#getting-started).
+
+See [the documentation](Docs_Home.md) for in-depth information about this tool.
+
+> It's worth aliasing `gcmake-rust` to just `gcmake`, for convenience.
 
 ## Common Uses
 
