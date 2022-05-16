@@ -23,8 +23,8 @@ pub fn configure_cmake(project_data: &FinalProjectData) -> io::Result<()> {
 fn defines_generator_string(build_type: &BuildType, build_config: &BuildConfig) -> Option<String> {
   if let Some(defines) = build_config.defines.as_ref() {
     let defines_list = defines.iter()
-      .map(|def| &def[..])
-      .collect::<Vec<&str>>()
+      .map(|def| def.replace('"', "\\\""))
+      .collect::<Vec<String>>()
       .join(";");
 
     Some(format!(

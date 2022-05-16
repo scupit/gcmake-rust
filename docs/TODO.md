@@ -24,6 +24,7 @@ Support for:
 
 - [ ] Add "library group" project type which allows building multiple libraries in the same
 project, organized as *components*. See [SFML](https://github.com/SFML/SFML) for a good example of this.
+- [ ] Separate *flags* build config option into *compiler_flags* and *linker_flags*.
 
 ### Quality of Life
 
