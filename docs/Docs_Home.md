@@ -23,5 +23,7 @@ configuration work together.
 - ["Include prefix" accumulation](cmake_data.md#prefix-accumulation)
 - [Output item rules and constraints](cmake_data.md#output-rules-and-constraints)
 - [Linking to an output](cmake_data.md#output-link)
+- Adding [compiler flags](cmake_data.md#buildconfigs-compilerflags) and
+    [linker flags](cmake_data.md#buildconfigs-linkerflags) to the build
 - [Managing dependencies](cmake_data.md#using-dependencies)
 - [Subprojects (nested projects)](cmake_data.md#subprojects)

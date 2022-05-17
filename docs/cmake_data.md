@@ -174,7 +174,7 @@ build_configs:
     GCC:
       defines:
         - DEFINED_ONLY_FOR_GCC
-      flags:
+      compiler_flags:
         - "-Wall"
         - "-Og"
     Clang:
@@ -185,8 +185,11 @@ build_configs:
       defines:
         - RELEASE_ONLY_DEFINE
     GCC:
-      flags:
+      compiler_flags:
         - "-O2"
+    Clang:
+      linker_flags:
+        - -s
 ```
 
 Each build configuration (Debug, Release, etc.) can define different attributes per compiler, or for any compiler
@@ -217,7 +220,7 @@ build_configs:
         - SOME_STRING="Something is defined here"
 ```
 
-#### build_configs 'flags'
+#### build_configs 'compiler_flags'
 
 A list of compiler flags to be added to the build for the given configuration. Flags must be fully prefixed
 (leading `-` for GCC and Clang, or leading `/` for MSVC).
@@ -231,6 +234,22 @@ build_configs:
     GCC:
       flags:
         - "-O2"
+```
+
+#### build_configs 'Linker_flags'
+
+A list of flags to be passed to the linker for the given configuration. Flags must be fully prefixed
+(leading `/` for MSVC, or leading `-` for others).
+
+``` yaml
+supported_compilers: [ GCC, MSVC ]
+build_configs:
+  Release:
+    MSVC:
+      linker_flags: [ /INCREMENTAL:NO ]
+    GCC:
+      linker_flags:
+        - "-s"
 ```
 
 ### global_defines
@@ -283,7 +302,7 @@ Cpp: [11, 14, 17, 20]
 
 ## output
 
-> **REQUIRED** `Map<String,` [OutputItemConfig](#TODO)`>`
+> **REQUIRED** `Map<String,` [OutputItemConfig](#individual-output-item-configuration)`>`
 
 The compiled outputs to be produced by the project, mapped by name.
 
@@ -333,7 +352,15 @@ parent_project/ -> Executables
 The parent project makes use of the library produced by its library_subproject. Both the library
 and executables are produced by the project.
 
-### output_type
+## Individual Output Item Configuration
+
+Each defined output is configured using these fields:
+
+- [output_type](#output-outputtype)
+- [entry_file](#output-entryfile)
+- [link](#output-link)
+
+### output output_type
 
 > **REQUIRED** [OutputTypeSpecifier](#output-type-specifier)
 
@@ -769,7 +796,7 @@ This value is used to declare which compiler options are being configured, and i
 
 ### Output Type Specifier
 
-*Case sensitive* type of an output item produced by the project. See [output_type](#outputtype) for
+*Case sensitive* type of an output item produced by the project. See [output_type](#output-outputtype) for
 usage details.
 
 > Header-only libraries are currently not supported, but should be added in the near future (once I figure out
