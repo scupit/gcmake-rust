@@ -299,7 +299,11 @@ impl<'a> CMakeListsWriter<'a> {
     Ok(())
   }
 
-  fn write_def_list(&self, spacer: &'static str, items: &HashSet<String>) -> io::Result<()> {
+  fn write_def_list(
+    &self,
+    spacer: &'static str,
+    items: &HashSet<String>
+  ) -> io::Result<()> {
     writeln!(&self.cmakelists_file,
       "{}add_compile_definitions(",
       spacer

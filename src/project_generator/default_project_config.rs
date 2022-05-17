@@ -104,17 +104,17 @@ pub fn get_default_project_config(
           defines: Some(create_string_set(["NDEBUG"]))
         }),
         (BuildConfigCompilerSpecifier::GCC, BuildConfig {
-          compiler_flags: Some(create_string_set([ "-O3", "-s"])),
-          linker_flags: None,
+          compiler_flags: Some(create_string_set([ "-O3", "-flto" ])),
+          linker_flags: Some(create_string_set([ "-s" ])),
           defines: None
         }),
         (BuildConfigCompilerSpecifier::Clang, BuildConfig {
-          compiler_flags: Some(create_string_set([ "-O3" ])),
+          compiler_flags: Some(create_string_set([ "-O3", "-flto" ])),
           linker_flags: Some(create_string_set([ "-s" ])),
           defines: None
         }),
         (BuildConfigCompilerSpecifier::MSVC, BuildConfig {
-          compiler_flags: Some(create_string_set([ "/O2" ])),
+          compiler_flags: Some(create_string_set([ "/O2", "/GL" ])),
           linker_flags: None,
           defines: None
         })
@@ -126,17 +126,17 @@ pub fn get_default_project_config(
           defines: Some(create_string_set(["NDEBUG"]))
         }),
         (BuildConfigCompilerSpecifier::GCC, BuildConfig {
-          compiler_flags: Some(create_string_set([ "-Os", "-s"])),
-          linker_flags: None,
+          compiler_flags: Some(create_string_set([ "-Os", "-flto" ])),
+          linker_flags: Some(create_string_set([ "-s" ])),
           defines: None
         }),
         (BuildConfigCompilerSpecifier::Clang, BuildConfig {
-          compiler_flags: Some(create_string_set([ "-Os" ])),
+          compiler_flags: Some(create_string_set([ "-Os", "-flto" ])),
           linker_flags: Some(create_string_set([ "-s" ])),
           defines: None
         }),
         (BuildConfigCompilerSpecifier::MSVC, BuildConfig {
-          compiler_flags: Some(create_string_set([ "/O1" ])),
+          compiler_flags: Some(create_string_set([ "/O1", "/GL" ])),
           linker_flags: None,
           defines: None
         })
@@ -148,12 +148,12 @@ pub fn get_default_project_config(
           defines: Some(create_string_set(["NDEBUG"]))
         }),
         (BuildConfigCompilerSpecifier::GCC, BuildConfig {
-          compiler_flags: Some(create_string_set([ "-O2", "-g"])),
+          compiler_flags: Some(create_string_set([ "-O2", "-g" ])),
           linker_flags: None,
           defines: None
         }),
         (BuildConfigCompilerSpecifier::Clang, BuildConfig {
-          compiler_flags: Some(create_string_set([ "-O2", "-g"])),
+          compiler_flags: Some(create_string_set([ "-O2", "-g" ])),
           linker_flags: None,
           defines: None
         }),
