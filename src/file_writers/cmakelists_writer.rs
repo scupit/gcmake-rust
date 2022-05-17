@@ -2,8 +2,8 @@ use std::{collections::{HashMap, HashSet}, fs::File, io::{self, Write}, path::{P
 
 use crate::{file_writers::cmake_utils_writer::CMakeUtilWriter, project_info::{final_project_data::{FinalProjectData, DependencySearchMode}, path_manipulation::cleaned_path_str, final_dependencies::GitRevisionSpecifier, raw_data_in::{BuildType, BuildConfig, BuildConfigCompilerSpecifier, SpecificCompilerSpecifier, CompiledItemType, LanguageConfigMap}, FinalProjectType, CompiledOutputItem, PreBuildScript}};
 
-const RUNTIME_BUILD_DIR: &'static str = "${CMAKE_BINARY_DIR}/bin/${CMAKE_BUILD_TYPE}";
-const LIB_BUILD_DIR: &'static str = "${CMAKE_BINARY_DIR}/lib/${CMAKE_BUILD_TYPE}";
+const RUNTIME_BUILD_DIR_VAR: &'static str = "${MY_RUNTIME_OUTPUT_DIR}";
+const LIB_BUILD_DIR_VAR: &'static str = "${MY_LIBRARY_OUTPUT_DIR}";
 
 pub fn configure_cmake(project_data: &FinalProjectData) -> io::Result<()> {
   for (_, subproject) in project_data.get_subprojects() {
@@ -162,18 +162,30 @@ impl<'a> CMakeListsWriter<'a> {
     )?;
 
     self.write_newline()?;
-    self.set_basic_var("", "CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS", "true")?;
 
     Ok(())
   }
 
   fn write_toplevel_tweaks(&self) -> io::Result<()> {
+    writeln!(&self.cmakelists_file, "\nget_property(isMultiConfigGenerator GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)")?;
+    self.set_basic_var("", "CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS", "true")?;
+
+    writeln!(&self.cmakelists_file,
+      "if( ${{isMultiConfigGenerator}} )"
+    )?;
+      self.set_basic_var("\t", "MY_RUNTIME_OUTPUT_DIR", "\"$<1:${CMAKE_BINARY_DIR}/bin>\"")?;
+      self.set_basic_var("\t", "MY_LIBRARY_OUTPUT_DIR", "\"$<1:${CMAKE_BINARY_DIR}/lib>\"")?;
+    writeln!(&self.cmakelists_file, "else()")?;
+      self.set_basic_var("\t", "MY_RUNTIME_OUTPUT_DIR", "\"${CMAKE_BINARY_DIR}/bin/${CMAKE_BUILD_TYPE}\"")?;
+      self.set_basic_var("\t", "MY_LIBRARY_OUTPUT_DIR", "\"${CMAKE_BINARY_DIR}/lib/${CMAKE_BUILD_TYPE}\"")?;
+    writeln!(&self.cmakelists_file, "endif()")?;
+
     writeln!(&self.cmakelists_file,
       "if( \"${{CMAKE_CURRENT_SOURCE_DIR}}\" STREQUAL \"${{CMAKE_SOURCE_DIR}}\" )"
     )?;
 
-    self.set_basic_var("\t", "CMAKE_RUNTIME_OUTPUT_DIRECTORY", RUNTIME_BUILD_DIR)?;
-    self.set_basic_var("\t", "CMAKE_LIBRARY_OUTPUT_DIRECTORY", LIB_BUILD_DIR)?;
+    self.set_basic_var("\t", "CMAKE_RUNTIME_OUTPUT_DIRECTORY", RUNTIME_BUILD_DIR_VAR)?;
+    self.set_basic_var("\t", "CMAKE_LIBRARY_OUTPUT_DIRECTORY", LIB_BUILD_DIR_VAR)?;
 
     writeln!(&self.cmakelists_file, "endif()")?;
     Ok(())
@@ -216,7 +228,7 @@ impl<'a> CMakeListsWriter<'a> {
           self.write_properties_for_output(
             script_target_name,
             &HashMap::from([
-              (String::from("RUNTIME_OUTPUT_DIRECTORY"), String::from(RUNTIME_BUILD_DIR)),
+              (String::from("RUNTIME_OUTPUT_DIRECTORY"), format!("{}/prebuild-scripts", RUNTIME_BUILD_DIR_VAR)),
               (String::from("C_EXTENSIONS"), String::from("OFF")),
               (String::from("CXX_EXTENSIONS"), String::from("OFF"))
             ])
@@ -252,7 +264,8 @@ impl<'a> CMakeListsWriter<'a> {
   // a single toplevel one. This is bound to cause issues due to files overwriting each other. 
   fn write_resource_dir_copier(&self) -> io::Result<()> {
     writeln!(&self.cmakelists_file,
-      "copy_resource_dir_if_exists(\n\t${{CMAKE_CURRENT_SOURCE_DIR}}/resources\n\t${{CMAKE_BINARY_DIR}}/bin/${{CMAKE_BUILD_TYPE}}/resources\n\t${{PROJECT_NAME}}-pre-build-step\n)"
+      "copy_resource_dir_if_exists(\n\t${{CMAKE_CURRENT_SOURCE_DIR}}/resources\n\t{}/resources\n\t${{PROJECT_NAME}}-pre-build-step\n)",
+      RUNTIME_BUILD_DIR_VAR
     )?;
 
     Ok(())
@@ -527,10 +540,8 @@ impl<'a> CMakeListsWriter<'a> {
         .map(|(build_type, _)| build_type.name_string())
         .collect();
 
-      writeln!(&self.cmakelists_file, "\nget_property(isMultiConfigGenerator GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)")?;
-
       writeln!(&self.cmakelists_file,
-        "\nif( NOT isMultiConfigGenerator )"
+        "\nif( NOT ${{isMultiConfigGenerator}} )"
       )?;
 
       writeln!(&self.cmakelists_file,
@@ -948,9 +959,9 @@ impl<'a> CMakeListsWriter<'a> {
     self.write_properties_for_output(
       output_name,
       &HashMap::from([
-        (String::from("RUNTIME_OUTPUT_DIRECTORY"), String::from(RUNTIME_BUILD_DIR)),
-        (String::from("LIBRARY_OUTPUT_DIRECTORY"), String::from(LIB_BUILD_DIR)),
-        (String::from("ARCHIVE_OUTPUT_DIRECTORY"), String::from(LIB_BUILD_DIR)),
+        (String::from("RUNTIME_OUTPUT_DIRECTORY"), String::from(RUNTIME_BUILD_DIR_VAR)),
+        (String::from("LIBRARY_OUTPUT_DIRECTORY"), String::from(LIB_BUILD_DIR_VAR)),
+        (String::from("ARCHIVE_OUTPUT_DIRECTORY"), String::from(LIB_BUILD_DIR_VAR)),
         (String::from("C_EXTENSIONS"), String::from("OFF")),
         (String::from("CXX_EXTENSIONS"), String::from("OFF"))
       ])
@@ -1009,7 +1020,7 @@ impl<'a> CMakeListsWriter<'a> {
     self.write_properties_for_output(
       output_name,
       &HashMap::from([
-        (String::from("RUNTIME_OUTPUT_DIRECTORY"), String::from(RUNTIME_BUILD_DIR)),
+        (String::from("RUNTIME_OUTPUT_DIRECTORY"), String::from(RUNTIME_BUILD_DIR_VAR)),
         (String::from("C_EXTENSIONS"), String::from("OFF")),
         (String::from("CXX_EXTENSIONS"), String::from("OFF"))
       ])
