@@ -161,14 +161,13 @@ impl<'a> CMakeListsWriter<'a> {
       self.project_data.version.to_string()
     )?;
 
-    self.write_newline()?;
-
     Ok(())
   }
 
   fn write_toplevel_tweaks(&self) -> io::Result<()> {
-    writeln!(&self.cmakelists_file, "\nget_property(isMultiConfigGenerator GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)")?;
+    writeln!(&self.cmakelists_file, "\nget_property( isMultiConfigGenerator GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)")?;
     self.set_basic_var("", "CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS", "true")?;
+    self.write_newline()?;
 
     writeln!(&self.cmakelists_file,
       "if( ${{isMultiConfigGenerator}} )"
@@ -178,7 +177,7 @@ impl<'a> CMakeListsWriter<'a> {
     writeln!(&self.cmakelists_file, "else()")?;
       self.set_basic_var("\t", "MY_RUNTIME_OUTPUT_DIR", "\"${CMAKE_BINARY_DIR}/bin/${CMAKE_BUILD_TYPE}\"")?;
       self.set_basic_var("\t", "MY_LIBRARY_OUTPUT_DIR", "\"${CMAKE_BINARY_DIR}/lib/${CMAKE_BUILD_TYPE}\"")?;
-    writeln!(&self.cmakelists_file, "endif()")?;
+    writeln!(&self.cmakelists_file, "endif()\n")?;
 
     writeln!(&self.cmakelists_file,
       "if( \"${{CMAKE_CURRENT_SOURCE_DIR}}\" STREQUAL \"${{CMAKE_SOURCE_DIR}}\" )"
