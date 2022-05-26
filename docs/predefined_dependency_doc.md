@@ -1,8 +1,7 @@
 # Predefined Dependency Compatibility Layer
 
-This document explains the configuration which makes other libraries compatible with `gcmake-rust`.
+This document explains the configuration layer which makes C/C++ libraries compatible with `gcmake-rust`,
+when those projects don't use gcmake-rust.
 
-> **TODO:** This should be written after the compatibility layer is moved into its own repository.
-> Currently, external *non-gcmake* library configuration is tied to the executable itself. The
-> configurations should be developed separate from the tool, but the tool should be able to download and
-> update the full set of configurations.
+The [gcmake-dependency-configs](https://github.com/scupit/gcmake-dependency-configs) repository
+on GitHub contains all current dependency configurations for gcmake-rust.

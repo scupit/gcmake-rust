@@ -1,3 +1,6 @@
 [submodule "gcmake-test-project"]
 	path = gcmake-test-project
 	url = git@github.com:scupit/gcmake-test-project.git
+[submodule "gcmake-dependency-configs"]
+	path = gcmake-dependency-configs
+	url = git@github.com:scupit/gcmake-dependency-configs.git
