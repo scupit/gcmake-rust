@@ -7,7 +7,7 @@ pub struct SubprojectOnlyOptions {
 }
 
 pub enum FinalProjectType {
-  Full,
+  Root,
   Subproject(SubprojectOnlyOptions)
 }
 

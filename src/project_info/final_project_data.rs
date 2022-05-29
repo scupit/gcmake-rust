@@ -215,14 +215,6 @@ impl FinalProjectData {
     });
   }
 
-  // pub fn new(unclean_project_root: &str, dep_config: &AllPredefinedDependencies) -> Result<FinalProjectData, String> {
-  //   let project_data_result: FinalProjectData = Self::create_new(unclean_project_root, None, dep_config)?;
-
-  //   project_data_result.validate_correctness()?;
-
-  //   return Ok(project_data_result);
-  // }
-
   fn create_new(
     unclean_project_root: &str,
     parent_project_info: Option<ParentProjectInfo>,
@@ -240,7 +232,7 @@ impl FinalProjectData {
       project_type = FinalProjectType::Subproject(SubprojectOnlyOptions { })
     } else {
       raw_project = create_project_data(&unclean_project_root)?;
-      project_type = FinalProjectType::Full;
+      project_type = FinalProjectType::Root;
     };
 
     if let Err(err_message) = validate_raw_project(&raw_project) {
@@ -412,6 +404,13 @@ impl FinalProjectData {
       .map_err(|err| ProjectLoadFailureReason::Other(err.to_string()))?;
 
     return Ok(finalized_project_data);
+  }
+
+  pub fn is_root_project(&self) -> bool {
+    match &self.project_type {
+      FinalProjectType::Root => true,
+      _ => false
+    }
   }
 
   // Visit the toplevel root project and all its subprojects.

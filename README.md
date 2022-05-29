@@ -18,7 +18,11 @@ most general and common use cases.
 3. Generate a full working CMake configuration for an entire project tree, including dependencies
 and subprojects.
 
-## Getting Started
+## Requirements
+
+- [Git](https://git-scm.com/) must be installed on the system
+
+## Installation/Getting Started
 
 1. Clone the repository: `git clone --recurse-submodules git@github.com:scupit/gcmake-rust.git`
 2. `cd` into the cloned repository.

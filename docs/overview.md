@@ -3,6 +3,10 @@
 This "project overview" page is essentially the same as the [README](/README.md).
 It's here to explain the basic functionality of this project and describe its common uses.
 
+## Requirements
+
+- [Git](https://git-scm.com/) must be installed on the system
+
 ## About gcmake-rust
 
 `gcmake-rust` aims to be an intuitive, opinionated C/C++ project configuration tool which covers
@@ -22,7 +26,8 @@ of a working gcmake project.
 
 ## Suggestions
 
-See [the README](/README.md) for build information and help [getting started](/README.md#getting-started).
+See [the README](/README.md) for [build/installation information](/README.md#getting-started) and
+help [getting started](/README.md#getting-started).
 
 See [the documentation](Docs_Home.md) for in-depth information about this tool.
 
@@ -35,6 +40,8 @@ See [the documentation](Docs_Home.md) for in-depth information about this tool.
 `gcmake --help` shows toplevel help info.
 
 `gcmake <command> --help` for command-specific info.
+
+`gcmake dep-config update [--branch <branch>]` to download/update the dependency configuration repository.
 
 `gcmake [path-to-project]` configures the project in the given path and writes CMake configurations for the entire
 project tree (excluding subdirectories).  If no path is provided, the current working directory is used.

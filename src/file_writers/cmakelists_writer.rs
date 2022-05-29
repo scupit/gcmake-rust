@@ -6,19 +6,19 @@ const RUNTIME_BUILD_DIR_VAR: &'static str = "${MY_RUNTIME_OUTPUT_DIR}";
 const LIB_BUILD_DIR_VAR: &'static str = "${MY_LIBRARY_OUTPUT_DIR}";
 
 pub fn configure_cmake(project_data: &UseableFinalProjectDataGroup) -> io::Result<()> {
-  configure_cmake_helper(&project_data.root_project, true)
+  configure_cmake_helper(&project_data.root_project)
 }
 
-fn configure_cmake_helper(project_data: &FinalProjectData, is_toplevel: bool) -> io::Result<()> {
+fn configure_cmake_helper(project_data: &FinalProjectData) -> io::Result<()> {
   for (_, subproject) in project_data.get_subprojects() {
-    configure_cmake_helper(subproject, false)?;
+    configure_cmake_helper(subproject)?;
   }
 
   let cmake_util_path = Path::new(project_data.get_project_root()).join("cmake");
   let util_writer = CMakeUtilWriter::new(cmake_util_path);
   util_writer.write_cmake_utils()?;
 
-  let cmake_configurer = CMakeListsWriter::new(project_data, is_toplevel, util_writer)?;
+  let cmake_configurer = CMakeListsWriter::new(project_data, util_writer)?;
   cmake_configurer.write_cmakelists()?;
   cmake_configurer.write_cmake_config_in()?;
   Ok(())
@@ -71,7 +71,6 @@ fn flattened_linker_flags_string(maybe_flags: &Option<HashSet<String>>) -> Strin
 
 struct CMakeListsWriter<'a> {
   project_data: &'a FinalProjectData,
-  is_root_project: bool,
   util_writer: CMakeUtilWriter,
   cmakelists_file: File,
   cmake_config_in_file: File,
@@ -81,7 +80,6 @@ struct CMakeListsWriter<'a> {
 impl<'a> CMakeListsWriter<'a> {
   fn new(
     project_data: &'a FinalProjectData,
-    is_root_project: bool,
     util_writer: CMakeUtilWriter
   ) -> io::Result<Self> {
     let cmakelists_file_name: String = format!("{}/CMakeLists.txt", project_data.get_project_root());
@@ -89,7 +87,6 @@ impl<'a> CMakeListsWriter<'a> {
 
     Ok(Self {
       project_data,
-      is_root_project,
       util_writer,
       cmakelists_file: File::create(cmakelists_file_name)?,
       cmake_config_in_file: File::create(cmake_config_in_file_name)?,
@@ -114,7 +111,7 @@ impl<'a> CMakeListsWriter<'a> {
     self.include_utils()?;
     self.write_newline()?;
 
-    if self.is_root_project {
+    if self.project_data.is_root_project() {
       self.write_toplevel_tweaks()?;
     }
 
@@ -130,7 +127,7 @@ impl<'a> CMakeListsWriter<'a> {
       self.write_fetchcontent_makeavailable()?;
     }
 
-    if let FinalProjectType::Full = project_type {
+    if let FinalProjectType::Root = project_type {
       self.write_section_header("Language Configuration")?;
       self.write_language_config()?;
     }
@@ -548,7 +545,7 @@ impl<'a> CMakeListsWriter<'a> {
         }
 
           
-        if let FinalProjectType::Full = project_type {
+        if let FinalProjectType::Root = project_type {
           let definitions_generator_string: HashSet<String> = config_map
             .iter()
             .map(|(build_type, build_config)| defines_generator_string(build_type, build_config) )
@@ -574,7 +571,7 @@ impl<'a> CMakeListsWriter<'a> {
   fn write_build_config_section(&self, project_type: &FinalProjectType) -> io::Result<()> {
     self.write_newline()?;
     
-    if let FinalProjectType::Full = project_type {
+    if let FinalProjectType::Root = project_type {
       if let Some(def_list) = self.project_data.get_global_defines() {
         self.write_def_list("", def_list)?;
       }
@@ -1065,7 +1062,7 @@ impl<'a> CMakeListsWriter<'a> {
     )?;
 
     match &self.project_data.get_project_type() {
-      FinalProjectType::Full => {
+      FinalProjectType::Root => {
         writeln!(&self.cmakelists_file,
           "configure_installation(\n\t\"{}\"\n\t\"${{{}}}\"\n)",
           self.project_data.get_project_name(),
