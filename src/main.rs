@@ -8,11 +8,11 @@ mod program_actions;
 use logger::exit_error_log;
 
 use clap::Clap;
-use cli_config::{Opts, SubCommand, NewProjectCommand, CreateFilesCommand};
+use cli_config::{Opts, SubCommand, NewProjectCommand, CreateFilesCommand, UpdateDependencyConfigsCommand};
 use program_actions::*;
 use project_info::final_project_data::UseableFinalProjectDataGroup;
 
-use crate::{project_info::{raw_data_in::dependencies::{supported_dependency_configs, internal_dep_config::AllPredefinedDependencies}, final_project_data::ProjectLoadFailureReason}, file_writers::write_configurations};
+use crate::{project_info::{raw_data_in::dependencies::{supported_dependency_configs, internal_dep_config::AllPredefinedDependencies}, final_project_data::ProjectLoadFailureReason}, file_writers::write_configurations, cli_config::DepConfigSubCommand};
 
 // fn print_project_info(project_data_group: UseableFinalProjectDataGroup) {
 //   println!("PROJECT INFORMATION\n----------------------------------------");
@@ -31,6 +31,16 @@ use crate::{project_info::{raw_data_in::dependencies::{supported_dependency_conf
 
 fn main() {
   let opts: Opts = Opts::parse();
+
+  if let Some(SubCommand::DepConfig(dep_config_subcommand)) = opts.subcommand {
+    match dep_config_subcommand {
+      DepConfigSubCommand::Update(command_update_deps) => {
+        do_dependency_config_update_subcommand(command_update_deps);
+      }
+    }
+
+    return;
+  }
 
   let dep_config: AllPredefinedDependencies = match supported_dependency_configs() {
     Ok(config) => config,
@@ -54,7 +64,10 @@ fn main() {
         command,
         &given_root_dir,
         &dep_config
-      )
+      ),
+      SubCommand::DepConfig(_) => {
+        unreachable!();
+      }
     }
   }
 
@@ -76,7 +89,7 @@ fn do_generate_project_configs(
     Ok(project_data_group) => {
       // print_project_info(project_data_group);
       write_configurations(
-        &project_data_group.root_project,
+        &project_data_group,
         |config_name| println!("Beginning {} configuration step...", config_name),
         |(config_name, config_result)| match config_result {
           Ok(_) => println!("{} configuration written successfully!", config_name),
@@ -128,6 +141,27 @@ fn do_new_project_subcommand(
       );
     },
     Err(error_message) => exit_error_log(&error_message)
+  }
+}
+
+fn do_dependency_config_update_subcommand(command: UpdateDependencyConfigsCommand) {
+  match update_dependency_config_repo(&command.branch) {
+    Ok(status) => match status {
+      DepConfigUpdateResult::SubprocessError(git_subprocess_err_msg) => {
+        exit_error_log(git_subprocess_err_msg);
+      },
+      DepConfigUpdateResult::NewlyDownloaded { branch, local_repo_location } => {
+        println!(
+          "Dependency config repo successfully downloaded to {}.",
+          local_repo_location.to_str().unwrap()
+        );
+        println!("Checked out '{}' branch.", branch);
+      },
+      DepConfigUpdateResult::UpdatedBranch { branch, .. } => {
+        println!("Successfully checked out and updated dependency config repo '{}' branch.", branch);
+      }
+    },
+    Err(err) => exit_error_log(err.to_string())
   }
 }
 

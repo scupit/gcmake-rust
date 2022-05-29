@@ -21,11 +21,16 @@ pub enum SubCommand {
 
     /// Generate code files in-tree.
     #[clap()]
-    GenFile(CreateFilesCommand)
+    GenFile(CreateFilesCommand),
+
+    /// Subcommand for working with the 'external dependency configuration repository'.
+    #[clap(subcommand)]
+    DepConfig(DepConfigSubCommand)
 }
 
 /// Generate a new project
 #[derive(Clap)]
+#[clap(setting = AppSettings::ColoredHelp)]
 pub struct NewProjectCommand {
     #[clap(long)]
     pub subproject: bool,
@@ -59,6 +64,7 @@ pub enum FileCreationLang {
 }
 
 #[derive(Clap)]
+#[clap(setting = AppSettings::ColoredHelp)]
 pub struct CreateFilesCommand {
   #[clap(arg_enum, required = true)]
   pub language: FileCreationLang,
@@ -79,4 +85,18 @@ pub struct CreateFilesCommand {
 
   #[clap(short = 'p')]
   pub use_pragma_guards: bool
+}
+
+#[derive(Clap)]
+#[clap(setting = AppSettings::ColoredHelp)]
+pub enum DepConfigSubCommand {
+  /// Update the dependency configuration repo. Downloads the repo if it is not already present.
+  #[clap()]
+  Update(UpdateDependencyConfigsCommand)
+}
+
+#[derive(Clap)]
+pub struct UpdateDependencyConfigsCommand {
+  #[clap(long, default_value = "develop")]
+  pub branch: String
 }

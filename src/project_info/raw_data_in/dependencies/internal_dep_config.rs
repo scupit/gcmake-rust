@@ -6,6 +6,12 @@ pub enum RawDep<'a> {
   AsSubdirectory(&'a RawSubdirectoryDependency)
 }
 
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SinglePredefinedDependencyInfo {
+  as_subdirectory: RawSubdirectoryDependency
+}
+
 // Container for all dependency types defined in supported_dependencies.yaml
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -16,6 +22,20 @@ pub struct AllPredefinedDependencies {
 }
 
 impl AllPredefinedDependencies {
+  pub fn new() -> AllPredefinedDependencies {
+    AllPredefinedDependencies {
+      as_subdirectory: HashMap::new()
+    }
+  }
+
+  pub fn add(
+    &mut self,
+    dep_name: impl Into<String>,
+    dep_info: SinglePredefinedDependencyInfo
+  ) {
+    self.as_subdirectory.insert(dep_name.into(), dep_info.as_subdirectory);
+  }
+
   pub fn find_dependency(&self, dep_name: &str) -> Option<RawDep> {
     if let Some(subdir_dep) = self.as_subdirectory.get(dep_name) {
       return Some(RawDep::AsSubdirectory(subdir_dep))

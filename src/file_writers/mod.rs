@@ -1,5 +1,5 @@
 use std::{io};
-use crate::project_info::final_project_data::FinalProjectData;
+use crate::project_info::final_project_data::{FinalProjectData, UseableFinalProjectDataGroup};
 
 use self::{cmakelists_writer::configure_cmake};
 
@@ -8,11 +8,11 @@ mod cmakelists_writer;
 
 pub struct ProjectWriteConfiguration {
   name: String,
-  config_func: fn(&FinalProjectData) -> io::Result<()>,
+  config_func: fn(&UseableFinalProjectDataGroup) -> io::Result<()>,
 }
 
 pub fn write_configurations<'a, FBefore, FAfter>(
-  project_data: &FinalProjectData,
+  project_data: &UseableFinalProjectDataGroup,
   before_write: FBefore,
   after_write: FAfter
 )

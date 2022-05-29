@@ -1,20 +1,24 @@
 use std::{collections::{HashMap, HashSet}, fs::File, io::{self, Write}, path::{Path, PathBuf}};
 
-use crate::{file_writers::cmake_utils_writer::CMakeUtilWriter, project_info::{final_project_data::{FinalProjectData, DependencySearchMode}, path_manipulation::cleaned_path_str, final_dependencies::GitRevisionSpecifier, raw_data_in::{BuildType, BuildConfig, BuildConfigCompilerSpecifier, SpecificCompilerSpecifier, CompiledItemType, LanguageConfigMap}, FinalProjectType, CompiledOutputItem, PreBuildScript}};
+use crate::{file_writers::cmake_utils_writer::CMakeUtilWriter, project_info::{final_project_data::{FinalProjectData, DependencySearchMode, UseableFinalProjectDataGroup}, path_manipulation::cleaned_path_str, final_dependencies::GitRevisionSpecifier, raw_data_in::{BuildType, BuildConfig, BuildConfigCompilerSpecifier, SpecificCompilerSpecifier, CompiledItemType, LanguageConfigMap}, FinalProjectType, CompiledOutputItem, PreBuildScript}};
 
 const RUNTIME_BUILD_DIR_VAR: &'static str = "${MY_RUNTIME_OUTPUT_DIR}";
 const LIB_BUILD_DIR_VAR: &'static str = "${MY_LIBRARY_OUTPUT_DIR}";
 
-pub fn configure_cmake(project_data: &FinalProjectData) -> io::Result<()> {
+pub fn configure_cmake(project_data: &UseableFinalProjectDataGroup) -> io::Result<()> {
+  configure_cmake_helper(&project_data.root_project, true)
+}
+
+fn configure_cmake_helper(project_data: &FinalProjectData, is_toplevel: bool) -> io::Result<()> {
   for (_, subproject) in project_data.get_subprojects() {
-    configure_cmake(subproject)?;
+    configure_cmake_helper(subproject, false)?;
   }
 
   let cmake_util_path = Path::new(project_data.get_project_root()).join("cmake");
   let util_writer = CMakeUtilWriter::new(cmake_util_path);
   util_writer.write_cmake_utils()?;
 
-  let cmake_configurer = CMakeListsWriter::new(project_data, util_writer)?;
+  let cmake_configurer = CMakeListsWriter::new(project_data, is_toplevel, util_writer)?;
   cmake_configurer.write_cmakelists()?;
   cmake_configurer.write_cmake_config_in()?;
   Ok(())
@@ -67,6 +71,7 @@ fn flattened_linker_flags_string(maybe_flags: &Option<HashSet<String>>) -> Strin
 
 struct CMakeListsWriter<'a> {
   project_data: &'a FinalProjectData,
+  is_root_project: bool,
   util_writer: CMakeUtilWriter,
   cmakelists_file: File,
   cmake_config_in_file: File,
@@ -74,12 +79,17 @@ struct CMakeListsWriter<'a> {
 }
 
 impl<'a> CMakeListsWriter<'a> {
-  fn new(project_data: &'a FinalProjectData, util_writer: CMakeUtilWriter) -> io::Result<Self> {
+  fn new(
+    project_data: &'a FinalProjectData,
+    is_root_project: bool,
+    util_writer: CMakeUtilWriter
+  ) -> io::Result<Self> {
     let cmakelists_file_name: String = format!("{}/CMakeLists.txt", project_data.get_project_root());
     let cmake_config_in_file_name: String = format!("{}/Config.cmake.in", project_data.get_project_root());
 
     Ok(Self {
       project_data,
+      is_root_project,
       util_writer,
       cmakelists_file: File::create(cmakelists_file_name)?,
       cmake_config_in_file: File::create(cmake_config_in_file_name)?,
@@ -104,7 +114,9 @@ impl<'a> CMakeListsWriter<'a> {
     self.include_utils()?;
     self.write_newline()?;
 
-    self.write_toplevel_tweaks()?;
+    if self.is_root_project {
+      self.write_toplevel_tweaks()?;
+    }
 
     if self.project_data.has_predefined_dependencies() {
       self.write_predefined_dependencies()?;
@@ -165,8 +177,44 @@ impl<'a> CMakeListsWriter<'a> {
   }
 
   fn write_toplevel_tweaks(&self) -> io::Result<()> {
-    writeln!(&self.cmakelists_file, "\nget_property( isMultiConfigGenerator GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)")?;
+    writeln!(&self.cmakelists_file, "get_property( isMultiConfigGenerator GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)")?;
     self.set_basic_var("", "CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS", "true")?;
+    self.write_newline()?;
+
+    writeln!(&self.cmakelists_file,
+      "if( NOT ${{IS_FIRST_CONFIGURE}} )"
+    )?;
+
+    self.set_basic_var("\t", "FETCHCONTENT_QUIET", "OFF")?;
+    self.set_basic_var("\t", "IS_FIRST_CONFIGURE", "TRUE")?;
+
+    writeln!(&self.cmakelists_file, "else()")?;
+
+    self.set_basic_var("\t", "FETCHCONTENT_QUIET", "ON")?;
+    writeln!(&self.cmakelists_file, "endif()\n")?;
+
+    let config_names: Vec<&'static str> = self.project_data.get_build_configs()
+      .iter()
+      .map(|(build_type, _)| build_type.name_string())
+      .collect();
+
+    writeln!(&self.cmakelists_file,
+      "if( NOT ${{isMultiConfigGenerator}} )"
+    )?;
+
+    writeln!(&self.cmakelists_file,
+      "\tset_property( CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS {} )",
+      config_names.join(" ")
+    )?;
+
+    writeln!(&self.cmakelists_file,
+      "\n\tif( \"${{CMAKE_BUILD_TYPE}}\" STREQUAL \"\")\n\t\tset( CMAKE_BUILD_TYPE \"{}\" CACHE STRING \"Project Build configuration\" FORCE )\n\tendif()",
+      self.project_data.get_default_build_config().name_string()
+    )?;
+    self.write_newline()?;
+
+    self.write_message("\t", "Building configuration: ${CMAKE_BUILD_TYPE}")?;
+    writeln!(&self.cmakelists_file, "endif()")?;
     self.write_newline()?;
 
     writeln!(&self.cmakelists_file,
@@ -203,9 +251,6 @@ impl<'a> CMakeListsWriter<'a> {
         util_name
       )?;
     }
-
-    self.write_newline()?;
-    self.set_basic_var("", "FETCHCONTENT_QUIET", "OFF")?;
 
     Ok(())
   }
@@ -533,31 +578,6 @@ impl<'a> CMakeListsWriter<'a> {
       if let Some(def_list) = self.project_data.get_global_defines() {
         self.write_def_list("", def_list)?;
       }
-
-      let config_names: Vec<&'static str> = self.project_data.get_build_configs()
-        .iter()
-        .map(|(build_type, _)| build_type.name_string())
-        .collect();
-
-      writeln!(&self.cmakelists_file,
-        "\nif( NOT ${{isMultiConfigGenerator}} )"
-      )?;
-
-      writeln!(&self.cmakelists_file,
-        "\tset_property( CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS {} )",
-        config_names.join(" ")
-      )?;
-
-      writeln!(&self.cmakelists_file,
-        "\n\tif( \"${{CMAKE_BUILD_TYPE}}\" STREQUAL \"\")\n\t\tset( CMAKE_BUILD_TYPE \"{}\" CACHE STRING \"Project Build configuration\" FORCE )\n\tendif()",
-        self.project_data.get_default_build_config().name_string()
-      )?;
-
-      self.write_newline()?;
-      self.write_message("\t", "Building configuration: ${CMAKE_BUILD_TYPE}")?;
-      writeln!(&self.cmakelists_file, "endif()")?;
-
-      self.write_newline()?;
     }
 
     self.write_global_config_specific_defines()?;
