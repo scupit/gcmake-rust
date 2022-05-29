@@ -31,7 +31,9 @@ and subprojects.
 5. The resulting executable will be located at *target/release/gcmake-rust.exe*.
     Make it available on your [system PATH](https://en.wikipedia.org/wiki/PATH_(variable)).
 6. Optionally, alias `gcmake-rust` to just `gcmake`.
-7. Create a new project with `gcmake new 'your-project-name-here'`. After stepping through the
+7. Run `gcmake-rust dep-config update` to install the
+[external dependency compatibility configuration repository](docs/predefined_dependency_doc.md)
+8. Create a new project with `gcmake-rust new 'your-project-name-here'`. After stepping through the
     initializer, you now have a fully functioning gcmake (and CMake) project!
 
 ## Common Uses
