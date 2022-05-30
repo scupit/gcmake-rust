@@ -16,7 +16,10 @@ fn configure_cmake_helper(project_data: &FinalProjectData) -> io::Result<()> {
 
   let cmake_util_path = Path::new(project_data.get_project_root()).join("cmake");
   let util_writer = CMakeUtilWriter::new(cmake_util_path);
-  util_writer.write_cmake_utils()?;
+
+  if project_data.is_root_project() {
+    util_writer.write_cmake_utils()?;
+  }
 
   let cmake_configurer = CMakeListsWriter::new(project_data, util_writer)?;
   cmake_configurer.write_cmakelists()?;
@@ -179,15 +182,14 @@ impl<'a> CMakeListsWriter<'a> {
     self.write_newline()?;
 
     writeln!(&self.cmakelists_file,
-      "if( NOT ${{IS_FIRST_CONFIGURE}} )"
+      "if( IS_SUBSEQUENT_CONFIGURE )"
     )?;
-
-    self.set_basic_var("\t", "FETCHCONTENT_QUIET", "OFF")?;
-    self.set_basic_var("\t", "IS_FIRST_CONFIGURE", "TRUE")?;
+    self.set_basic_var("\t", "FETCHCONTENT_QUIET", "ON")?;
 
     writeln!(&self.cmakelists_file, "else()")?;
+    self.set_basic_var("\t", "FETCHCONTENT_QUIET", "OFF")?;
+    self.set_basic_var("\t", "IS_SUBSEQUENT_CONFIGURE", "TRUE CACHE BOOL INTERNAL")?;
 
-    self.set_basic_var("\t", "FETCHCONTENT_QUIET", "ON")?;
     writeln!(&self.cmakelists_file, "endif()\n")?;
 
     let config_names: Vec<&'static str> = self.project_data.get_build_configs()
@@ -242,11 +244,13 @@ impl<'a> CMakeListsWriter<'a> {
       writeln!(&self.cmakelists_file, "include(FetchContent)")?;
     }
 
-    for (util_name, _) in self.util_writer.get_utils() {
-      writeln!(&self.cmakelists_file,
-        "include( cmake/{}.cmake )",
-        util_name
-      )?;
+    if self.project_data.is_root_project() {
+      for (util_name, _) in self.util_writer.get_utils() {
+        writeln!(&self.cmakelists_file,
+          "include( cmake/{}.cmake )",
+          util_name
+        )?;
+      }
     }
 
     Ok(())
