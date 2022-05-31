@@ -1,6 +1,6 @@
 use std::{collections::{HashMap, HashSet}, fs::File, io::{self, Write}, path::{Path, PathBuf}};
 
-use crate::{file_writers::cmake_utils_writer::CMakeUtilWriter, project_info::{final_project_data::{FinalProjectData, DependencySearchMode, UseableFinalProjectDataGroup}, path_manipulation::cleaned_path_str, final_dependencies::GitRevisionSpecifier, raw_data_in::{BuildType, BuildConfig, BuildConfigCompilerSpecifier, SpecificCompilerSpecifier, CompiledItemType, LanguageConfigMap}, FinalProjectType, CompiledOutputItem, PreBuildScript}};
+use crate::{file_writers::cmake_utils_writer::CMakeUtilWriter, project_info::{final_project_data::{FinalProjectData, DependencySearchMode, UseableFinalProjectDataGroup}, path_manipulation::cleaned_path_str, final_dependencies::{GitRevisionSpecifier, FinalPredefinedDependency, PredefinedComponentsFindModuleDep, PredefinedSubdirDep}, raw_data_in::{BuildType, BuildConfig, BuildConfigCompilerSpecifier, SpecificCompilerSpecifier, CompiledItemType, LanguageConfigMap}, FinalProjectType, CompiledOutputItem, PreBuildScript}};
 
 const RUNTIME_BUILD_DIR_VAR: &'static str = "${MY_RUNTIME_OUTPUT_DIR}";
 const LIB_BUILD_DIR_VAR: &'static str = "${MY_LIBRARY_OUTPUT_DIR}";
@@ -126,7 +126,7 @@ impl<'a> CMakeListsWriter<'a> {
       self.write_gcmake_dependencies()?;
     }
 
-    if self.project_data.has_any_fetcontent_dependencies() {
+    if self.project_data.has_any_fetchcontent_dependencies() {
       self.write_fetchcontent_makeavailable()?;
     }
 
@@ -240,7 +240,7 @@ impl<'a> CMakeListsWriter<'a> {
   fn include_utils(&self) -> io::Result<()> {
     self.write_newline()?;
 
-    if self.project_data.has_any_fetcontent_dependencies() {
+    if self.project_data.has_any_fetchcontent_dependencies() {
       writeln!(&self.cmakelists_file, "include(FetchContent)")?;
     }
 
@@ -411,31 +411,84 @@ impl<'a> CMakeListsWriter<'a> {
 
   fn write_predefined_dependencies(&self) -> io::Result<()> {
     for (dep_name, dep_info) in self.project_data.get_predefined_dependencies() {
-      writeln!(&self.cmakelists_file,
-        "\nFetchContent_Declare(\n\t{}\n\tSOURCE_DIR ${{CMAKE_CURRENT_SOURCE_DIR}}/dep/{}\n\tGIT_REPOSITORY {}\n\tGIT_PROGRESS TRUE",
-        dep_name,
-        dep_name,
-        dep_info.repo_url()
-      )?;
-      
-      // TODO: Refactor this
-      match dep_info.revision() {
-        GitRevisionSpecifier::Tag(tag_string) => {
-          writeln!(&self.cmakelists_file,
-            "\tGIT_TAG {}",
-            tag_string
-          )?;
+
+      match dep_info {
+        FinalPredefinedDependency::BuiltinComponentsFindModule(components_dep) => {
+          self.write_predefined_components_find_module_dep(dep_name, components_dep)?;
         },
-        GitRevisionSpecifier::CommitHash(hash_string) => {
-          writeln!(&self.cmakelists_file,
-            "\tGIT_TAG {}",
-            hash_string
-          )?;
+        FinalPredefinedDependency::Subdirectory(subdir_dep) => {
+          self.write_predefined_subdirectory_dependency(dep_name, subdir_dep)?;
         }
       }
-
-      writeln!(&self.cmakelists_file, ")")?;
     }
+
+    Ok(())
+  }
+
+  fn write_predefined_components_find_module_dep(
+    &self,
+    dep_name: &str,
+    dep_info: &PredefinedComponentsFindModuleDep
+  ) -> io::Result<()> {
+    write!(&self.cmakelists_file,
+      "find_package( {} MODULE REQUIRED ",
+      dep_name
+    )?;
+
+    for component_name in dep_info.get_ordered_used_components() {
+      write!(&self.cmakelists_file,
+        "{} ",
+        component_name
+      )?;
+    }
+    writeln!(&self.cmakelists_file, ")")?;
+
+    if dep_name == "wxWidgets" {
+      writeln!(&self.cmakelists_file,
+        "include( ${{wxWidgets_USE_FILE}} )",
+      )?;
+    }
+    self.write_newline()?;
+
+    writeln!(&self.cmakelists_file,
+      "if( NOT {} )\n\tmessage( FATAL_ERROR \"{}\")\nendif()",
+      dep_info.found_varname(),
+      // TODO: Make a better error message. Include links to relevant pages if possible.
+      format!("Dependency '{}' was not found on the system. Please make sure the library is installed on the system.", dep_name)
+    )?;
+
+    Ok(())
+  }
+
+  fn write_predefined_subdirectory_dependency(
+    &self,
+    dep_name: &str,
+    dep_info: &PredefinedSubdirDep
+  ) -> io::Result<()> {
+    writeln!(&self.cmakelists_file,
+      "\nFetchContent_Declare(\n\t{}\n\tSOURCE_DIR ${{CMAKE_CURRENT_SOURCE_DIR}}/dep/{}\n\tGIT_REPOSITORY {}\n\tGIT_PROGRESS TRUE",
+      dep_name,
+      dep_name,
+      dep_info.repo_url()
+    )?;
+    
+    // TODO: Refactor this
+    match dep_info.revision() {
+      GitRevisionSpecifier::Tag(tag_string) => {
+        writeln!(&self.cmakelists_file,
+          "\tGIT_TAG {}",
+          tag_string
+        )?;
+      },
+      GitRevisionSpecifier::CommitHash(hash_string) => {
+        writeln!(&self.cmakelists_file,
+          "\tGIT_TAG {}",
+          hash_string
+        )?;
+      }
+    }
+
+    writeln!(&self.cmakelists_file, ")")?;
 
     Ok(())
   }

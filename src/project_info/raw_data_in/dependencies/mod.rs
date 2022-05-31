@@ -5,9 +5,9 @@ use std::{path::PathBuf, fs::{DirEntry, self}};
 
 use crate::program_actions::local_dep_config_repo_location;
 
-use self::internal_dep_config::{AllPredefinedDependencies, SinglePredefinedDependencyInfo};
+use self::internal_dep_config::{AllRawPredefinedDependencies, SingleRawPredefinedDependencyInfo};
 
-pub fn supported_dependency_configs() -> Result<AllPredefinedDependencies, String> {
+pub fn all_raw_supported_dependency_configs() -> Result<AllRawPredefinedDependencies, String> {
   /*
     Whole bunch of TODOS related to the new dependency configuration system.
     ================================================================================
@@ -34,7 +34,7 @@ pub fn supported_dependency_configs() -> Result<AllPredefinedDependencies, Strin
     ));
   }
 
-  let mut all_dep_configs = AllPredefinedDependencies::new();
+  let mut all_dep_configs: AllRawPredefinedDependencies = AllRawPredefinedDependencies::new();
 
   let dir_data = fs::read_dir(&dep_config_repo)
     .map_err(|err| err.to_string())?;
@@ -52,11 +52,11 @@ pub fn supported_dependency_configs() -> Result<AllPredefinedDependencies, Strin
       let config_file_contents: String = fs::read_to_string(&config_file_path)
         .map_err(|err| err.to_string())?;
 
-      let single_dep_config: SinglePredefinedDependencyInfo = serde_yaml::from_str(&config_file_contents)
+      let single_dep_config: SingleRawPredefinedDependencyInfo = serde_yaml::from_str(&config_file_contents)
         .map_err(|err| err.to_string())?;
 
-      all_dep_configs.add(
-        file_name,
+      all_dep_configs.insert(
+        file_name.to_string(),
         single_dep_config
       );
     }

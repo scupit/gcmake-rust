@@ -12,7 +12,7 @@ use cli_config::{Opts, SubCommand, NewProjectCommand, CreateFilesCommand, Update
 use program_actions::*;
 use project_info::final_project_data::UseableFinalProjectDataGroup;
 
-use crate::{project_info::{raw_data_in::dependencies::{supported_dependency_configs, internal_dep_config::AllPredefinedDependencies}, final_project_data::ProjectLoadFailureReason}, file_writers::write_configurations, cli_config::DepConfigSubCommand};
+use crate::{project_info::{raw_data_in::dependencies::{all_raw_supported_dependency_configs, internal_dep_config::AllRawPredefinedDependencies}, final_project_data::ProjectLoadFailureReason}, file_writers::write_configurations, cli_config::DepConfigSubCommand};
 
 // fn print_project_info(project_data_group: UseableFinalProjectDataGroup) {
 //   println!("PROJECT INFORMATION\n----------------------------------------");
@@ -42,7 +42,7 @@ fn main() {
     return;
   }
 
-  let dep_config: AllPredefinedDependencies = match supported_dependency_configs() {
+  let dep_config: AllRawPredefinedDependencies = match all_raw_supported_dependency_configs() {
     Ok(config) => config,
     Err(error_message) => exit_error_log(&error_message)
   };
@@ -83,7 +83,7 @@ fn main() {
 
 fn do_generate_project_configs(
   given_root_dir: &str,
-  dep_config: &AllPredefinedDependencies
+  dep_config: &AllRawPredefinedDependencies
 ) {
   match parse_project_info(&given_root_dir, &dep_config) {
     Ok(project_data_group) => {
@@ -107,7 +107,7 @@ fn do_generate_project_configs(
 fn do_new_files_subcommand(
   command: CreateFilesCommand,
   given_root_dir: &str,
-  dep_config: &AllPredefinedDependencies
+  dep_config: &AllRawPredefinedDependencies
 ) {
   match parse_project_info(&given_root_dir, &dep_config) {
     Ok(project_data_group) => {
@@ -127,7 +127,7 @@ fn do_new_files_subcommand(
 
 fn do_new_project_subcommand(
   command: NewProjectCommand,
-  dep_config: &AllPredefinedDependencies,
+  dep_config: &AllRawPredefinedDependencies,
   given_root_dir: &mut String,
   should_generate_cmakelists: &mut bool
 ) {
@@ -167,7 +167,7 @@ fn do_dependency_config_update_subcommand(command: UpdateDependencyConfigsComman
 
 fn get_parent_project_for_new_project(
   current_root: &str,
-  dep_config: &AllPredefinedDependencies
+  dep_config: &AllRawPredefinedDependencies
 ) -> Result<Option<UseableFinalProjectDataGroup>, String> {
   match parse_project_info(current_root, dep_config) {
     Ok(project_data_group) => Ok(Some(project_data_group)),

@@ -2,7 +2,7 @@ use std::{collections::{HashMap, HashSet}, path::{Path, PathBuf}, io, rc::Rc};
 
 use crate::project_info::path_manipulation::cleaned_pathbuf;
 
-use super::{path_manipulation::{cleaned_path_str, relative_to_project_root, find_first_dir_named, absolute_path}, final_dependencies::{FinalPredefinedDependency, FinalGCMakeDependency, GCMakeDependencyStatus}, raw_data_in::{RawProject, ProjectLike, dependencies::internal_dep_config::AllPredefinedDependencies, BuildConfigMap, BuildType, LanguageConfigMap, CompiledItemType, PreBuildConfigIn, SpecificCompilerSpecifier, ProjectMetadata}, final_project_configurables::{FinalProjectType, SubprojectOnlyOptions}, CompiledOutputItem, helpers::{create_subproject_data, create_project_data, validate_raw_project, populate_files, find_prebuild_script, PrebuildScriptFile, parse_project_metadata}, PreBuildScript};
+use super::{path_manipulation::{cleaned_path_str, relative_to_project_root, find_first_dir_named, absolute_path}, final_dependencies::{PredefinedSubdirDep, FinalGCMakeDependency, GCMakeDependencyStatus, FinalPredefinedDependency}, raw_data_in::{RawProject, ProjectLike, dependencies::internal_dep_config::AllRawPredefinedDependencies, BuildConfigMap, BuildType, LanguageConfigMap, CompiledItemType, PreBuildConfigIn, SpecificCompilerSpecifier, ProjectMetadata}, final_project_configurables::{FinalProjectType, SubprojectOnlyOptions}, CompiledOutputItem, helpers::{create_subproject_data, create_project_data, validate_raw_project, populate_files, find_prebuild_script, PrebuildScriptFile, parse_project_metadata}, PreBuildScript};
 
 pub struct ThreePartVersion (u32, u32, u32);
 
@@ -164,7 +164,7 @@ impl FinalProjectData {
 
   pub fn new(
     unclean_given_root: &str,
-    dep_config: &AllPredefinedDependencies
+    dep_config: &AllRawPredefinedDependencies
   ) -> Result<UseableFinalProjectDataGroup, ProjectLoadFailureReason> {
     let metadata: ProjectMetadata = parse_project_metadata(unclean_given_root)?;
     let cleaned_given_root: String = cleaned_path_str(unclean_given_root);
@@ -218,7 +218,7 @@ impl FinalProjectData {
   fn create_new(
     unclean_project_root: &str,
     parent_project_info: Option<ParentProjectInfo>,
-    all_dep_config: &AllPredefinedDependencies
+    all_dep_config: &AllRawPredefinedDependencies
   ) -> Result<FinalProjectData, ProjectLoadFailureReason> {
     // NOTE: Subprojects are still considered whole projects, however they are not allowed to specify
     // top level build configuration data. This means that language data, build configs, etc. are not
@@ -332,8 +332,8 @@ impl FinalProjectData {
       for (dep_name, user_given_config) in pre_deps {
         let finalized_dep = FinalPredefinedDependency::new(
           all_dep_config,
-          dep_name,
-          user_given_config
+          user_given_config,
+          dep_name
         )
           .map_err(ProjectLoadFailureReason::Other)?;
 
@@ -385,6 +385,9 @@ impl FinalProjectData {
       target_namespace_prefix
     };
 
+    finalized_project_data.populate_used_components()
+      .map_err(ProjectLoadFailureReason::Other)?;
+
     populate_files(
       Path::new(&finalized_project_data.src_dir),
       &mut finalized_project_data.src_files
@@ -430,6 +433,35 @@ impl FinalProjectData {
     None
   }
 
+  // Component-based predefined dependencies need to be told which of their components have been used
+  // for the entire project, not per target. Why? find_package requires components to be specified
+  // when called (not when linking libraries to target), and also likely populates the library
+  // in such a way where the component names are not the same as the targets (or variables) CMake
+  // needs to use to link to.
+  fn populate_used_components(&mut self) -> Result<(), String> {
+    for (dep_name, predefined_dep) in &mut self.predefined_dependencies {
+      if let FinalPredefinedDependency::BuiltinComponentsFindModule(components_dep) = predefined_dep {
+        for (_, output_item) in &self.output {
+          if let Some(links) = output_item.get_links() {
+            if let Some(linked_component_names) = links.get(dep_name) {
+              components_dep.mark_multiple_components_used(dep_name, linked_component_names.iter())?;
+            }
+          }
+        }
+
+        if let Some(prebuild_script) = &self.prebuild_script {
+          if let PreBuildScript::Exe(CompiledOutputItem { links: Some(links), ..}) = prebuild_script {
+            if let Some(linked_component_names) = links.get(dep_name) {
+              components_dep.mark_multiple_components_used(dep_name, linked_component_names.iter())?;
+            }
+          }
+        }
+      }
+    }
+
+    Ok(())
+  }
+
   fn ensure_links_are_valid(
     &self,
     item_name: &str,
@@ -468,15 +500,31 @@ impl FinalProjectData {
         // Check if it's linked to a predefined dependency
         else if let Some(final_dep) = self.predefined_dependencies.get(project_name_containing_libraries) {
           for lib_name_linking in lib_names_linking {
-            if !final_dep.has_target_named(lib_name_linking) {
-              return Err(format!(
-                "Output item '{}' in project '{}' tries to link to a nonexistent target '{}' in predefined dependency '{}'.",
-                item_name,
-                self.get_project_name(),
-                lib_name_linking,
-                project_name_containing_libraries
-              ))
+            match final_dep {
+              FinalPredefinedDependency::Subdirectory(subdir_dep) => {
+                if !subdir_dep.has_target_named(lib_name_linking) {
+                  return Err(format!(
+                    "Output item '{}' in project '{}' tries to link to a nonexistent target '{}' in predefined dependency '{}'.",
+                    item_name,
+                    self.get_project_name(),
+                    lib_name_linking,
+                    project_name_containing_libraries
+                  ))
+                }
+              },
+              FinalPredefinedDependency::BuiltinComponentsFindModule(components_dep) => {
+                if !components_dep.has_component_named(lib_name_linking) {
+                  return Err(format!(
+                    "Output item '{}' in project '{}' tries to link to a nonexistent components '{}' in predefined dependency '{}'.",
+                    item_name,
+                    self.get_project_name(),
+                    lib_name_linking,
+                    project_name_containing_libraries
+                  ))
+                }
+              }
             }
+            
           }
         }
         else if let Some(final_gcmake_dep) = self.gcmake_dependency_projects.get(project_name_containing_libraries) {
@@ -605,31 +653,41 @@ impl FinalProjectData {
     }
   }
 
-  pub fn has_prebuild_script(&self) -> bool {
-    self.prebuild_script.is_some()
-  }
-
   pub fn has_subprojects(&self) -> bool {
     !self.subprojects.is_empty()
   }
 
   pub fn has_predefined_dependencies(&self) -> bool {
-    self.predefined_dependencies.len() > 0
+    !self.predefined_dependencies.is_empty()
+  }
+
+  pub fn has_predefined_fetchable_dependencies(&self) -> bool {
+    let num_needing_fetch: usize = self.predefined_dependencies
+      .iter()
+      .filter(|(_, dep_info)| dep_info.requires_fetch())
+      .collect::<HashMap<_, _>>()
+      .len();
+
+    return num_needing_fetch > 0;
   }
 
   pub fn has_gcmake_dependencies(&self) -> bool {
     self.gcmake_dependency_projects.len() > 0
   }
 
-  // TODO: Subject to change once find_package (using dependencies already installed on system)
-  // support is added.
-  pub fn has_any_fetcontent_dependencies(&self) -> bool {
-    self.has_gcmake_dependencies() || self.has_predefined_dependencies()
+  pub fn has_any_fetchcontent_dependencies(&self) -> bool {
+    self.has_gcmake_dependencies() || self.has_predefined_fetchable_dependencies()
   }
 
   pub fn fetchcontent_dep_names(&self) -> impl Iterator<Item = &String> {
-    return self.predefined_dependencies.keys()
-      .chain(self.gcmake_dependency_projects.keys())
+    return self.predefined_dependencies
+      .iter()
+      .filter_map(|(dep_name, dep_info)| {
+        if dep_info.requires_fetch()
+          { Some(dep_name) }
+          else { None }
+      })
+      .chain(self.gcmake_dependency_projects.keys());
   }
 
   // These are guaranteed to be valid since all links are checked when gcmake configures the project.
@@ -638,26 +696,35 @@ impl FinalProjectData {
     &self,
     search_mode: DependencySearchMode,
     namespace_prefix: &str,
-    target_names: &Vec<String>,
+    item_names: &Vec<String>,
   ) -> Result<Option<Vec<String>>, String> {
     if let DependencySearchMode::AsParent = search_mode {
       if let Some(predef_dep) = self.predefined_dependencies.get(namespace_prefix) {
-        return Ok(Some(
-          target_names
-            .iter()
-            .map(|base_name|
-              predef_dep.get_linkable_target_name(base_name)
-                .unwrap()
-                .to_string()
-            )
-            .collect()
-        ))
+        match predef_dep {
+          FinalPredefinedDependency::Subdirectory(subdir_dep) => {
+            return Ok(Some(
+              item_names
+                .iter()
+                .map(|base_name|
+                  subdir_dep.get_linkable_target_name(base_name)
+                    .unwrap()
+                    .to_string()
+                )
+                .collect()
+            ))
+          },
+          FinalPredefinedDependency::BuiltinComponentsFindModule(components_dep) => {
+            // Here, 'item_names' contains the list of components imported. The components themselves
+            // are not linked directly to targets, which is why they aren't passed to the components_dep.
+            return Ok(Some(vec![components_dep.linkable_string()]));
+          }
+        }
       }
 
       if let Some(gcmake_dep) = self.gcmake_dependency_projects.get(namespace_prefix) {
         let mut namespaced_list: Vec<String> = Vec::new();
         
-        for base_name in target_names {
+        for base_name in item_names {
             namespaced_list.push(
               gcmake_dep
                 .get_linkable_target_name(base_name)?
@@ -672,7 +739,7 @@ impl FinalProjectData {
     if let Some(matching_subproject) = self.subprojects.get(namespace_prefix) {
       let mut namespaced_list: Vec<String> = Vec::new();
       
-      for base_name in target_names {
+      for base_name in item_names {
           namespaced_list.push(
             matching_subproject
               .get_namespaced_public_linkable_target_name(base_name)?

@@ -62,18 +62,18 @@ pub fn create_project_at(
       .to_uppercase()
       .replace("-", "_");
 
-    let mut include_prefix = prompt_once(
+    let include_prefix: String = prompt_once(
       &format!("include prefix ({}): ", &default_prefix)
     )?.unwrap_or(default_prefix);
 
-    if let ProjectTypeCreating::Subproject(current_project_context) = &project_type_creating {
-      include_prefix = current_project_context.nested_include_prefix(&include_prefix);
-    }
+    let folder_generation_include_prefix: String = if let ProjectTypeCreating::Subproject(current_project_context) = &project_type_creating
+      { current_project_context.nested_include_prefix(&include_prefix) }
+      else { include_prefix.clone() };
 
     for source_code_dir in [SRC_DIR, INCLUDE_DIR, TEMPLATE_IMPL_DIR] {
       let mut extended_path = project_root.to_path_buf();
       extended_path.push(source_code_dir);
-      extended_path.push(&include_prefix);
+      extended_path.push(&folder_generation_include_prefix);
       create_dir_all(extended_path)?;
     }
 
