@@ -30,10 +30,6 @@ impl PredefinedComponentsFindModuleDep {
     &self.raw_dep.links
   }
 
-  pub fn name_of_find_module(&self) -> &str {
-    &self.raw_dep.find_module_name
-  }
-
   pub fn has_component_named(&self, name_searching: &str) -> bool {
     self.components.available.contains(name_searching)
   }

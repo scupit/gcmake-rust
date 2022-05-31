@@ -159,7 +159,7 @@ Pre-written CMake find modules:
   - [ ] SDL_sound
   - [ ] SDL_ttf
 - [ ] SQLite (3)
-- [ ] wxWidgets
+- [x] wxWidgets
 - [ ] Vulkan
 - [ ] ZLIB
 

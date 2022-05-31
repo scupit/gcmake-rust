@@ -1,16 +1,19 @@
 mod final_predefined_subdir_dep;
 mod final_predefined_components_find_module_dep;
 mod final_gcmake_project_dep;
+mod final_predefined_find_module_dep;
 
 pub use final_predefined_subdir_dep::*;
 pub use final_predefined_components_find_module_dep::*;
 pub use final_gcmake_project_dep::*;
+pub use final_predefined_find_module_dep::*;
 
 use super::raw_data_in::dependencies::{internal_dep_config::{SingleRawPredefinedDependencyInfo, AllRawPredefinedDependencies}, user_given_dep_config::UserGivenPredefinedDependencyConfig};
 
 pub enum FinalPredefinedDependency {
   Subdirectory(PredefinedSubdirDep),
-  BuiltinComponentsFindModule(PredefinedComponentsFindModuleDep)
+  BuiltinComponentsFindModule(PredefinedComponentsFindModuleDep),
+  BuiltinFindModule(PredefinedFindModuleDep)
 }
 
 impl FinalPredefinedDependency {
@@ -34,6 +37,9 @@ impl FinalPredefinedDependency {
       // only configured for use as a subdirectory dependency.
       Ok(Self::Subdirectory(subdir_dep))
     }
+    else if let Some(find_module_dep) = configs.built_in_find_module {
+      Ok(Self::BuiltinFindModule(find_module_dep))
+    }
     else if let Some(components_find_module_dep) = configs.components_built_in_find_module {
       Ok(Self::BuiltinComponentsFindModule(components_find_module_dep))
     }
@@ -48,14 +54,16 @@ impl FinalPredefinedDependency {
   pub fn requires_fetch(&self) -> bool {
     match self {
       Self::Subdirectory(_) => true,
-      Self::BuiltinComponentsFindModule(_) => false
+      Self::BuiltinComponentsFindModule(_) => false,
+      Self::BuiltinFindModule(_) => false
     }
   }
 }
 
 struct PredefinedDependencyAllConfigs {
   as_subdirectory: Option<PredefinedSubdirDep>,
-  components_built_in_find_module: Option<PredefinedComponentsFindModuleDep>
+  components_built_in_find_module: Option<PredefinedComponentsFindModuleDep>,
+  built_in_find_module: Option<PredefinedFindModuleDep>
 }
 
 impl PredefinedDependencyAllConfigs {
@@ -77,7 +85,8 @@ impl PredefinedDependencyAllConfigs {
 
     let mut final_config: Self = Self {
       as_subdirectory: None,
-      components_built_in_find_module: None
+      components_built_in_find_module: None,
+      built_in_find_module: None
     };
 
     if let Some(subdir_dep_info) = &dep_info.as_subdirectory {
@@ -91,6 +100,14 @@ impl PredefinedDependencyAllConfigs {
     if let Some(components_find_module_dep) = &dep_info.cmake_builtin_find_components_module {
       final_config.components_built_in_find_module = Some(PredefinedComponentsFindModuleDep::from_components_find_module_dep(
         components_find_module_dep,
+        user_given_config,
+        dep_name
+      ));
+    }
+
+    if let Some(find_module_dep_info) = &dep_info.cmake_builtin_find_module {
+      final_config.built_in_find_module = Some(PredefinedFindModuleDep::from_find_module_dep(
+        find_module_dep_info,
         user_given_config,
         dep_name
       ));

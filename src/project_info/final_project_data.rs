@@ -515,7 +515,18 @@ impl FinalProjectData {
               FinalPredefinedDependency::BuiltinComponentsFindModule(components_dep) => {
                 if !components_dep.has_component_named(lib_name_linking) {
                   return Err(format!(
-                    "Output item '{}' in project '{}' tries to link to a nonexistent components '{}' in predefined dependency '{}'.",
+                    "Output item '{}' in project '{}' tries to link to a nonexistent component '{}' in predefined dependency '{}'.",
+                    item_name,
+                    self.get_project_name(),
+                    lib_name_linking,
+                    project_name_containing_libraries
+                  ))
+                }
+              },
+              FinalPredefinedDependency::BuiltinFindModule(find_module_dep) => {
+                if !find_module_dep.has_target_named(lib_name_linking) {
+                  return Err(format!(
+                    "Output item '{}' in project '{}' tries to link to a nonexistent target '{}' in predefined dependency '{}'.",
                     item_name,
                     self.get_project_name(),
                     lib_name_linking,
@@ -705,11 +716,11 @@ impl FinalProjectData {
             return Ok(Some(
               item_names
                 .iter()
-                .map(|base_name|
+                .map(|base_name| {
                   subdir_dep.get_linkable_target_name(base_name)
                     .unwrap()
                     .to_string()
-                )
+                })
                 .collect()
             ))
           },
@@ -717,6 +728,18 @@ impl FinalProjectData {
             // Here, 'item_names' contains the list of components imported. The components themselves
             // are not linked directly to targets, which is why they aren't passed to the components_dep.
             return Ok(Some(vec![components_dep.linkable_string()]));
+          },
+          FinalPredefinedDependency::BuiltinFindModule(find_module_dep) => {
+            return Ok(Some(
+              item_names
+                .iter()
+                .map(|base_name| {
+                  find_module_dep.get_linkable_target_name(base_name)
+                    .unwrap()
+                    .to_string()
+                })
+                .collect()
+            ))
           }
         }
       }

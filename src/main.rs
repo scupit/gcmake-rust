@@ -157,8 +157,18 @@ fn do_dependency_config_update_subcommand(command: UpdateDependencyConfigsComman
         );
         println!("Checked out '{}' branch.", branch);
       },
-      DepConfigUpdateResult::UpdatedBranch { branch, .. } => {
-        println!("Successfully checked out and updated dependency config repo '{}' branch.", branch);
+      DepConfigUpdateResult::UpdatedBranch { branch: maybe_branch, .. } => {
+        match maybe_branch {
+          Some(checked_out_branch) => {
+            println!(
+              "Successfully checked out and updated dependency config repo '{}' branch.",
+              checked_out_branch
+            );
+          },
+          None => {
+            println!("Successfully updated dependency config repo");
+          }
+        }
       }
     },
     Err(err) => exit_error_log(err.to_string())

@@ -1,6 +1,6 @@
 use std::{collections::{HashMap, HashSet}, fs::File, io::{self, Write}, path::{Path, PathBuf}};
 
-use crate::{file_writers::cmake_utils_writer::CMakeUtilWriter, project_info::{final_project_data::{FinalProjectData, DependencySearchMode, UseableFinalProjectDataGroup}, path_manipulation::cleaned_path_str, final_dependencies::{GitRevisionSpecifier, FinalPredefinedDependency, PredefinedComponentsFindModuleDep, PredefinedSubdirDep}, raw_data_in::{BuildType, BuildConfig, BuildConfigCompilerSpecifier, SpecificCompilerSpecifier, CompiledItemType, LanguageConfigMap}, FinalProjectType, CompiledOutputItem, PreBuildScript}};
+use crate::{file_writers::cmake_utils_writer::CMakeUtilWriter, project_info::{final_project_data::{FinalProjectData, DependencySearchMode, UseableFinalProjectDataGroup}, path_manipulation::cleaned_path_str, final_dependencies::{GitRevisionSpecifier, FinalPredefinedDependency, PredefinedComponentsFindModuleDep, PredefinedSubdirDep, PredefinedFindModuleDep}, raw_data_in::{BuildType, BuildConfig, BuildConfigCompilerSpecifier, SpecificCompilerSpecifier, CompiledItemType, LanguageConfigMap}, FinalProjectType, CompiledOutputItem, PreBuildScript}};
 
 const RUNTIME_BUILD_DIR_VAR: &'static str = "${MY_RUNTIME_OUTPUT_DIR}";
 const LIB_BUILD_DIR_VAR: &'static str = "${MY_LIBRARY_OUTPUT_DIR}";
@@ -413,6 +413,9 @@ impl<'a> CMakeListsWriter<'a> {
     for (dep_name, dep_info) in self.project_data.get_predefined_dependencies() {
 
       match dep_info {
+        FinalPredefinedDependency::BuiltinFindModule(find_module_dep) => {
+          self.write_predefined_find_module_dep(dep_name, find_module_dep)?;
+        },
         FinalPredefinedDependency::BuiltinComponentsFindModule(components_dep) => {
           self.write_predefined_components_find_module_dep(dep_name, components_dep)?;
         },
@@ -421,6 +424,26 @@ impl<'a> CMakeListsWriter<'a> {
         }
       }
     }
+
+    Ok(())
+  }
+
+  fn write_predefined_find_module_dep(
+    &self,
+    dep_name: &str,
+    dep_info: &PredefinedFindModuleDep
+  ) -> io::Result<()> {
+    writeln!(&self.cmakelists_file,
+      "find_package( {} MODULE REQUIRED )",
+      dep_name
+    )?;
+
+    writeln!(&self.cmakelists_file,
+      "if( NOT {} )\n\tmessage( FATAL_ERROR \"{}\")\nendif()",
+      dep_info.found_varname(),
+      // TODO: Make a better error message. Include links to relevant pages if possible.
+      format!("Dependency '{}' was not found on the system. Please make sure the library is installed on the system.", dep_name)
+    )?;
 
     Ok(())
   }

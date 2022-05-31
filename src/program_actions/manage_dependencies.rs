@@ -71,16 +71,18 @@ pub enum DepConfigUpdateResult {
   },
   UpdatedBranch {
     local_repo_location: PathBuf,
-    branch: String
+    branch: Option<String>
   }
 }
 
-pub fn update_dependency_config_repo(branch_name: &str) -> io::Result<DepConfigUpdateResult> {
+pub fn update_dependency_config_repo(maybe_branch_name: &Option<String>) -> io::Result<DepConfigUpdateResult> {
   let local_repo_location: PathBuf = local_dep_config_repo_location();
 
   if local_repo_location.is_dir() {
-    if let Some(checkout_failure_message) = checkout_branch(&local_repo_location, branch_name)? {
-      return Ok(DepConfigUpdateResult::SubprocessError(checkout_failure_message));
+    if let Some(branch_name) = maybe_branch_name {
+      if let Some(checkout_failure_message) = checkout_branch(&local_repo_location, branch_name)? {
+        return Ok(DepConfigUpdateResult::SubprocessError(checkout_failure_message));
+      }
     }
 
     let pull_output: Output = process::Command::new("git")
@@ -97,8 +99,8 @@ pub fn update_dependency_config_repo(branch_name: &str) -> io::Result<DepConfigU
     }
 
     return Ok(DepConfigUpdateResult::UpdatedBranch {
-      branch: branch_name.to_string(),
-      local_repo_location
+      local_repo_location,
+      branch: maybe_branch_name.clone()
     });
   }
   else {
@@ -121,12 +123,14 @@ pub fn update_dependency_config_repo(branch_name: &str) -> io::Result<DepConfigU
       )));
     }
 
-    if let Some(checkout_error_message) = checkout_branch(&local_repo_location, "develop")? {
+    let default_branch = "develop";
+
+    if let Some(checkout_error_message) = checkout_branch(&local_repo_location, default_branch)? {
       return Ok(DepConfigUpdateResult::SubprocessError(checkout_error_message));
     }
 
     return Ok(DepConfigUpdateResult::NewlyDownloaded {
-      branch: branch_name.to_string(),
+      branch: default_branch.to_string(),
       local_repo_location
     });
   }

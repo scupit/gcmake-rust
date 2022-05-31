@@ -35,7 +35,6 @@ pub struct ComponentsFindModuleUsage {
 #[derive(Deserialize, Clone)]
 #[serde(deny_unknown_fields)]
 pub struct RawBuiltinComponentsFindModuleDep {
-  pub find_module_name: String,
   pub links: ComponentsFindModuleLinks,
   pub cmakelists_usage: ComponentsFindModuleUsage,
   pub components: HashSet<String>
