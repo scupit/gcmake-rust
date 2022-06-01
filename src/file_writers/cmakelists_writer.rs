@@ -433,6 +433,11 @@ impl<'a> CMakeListsWriter<'a> {
     dep_name: &str,
     dep_info: &PredefinedFindModuleDep
   ) -> io::Result<()> {
+    if dep_name == "GLEW" {
+      self.set_basic_var("", "GLEW_USE_STATIC_LIBS", "TRUE")?;
+      self.write_newline()?;
+    }
+
     writeln!(&self.cmakelists_file,
       "find_package( {} MODULE REQUIRED )",
       dep_name
