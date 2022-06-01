@@ -149,7 +149,7 @@ Pre-written CMake find modules:
 - [ ] Curses (ncurses)
 - [ ] Doxygen
 - [ ] FreeType
-- [ ] GLEW
+- [x] GLEW (**NOTE:** Will have to copy the dll manually for now. Ideally just use the static version.)
 - [ ] OpenGL
 - [ ] OpenSSL
 - [ ] SDL (not sure why these are listed separately in the docs, I'll have to research that.)
@@ -170,12 +170,12 @@ Other CMake projects:
 - [x] [fmt](https://github.com/fmtlib/fmt)
 - [ ] [JUCE](https://juce.com/)
 - [ ] [yaml-cpp](https://github.com/jbeder/yaml-cpp)
-- [ ] [GLFW](https://www.glfw.org/)
+- [x] [GLFW](https://www.glfw.org/)
 - [ ] [OpenCV](https://opencv.org/)
 - [ ] [ffmpeg](https://www.ffmpeg.org/)
 - [ ] [TensorFlow](https://www.tensorflow.org/)
 - [ ] [imgui](https://github.com/ocornut/imgui)
-- [ ] [GLM (OpenGL Mathematics)](https://github.com/g-truc/glm)
+- [x] [GLM (OpenGL Mathematics)](https://github.com/g-truc/glm)
 
 Non-CMake projects:
 
