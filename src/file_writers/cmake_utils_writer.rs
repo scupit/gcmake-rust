@@ -188,6 +188,10 @@ r#"function( make_toggle_lib
     add_library( ${lib_name} STATIC )
   elseif( ${lib_name}_LIB_TYPE STREQUAL SHARED )
     add_library( ${lib_name} SHARED )
+    set_target_properties( ${lib_name}
+      PROPERTIES
+        WINDOWS_EXPORT_ALL_SYMBOLS TRUE
+    )
   endif()
 endfunction()
 "#;

@@ -176,7 +176,6 @@ impl<'a> CMakeListsWriter<'a> {
 
   fn write_toplevel_tweaks(&self) -> io::Result<()> {
     writeln!(&self.cmakelists_file, "get_property( isMultiConfigGenerator GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)")?;
-    self.set_basic_var("", "CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS", "true")?;
     self.write_newline()?;
 
     writeln!(&self.cmakelists_file,
@@ -230,6 +229,7 @@ impl<'a> CMakeListsWriter<'a> {
 
     self.set_basic_var("\t", "CMAKE_RUNTIME_OUTPUT_DIRECTORY", RUNTIME_BUILD_DIR_VAR)?;
     self.set_basic_var("\t", "CMAKE_LIBRARY_OUTPUT_DIRECTORY", LIB_BUILD_DIR_VAR)?;
+    self.set_basic_var("\t", "CMAKE_ARCHIVE_OUTPUT_DIRECTORY", LIB_BUILD_DIR_VAR)?;
 
     writeln!(&self.cmakelists_file, "endif()")?;
     Ok(())
@@ -976,6 +976,13 @@ impl<'a> CMakeListsWriter<'a> {
       output_name,
       lib_type_string
     )?;
+
+    if let CompiledItemType::SharedLib = output_data.get_output_type() {
+      writeln!(&self.cmakelists_file,
+        "set_target_properties( {}\n\tPROPERTIES\n\t\tWINDOWS_EXPORT_ALL_SYMBOLS TRUE\n)",
+        output_name
+      )?;
+    }
 
     self.write_general_library_data(
       output_data,
