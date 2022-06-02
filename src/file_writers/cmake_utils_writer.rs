@@ -256,10 +256,10 @@ r#"function( copy_resource_dir_if_exists
 endfunction()
 "#;
 
-const INSTALLATION_CONFIGURE_TEXT: &'static str = r#"function( configure_installation
-  project_version
-  targets_installing
-)
+const INSTALLATION_CONFIGURE_TEXT: &'static str = r#"function( configure_installation )
+  set( targets_installing "${MY_INSTALLABLE_TARGETS}" )
+  set( bin_files_installing "${MY_NEEDED_BIN_FILES}" )
+
   if( NOT "${targets_installing}" STREQUAL "" )
     install( TARGETS ${targets_installing}
       EXPORT ${PROJECT_NAME}Targets
@@ -273,6 +273,14 @@ const INSTALLATION_CONFIGURE_TEXT: &'static str = r#"function( configure_install
         DESTINATION "include/${PROJECT_INCLUDE_PREFIX}"
       INCLUDES DESTINATION
         "include" "include/${PROJECT_INCLUDE_PREFIX}/include"
+    )
+
+    install( FILES ${bin_files_installing}
+      DESTINATION bin
+    )
+
+    install( DIRECTORY "${MY_RUNTIME_OUTPUT_DIR}/resources"
+      DESTINATION bin
     )
   
     install( EXPORT ${PROJECT_NAME}Targets
@@ -308,26 +316,65 @@ const INSTALLATION_CONFIGURE_TEXT: &'static str = r#"function( configure_install
   endif()
 endfunction()
 
-macro( raise_target_list
-  target_list
+macro( initialize_target_list )
+  set( MY_INSTALLABLE_TARGETS "" )
+endmacro()
+
+macro( clean_target_list )
+  clean_list( "${MY_INSTALLABLE_TARGETS}" MY_INSTALLABLE_TARGETS )
+endmacro()
+
+macro( add_to_target_list
+  target_name
 )
-  set( LATEST_SUBPROJECT_TARGET_LIST "${target_list}" PARENT_SCOPE )
+  set( MY_INSTALLABLE_TARGETS "${MY_INSTALLABLE_TARGETS}" "${target_name}" )
+endmacro()
+
+macro( raise_target_list )
+  set( LATEST_SUBPROJECT_TARGET_LIST "${MY_INSTALLABLE_TARGETS}" PARENT_SCOPE )
+endmacro()
+
+macro( initialize_needed_files_list )
+  set( MY_NEEDED_BIN_FILES "" )
+endmacro()
+
+macro( clean_needed_files_list )
+  clean_list( "${MY_NEEDED_BIN_FILES}" MY_NEEDED_BIN_FILES )
+endmacro()
+
+macro( add_to_needed_files_list
+  needed_file
+)
+  set( MY_NEEDED_BIN_FILES "${MY_NEEDED_BIN_FILES}" "${needed_file}" )
+endmacro()
+
+macro( raise_needed_files_list)
+  set( LATEST_SUBPROJECT_NEEDED_BIN_FILES_LIST "${MY_NEEDED_BIN_FILES}" PARENT_SCOPE )
 endmacro()
 
 function( configure_subproject
   subproject_path
-  target_list_name
 )
   add_subdirectory( "${subproject_path}" )
 
   if( NOT "${LATEST_SUBPROJECT_TARGET_LIST}" STREQUAL "" )
-    if( "${${target_list_name}}" STREQUAL "" )
+    if( "${MY_INSTALLABLE_TARGETS}" STREQUAL "" )
       set( combined_list "${LATEST_SUBPROJECT_TARGET_LIST}" )
     else()
-      set( combined_list "${${target_list_name}}" "${LATEST_SUBPROJECT_TARGET_LIST}" )
+      set( combined_list "${MY_INSTALLABLE_TARGETS}" "${LATEST_SUBPROJECT_TARGET_LIST}" )
     endif()
 
-    set( ${target_list_name} "${combined_list}" PARENT_SCOPE )
+    set( MY_INSTALLABLE_TARGETS "${combined_list}" PARENT_SCOPE )
+  endif()
+
+  if( NOT "${LATEST_SUBPROJECT_NEEDED_BIN_FILES_LIST}" STREQUAL "" )
+    if( "${MY_NEEDED_BIN_FILES}" STREQUAL "" )
+      set( combined_list "${LATEST_SUBPROJECT_NEEDED_BIN_FILES_LIST}" )
+    else()
+      set( combined_list "${MY_NEEDED_BIN_FILES}" "${LATEST_SUBPROJECT_NEEDED_BIN_FILES_LIST}" )
+    endif()
+
+    set( MY_NEEDED_BIN_FILES "${combined_list}" PARENT_SCOPE )
   endif()
 endfunction()
 "#;

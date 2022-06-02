@@ -1,11 +1,11 @@
 pub mod internal_dep_config;
 pub mod user_given_dep_config;
 
-use std::{path::PathBuf, fs::{DirEntry, self}};
+use std::{path::PathBuf, fs::{DirEntry, self}, rc::Rc};
 
 use crate::program_actions::local_dep_config_repo_location;
 
-use self::internal_dep_config::{AllRawPredefinedDependencies, SingleRawPredefinedDependencyInfo};
+use self::internal_dep_config::{AllRawPredefinedDependencies, SingleRawPredefinedDependencyConfigGroup, RawPredefinedDependencyInfo, PredefinedCMakeDepHookFile};
 
 pub fn all_raw_supported_dependency_configs() -> Result<AllRawPredefinedDependencies, String> {
   /*
@@ -52,12 +52,20 @@ pub fn all_raw_supported_dependency_configs() -> Result<AllRawPredefinedDependen
       let config_file_contents: String = fs::read_to_string(&config_file_path)
         .map_err(|err| err.to_string())?;
 
-      let single_dep_config: SingleRawPredefinedDependencyInfo = serde_yaml::from_str(&config_file_contents)
+      let dep_configs: SingleRawPredefinedDependencyConfigGroup = serde_yaml::from_str(&config_file_contents)
         .map_err(|err| err.to_string())?;
 
       all_dep_configs.insert(
         file_name.to_string(),
-        single_dep_config
+        RawPredefinedDependencyInfo {
+          dep_configs,
+          pre_load: PredefinedCMakeDepHookFile::new(entry_path.join("pre_load.cmake"))
+            .map_err(|err| err.to_string())?
+            .map(|hook_file| Rc::new(hook_file)),
+          post_load: PredefinedCMakeDepHookFile::new(entry_path.join("post_load.cmake"))
+            .map_err(|err| err.to_string())?
+            .map(|hook_file| Rc::new(hook_file))
+        }
       );
     }
   }

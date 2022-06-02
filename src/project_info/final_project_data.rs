@@ -2,7 +2,7 @@ use std::{collections::{HashMap, HashSet}, path::{Path, PathBuf}, io, rc::Rc};
 
 use crate::project_info::path_manipulation::cleaned_pathbuf;
 
-use super::{path_manipulation::{cleaned_path_str, relative_to_project_root, find_first_dir_named, absolute_path}, final_dependencies::{PredefinedSubdirDep, FinalGCMakeDependency, GCMakeDependencyStatus, FinalPredefinedDependency}, raw_data_in::{RawProject, ProjectLike, dependencies::internal_dep_config::AllRawPredefinedDependencies, BuildConfigMap, BuildType, LanguageConfigMap, CompiledItemType, PreBuildConfigIn, SpecificCompilerSpecifier, ProjectMetadata}, final_project_configurables::{FinalProjectType, SubprojectOnlyOptions}, CompiledOutputItem, helpers::{create_subproject_data, create_project_data, validate_raw_project, populate_files, find_prebuild_script, PrebuildScriptFile, parse_project_metadata}, PreBuildScript};
+use super::{path_manipulation::{cleaned_path_str, relative_to_project_root, find_first_dir_named, absolute_path}, final_dependencies::{FinalGCMakeDependency, FinalPredefinedDependencyConfig, FinalPredepInfo}, raw_data_in::{RawProject, ProjectLike, dependencies::internal_dep_config::AllRawPredefinedDependencies, BuildConfigMap, BuildType, LanguageConfigMap, CompiledItemType, PreBuildConfigIn, SpecificCompilerSpecifier, ProjectMetadata}, final_project_configurables::{FinalProjectType, SubprojectOnlyOptions}, CompiledOutputItem, helpers::{create_subproject_data, create_project_data, validate_raw_project, populate_files, find_prebuild_script, PrebuildScriptFile, parse_project_metadata}, PreBuildScript};
 
 pub struct ThreePartVersion (u32, u32, u32);
 
@@ -154,7 +154,7 @@ pub struct FinalProjectData {
   // subprojects: Vec<FinalProjectData>,
   subprojects: SubprojectMap,
   output: HashMap<String, CompiledOutputItem>,
-  predefined_dependencies: HashMap<String, FinalPredefinedDependency>,
+  predefined_dependencies: HashMap<String, FinalPredefinedDependencyConfig>,
   gcmake_dependency_projects: HashMap<String, FinalGCMakeDependency>,
   prebuild_script: Option<PreBuildScript>,
   target_namespace_prefix: String
@@ -326,11 +326,11 @@ impl FinalProjectData {
       );
     }
 
-    let mut predefined_dependencies: HashMap<String, FinalPredefinedDependency> = HashMap::new();
+    let mut predefined_dependencies: HashMap<String, FinalPredefinedDependencyConfig> = HashMap::new();
 
     if let Some(pre_deps) = &raw_project.predefined_dependencies {
       for (dep_name, user_given_config) in pre_deps {
-        let finalized_dep = FinalPredefinedDependency::new(
+        let finalized_dep = FinalPredefinedDependencyConfig::new(
           all_dep_config,
           user_given_config,
           dep_name
@@ -440,7 +440,7 @@ impl FinalProjectData {
   // needs to use to link to.
   fn populate_used_components(&mut self) -> Result<(), String> {
     for (dep_name, predefined_dep) in &mut self.predefined_dependencies {
-      if let FinalPredefinedDependency::BuiltinComponentsFindModule(components_dep) = predefined_dep {
+      if let FinalPredepInfo::BuiltinComponentsFindModule(components_dep) = predefined_dep.mut_predef_dep_info() {
         for (_, output_item) in &self.output {
           if let Some(links) = output_item.get_links() {
             if let Some(linked_component_names) = links.get(dep_name) {
@@ -500,8 +500,8 @@ impl FinalProjectData {
         // Check if it's linked to a predefined dependency
         else if let Some(final_dep) = self.predefined_dependencies.get(project_name_containing_libraries) {
           for lib_name_linking in lib_names_linking {
-            match final_dep {
-              FinalPredefinedDependency::Subdirectory(subdir_dep) => {
+            match final_dep.predefined_dep_info() {
+              FinalPredepInfo::Subdirectory(subdir_dep) => {
                 if !subdir_dep.has_target_named(lib_name_linking) {
                   return Err(format!(
                     "Output item '{}' in project '{}' tries to link to a nonexistent target '{}' in predefined dependency '{}'.",
@@ -512,7 +512,7 @@ impl FinalProjectData {
                   ))
                 }
               },
-              FinalPredefinedDependency::BuiltinComponentsFindModule(components_dep) => {
+              FinalPredepInfo::BuiltinComponentsFindModule(components_dep) => {
                 if !components_dep.has_component_named(lib_name_linking) {
                   return Err(format!(
                     "Output item '{}' in project '{}' tries to link to a nonexistent component '{}' in predefined dependency '{}'.",
@@ -523,7 +523,7 @@ impl FinalProjectData {
                   ))
                 }
               },
-              FinalPredefinedDependency::BuiltinFindModule(find_module_dep) => {
+              FinalPredepInfo::BuiltinFindModule(find_module_dep) => {
                 if !find_module_dep.has_target_named(lib_name_linking) {
                   return Err(format!(
                     "Output item '{}' in project '{}' tries to link to a nonexistent target '{}' in predefined dependency '{}'.",
@@ -711,8 +711,8 @@ impl FinalProjectData {
   ) -> Result<Option<Vec<String>>, String> {
     if let DependencySearchMode::AsParent = search_mode {
       if let Some(predef_dep) = self.predefined_dependencies.get(namespace_prefix) {
-        match predef_dep {
-          FinalPredefinedDependency::Subdirectory(subdir_dep) => {
+        match predef_dep.predefined_dep_info() {
+          FinalPredepInfo::Subdirectory(subdir_dep) => {
             return Ok(Some(
               item_names
                 .iter()
@@ -724,12 +724,12 @@ impl FinalProjectData {
                 .collect()
             ))
           },
-          FinalPredefinedDependency::BuiltinComponentsFindModule(components_dep) => {
+          FinalPredepInfo::BuiltinComponentsFindModule(components_dep) => {
             // Here, 'item_names' contains the list of components imported. The components themselves
             // are not linked directly to targets, which is why they aren't passed to the components_dep.
             return Ok(Some(vec![components_dep.linkable_string()]));
           },
-          FinalPredefinedDependency::BuiltinFindModule(find_module_dep) => {
+          FinalPredepInfo::BuiltinFindModule(find_module_dep) => {
             return Ok(Some(
               item_names
                 .iter()
@@ -875,7 +875,7 @@ impl FinalProjectData {
     &self.project_type
   }
 
-  pub fn get_predefined_dependencies(&self) -> &HashMap<String, FinalPredefinedDependency> {
+  pub fn get_predefined_dependencies(&self) -> &HashMap<String, FinalPredefinedDependencyConfig> {
     &self.predefined_dependencies
   }
 

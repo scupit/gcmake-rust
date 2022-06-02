@@ -1,6 +1,6 @@
 use std::{collections::{HashMap, HashSet}, fs::File, io::{self, Write}, path::{Path, PathBuf}};
 
-use crate::{file_writers::cmake_utils_writer::CMakeUtilWriter, project_info::{final_project_data::{FinalProjectData, DependencySearchMode, UseableFinalProjectDataGroup}, path_manipulation::cleaned_path_str, final_dependencies::{GitRevisionSpecifier, FinalPredefinedDependency, PredefinedComponentsFindModuleDep, PredefinedSubdirDep, PredefinedFindModuleDep}, raw_data_in::{BuildType, BuildConfig, BuildConfigCompilerSpecifier, SpecificCompilerSpecifier, CompiledItemType, LanguageConfigMap}, FinalProjectType, CompiledOutputItem, PreBuildScript}};
+use crate::{file_writers::cmake_utils_writer::CMakeUtilWriter, project_info::{final_project_data::{FinalProjectData, DependencySearchMode, UseableFinalProjectDataGroup}, path_manipulation::cleaned_path_str, final_dependencies::{GitRevisionSpecifier, PredefinedComponentsFindModuleDep, PredefinedSubdirDep, PredefinedFindModuleDep, FinalPredepInfo}, raw_data_in::{BuildType, BuildConfig, BuildConfigCompilerSpecifier, SpecificCompilerSpecifier, CompiledItemType, LanguageConfigMap}, FinalProjectType, CompiledOutputItem, PreBuildScript}};
 
 const RUNTIME_BUILD_DIR_VAR: &'static str = "${MY_RUNTIME_OUTPUT_DIR}";
 const LIB_BUILD_DIR_VAR: &'static str = "${MY_LIBRARY_OUTPUT_DIR}";
@@ -76,8 +76,7 @@ struct CMakeListsWriter<'a> {
   project_data: &'a FinalProjectData,
   util_writer: CMakeUtilWriter,
   cmakelists_file: File,
-  cmake_config_in_file: File,
-  installable_targets_varname: String
+  cmake_config_in_file: File
 }
 
 impl<'a> CMakeListsWriter<'a> {
@@ -92,8 +91,7 @@ impl<'a> CMakeListsWriter<'a> {
       project_data,
       util_writer,
       cmakelists_file: File::create(cmakelists_file_name)?,
-      cmake_config_in_file: File::create(cmake_config_in_file_name)?,
-      installable_targets_varname: format!("{}_INSTALLABLE_TARGETS", project_data.get_project_name())
+      cmake_config_in_file: File::create(cmake_config_in_file_name)?
     })
   }
 
@@ -253,6 +251,10 @@ impl<'a> CMakeListsWriter<'a> {
       }
     }
 
+    writeln!(&self.cmakelists_file,
+      "initialize_target_list()\ninitialize_needed_files_list()"
+    )?;
+
     Ok(())
   }
 
@@ -319,9 +321,8 @@ impl<'a> CMakeListsWriter<'a> {
   fn write_subproject_includes(&self) -> io::Result<()> {
     for subproject_name in self.project_data.get_subproject_names() {
       writeln!( &self.cmakelists_file,
-        "configure_subproject(\n\t\"${{CMAKE_CURRENT_SOURCE_DIR}}/subprojects/{}\"\n\t{}\n)",
-        subproject_name,
-        &self.installable_targets_varname
+        "configure_subproject(\n\t\"${{CMAKE_CURRENT_SOURCE_DIR}}/subprojects/{}\"\n)",
+        subproject_name
       )?;
     }
 
@@ -411,17 +412,24 @@ impl<'a> CMakeListsWriter<'a> {
 
   fn write_predefined_dependencies(&self) -> io::Result<()> {
     for (dep_name, dep_info) in self.project_data.get_predefined_dependencies() {
+      if let Some(pre_load) = dep_info.pre_load_script() {
+        writeln!(&self.cmakelists_file, "{}", pre_load.contents_ref())?;
+      }
 
-      match dep_info {
-        FinalPredefinedDependency::BuiltinFindModule(find_module_dep) => {
+      match dep_info.predefined_dep_info() {
+        FinalPredepInfo::BuiltinFindModule(find_module_dep) => {
           self.write_predefined_find_module_dep(dep_name, find_module_dep)?;
         },
-        FinalPredefinedDependency::BuiltinComponentsFindModule(components_dep) => {
+        FinalPredepInfo::BuiltinComponentsFindModule(components_dep) => {
           self.write_predefined_components_find_module_dep(dep_name, components_dep)?;
         },
-        FinalPredefinedDependency::Subdirectory(subdir_dep) => {
+        FinalPredepInfo::Subdirectory(subdir_dep) => {
           self.write_predefined_subdirectory_dependency(dep_name, subdir_dep)?;
         }
+      }
+
+      if let Some(post_load) = dep_info.post_load_script() {
+        writeln!(&self.cmakelists_file, "{}", post_load.contents_ref())?;
       }
     }
 
@@ -433,11 +441,6 @@ impl<'a> CMakeListsWriter<'a> {
     dep_name: &str,
     dep_info: &PredefinedFindModuleDep
   ) -> io::Result<()> {
-    if dep_name == "GLEW" {
-      self.set_basic_var("", "GLEW_USE_STATIC_LIBS", "TRUE")?;
-      self.write_newline()?;
-    }
-
     writeln!(&self.cmakelists_file,
       "find_package( {} MODULE REQUIRED )",
       dep_name
@@ -1034,9 +1037,7 @@ impl<'a> CMakeListsWriter<'a> {
     self.write_newline()?;
 
     writeln!(&self.cmakelists_file,
-      "set( {} \"${{{}}};{}\" )",
-      &self.installable_targets_varname,
-      &self.installable_targets_varname,
+      "add_to_target_list( {} )",
       output_name
     )?;
     self.write_newline()?;
@@ -1096,9 +1097,7 @@ impl<'a> CMakeListsWriter<'a> {
     self.write_newline()?;
 
     writeln!(&self.cmakelists_file,
-      "set( {} \"${{{}}};{}\" )",
-      &self.installable_targets_varname,
-      &self.installable_targets_varname,
+      "add_to_target_list( {} )",
       output_name
     )?;
 
@@ -1140,25 +1139,22 @@ impl<'a> CMakeListsWriter<'a> {
   // See this page for help and a good example:
   // https://cmake.org/cmake/help/latest/guide/tutorial/Adding%20Export%20Configuration.html
   fn write_installation_and_exports(&self) -> io::Result<()> {
-    writeln!(&self.cmakelists_file,
-      "clean_list( \"${{{}}}\" {} )",
-      &self.installable_targets_varname,
-      &self.installable_targets_varname
-    )?;
+
+    writeln!(&self.cmakelists_file, "clean_target_list()")?;
+    writeln!(&self.cmakelists_file, "clean_needed_files_list()")?;
 
     match &self.project_data.get_project_type() {
       FinalProjectType::Root => {
-        writeln!(&self.cmakelists_file,
-          "configure_installation(\n\t\"{}\"\n\t\"${{{}}}\"\n)",
-          self.project_data.get_project_name(),
-          &self.installable_targets_varname
-        )?;
+        // writeln!(&self.cmakelists_file,
+        //   "configure_installation(\n\t\"{}\"\n\t\"{}\"\n)",
+        //   "${${PROJECT_NAME}_INSTALLABLE_TARGETS}",
+        //   "${${PROJECT_NAME}_NEEDED_FILES}"
+        // )?;
+        writeln!(&self.cmakelists_file, "configure_installation()")?;
       },
       FinalProjectType::Subproject(_) => {
-        writeln!(&self.cmakelists_file,
-          "raise_target_list( \"${{{}}}\" )",
-          &self.installable_targets_varname
-        )?;
+        writeln!(&self.cmakelists_file, "raise_target_list()")?;
+        writeln!(&self.cmakelists_file, "raise_needed_files_list()")?;
       }
     }
 
