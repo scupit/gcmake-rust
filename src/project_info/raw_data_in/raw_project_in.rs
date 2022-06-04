@@ -5,6 +5,7 @@ use super::dependencies::user_given_dep_config::{UserGivenPredefinedDependencyCo
 
 pub type BuildTypeOptionMap = HashMap<BuildConfigCompilerSpecifier, BuildConfig>;
 pub type BuildConfigMap = HashMap<BuildType, BuildTypeOptionMap>;
+pub type TargetBuildConfigMap = HashMap<TargetSpecificBuildType, BuildTypeOptionMap>;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(deny_unknown_fields)]
@@ -92,10 +93,11 @@ pub enum ImplementationLanguage {
   Cpp
 }
 
-#[derive(Serialize, Deserialize, Debug, Eq, PartialEq, Hash)]
+#[derive(Serialize, Deserialize, Debug)]
 #[serde(deny_unknown_fields)]
 pub struct PreBuildConfigIn {
-  pub link: Option<Vec<String>>
+  pub link: Option<Vec<String>>,
+  pub build_config: Option<TargetBuildConfigMap>
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -181,7 +183,35 @@ impl SpecificCompilerSpecifier {
   }
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone, Hash, PartialEq, Eq)]
+pub enum TargetSpecificBuildType {
+  AllConfigs,
+  Debug,
+  Release,
+  MinSizeRel,
+  RelWithDebInfo
+}
+
+impl TargetSpecificBuildType {
+  pub fn to_general_build_type(&self) -> Option<BuildType> {
+    match self {
+      Self::Debug => Some(BuildType::Debug),
+      Self::Release => Some(BuildType::Release),
+      Self::MinSizeRel => Some(BuildType::MinSizeRel),
+      Self::RelWithDebInfo => Some(BuildType::RelWithDebInfo),
+      Self::AllConfigs => None
+    }
+  }
+
+  pub fn name_string(&self) -> &str {
+    return match self {
+      Self::AllConfigs => "All",
+      other => other.to_general_build_type().unwrap().name_string()
+    }
+  }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(deny_unknown_fields)]
 pub struct RawCompiledItem {
   pub output_type: CompiledItemType,
@@ -193,7 +223,8 @@ pub struct RawCompiledItem {
   // The link format is namespaced like rust imports. subproject_name is the name of 
   // the library project which contains the library linking to. Eventually you will be able
   // to link to items inside dependencies as well, once dependency support is added.
-  pub link: Option<Vec<String>>
+  pub link: Option<Vec<String>>,
+  pub build_config: Option<TargetBuildConfigMap>
 }
 
 impl RawCompiledItem {

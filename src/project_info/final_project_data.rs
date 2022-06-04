@@ -2,7 +2,7 @@ use std::{collections::{HashMap, HashSet}, path::{Path, PathBuf}, io, rc::Rc};
 
 use crate::project_info::path_manipulation::cleaned_pathbuf;
 
-use super::{path_manipulation::{cleaned_path_str, relative_to_project_root, find_first_dir_named, absolute_path}, final_dependencies::{FinalGCMakeDependency, FinalPredefinedDependencyConfig, FinalPredepInfo}, raw_data_in::{RawProject, ProjectLike, dependencies::internal_dep_config::AllRawPredefinedDependencies, BuildConfigMap, BuildType, LanguageConfigMap, CompiledItemType, PreBuildConfigIn, SpecificCompilerSpecifier, ProjectMetadata}, final_project_configurables::{FinalProjectType, SubprojectOnlyOptions}, CompiledOutputItem, helpers::{create_subproject_data, create_project_data, validate_raw_project, populate_files, find_prebuild_script, PrebuildScriptFile, parse_project_metadata}, PreBuildScript};
+use super::{path_manipulation::{cleaned_path_str, relative_to_project_root, find_first_dir_named, absolute_path}, final_dependencies::{FinalGCMakeDependency, FinalPredefinedDependencyConfig, FinalPredepInfo}, raw_data_in::{RawProject, ProjectLike, dependencies::internal_dep_config::AllRawPredefinedDependencies, BuildConfigMap, BuildType, LanguageConfigMap, CompiledItemType, PreBuildConfigIn, SpecificCompilerSpecifier, ProjectMetadata, BuildConfigCompilerSpecifier, TargetBuildConfigMap, TargetSpecificBuildType}, final_project_configurables::{FinalProjectType, SubprojectOnlyOptions}, CompiledOutputItem, helpers::{create_subproject_data, create_project_data, validate_raw_project, populate_files, find_prebuild_script, PrebuildScriptFile, parse_project_metadata}, PreBuildScript};
 
 pub struct ThreePartVersion (u32, u32, u32);
 
@@ -56,7 +56,8 @@ fn resolve_prebuild_script(project_root: &str, pre_build_config: &PreBuildConfig
           links: match &pre_build_config.link {
             Some(raw_links) => Some(CompiledOutputItem::make_link_map(raw_links)?),
             None => None
-          }
+          },
+          build_config: pre_build_config.build_config.clone()
         })
       },
       PrebuildScriptFile::Python(python_file_pathbuf) => PreBuildScript::Python(
@@ -344,7 +345,8 @@ impl FinalProjectData {
     let prebuild_script = resolve_prebuild_script(
       &project_root,
       raw_project.prebuild_config.as_ref().unwrap_or(&PreBuildConfigIn {
-        link: None
+        link: None,
+        build_config: None
       })
     ).map_err(ProjectLoadFailureReason::Other)?;
 
@@ -634,17 +636,32 @@ impl FinalProjectData {
         output_name,
         output_item.get_links(),
         false
-      )?
+      )?;
+
+      self.validate_output_specific_build_config(
+        output_name,
+        output_item.get_build_config_map(),
+        false
+      )?;
     }
 
     if let Some(existing_script) = &self.prebuild_script {
       match existing_script {
         PreBuildScript::Exe(script_exe_config) => {
+          let the_item_name: String = format!("{}'s pre-build script", self.get_project_name());
+
           self.ensure_links_are_valid(
-            &format!("{}'s pre-build script", self.get_project_name()),
+            &the_item_name,
             script_exe_config.get_links(),
             true
           )?;
+
+          self.validate_output_specific_build_config(
+            &the_item_name,
+            script_exe_config.get_build_config_map(),
+            true
+          )?;
+
         },
         PreBuildScript::Python(_) => ()
       }
@@ -652,6 +669,67 @@ impl FinalProjectData {
 
     Ok(())
   }
+
+  fn validate_output_specific_build_config(
+    &self,
+    output_name: &str,
+    maybe_build_config_map: &Option<TargetBuildConfigMap>,
+    is_prebuild_script: bool
+  ) -> Result<(), String> {
+    if maybe_build_config_map.is_none() {
+      return Ok(());
+    }
+
+    for (build_type_or_all, config_by_compiler) in maybe_build_config_map.as_ref().unwrap() {
+      let build_type_name: &str = build_type_or_all.name_string();
+      let item_string: String = if is_prebuild_script
+        { String::from("prebuild script") }
+        else { format!("output item '{}'", output_name )};
+
+      match build_type_or_all {
+        TargetSpecificBuildType::AllConfigs => (),
+        targeted_build_type => {
+          let build_type: BuildType = targeted_build_type.to_general_build_type().unwrap();
+
+          if !self.build_config_map.contains_key(&build_type) {
+            return Err(format!(
+              "The {} in project '{}' contains a '{}' configuration, but no '{}' build configuration is provided by the toplevel project.",
+              &item_string,
+              self.get_project_name(),
+              build_type_name,
+              build_type_name
+            ))
+          }
+        }
+      }
+
+      for (compiler_specifier, _) in config_by_compiler {
+        match compiler_specifier {
+          BuildConfigCompilerSpecifier::All => continue,
+          narrowed_specifier => {
+            let specific_specifier: SpecificCompilerSpecifier = narrowed_specifier.to_specific().unwrap();
+
+            if !self.supported_compilers.contains(&specific_specifier) {
+              let specific_spec_name: &str = specific_specifier.name_string();
+
+              return Err(format!(
+                "The '{}' build_config for {} in project '{}' contains a configuration for '{}', but '{}' is not supported by the project. If it should be supported, add '{}' to the supported_compilers list in the toplevel project.",
+                build_type_name,
+                &item_string,
+                self.get_project_name(),
+                specific_spec_name,
+                specific_spec_name,
+                specific_spec_name
+              ))
+            }
+          }
+        }
+      }
+    }
+
+    Ok(())
+  }
+
 
   pub fn nested_include_prefix(&self, next_include_prefix: &str) -> String {
     return format!("{}/{}", &self.full_include_prefix, next_include_prefix);

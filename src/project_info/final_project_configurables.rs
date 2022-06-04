@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use super::{raw_data_in::{CompiledItemType, RawCompiledItem}, helpers::get_link_info};
+use super::{raw_data_in::{CompiledItemType, RawCompiledItem, BuildConfigMap, TargetSpecificBuildType, TargetBuildConfigMap}, helpers::get_link_info};
 
 pub struct SubprojectOnlyOptions {
   // TODO: Add subproject only options (such as optional_build)
@@ -24,7 +24,8 @@ pub enum PreBuildScript {
 pub struct CompiledOutputItem {
   pub output_type: CompiledItemType,
   pub entry_file: String,
-  pub links: Option<HashMap<String, Vec<String>>>
+  pub links: Option<HashMap<String, Vec<String>>>,
+  pub build_config: Option<TargetBuildConfigMap>
 }
 
 impl CompiledOutputItem {
@@ -49,7 +50,8 @@ impl CompiledOutputItem {
     let mut final_output_item = CompiledOutputItem {
       output_type: raw_output_item.output_type,
       entry_file: String::from(&raw_output_item.entry_file),
-      links: None
+      links: None,
+      build_config: raw_output_item.build_config.clone()
     };
 
     if let Some(raw_links) = &raw_output_item.link {
@@ -68,6 +70,10 @@ impl CompiledOutputItem {
       return !links.is_empty();
     }
     return false;
+  }
+
+  pub fn get_build_config_map(&self) -> &Option<TargetBuildConfigMap> {
+    &self.build_config
   }
 
   pub fn get_entry_file(&self) -> &str {

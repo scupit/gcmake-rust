@@ -74,7 +74,8 @@ pub fn get_default_project_config(
             OutputLibType::ToggleStaticOrShared => CompiledItemType::Library
           }
         },
-        link: None
+        link: None,
+        build_config: None
       })
     ]),
     predefined_dependencies: None,
