@@ -14,16 +14,21 @@ configuration work together.
 3. [Predefined Dependency Compatibility Layer](predefined_dependency_doc.md)
 4. [Project TODOs/Roadmap](TODO.md)
 
-## Quick Links
+## Important Concepts
+
+- ["Include prefix" accumulation](cmake_data.md#prefix-accumulation): How project hierarchy
+  affects each subproject's file inclusion prefix.
+- [Output item rules and constraints](cmake_data.md#output-rules-and-constraints): Rules dictating
+  output type and quantity per project instance.
+
+## Other Quick Links
 
 - [Getting started](/README.md#getting-started)
 - [Creating a new project](overview.md#common-uses)
 - [gcmake-test-project: an example project](https://github.com/scupit/gcmake-test-project)
-- [Adding a pre-build script](cmake_data.md#pre-build-script)
-- ["Include prefix" accumulation](cmake_data.md#prefix-accumulation)
-- [Output item rules and constraints](cmake_data.md#output-rules-and-constraints)
+- [Configuring project compilation flags and defines](cmake_data.md#build-configuration)
 - [Linking to an output](cmake_data.md#output-link)
-- Adding [compiler flags](cmake_data.md#buildconfigs-compilerflags) and
-    [linker flags](cmake_data.md#buildconfigs-linkerflags) to the build
+- [Configuring additional flags and defines per output item](cmake_data.md#output-buildconfig)
+- [Adding a pre-build script](cmake_data.md#pre-build-script)
 - [Managing dependencies](cmake_data.md#using-dependencies)
 - [Subprojects (nested projects)](cmake_data.md#subprojects)

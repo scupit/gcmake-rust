@@ -492,13 +492,74 @@ output:
       - gcmake-test-project::{ dll-lib, toggle-lib }
 ```
 
-### output flags
+### output build_config
 
-**TODO:** Implement flags specific to output items.
+> Optional `Map<`[BuildTypeSelector](#build-type-selector)`,`[BuildConfig](#buildconfigs)`>`
 
-### output defines
+Additional build configuration options applied only to the output item.
 
-**TODO:** Implement compiler defines specific to output items.
+Build configurations for individual output items are specified the same way as
+[project build_configs](#buildconfigs), except for this difference:
+
+1. The [selected build type](#build-type-selector) must have an explicitly defined
+    configuration in the [project's build_configs](#buildconfigs), except for the `AllConfigs`
+    selector which applies settings regardless of build type. `AllConfigs` is always a valid selector
+    because the project is required to define at least one build configuration.
+
+``` yaml
+---
+supported_compilers:
+  - GCC
+  - Clang
+
+output:
+  my-exe-output:
+    entry_file: main.cpp
+    # These build configuration options are added to the build for the 'my-exe-output' only.
+    build_config:
+      AllConfigs:
+        All:
+          defines:
+            - DEFINED_FOR_ALL_BUILD_TYPES_ON_ALL_COMPILERS=1
+        GCC:
+          compiler_flags:
+            - -flto
+          linker_flags:
+            - -s
+          defines:
+            - DEFINED_FOR_ALL_BUILD_TYPES_ON_GCC_ONLY=1
+      Debug:
+        All:
+          defines:
+            - DEFINED_FOR_DEBUG_BUILD_ON_ALL_COMPILERS=1
+      # Can't add a MinSizeRel configuration here because no MinSizeRel
+      # config has been specified in the project's build_configs.
+
+      # MinSizeRel:
+      #   All:
+      #     defines:
+      #       - DEFINED_FOR_MINSIZEREL_BUILD_ON_ALL_COMPILERS=1
+
+build_configs:
+  Debug:
+    All:
+      defines:
+        - DEFINED_FOR_ALL_COMPILERS="Very Nice"
+    GCC:
+      compiler_flags:
+        - "-Wall"
+        - "-Og"
+  Release:
+    All:
+      defines:
+        - RELEASE_ONLY_DEFINE
+    GCC:
+      compiler_flags:
+        - "-O2"
+    Clang:
+      linker_flags:
+        - -s
+```
 
 ## Using Dependencies
 
@@ -739,6 +800,19 @@ Name of a build configuration (case sensitive). Allowed values are:
 - `MinSizeRel`
 - `RelWithDebInfo`
 
+This is used when [specifying build_configs in the toplevel project](#buildconfigs).
+
+### Build Type Selector
+
+Selector for a build type listed in [build_configs](#buildconfigs), or `AllConfigs` which
+means "use these options no matter which build type is being used".
+
+- `AllConfigs`
+- Any single [build type specifier](#build-type-specifier)
+
+This is used as a map key when configuring
+[additional build options for individual outputs](#output-buildconfig).
+
 ### Language Specifier
 
 *Case sensitive* name of a programming language used by the project.
@@ -787,7 +861,8 @@ global_defines:
 
 ### Compiler Selection Specifier
 
-*Case sensitive* name of a compiler listed in cmake_data.yaml [supported_compilers](#supportedcompilers), or `All`.
+*Case sensitive* name of a compiler listed in cmake_data.yaml [supported_compilers](#supportedcompilers),
+or `All`.
 This value is used to declare which compiler options are being configured, and is used as a map key for
 [single build config configuration](#build-config-options)
 
