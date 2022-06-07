@@ -273,7 +273,10 @@ const INSTALLATION_CONFIGURE_TEXT: &'static str = r#"function( configure_install
   set( targets_installing "${MY_INSTALLABLE_TARGETS}" )
   set( bin_files_installing "${MY_NEEDED_BIN_FILES}" )
 
-  if( NOT "${targets_installing}" STREQUAL "" )
+  list( LENGTH targets_installing has_targets_to_install )
+  list( LENGTH bin_files_installing has_files_to_install )
+
+  if( has_targets_to_install )
     install( TARGETS ${targets_installing}
       EXPORT ${PROJECT_NAME}Targets
       RUNTIME 
@@ -281,16 +284,19 @@ const INSTALLATION_CONFIGURE_TEXT: &'static str = r#"function( configure_install
       LIBRARY
         DESTINATION lib
       ARCHIVE
-        DESTINATION lib/static
+        DESTINATION lib
+        # DESTINATION lib/static
       FILE_SET HEADERS
         DESTINATION "include/${PROJECT_INCLUDE_PREFIX}"
       INCLUDES DESTINATION
         "include" "include/${PROJECT_INCLUDE_PREFIX}/include"
     )
 
-    install( FILES ${bin_files_installing}
-      DESTINATION bin
-    )
+    if( has_files_to_install )
+      install( FILES ${bin_files_installing}
+        DESTINATION bin
+      )
+    endif()
 
     install( DIRECTORY "${MY_RUNTIME_OUTPUT_DIR}/resources"
       DESTINATION bin

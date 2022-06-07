@@ -20,8 +20,10 @@ configuration work together.
   affects each subproject's file inclusion prefix.
 - [Output item rules and constraints](cmake_data.md#output-rules-and-constraints): Rules dictating
   output type and quantity per project instance.
+- [Using other gcmake-rust projects as dependencies](cmake_data.md#gcmake-dependencies): Requires some
+    extra steps at the moment.
 
-## Other Quick Links
+## Quick Links
 
 - [Getting started](/README.md#getting-started)
 - [Creating a new project](overview.md#common-uses)
@@ -32,3 +34,12 @@ configuration work together.
 - [Adding a pre-build script](cmake_data.md#pre-build-script)
 - [Managing dependencies](cmake_data.md#using-dependencies)
 - [Subprojects (nested projects)](cmake_data.md#subprojects)
+
+## GCMake Repository Links
+
+- [gcmake-rust](https://github.com/scupit/gcmake-rust): The gcmake C/C++ project configuration tool
+- [gcmake-test-project](https://github.com/scupit/gcmake-test-project): The 'test case' project for
+    gcmake-rust which also acts as its working example.
+- [gcmake-dependency-configs](https://github.com/scupit/gcmake-dependency-configs): The
+    [dependency compatibility layer](predefined_dependency_doc.md) repository which allows non-gcmake
+    projects to be imported and consumed 'out of the box' by gcmake-rust.

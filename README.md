@@ -21,6 +21,7 @@ and subprojects.
 ## Requirements
 
 - [Git](https://git-scm.com/) must be installed on the system
+- [CMake 3.23](https://cmake.org/download/) or higher
 
 ## Installation/Getting Started
 
@@ -51,3 +52,12 @@ project tree (excluding subdirectories).  If no path is provided, the current wo
 
 `gcmake new --subproject <project-name>` checks if the current working directory is a GCMake-rust project. If it is, then runs the same
 project configuration process as above and creates the project in *subprojects/\<project-name\>*.
+
+## GCMake Repository Links
+
+- [gcmake-rust](https://github.com/scupit/gcmake-rust): The gcmake C/C++ project configuration tool
+- [gcmake-test-project](https://github.com/scupit/gcmake-test-project): The 'test case' project for
+    gcmake-rust which also acts as its working example.
+- [gcmake-dependency-configs](https://github.com/scupit/gcmake-dependency-configs): The
+    [dependency compatibility layer](predefined_dependency_doc.md) repository which allows non-gcmake
+    projects to be imported and consumed 'out of the box' by gcmake-rust.
