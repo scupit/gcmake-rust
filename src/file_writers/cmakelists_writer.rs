@@ -507,14 +507,7 @@ impl<'a> CMakeListsWriter<'a> {
         component_name
       )?;
     }
-    writeln!(&self.cmakelists_file, ")")?;
-
-    if dep_name == "wxWidgets" {
-      writeln!(&self.cmakelists_file,
-        "include( ${{wxWidgets_USE_FILE}} )",
-      )?;
-    }
-    self.write_newline()?;
+    writeln!(&self.cmakelists_file, ")\n")?;
 
     writeln!(&self.cmakelists_file,
       "if( NOT {} )\n\tmessage( FATAL_ERROR \"{}\")\nendif()",
