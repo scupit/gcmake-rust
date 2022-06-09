@@ -23,7 +23,8 @@ pub enum FinalPredepInfo {
 pub struct FinalPredefinedDependencyConfig {
   predep_info: FinalPredepInfo,
   pre_load: HookScriptContainer,
-  post_load: HookScriptContainer
+  post_load: HookScriptContainer,
+  custom_populate: HookScriptContainer
 }
 
 impl FinalPredefinedDependencyConfig {
@@ -63,13 +64,15 @@ impl FinalPredefinedDependencyConfig {
     let RawPredefinedDependencyInfo {
       pre_load,
       post_load,
+      custom_populate,
       ..
     } = all_raw_dep_configs.get(dep_name).unwrap(); 
     
     return Ok(Self {
       predep_info,
       pre_load: pre_load.clone(),
-      post_load: post_load.clone()
+      post_load: post_load.clone(),
+      custom_populate: custom_populate.clone()
     });
   }
 
@@ -89,9 +92,13 @@ impl FinalPredefinedDependencyConfig {
     &self.post_load
   }
 
-  pub fn requires_fetch(&self) -> bool {
+  pub fn custom_populate_script(&self) -> &HookScriptContainer {
+    &self.custom_populate
+  }
+
+  pub fn is_auto_fetchcontent_ready(&self) -> bool {
     match &self.predep_info {
-      FinalPredepInfo::Subdirectory(_) => true,
+      FinalPredepInfo::Subdirectory(subdir_info) => !subdir_info.requires_custom_fetchcontent_populate(),
       FinalPredepInfo::CMakeComponentsModule(_) => false,
       FinalPredepInfo::CMakeModule(_) => false
     }

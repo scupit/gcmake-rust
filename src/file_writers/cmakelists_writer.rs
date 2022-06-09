@@ -1,6 +1,6 @@
-use std::{collections::{HashMap, HashSet}, fs::File, io::{self, Write}, path::{Path, PathBuf}};
+use std::{collections::{HashMap, HashSet}, fs::File, io::{self, Write}, path::{Path, PathBuf}, rc::Rc};
 
-use crate::{file_writers::cmake_utils_writer::CMakeUtilWriter, project_info::{final_project_data::{FinalProjectData, DependencySearchMode, UseableFinalProjectDataGroup}, path_manipulation::cleaned_path_str, final_dependencies::{GitRevisionSpecifier, PredefinedCMakeComponentsModuleDep, PredefinedSubdirDep, PredefinedCMakeModuleDep, FinalPredepInfo}, raw_data_in::{BuildType, BuildConfig, BuildConfigCompilerSpecifier, SpecificCompilerSpecifier, CompiledItemType, LanguageConfigMap, TargetSpecificBuildType, dependencies::internal_dep_config::CMakeModuleType}, FinalProjectType, CompiledOutputItem, PreBuildScript}};
+use crate::{file_writers::cmake_utils_writer::CMakeUtilWriter, project_info::{final_project_data::{FinalProjectData, DependencySearchMode, UseableFinalProjectDataGroup}, path_manipulation::cleaned_path_str, final_dependencies::{GitRevisionSpecifier, PredefinedCMakeComponentsModuleDep, PredefinedSubdirDep, PredefinedCMakeModuleDep, FinalPredepInfo}, raw_data_in::{BuildType, BuildConfig, BuildConfigCompilerSpecifier, SpecificCompilerSpecifier, CompiledItemType, LanguageConfigMap, TargetSpecificBuildType, dependencies::internal_dep_config::{CMakeModuleType, PredefinedCMakeDepHookFile}}, FinalProjectType, CompiledOutputItem, PreBuildScript}};
 
 const RUNTIME_BUILD_DIR_VAR: &'static str = "${MY_RUNTIME_OUTPUT_DIR}";
 const LIB_BUILD_DIR_VAR: &'static str = "${MY_LIBRARY_OUTPUT_DIR}";
@@ -459,7 +459,11 @@ impl<'a> CMakeListsWriter<'a> {
           self.write_predefined_cmake_components_module_dep(dep_name, components_dep)?;
         },
         FinalPredepInfo::Subdirectory(subdir_dep) => {
-          self.write_predefined_subdirectory_dependency(dep_name, subdir_dep)?;
+          self.write_predefined_subdirectory_dependency(
+            dep_name,
+            subdir_dep,
+            dep_info.custom_populate_script()
+          )?;
         }
       }
 
@@ -534,7 +538,8 @@ impl<'a> CMakeListsWriter<'a> {
   fn write_predefined_subdirectory_dependency(
     &self,
     dep_name: &str,
-    dep_info: &PredefinedSubdirDep
+    dep_info: &PredefinedSubdirDep,
+    maybe_custom_populate: &Option<Rc<PredefinedCMakeDepHookFile>>
   ) -> io::Result<()> {
     writeln!(&self.cmakelists_file,
       "\nFetchContent_Declare(\n\t{}\n\tSOURCE_DIR ${{CMAKE_CURRENT_SOURCE_DIR}}/dep/{}\n\tGIT_REPOSITORY {}\n\tGIT_PROGRESS TRUE",
@@ -560,6 +565,31 @@ impl<'a> CMakeListsWriter<'a> {
     }
 
     writeln!(&self.cmakelists_file, ")")?;
+
+    if dep_info.requires_custom_fetchcontent_populate() {
+      writeln!(&self.cmakelists_file,
+        "FetchContent_GetProperties( {} )",
+        dep_name
+      )?;
+
+      writeln!(&self.cmakelists_file,
+        "if( NOT {}_POPULATED )\n\tFetchContent_Populate( {} )",
+        dep_name,
+        dep_name
+      )?;
+
+      // The predefined dependency config loader guarantees that a custom_populate
+      // script exists when a subdirectory dependency specifies that it must
+      // be populated manually.
+      for line in maybe_custom_populate.as_ref().unwrap().contents_ref().lines() {
+        writeln!(&self.cmakelists_file,
+          "\t{}",
+          line
+        )?;
+      }
+
+      writeln!(&self.cmakelists_file, "endif()")?;
+    }
 
     Ok(())
   }
@@ -595,6 +625,7 @@ impl<'a> CMakeListsWriter<'a> {
     Ok(()) 
   }
 
+  // Is only run if there are dependencies which need to be made available this way.
   fn write_fetchcontent_makeavailable(&self) -> io::Result<()> {
     writeln!(&self.cmakelists_file, "\nFetchContent_MakeAvailable(")?;
 

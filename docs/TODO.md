@@ -149,22 +149,26 @@ Pre-written CMake find modules:
 - [ ] Curses (ncurses)
 - [ ] Doxygen
 - [ ] FreeType
-- [x] GLEW (**NOTE:** Will have to copy the dll manually for now. Ideally just use the static version.)
-- [ ] OpenGL
+- [x] GLEW
+- [ ] OpenAL-soft
+- [X] OpenGL
+- [ ] OpenSceneGraph (maybe) (NOTE: has cmake package config file)
 - [ ] OpenSSL
-- [ ] SDL (not sure why these are listed separately in the docs, I'll have to research that.)
+- [X] SDL2
   - [ ] SDL_image
   - [ ] SDL_mixer
   - [ ] SDL_net
   - [ ] SDL_sound
   - [ ] SDL_ttf
 - [ ] SQLite (3)
+- [X] Threads
 - [x] wxWidgets
 - [ ] Vulkan
 - [ ] ZLIB
 
 Other CMake projects:
 
+- [ ] [Qt6](https://www.qt.io/product/qt6)
 - [x] [nlohmann json](https://github.com/nlohmann/json)
 - [x] [SFML](https://www.sfml-dev.org/)
 - [x] [fmt](https://github.com/fmtlib/fmt)
@@ -176,7 +180,3 @@ Other CMake projects:
 - [ ] [TensorFlow](https://www.tensorflow.org/)
 - [ ] [imgui](https://github.com/ocornut/imgui)
 - [x] [GLM (OpenGL Mathematics)](https://github.com/g-truc/glm)
-
-Non-CMake projects:
-
-- [ ] [Asio](https://think-async.com/Asio/)

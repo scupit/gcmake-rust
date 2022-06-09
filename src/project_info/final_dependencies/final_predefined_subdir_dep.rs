@@ -22,10 +22,15 @@ pub struct FinalGitRepoDescriptor {
 pub struct PredefinedSubdirDep {
   git_repo: FinalGitRepoDescriptor,
   // Map of target base name to the namespaced target name used for linking.
-  namespaced_target_map: HashMap<String, String>
+  namespaced_target_map: HashMap<String, String>,
+  requires_custom_populate: bool
 }
 
 impl PredefinedSubdirDep {
+  pub fn requires_custom_fetchcontent_populate(&self) -> bool {
+    self.requires_custom_populate
+  }
+
   pub fn get_linkable_target_name(&self, target_name: &str) -> Option<&str> {
     self.namespaced_target_map.get(target_name)
       .map(|str_ref| &str_ref[..])
@@ -73,7 +78,8 @@ impl PredefinedSubdirDep {
           repo_url: subdir_dep.git_repo.repo_url.clone(),
           revision_specifier
         },
-        namespaced_target_map: target_map 
+        namespaced_target_map: target_map ,
+        requires_custom_populate: subdir_dep.requires_custom_fetchcontent_populate
       }
     )
   }

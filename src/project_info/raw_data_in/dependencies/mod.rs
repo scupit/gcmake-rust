@@ -36,15 +36,17 @@ pub fn all_raw_supported_dependency_configs() -> Result<AllRawPredefinedDependen
 
   let mut all_dep_configs: AllRawPredefinedDependencies = AllRawPredefinedDependencies::new();
 
+  // TODO: Refactor this. Currently, all dependency configs (including all their cmake scripts) are
+  // loaded every run of gcmake. They should only be loaded as needed.
   let dir_data = fs::read_dir(&dep_config_repo)
     .map_err(|err| err.to_string())?;
 
   for maybe_entry in dir_data {
     let entry: DirEntry = maybe_entry.map_err(|err| err.to_string())?;
     let entry_path: PathBuf = entry.path();
-    let file_name: &str = entry_path.file_name().unwrap().to_str().unwrap();
+    let dep_dir_name: &str = entry_path.file_name().unwrap().to_str().unwrap();
 
-    if entry_path.is_dir() && !file_name.starts_with('.') {
+    if entry_path.is_dir() && !dep_dir_name.starts_with('.') {
       // let dep_name = entry_path.file_name().unwrap();
       let mut config_file_path: PathBuf = entry.path();
       config_file_path.push("dep_config.yaml");
@@ -55,17 +57,33 @@ pub fn all_raw_supported_dependency_configs() -> Result<AllRawPredefinedDependen
       let dep_configs: SingleRawPredefinedDependencyConfigGroup = serde_yaml::from_str(&config_file_contents)
         .map_err(|err| err.to_string())?;
 
-      all_dep_configs.insert(
-        file_name.to_string(),
-        RawPredefinedDependencyInfo {
-          dep_configs,
-          pre_load: PredefinedCMakeDepHookFile::new(entry_path.join("pre_load.cmake"))
-            .map_err(|err| err.to_string())?
-            .map(|hook_file| Rc::new(hook_file)),
-          post_load: PredefinedCMakeDepHookFile::new(entry_path.join("post_load.cmake"))
-            .map_err(|err| err.to_string())?
-            .map(|hook_file| Rc::new(hook_file))
+      let dep_config_container = RawPredefinedDependencyInfo {
+        dep_configs,
+        // TODO: Refactor this
+        pre_load: PredefinedCMakeDepHookFile::new(entry_path.join("pre_load.cmake"))
+          .map_err(|err| err.to_string())?
+          .map(|hook_file| Rc::new(hook_file)),
+        post_load: PredefinedCMakeDepHookFile::new(entry_path.join("post_load.cmake"))
+          .map_err(|err| err.to_string())?
+          .map(|hook_file| Rc::new(hook_file)),
+        custom_populate: PredefinedCMakeDepHookFile::new(entry_path.join("custom_populate.cmake"))
+          .map_err(|err| err.to_string())?
+          .map(|hook_file| Rc::new(hook_file))
+      };
+
+      if let Some(subdir_dep) = &dep_config_container.dep_configs.as_subdirectory {
+        if subdir_dep.requires_custom_fetchcontent_populate && dep_config_container.custom_populate.is_none() {
+          return Err(format!(
+            "Predefined dependency '{}' as_subdirectory configuration requires a custom_populate.cmake. However, one could not be found in the '{}' configuration directory.",
+            dep_dir_name,
+            dep_dir_name
+          ))
         }
+      }
+
+      all_dep_configs.insert(
+        dep_dir_name.to_string(),
+        dep_config_container
       );
     }
   }

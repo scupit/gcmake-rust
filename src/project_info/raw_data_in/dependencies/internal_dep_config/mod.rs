@@ -45,7 +45,8 @@ impl PredefinedCMakeDepHookFile {
 pub struct RawPredefinedDependencyInfo {
   pub dep_configs: SingleRawPredefinedDependencyConfigGroup,
   pub pre_load: Option<Rc<PredefinedCMakeDepHookFile>>,
-  pub post_load: Option<Rc<PredefinedCMakeDepHookFile>>
+  pub post_load: Option<Rc<PredefinedCMakeDepHookFile>>,
+  pub custom_populate: Option<Rc<PredefinedCMakeDepHookFile>>
 }
 
 // Container for all dependency types defined in supported_dependencies.yaml

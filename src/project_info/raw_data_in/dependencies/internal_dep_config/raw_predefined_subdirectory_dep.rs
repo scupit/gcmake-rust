@@ -12,6 +12,10 @@ pub struct GitRepoConfig {
   pub repo_url: String
 }
 
+fn default_requires_custom_populate() -> bool {
+  false
+}
+
 // A predefined dependency which exists within the project build tree.
 // These should always be inside the dep/ folder.
 #[derive(Deserialize)]
@@ -19,7 +23,9 @@ pub struct GitRepoConfig {
 pub struct RawSubdirectoryDependency {
   namespace_config: NamespaceConfig,
   pub git_repo: GitRepoConfig,
-  pub target_names: Vec<String>
+  pub target_names: Vec<String>,
+  #[serde(default = "default_requires_custom_populate")]
+  pub requires_custom_fetchcontent_populate: bool
 }
 
 impl RawSubdirectoryDependency {

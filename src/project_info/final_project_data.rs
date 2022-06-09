@@ -753,7 +753,7 @@ impl FinalProjectData {
   pub fn has_predefined_fetchable_dependencies(&self) -> bool {
     let num_needing_fetch: usize = self.predefined_dependencies
       .iter()
-      .filter(|(_, dep_info)| dep_info.requires_fetch())
+      .filter(|(_, dep_info)| dep_info.is_auto_fetchcontent_ready())
       .collect::<HashMap<_, _>>()
       .len();
 
@@ -772,7 +772,7 @@ impl FinalProjectData {
     return self.predefined_dependencies
       .iter()
       .filter_map(|(dep_name, dep_info)| {
-        if dep_info.requires_fetch()
+        if dep_info.is_auto_fetchcontent_ready()
           { Some(dep_name) }
           else { None }
       })
