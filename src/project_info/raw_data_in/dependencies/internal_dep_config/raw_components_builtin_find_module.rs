@@ -2,6 +2,8 @@ use std::collections::HashSet;
 
 use serde::{Serialize, Deserialize};
 
+use super::CMakeModuleType;
+
 #[derive(Deserialize, Clone)]
 #[serde(deny_unknown_fields)]
 pub struct InstallationLinks {
@@ -34,8 +36,9 @@ pub struct ComponentsFindModuleUsage {
 
 #[derive(Deserialize, Clone)]
 #[serde(deny_unknown_fields)]
-pub struct RawBuiltinComponentsFindModuleDep {
+pub struct RawComponentsModuleDep {
   pub links: ComponentsFindModuleLinks,
+  pub module_type: CMakeModuleType,
   pub cmakelists_usage: ComponentsFindModuleUsage,
   pub components: HashSet<String>
 }

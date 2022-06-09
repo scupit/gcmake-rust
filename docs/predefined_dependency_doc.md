@@ -82,25 +82,27 @@ in the CMakeLists.txt.
 
 **Full example:** [gcmake-dependency-configs/nlohmann_json/dep_config.yaml](https://github.com/scupit/gcmake-dependency-configs/blob/develop/nlohmann_json/dep_config.yaml)
 
-### cmake_builtin_find_module
+### cmake_module
 
-This is the configuration for dependencies for which
-[CMake provides a pre-written 'Find Module'](https://cmake.org/cmake/help/latest/manual/cmake-modules.7.html#find-modules).
+This is the configuration for dependencies for which either
+[CMake provides a pre-written 'Find Module'](https://cmake.org/cmake/help/latest/manual/cmake-modules.7.html#find-modules)
+or the dependency provides its own
+[CMake package config file](https://cmake.org/cmake/help/latest/manual/cmake-packages.7.html#package-configuration-file)
 
 These dependencies are either system files/libraries (OpenGL, Threads, etc.), or other libraries which
-you have installed on your system (WxWidgets, GLEW, etc.). These translate to a `find_package(... MODULE)`
-call in the CMakeLists.txt.
+you have installed on your system (WxWidgets, GLEW, etc.). These translate to a
+`find_package(... <MODULE|CONFIG> REQUIRED )` call in the CMakeLists.txt.
 
 **Full example:** [gcmake-dependency-configs/OpenGL/dep_config.yaml](https://github.com/scupit/gcmake-dependency-configs/blob/develop/OpenGL/dep_config.yaml)
 
 ### cmake_builtin_find_components_module
 
-This is very similar to [normal builtin cmake find-module configs](#cmakebuiltinfindmodule), except
+This is very similar to [normal cmake module configs](#cmakebuiltinfindmodule), except
 the library being imported is composed of several components which may be optionally imported. See
 the sample usage example in
 [CMake's FindwxWidgets module page](https://cmake.org/cmake/help/latest/module/FindwxWidgets.html)
 to get an idea of how this works internally.
 
-These translate to a `find_package(... COMPONENTS ... )` call in CMakeLists.txt.
+These translate to a `find_package(... <MODULE|CONFIG> REQUIRED COMPONENTS ... )` call in CMakeLists.txt.
 
 **Full example:** [gcmake-dependency-configs/wxWidgets/dep_config.yaml](https://github.com/scupit/gcmake-dependency-configs/blob/develop/wxWidgets/dep_config.yaml)

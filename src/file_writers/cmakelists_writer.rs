@@ -1,6 +1,6 @@
 use std::{collections::{HashMap, HashSet}, fs::File, io::{self, Write}, path::{Path, PathBuf}};
 
-use crate::{file_writers::cmake_utils_writer::CMakeUtilWriter, project_info::{final_project_data::{FinalProjectData, DependencySearchMode, UseableFinalProjectDataGroup}, path_manipulation::cleaned_path_str, final_dependencies::{GitRevisionSpecifier, PredefinedComponentsFindModuleDep, PredefinedSubdirDep, PredefinedFindModuleDep, FinalPredepInfo}, raw_data_in::{BuildType, BuildConfig, BuildConfigCompilerSpecifier, SpecificCompilerSpecifier, CompiledItemType, LanguageConfigMap, TargetSpecificBuildType}, FinalProjectType, CompiledOutputItem, PreBuildScript}};
+use crate::{file_writers::cmake_utils_writer::CMakeUtilWriter, project_info::{final_project_data::{FinalProjectData, DependencySearchMode, UseableFinalProjectDataGroup}, path_manipulation::cleaned_path_str, final_dependencies::{GitRevisionSpecifier, PredefinedCMakeComponentsModuleDep, PredefinedSubdirDep, PredefinedCMakeModuleDep, FinalPredepInfo}, raw_data_in::{BuildType, BuildConfig, BuildConfigCompilerSpecifier, SpecificCompilerSpecifier, CompiledItemType, LanguageConfigMap, TargetSpecificBuildType, dependencies::internal_dep_config::CMakeModuleType}, FinalProjectType, CompiledOutputItem, PreBuildScript}};
 
 const RUNTIME_BUILD_DIR_VAR: &'static str = "${MY_RUNTIME_OUTPUT_DIR}";
 const LIB_BUILD_DIR_VAR: &'static str = "${MY_LIBRARY_OUTPUT_DIR}";
@@ -452,11 +452,11 @@ impl<'a> CMakeListsWriter<'a> {
       }
 
       match dep_info.predefined_dep_info() {
-        FinalPredepInfo::BuiltinFindModule(find_module_dep) => {
-          self.write_predefined_find_module_dep(dep_name, find_module_dep)?;
+        FinalPredepInfo::CMakeModule(find_module_dep) => {
+          self.write_predefined_cmake_module_dep(dep_name, find_module_dep)?;
         },
-        FinalPredepInfo::BuiltinComponentsFindModule(components_dep) => {
-          self.write_predefined_components_find_module_dep(dep_name, components_dep)?;
+        FinalPredepInfo::CMakeComponentsModule(components_dep) => {
+          self.write_predefined_cmake_components_module_dep(dep_name, components_dep)?;
         },
         FinalPredepInfo::Subdirectory(subdir_dep) => {
           self.write_predefined_subdirectory_dependency(dep_name, subdir_dep)?;
@@ -471,14 +471,20 @@ impl<'a> CMakeListsWriter<'a> {
     Ok(())
   }
 
-  fn write_predefined_find_module_dep(
+  fn write_predefined_cmake_module_dep(
     &self,
     dep_name: &str,
-    dep_info: &PredefinedFindModuleDep
+    dep_info: &PredefinedCMakeModuleDep
   ) -> io::Result<()> {
+    let search_type_spec: &str = match dep_info.module_type() {
+      CMakeModuleType::FindModule => "MODULE",
+      CMakeModuleType::ConfigFile => "CONFIG"
+    };
+
     writeln!(&self.cmakelists_file,
-      "find_package( {} MODULE REQUIRED )",
-      dep_name
+      "find_package( {} {} REQUIRED )",
+      dep_name,
+      search_type_spec
     )?;
 
     writeln!(&self.cmakelists_file,
@@ -491,14 +497,20 @@ impl<'a> CMakeListsWriter<'a> {
     Ok(())
   }
 
-  fn write_predefined_components_find_module_dep(
+  fn write_predefined_cmake_components_module_dep(
     &self,
     dep_name: &str,
-    dep_info: &PredefinedComponentsFindModuleDep
+    dep_info: &PredefinedCMakeComponentsModuleDep
   ) -> io::Result<()> {
+    let search_type_spec: &str = match *dep_info.module_type() {
+      CMakeModuleType::FindModule => "MODULE",
+      CMakeModuleType::ConfigFile => "CONFIG"
+    };
+
     write!(&self.cmakelists_file,
-      "find_package( {} MODULE REQUIRED ",
-      dep_name
+      "find_package( {} {} REQUIRED COMPONENTS ",
+      dep_name,
+      search_type_spec
     )?;
 
     for component_name in dep_info.get_ordered_used_components() {

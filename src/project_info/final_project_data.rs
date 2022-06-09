@@ -442,7 +442,7 @@ impl FinalProjectData {
   // needs to use to link to.
   fn populate_used_components(&mut self) -> Result<(), String> {
     for (dep_name, predefined_dep) in &mut self.predefined_dependencies {
-      if let FinalPredepInfo::BuiltinComponentsFindModule(components_dep) = predefined_dep.mut_predef_dep_info() {
+      if let FinalPredepInfo::CMakeComponentsModule(components_dep) = predefined_dep.mut_predef_dep_info() {
         for (_, output_item) in &self.output {
           if let Some(links) = output_item.get_links() {
             if let Some(linked_component_names) = links.get(dep_name) {
@@ -514,7 +514,7 @@ impl FinalProjectData {
                   ))
                 }
               },
-              FinalPredepInfo::BuiltinComponentsFindModule(components_dep) => {
+              FinalPredepInfo::CMakeComponentsModule(components_dep) => {
                 if !components_dep.has_component_named(lib_name_linking) {
                   return Err(format!(
                     "Output item '{}' in project '{}' tries to link to a nonexistent component '{}' in predefined dependency '{}'.",
@@ -525,7 +525,7 @@ impl FinalProjectData {
                   ))
                 }
               },
-              FinalPredepInfo::BuiltinFindModule(find_module_dep) => {
+              FinalPredepInfo::CMakeModule(find_module_dep) => {
                 if !find_module_dep.has_target_named(lib_name_linking) {
                   return Err(format!(
                     "Output item '{}' in project '{}' tries to link to a nonexistent target '{}' in predefined dependency '{}'.",
@@ -802,12 +802,12 @@ impl FinalProjectData {
                 .collect()
             ))
           },
-          FinalPredepInfo::BuiltinComponentsFindModule(components_dep) => {
+          FinalPredepInfo::CMakeComponentsModule(components_dep) => {
             // Here, 'item_names' contains the list of components imported. The components themselves
             // are not linked directly to targets, which is why they aren't passed to the components_dep.
             return Ok(Some(vec![components_dep.linkable_string()]));
           },
-          FinalPredepInfo::BuiltinFindModule(find_module_dep) => {
+          FinalPredepInfo::CMakeModule(find_module_dep) => {
             return Ok(Some(
               item_names
                 .iter()

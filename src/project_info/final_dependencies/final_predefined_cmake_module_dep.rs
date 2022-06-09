@@ -1,13 +1,17 @@
 use std::collections::HashMap;
 
-use crate::project_info::raw_data_in::dependencies::{internal_dep_config::RawBuiltinFindModuleDep, user_given_dep_config::UserGivenPredefinedDependencyConfig};
+use crate::project_info::raw_data_in::dependencies::{internal_dep_config::{RawModuleDep, CMakeModuleType}, user_given_dep_config::UserGivenPredefinedDependencyConfig};
 
-pub struct PredefinedFindModuleDep {
-  raw_dep: RawBuiltinFindModuleDep,
+pub struct PredefinedCMakeModuleDep {
+  raw_dep: RawModuleDep,
   namespaced_target_map: HashMap<String, String>
 }
 
-impl PredefinedFindModuleDep {
+impl PredefinedCMakeModuleDep {
+  pub fn module_type(&self) -> &CMakeModuleType {
+    &self.raw_dep.module_type
+  }
+
   pub fn found_varname(&self) -> &str {
     &self.raw_dep.found_var
   }
@@ -22,7 +26,7 @@ impl PredefinedFindModuleDep {
   }
 
   pub fn from_find_module_dep(
-    dep: &RawBuiltinFindModuleDep,
+    dep: &RawModuleDep,
     _user_given_dep_config: &UserGivenPredefinedDependencyConfig,
     _dep_name: &str
   ) -> Self {

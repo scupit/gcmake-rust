@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use crate::project_info::raw_data_in::dependencies::{internal_dep_config::{RawBuiltinComponentsFindModuleDep, ComponentsFindModuleLinks, ComponentsFindModuleUsage, UsageMode}, user_given_dep_config::{self, UserGivenPredefinedDependencyConfig}};
+use crate::project_info::raw_data_in::dependencies::{internal_dep_config::{RawComponentsModuleDep, ComponentsFindModuleLinks, ComponentsFindModuleUsage, UsageMode, CMakeModuleType}, user_given_dep_config::{self, UserGivenPredefinedDependencyConfig}};
 
 struct OrganizedComponents {
   available: HashSet<String>,
@@ -20,12 +20,16 @@ impl OrganizedComponents {
   }
 }
 
-pub struct PredefinedComponentsFindModuleDep {
-  raw_dep: RawBuiltinComponentsFindModuleDep,
+pub struct PredefinedCMakeComponentsModuleDep {
+  raw_dep: RawComponentsModuleDep,
   components: OrganizedComponents
 }
 
-impl PredefinedComponentsFindModuleDep {
+impl PredefinedCMakeComponentsModuleDep {
+  pub fn module_type(&self) -> &CMakeModuleType {
+    &self.raw_dep.module_type
+  }
+
   pub fn web_links(&self) -> &ComponentsFindModuleLinks {
     &self.raw_dep.links
   }
@@ -85,7 +89,7 @@ impl PredefinedComponentsFindModuleDep {
   }
 
   pub fn from_components_find_module_dep(
-    dep: &RawBuiltinComponentsFindModuleDep,
+    dep: &RawComponentsModuleDep,
     user_given_dep_config: &UserGivenPredefinedDependencyConfig,
     dep_name: &str
   ) -> Self {

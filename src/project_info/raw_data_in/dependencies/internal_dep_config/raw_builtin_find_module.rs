@@ -12,14 +12,22 @@ struct BuiltinFindModuleNamespaceConfig {
 
 #[derive(Deserialize, Clone)]
 #[serde(deny_unknown_fields)]
-pub struct RawBuiltinFindModuleDep {
+pub enum CMakeModuleType {
+  ConfigFile,
+  FindModule
+}
+
+#[derive(Deserialize, Clone)]
+#[serde(deny_unknown_fields)]
+pub struct RawModuleDep {
   pub found_var: String,
+  pub module_type: CMakeModuleType,
   pub links: ComponentsFindModuleLinks,
   namespace_config: BuiltinFindModuleNamespaceConfig,
   pub targets: HashSet<String>
 }
 
-impl RawBuiltinFindModuleDep {
+impl RawModuleDep {
   pub fn namespaced_target(&self, target_name: &str) -> Option<String> {
     return if self.targets.contains(target_name) {
       Some(format!(

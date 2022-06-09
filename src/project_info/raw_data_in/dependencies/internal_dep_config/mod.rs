@@ -13,8 +13,8 @@ use serde::{Deserialize};
 #[serde(deny_unknown_fields)]
 pub struct SingleRawPredefinedDependencyConfigGroup {
   pub as_subdirectory: Option<RawSubdirectoryDependency>,
-  pub cmake_builtin_find_components_module: Option<RawBuiltinComponentsFindModuleDep>,
-  pub cmake_builtin_find_module: Option<RawBuiltinFindModuleDep>
+  pub cmake_components_module: Option<RawComponentsModuleDep>,
+  pub cmake_module: Option<RawModuleDep>
 }
 
 pub struct PredefinedCMakeDepHookFile {
