@@ -103,6 +103,13 @@ impl FinalPredefinedDependencyConfig {
       FinalPredepInfo::CMakeModule(_) => false
     }
   }
+
+  pub fn should_install_if_linked(&self) -> bool {
+    return match &self.predep_info {
+      FinalPredepInfo::Subdirectory(subdir_info) => subdir_info.should_install_if_linked(),
+      _ => false
+    }
+  }
 }
 
 struct PredefinedDependencyAllConfigs {

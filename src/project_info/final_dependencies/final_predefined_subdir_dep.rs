@@ -23,10 +23,15 @@ pub struct PredefinedSubdirDep {
   git_repo: FinalGitRepoDescriptor,
   // Map of target base name to the namespaced target name used for linking.
   namespaced_target_map: HashMap<String, String>,
-  requires_custom_populate: bool
+  requires_custom_populate: bool,
+  install_if_linked: bool
 }
 
 impl PredefinedSubdirDep {
+  pub fn should_install_if_linked(&self) -> bool {
+    self.install_if_linked
+  }
+
   pub fn requires_custom_fetchcontent_populate(&self) -> bool {
     self.requires_custom_populate
   }
@@ -79,7 +84,8 @@ impl PredefinedSubdirDep {
           revision_specifier
         },
         namespaced_target_map: target_map ,
-        requires_custom_populate: subdir_dep.requires_custom_fetchcontent_populate
+        requires_custom_populate: subdir_dep.requires_custom_fetchcontent_populate,
+        install_if_linked: subdir_dep.install_if_linked
       }
     )
   }

@@ -209,6 +209,16 @@ impl<'a> CMakeListsWriter<'a> {
       "LOCAL_TOPLEVEL_PROJECT_NAME", 
       &format!("\"{}\"", self.project_data.get_project_name())
     )?;
+    self.set_basic_var(
+      "",
+      "TOPLEVEL_INCLUDE_PREFIX",
+      self.project_data.get_base_include_prefix()
+    )?;
+    self.set_basic_var(
+      "",
+      "TOPLEVEL_PROJECT_DIR",
+      "${CMAKE_CURRENT_SOURCE_DIR}"
+    )?;
     self.write_newline()?;
 
     writeln!(&self.cmakelists_file,
@@ -284,9 +294,9 @@ impl<'a> CMakeListsWriter<'a> {
       }
     }
 
-    writeln!(&self.cmakelists_file,
-      "initialize_target_list()\ninitialize_needed_files_list()"
-    )?;
+    writeln!(&self.cmakelists_file, "initialize_target_list()")?;
+    writeln!(&self.cmakelists_file, "initialize_needed_bin_files_list()")?;
+    writeln!(&self.cmakelists_file, "initialize_install_no_export_list()")?;
 
     Ok(())
   }
@@ -1427,22 +1437,59 @@ impl<'a> CMakeListsWriter<'a> {
   // See this page for help and a good example:
   // https://cmake.org/cmake/help/latest/guide/tutorial/Adding%20Export%20Configuration.html
   fn write_installation_and_exports(&self) -> io::Result<()> {
+    let mut extra_targets_to_install_no_export: HashMap<String, String> = HashMap::new();
+
+    for (_output_name, output_data) in self.project_data.get_outputs() {
+      if let Some(links) = output_data.get_links() {
+        for (lib_container, lib_names) in links {
+          if let Some(predep_config) = self.project_data.get_predefined_dependencies().get(lib_container) {
+            if predep_config.should_install_if_linked() {
+              self.project_data.get_namespaced_library_target_names(
+                DependencySearchMode::AsParent,
+                lib_container,
+                lib_names
+              )
+                .map_err(|err_message| io::Error::new(io::ErrorKind::Other, err_message))?
+                .iter()
+                .for_each(|namespaced_lib_names|
+                  for namespaced_target in namespaced_lib_names {
+                    extra_targets_to_install_no_export.insert(
+                      namespaced_target.to_string(),
+                      lib_container.to_string()
+                    );
+                  }
+                )
+            }
+          }
+        }
+      }
+    }
+
+    for (namespaced_target, container_lib) in extra_targets_to_install_no_export {
+      writeln!(&self.cmakelists_file,
+        "add_to_install_no_export_list( {} \"${{{}_RELATIVE_DEP_PATH}}\" )",
+        namespaced_target,
+        container_lib
+      )?;
+    }
 
     writeln!(&self.cmakelists_file, "clean_target_list()")?;
-    writeln!(&self.cmakelists_file, "clean_needed_files_list()")?;
+    writeln!(&self.cmakelists_file, "clean_needed_bin_files_list()")?;
+    writeln!(&self.cmakelists_file, "clean_install_no_export_list()")?;
 
     match &self.project_data.get_project_type() {
       FinalProjectType::Root => {
         // writeln!(&self.cmakelists_file,
         //   "configure_installation(\n\t\"{}\"\n\t\"{}\"\n)",
         //   "${${PROJECT_NAME}_INSTALLABLE_TARGETS}",
-        //   "${${PROJECT_NAME}_NEEDED_FILES}"
+        //   "${${PROJECT_NAME}_needed_bin_files}"
         // )?;
         writeln!(&self.cmakelists_file, "configure_installation()")?;
       },
       FinalProjectType::Subproject(_) => {
         writeln!(&self.cmakelists_file, "raise_target_list()")?;
-        writeln!(&self.cmakelists_file, "raise_needed_files_list()")?;
+        writeln!(&self.cmakelists_file, "raise_needed_bin_files_list()")?;
+        writeln!(&self.cmakelists_file, "raise_install_no_export_list()")?;
       }
     }
 

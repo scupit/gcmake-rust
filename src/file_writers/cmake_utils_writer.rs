@@ -75,7 +75,7 @@ function( make_generators
   endforeach()
 
   foreach( file_for_install IN LISTS for_install )
-    set( ${var_name}_i "${${var_name}_i}" "$<INSTALL_INTERFACE:${file_for_install}>" )
+    set( ${var_name}_i "${${var_name}_i}" "$<INSTALL_INTERFACE:${the_file_for_install}>" )
   endforeach()
 
   set( ${var_name}_b "${${var_name}_b}" PARENT_SCOPE )
@@ -163,7 +163,7 @@ function( apply_include_dirs
     PUBLIC
       "$<BUILD_INTERFACE:${BUILD_INTERFACE_INCLUDE_DIRS}>"
       "$<INSTALL_INTERFACE:include>"
-      "$<INSTALL_INTERFACE:include/${CURRENT_INCLUDE_PREFIX}/include>"
+      "$<INSTALL_INTERFACE:include/${TOPLEVEL_INCLUDE_PREFIX}/include>"
   )
 endfunction()
 "#;
@@ -273,8 +273,16 @@ const INSTALLATION_CONFIGURE_TEXT: &'static str = r#"function( configure_install
   set( targets_installing "${MY_INSTALLABLE_TARGETS}" )
   set( bin_files_installing "${MY_NEEDED_BIN_FILES}" )
 
+  set( additional_installs_no_export "${MY_ADDITIONAL_INSTALL_NO_EXPORT_TARGETS}" )
+  list( REMOVE_DUPLICATES additional_installs_no_export )
+
+  set( additional_relative_dep_paths "${MY_ADDITIONAL_RELATIVE_DEP_PATHS}" )
+  list( TRANSFORM additional_relative_dep_paths PREPEND "include/" )
+  list( REMOVE_DUPLICATES additional_relative_dep_paths )
+
   list( LENGTH targets_installing has_targets_to_install )
   list( LENGTH bin_files_installing has_files_to_install )
+  list( LENGTH additional_installs_no_export has_additional_installs )
 
   if( has_targets_to_install )
     install( TARGETS ${targets_installing}
@@ -288,13 +296,28 @@ const INSTALLATION_CONFIGURE_TEXT: &'static str = r#"function( configure_install
         # DESTINATION lib/static
       FILE_SET HEADERS
         DESTINATION "include/${PROJECT_INCLUDE_PREFIX}"
-      INCLUDES DESTINATION
-        "include" "include/${PROJECT_INCLUDE_PREFIX}/include"
     )
 
     if( has_files_to_install )
       install( FILES ${bin_files_installing}
         DESTINATION bin
+      )
+    endif()
+
+    if( has_additional_installs )
+      install( TARGETS ${additional_installs_no_export}
+        EXPORT ${PROJECT_NAME}Targets
+        RUNTIME 
+          DESTINATION bin
+        LIBRARY
+          DESTINATION lib
+        ARCHIVE
+          DESTINATION lib
+          # DESTINATION lib/static
+        FILE_SET HEADERS
+          DESTINATION "include"
+        INCLUDES DESTINATION
+          ${additional_relative_dep_paths}
       )
     endif()
 
@@ -332,8 +355,33 @@ const INSTALLATION_CONFIGURE_TEXT: &'static str = r#"function( configure_install
       FILE "${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}Targets.cmake"
       NAMESPACE "${PROJECT_NAME}::"
     )
+  else()
+    message( FATAL_ERROR "ERROR: This project (${PROJECT_NAME}) doesn't install any targets." )
   endif()
 endfunction()
+
+macro( initialize_install_no_export_list )
+  set( MY_ADDITIONAL_INSTALL_NO_EXPORT_TARGETS "" )
+  set( MY_ADDITIONAL_RELATIVE_DEP_PATHS "" )
+endmacro()
+
+macro( clean_install_no_export_list )
+  clean_list( "${MY_ADDITIONAL_INSTALL_NO_EXPORT_TARGETS}" MY_ADDITIONAL_INSTALL_NO_EXPORT_TARGETS )
+  clean_list( "${MY_ADDITIONAL_RELATIVE_DEP_PATHS}" MY_ADDITIONAL_RELATIVE_DEP_PATHS )
+endmacro()
+
+macro( add_to_install_no_export_list
+  target_name
+  relative_dep_path
+)
+  set( MY_ADDITIONAL_INSTALL_NO_EXPORT_TARGETS "${MY_ADDITIONAL_INSTALL_NO_EXPORT_TARGETS}" "${target_name}" )
+  set( MY_ADDITIONAL_RELATIVE_DEP_PATHS "${MY_ADDITIONAL_RELATIVE_DEP_PATHS}" "${relative_dep_path}" )
+endmacro()
+
+macro( raise_install_no_export_list )
+  set( LATEST_INSTALL_NO_EXPORT_LIST "${MY_ADDITIONAL_INSTALL_NO_EXPORT_TARGETS}" PARENT_SCOPE )
+  set( LATEST_RELATIVE_DEP_PATHS "${MY_ADDITIONAL_RELATIVE_DEP_PATHS}" PARENT_SCOPE )
+endmacro()
 
 macro( initialize_target_list )
   set( MY_INSTALLABLE_TARGETS "" )
@@ -353,21 +401,21 @@ macro( raise_target_list )
   set( LATEST_SUBPROJECT_TARGET_LIST "${MY_INSTALLABLE_TARGETS}" PARENT_SCOPE )
 endmacro()
 
-macro( initialize_needed_files_list )
+macro( initialize_needed_bin_files_list )
   set( MY_NEEDED_BIN_FILES "" )
 endmacro()
 
-macro( clean_needed_files_list )
+macro( clean_needed_bin_files_list )
   clean_list( "${MY_NEEDED_BIN_FILES}" MY_NEEDED_BIN_FILES )
 endmacro()
 
-macro( add_to_needed_files_list
+macro( add_to_needed_bin_files_list
   needed_file
 )
   set( MY_NEEDED_BIN_FILES "${MY_NEEDED_BIN_FILES}" "${needed_file}" )
 endmacro()
 
-macro( raise_needed_files_list)
+macro( raise_needed_bin_files_list)
   set( LATEST_SUBPROJECT_NEEDED_BIN_FILES_LIST "${MY_NEEDED_BIN_FILES}" PARENT_SCOPE )
 endmacro()
 
@@ -394,6 +442,26 @@ function( configure_subproject
     endif()
 
     set( MY_NEEDED_BIN_FILES "${combined_list}" PARENT_SCOPE )
+  endif()
+
+  if( NOT "${LATEST_INSTALL_NO_EXPORT_LIST}" STREQUAL "" )
+    if( "${MY_ADDITIONAL_INSTALL_NO_EXPORT_TARGETS}" STREQUAL "" )
+      set( combined_list "${LATEST_INSTALL_NO_EXPORT_LIST}" )
+    else()
+      set( combined_list "${MY_ADDITIONAL_INSTALL_NO_EXPORT_TARGETS}" "${LATEST_INSTALL_NO_EXPORT_LIST}" )
+    endif()
+
+    set( MY_ADDITIONAL_INSTALL_NO_EXPORT_TARGETS "${combined_list}" PARENT_SCOPE )
+  endif()
+
+  if( NOT "${LATEST_RELATIVE_DEP_PATHS}" STREQUAL "" )
+    if( "${MY_ADDITIONAL_RELATIVE_DEP_PATHS}" STREQUAL "" )
+      set( combined_list "${LATEST_RELATIVE_DEP_PATHS}" )
+    else()
+      set( combined_list "${MY_ADDITIONAL_RELATIVE_DEP_PATHS}" "${LATEST_RELATIVE_DEP_PATHS}" )
+    endif()
+
+    set( MY_ADDITIONAL_RELATIVE_DEP_PATHS "${combined_list}" PARENT_SCOPE )
   endif()
 endfunction()
 "#;

@@ -6,8 +6,22 @@ There are a whole bunch of things which need doing. This is the place to list th
   but can be configured to work with gcmake by providing a 'yaml dependency glue' config. Those glue configs
   should be contained in a separate repository, should function as a sort of "registry" updateable by the
   gcmake tool.
-- Set fetchcontent_quiet to true after first config if all subprojects/dependencies are cloned correctly.
+- [x] Set fetchcontent_quiet to true after first config if all subprojects/dependencies are cloned correctly.
   That way git info doesn't clog up the output prompt each configure.
+
+## Priorities
+
+- [ ] For compiled libraries (`StaticLib`, `SharedLib`, and `CompiledLib`), links must be explicitly
+        categorized as 'public' or 'private'. Add a section in the docs to explain this. See
+        [this great StackOverflow answer](https://stackoverflow.com/questions/26037954/cmake-target-link-libraries-interface-dependencies)
+        for the difference between PUBLIC, PRIVATE, and, INTERFACE in CMake.
+- [ ] Header-only library support. `HeaderOnly`
+- [ ] When generating CMakeLists.txt, make sure to use correct access specifiers.
+        Headers should be PRIVATE for executables, INTERFACE for header-only libraries, and
+        PUBLIC for compiled libraries. Links should be PRIVATE for executables, INTERFACE for
+        header-only libraries, and PUBLIC or PRIVATE for compiled libraries (see above).
+- [ ] Change `Library` output type to `CompiledLib` or `BinaryLib`, so it won't be confused with
+        header-only libraries.
 
 ## Configuration TODO
 
@@ -46,7 +60,7 @@ project, organized as *components*. See [SFML](https://github.com/SFML/SFML) for
 
 - [x] **Namespaced output targets**
 - [ ] Support for header-only libraries.
-- [ ] Defines and flags per target.
+- [x] Defines and flags per target.
 
 ### Testing
 
@@ -120,12 +134,8 @@ The command set for viewing project metadata.
 
 ### External libraries TODO
 
-- **Move dependency yaml configurations to separate files, in their own repository**, since other library
-  compatibility configurations shouldn't be tied to the tool itself. Add command `update-compat` which clones
-  or pulls that repo to *HOME/.gcmake/gcmake-lib-configs*. This tool can then read from there (or a given
-  custom location with a new flag).
 - [x] Remove default `latest_stable_release_tag` in dependency yaml configuration. This project shouldn't manage default lib versions.
-- [ ] Add support for bringing external libraries into the project.
+- [x] Add support for bringing external libraries into the project.
 
 ### IMPORTANT NOTE
 
@@ -180,3 +190,7 @@ Other CMake projects:
 - [ ] [TensorFlow](https://www.tensorflow.org/)
 - [ ] [imgui](https://github.com/ocornut/imgui)
 - [x] [GLM (OpenGL Mathematics)](https://github.com/g-truc/glm)
+
+Other projects:
+
+- [x] [stb](https://github.com/nothings/stb)
