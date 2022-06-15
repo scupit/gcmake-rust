@@ -735,10 +735,11 @@ impl<'a> CMakeListsWriter<'a> {
     }
 
     writeln!(&self.cmakelists_file,
-      "FetchContent_Declare(\n\t{}\n\tSOURCE_DIR ${{CMAKE_CURRENT_SOURCE_DIR}}/dep/{}\n\tGIT_REPOSITORY {}\n\tGIT_PROGRESS TRUE",
+      "FetchContent_Declare(\n\t{}\n\tSOURCE_DIR ${{CMAKE_CURRENT_SOURCE_DIR}}/dep/{}\n\tGIT_REPOSITORY {}\n\tGIT_PROGRESS TRUE\n\tGIT_SHALLOW TRUE\n\tGIT_SUBMODULES_RECURSE {}",
       dep_name,
       dep_name,
-      dep_info.repo_url()
+      dep_info.repo_url(),
+      dep_info.should_recursive_clone().to_string().to_uppercase()
     )?;
     
     // TODO: Refactor this
@@ -796,10 +797,11 @@ impl<'a> CMakeListsWriter<'a> {
       )?;
 
       writeln!(&self.cmakelists_file,
-        "\nFetchContent_Declare(\n\t{}\n\tSOURCE_DIR ${{CMAKE_CURRENT_SOURCE_DIR}}/dep/{}\n\tGIT_REPOSITORY {}\n\tGIT_PROGRESS TRUE",
+        "\nFetchContent_Declare(\n\t{}\n\tSOURCE_DIR ${{CMAKE_CURRENT_SOURCE_DIR}}/dep/{}\n\tGIT_REPOSITORY {}\n\tGIT_PROGRESS TRUE\n\tGIT_SHALLOW TRUE\n\tGIT_SUBMODULES_RECURSE {}",
         dep_name,
         dep_name,
-        dep_info.repo_url()
+        dep_info.repo_url(),
+        dep_info.should_recursive_clone().to_string().to_uppercase()
       )?;
       
       // TODO: Refactor this

@@ -16,7 +16,8 @@ pub enum DependencyVersion {
 
 pub struct FinalGitRepoDescriptor {
   pub repo_url: String,
-  pub revision_specifier: GitRevisionSpecifier
+  pub revision_specifier: GitRevisionSpecifier,
+  pub recursive_clone: bool
 }
 
 pub struct PredefinedSubdirDep {
@@ -53,6 +54,10 @@ impl PredefinedSubdirDep {
     &self.git_repo.revision_specifier
   }
 
+  pub fn should_recursive_clone(&self) -> bool {
+    self.git_repo.recursive_clone
+  }
+
   pub fn from_subdir_dep(
     subdir_dep: &RawSubdirectoryDependency,
     user_given_config: &UserGivenPredefinedDependencyConfig,
@@ -81,7 +86,8 @@ impl PredefinedSubdirDep {
       Self {
         git_repo: FinalGitRepoDescriptor {
           repo_url: subdir_dep.git_repo.repo_url.clone(),
-          revision_specifier
+          revision_specifier,
+          recursive_clone: subdir_dep.git_repo.recursive_clone
         },
         include_dir_name: subdir_dep.include_dir_name.clone(),
         namespaced_target_map: target_map ,

@@ -13,7 +13,7 @@ pub enum GCMakeDependencyStatus {
 
 pub struct FinalGCMakeDependency {
   git_repo: FinalGitRepoDescriptor,
-  dep_project_status: GCMakeDependencyStatus,
+  dep_project_status: GCMakeDependencyStatus
 }
 
 impl FinalGCMakeDependency {
@@ -35,7 +35,8 @@ impl FinalGCMakeDependency {
     return Ok(Self {
       git_repo: FinalGitRepoDescriptor {
         repo_url: given_config.repo_url.clone(),
-        revision_specifier: download_specifier
+        revision_specifier: download_specifier,
+        recursive_clone: true
       },
       dep_project_status: match maybe_associated_project {
         Some(project_info) => GCMakeDependencyStatus::Available(project_info),
@@ -50,6 +51,10 @@ impl FinalGCMakeDependency {
 
   pub fn revision(&self) -> &GitRevisionSpecifier {
     &self.git_repo.revision_specifier
+  }
+
+  pub fn should_recursive_clone(&self) -> bool {
+    self.git_repo.recursive_clone
   }
 
   pub fn project_status(&self) -> &GCMakeDependencyStatus {
