@@ -1,8 +1,31 @@
-use std::{path::{PathBuf, Path}, fs, io};
+use std::{path::{PathBuf, Path}, fs, io, os::raw, any};
 
 use regex::{Captures, Regex};
 
-use super::{raw_data_in::{RawProject, RawSubproject, ProjectLike, ProjectMetadata}, path_manipulation::cleaned_pathbuf, final_project_configurables::LinkInfo, final_project_data::ProjectLoadFailureReason};
+use super::{raw_data_in::{RawProject, RawSubproject, ProjectLike, ProjectMetadata, CompiledItemType}, path_manipulation::cleaned_pathbuf, final_project_configurables::LinkInfo, final_project_data::ProjectLoadFailureReason};
+
+#[derive(PartialEq, Eq)]
+pub enum RetrievedCodeFileType {
+  Source,
+  Header,
+  TemplateImpl,
+  // Module (when implemented in compilers and build systems)
+  Unknown
+}
+
+pub fn retrieve_file_type(any_path_type: impl AsRef<Path>) -> RetrievedCodeFileType {
+  let the_path: &Path = any_path_type.as_ref();
+
+  return match the_path.extension() {
+    Some(extension) => match extension.to_str().unwrap() {
+      "c" | "cpp" | "cxx" => RetrievedCodeFileType::Source,
+      "h" | "hpp" | "hxx" => RetrievedCodeFileType::Header,
+      "tpp" | "txx"       => RetrievedCodeFileType::TemplateImpl,
+      _                   => RetrievedCodeFileType::Unknown
+    },
+    None => RetrievedCodeFileType::Unknown
+  }
+}
 
 fn file_variants(
   project_root: &str,
@@ -148,43 +171,57 @@ pub fn get_link_info(link_str: &str) -> Result<LinkInfo, String> {
   return Err(format!("Link specifier \"{}\" is in an invalid format", link_str));
 }
 
-pub fn validate_output_config(project_data: &RawProject) -> Result<(), String> {
-  let mut makes_executable: bool = false;
-  let mut makes_library: bool = false;
-
-  for (_output_name, output_data) in project_data.get_output() {
-    if output_data.is_library_type() {
-      if makes_library {
-        return Err(format!("Project \"{}\" contains more than one library output, but should only contain one.", project_data.get_name()));
-      }
-
-      makes_library = true;
-
-      if makes_executable {
-        break;
-      }
-    }
-    else if output_data.is_executable_type() {
-      makes_executable = true;
-
-      if makes_library {
-        break
-      }
-    }
-  }
-
-  return if makes_executable && makes_library {
-    Err(format!("Project \"{}\" should not create both library and executable outputs.", project_data.get_name()))
-  }
-  else {
-    Ok(())
-  }
+pub enum ProjectOutputType {
+  ExeProject,
+  CompiledLibProject,
+  HeaderOnlyLibProject
 }
 
-pub fn validate_raw_project(project_data: &RawProject) -> Result<(), String> {
-  if let Err(message) = validate_output_config(project_data) {
-    return Err(message)
+pub fn validate_raw_project_outputs(raw_project: &RawProject) -> Result<ProjectOutputType, String> {
+  let mut num_exes: i32 = 0;
+  let mut num_compiled_libs: i32 = 0;
+  let mut num_header_only_libs: i32 = 0;
+
+  for (_, raw_output_data) in raw_project.get_output() {
+    match *raw_output_data.get_output_type() {
+      CompiledItemType::Executable => num_exes += 1,
+      CompiledItemType::HeaderOnlyLib => num_header_only_libs += 1,
+      CompiledItemType::Library
+      | CompiledItemType::StaticLib
+      | CompiledItemType::SharedLib => num_compiled_libs += 1
+    }
   }
 
-  Ok(())
+  let total_num_libs: i32 = num_compiled_libs + num_header_only_libs;
+
+  if num_exes > 0 && total_num_libs > 0 {
+    return Err(format!(
+      "Project \"{}\" should not create both library and executable outputs.",
+      raw_project.get_name()
+    ));
+  }
+  else if total_num_libs > 1 {
+    return Err(format!(
+      "Project \"{}\" contains {} library outputs, but should only contain one.",
+      total_num_libs,
+      raw_project.get_name()
+    ));
+  }
+  else if total_num_libs + num_exes == 0 {
+    return Err(format!(
+      "Project \"{}\" does not contain any output items. Each project is required to define at least one output.",
+      raw_project.get_name()
+    ));
+  }
+
+  return if num_compiled_libs == 1 {
+    Ok(ProjectOutputType::CompiledLibProject)
+  }
+  else if num_header_only_libs == 1 {
+    Ok(ProjectOutputType::HeaderOnlyLibProject)
+  }
+  else {
+    // No libraries are created, and 1 or more executables are made
+    Ok(ProjectOutputType::ExeProject)
+  }
 }

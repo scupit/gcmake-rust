@@ -162,7 +162,20 @@ pub enum CompiledItemType {
   Executable,
   Library,
   StaticLib,
-  SharedLib
+  SharedLib,
+  HeaderOnlyLib
+}
+
+impl CompiledItemType {
+  pub fn name_string(&self) -> &str {
+    match *self {
+      CompiledItemType::Executable => "Executable",
+      CompiledItemType::Library => "Library",
+      CompiledItemType::StaticLib => "StaticLib",
+      CompiledItemType::SharedLib => "SharedLib",
+      CompiledItemType::HeaderOnlyLib => "HeaderOnlyLib",
+    }
+  }
 }
 
 #[derive(Serialize, Deserialize, Hash, Debug, Eq, PartialEq, PartialOrd, Ord, Clone, Copy)]
@@ -211,7 +224,17 @@ impl TargetSpecificBuildType {
   }
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(deny_unknown_fields, untagged)]
+pub enum LinkSection {
+  Uncategorized(Vec<String>),
+  PublicPrivateCategorized {
+    public: Option<Vec<String>>,
+    private: Option<Vec<String>>
+  }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(deny_unknown_fields)]
 pub struct RawCompiledItem {
   pub output_type: CompiledItemType,
@@ -223,7 +246,7 @@ pub struct RawCompiledItem {
   // The link format is namespaced like rust imports. subproject_name is the name of 
   // the library project which contains the library linking to. Eventually you will be able
   // to link to items inside dependencies as well, once dependency support is added.
-  pub link: Option<Vec<String>>,
+  pub link: Option<LinkSection>,
   pub build_config: Option<TargetBuildConfigMap>
 }
 
@@ -236,11 +259,16 @@ impl RawCompiledItem {
     return &self.output_type;
   }
 
+  pub fn is_header_only_type(&self) -> bool {
+    self.output_type == CompiledItemType::HeaderOnlyLib
+  }
+
   pub fn is_library_type(&self) -> bool {
     match self.output_type {
       CompiledItemType::Library
       | CompiledItemType::SharedLib
-      | CompiledItemType::StaticLib => true,
+      | CompiledItemType::StaticLib
+      | CompiledItemType::HeaderOnlyLib => true,
       CompiledItemType::Executable => false
     }
   }

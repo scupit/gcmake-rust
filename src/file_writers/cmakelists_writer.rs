@@ -1,6 +1,6 @@
-use std::{collections::{HashMap, HashSet}, fs::File, io::{self, Write}, path::{Path, PathBuf}, rc::Rc};
+use std::{collections::{HashMap, HashSet}, fs::File, io::{self, Write}, path::{Path, PathBuf}, rc::Rc, cell::RefCell, borrow::BorrowMut, ops::{Deref, DerefMut}};
 
-use crate::{file_writers::cmake_utils_writer::CMakeUtilWriter, project_info::{final_project_data::{FinalProjectData, DependencySearchMode, UseableFinalProjectDataGroup}, path_manipulation::cleaned_path_str, final_dependencies::{GitRevisionSpecifier, PredefinedCMakeComponentsModuleDep, PredefinedSubdirDep, PredefinedCMakeModuleDep, FinalPredepInfo}, raw_data_in::{BuildType, BuildConfig, BuildConfigCompilerSpecifier, SpecificCompilerSpecifier, CompiledItemType, LanguageConfigMap, TargetSpecificBuildType, dependencies::internal_dep_config::{CMakeModuleType, PredefinedCMakeDepHookFile}}, FinalProjectType, CompiledOutputItem, PreBuildScript}};
+use crate::{file_writers::cmake_utils_writer::CMakeUtilWriter, project_info::{final_project_data::{FinalProjectData, DependencySearchMode, UseableFinalProjectDataGroup}, path_manipulation::cleaned_path_str, final_dependencies::{GitRevisionSpecifier, PredefinedCMakeComponentsModuleDep, PredefinedSubdirDep, PredefinedCMakeModuleDep, FinalPredepInfo}, raw_data_in::{BuildType, BuildConfig, BuildConfigCompilerSpecifier, SpecificCompilerSpecifier, CompiledItemType, LanguageConfigMap, TargetSpecificBuildType, dependencies::internal_dep_config::{CMakeModuleType, PredefinedCMakeDepHookFile}}, FinalProjectType, CompiledOutputItem, PreBuildScript, LinkMode, LinkView}};
 
 const RUNTIME_BUILD_DIR_VAR: &'static str = "${MY_RUNTIME_OUTPUT_DIR}";
 const LIB_BUILD_DIR_VAR: &'static str = "${MY_LIBRARY_OUTPUT_DIR}";
@@ -21,9 +21,12 @@ fn configure_cmake_helper(project_data: &FinalProjectData) -> io::Result<()> {
     util_writer.write_cmake_utils()?;
   }
 
-  let cmake_configurer = CMakeListsWriter::new(project_data, util_writer)?;
+  let mut cmake_configurer = CMakeListsWriter::new(project_data, util_writer)?;
   cmake_configurer.write_cmakelists()?;
-  cmake_configurer.write_cmake_config_in()?;
+  
+  if project_data.is_root_project() {
+    cmake_configurer.write_cmake_config_in()?;
+  }
   Ok(())
 }
 
@@ -100,11 +103,16 @@ fn flattened_maybe_linker_flags_string(maybe_flags: &Option<HashSet<String>>) ->
   }
 }
 
+enum WritingTo {
+  CMakeLists,
+  CMakeConfigIn
+}
+
 struct CMakeListsWriter<'a> {
   project_data: &'a FinalProjectData,
   util_writer: CMakeUtilWriter,
   cmakelists_file: File,
-  cmake_config_in_file: File
+  cmake_config_in_file: File,
 }
 
 impl<'a> CMakeListsWriter<'a> {
@@ -115,6 +123,7 @@ impl<'a> CMakeListsWriter<'a> {
     let cmakelists_file_name: String = format!("{}/CMakeLists.txt", project_data.get_project_root());
     let cmake_config_in_file_name: String = format!("{}/Config.cmake.in", project_data.get_project_root());
 
+
     Ok(Self {
       project_data,
       util_writer,
@@ -123,17 +132,176 @@ impl<'a> CMakeListsWriter<'a> {
     })
   }
 
-  fn write_cmake_config_in(&self) -> io::Result<()> {
-    writeln!(&self.cmake_config_in_file, "@PACKAGE_INIT@\n")?;
+  // This function is only run when using a root project.
+  fn write_cmake_config_in(&mut self) -> io::Result<()> {
+    writeln!(self.cmake_config_in_file, "@PACKAGE_INIT@\n")?;
+
+    writeln!(
+      self.cmake_config_in_file,
+      "include( CMakeFindDependencyMacro )"
+    )?;
+
+    // Collect all PUBLIC/INTERFACE linked find_module and find_module_components
+    // dependencies (+ all components) from the whole project. Import them here as if they
+    // were being used in the CMakeLists file (including all cmake hooks).
+
+    // All PUBLIC/INTERFACE linked subdirectory dependencies targets were already added as install targets
+    // to the current project's export set, and were also installed by their respective projects.
+    // Since they were built as part of the "current project", nothing needs to happen with those.
+
+    // All PUBLIC/INTERFACE linked gcmake dependency targets should have already been added as install
+    // targets to the current project's export set. This means their headers were installed too, since
+    // FILE_SET is used by gcmake. 
+    // The question then is, how to find_package that project's dependencies? It's possible to just include
+    // the project's toplevel CMake.Config.in, but that would try to retrieve all the dependencies needed
+    // by the that project (including dependencies for its executables, etc.). We only need the dependencies
+    // of its libraries which were PUBLIC/INTERFACE linked to our project.
+    // Looks like we might be able to recurse through all gcmake dependencies and collect a flattened list
+    // to generate (just like everything above) using the same method as a regular project.
+
+    // Actually you know what, it's fine to just include it. Successfully building and installing the
+    // GCMake dependency as part of your project means that all the dependencies needed by the
+    // GCMake dependency are already present. Since the dependencies of the GCMake dependency are
+    // 'inherited' by this project, including the CMake.Config.in of the GCMake dependency is necesary
+    // to ensure all needed system dependencies are available when importing the current project
+    // using find_package.
+
+    // if this project PUBLIC/INTERFACE links any libraries from a gcmake_dependency,
+    // include the Config.CMake.in file of the gcmake_dependency project.
+
+    // TODO: Definitely refactor this. This type is super ugly.
+    let needed_find_components_module_targets: Rc<RefCell<HashMap<String, (HashSet<String>, Vec<String>, CMakeModuleType)>>> =
+      Rc::new(RefCell::new(HashMap::new()));
+    let needed_find_module_targets: Rc<RefCell<HashMap<String, CMakeModuleType>>> =
+      Rc::new(RefCell::new(HashMap::new()));
+    let needed_public_gcmake_projects: Rc<RefCell<HashSet<String>>> =
+      Rc::new(RefCell::new(HashSet::new()));
+
+    self.project_data.recurse_subprojects_and_current(&|project| {
+      // This is annoying.
+      let mut components_map_borrow = needed_find_components_module_targets.deref().borrow_mut();
+      let mut singles_map_borrow = needed_find_module_targets.deref().borrow_mut();
+      let mut gcmake_map_borrow = needed_public_gcmake_projects.deref().borrow_mut();
+
+      for (_, output_item) in project.get_outputs() {
+        for ref lib_container_name in output_item.get_links().all_projects_linked() {
+          let link_view = output_item.get_links().get(lib_container_name).unwrap();
+          let link_iterator = link_view
+            .iter_by_link_mode([LinkMode::Public, LinkMode::Interface]);
+
+          if let Some(_) = project.get_gcmake_dependencies().get(lib_container_name) {
+            if link_iterator.count() > 0 {
+              gcmake_map_borrow.insert(lib_container_name.to_string());
+            }
+          }
+          else if let Some(predef_dep) = project.get_predefined_dependencies().get(lib_container_name) {
+            match predef_dep.predefined_dep_info() {
+              FinalPredepInfo::Subdirectory(_) => {
+                // Nothing needs to happen here, since the subdirectory dependencies are installed
+                // with this project by default.
+              },
+              FinalPredepInfo::CMakeComponentsModule(components_dep) => {
+                // NOTE that this always creates the entry, even if it isn't needed.
+                // Make sure to filter out entries with empty 'used component' lists later.
+                let (used_targets, ordered_targets, _) = components_map_borrow
+                  .entry(lib_container_name.clone())
+                  .or_insert((
+                    HashSet::new(),
+                    Vec::new(),
+                    components_dep.module_type().clone()
+                  ));
+                
+                link_iterator
+                  .for_each(|target_name| {
+                    if !used_targets.contains(target_name) {
+                      used_targets.insert(target_name.to_string());
+                      ordered_targets.push(target_name.to_string());
+                    }
+                  })
+              },
+              FinalPredepInfo::CMakeModule(cmake_module) => {
+                if link_iterator.count() > 0 {
+                  singles_map_borrow.insert(
+                    lib_container_name.to_string(),
+                    cmake_module.module_type().clone()
+                  );
+                }
+              }
+            }
+          }
+        }
+      }
+    });
+
+    for (dep_name, (_, ordered_components, module_type)) in needed_find_components_module_targets.deref().borrow().iter() {
+      if ordered_components.is_empty() {
+        continue;
+      }
+
+      let module_type_string: &str = match module_type {
+        CMakeModuleType::ConfigFile => "CONFIG",
+        CMakeModuleType::FindModule => "MODULE",
+      };
+
+      write!(&self.cmake_config_in_file,
+        "find_dependency( {} {} COMPONENTS",
+        dep_name,
+        module_type_string
+      )?;
+
+      for component_name in ordered_components {
+        write!(&self.cmake_config_in_file,
+          " {}",
+          component_name
+        )?;
+      }
+
+      writeln!(&self.cmake_config_in_file, " )")?;
+    }
+
+    for (dep_name, module_type) in needed_find_module_targets.deref().borrow().iter() {
+      let module_type_string: &str = match module_type {
+        CMakeModuleType::ConfigFile => "CONFIG",
+        CMakeModuleType::FindModule => "MODULE",
+      };
+
+      writeln!(&self.cmake_config_in_file,
+        "find_dependency( {} {} )",
+        dep_name,
+        module_type_string
+      )?;
+    }
+
+    // Is this how this should work?
+    // I'm not sure if gcmake projects should be searched for using find_dependency in the install
+    // directory, Or if their Config.CMake.in file should be included directly into this one (note
+    // that the inclusion is recursive).
+    // I'm leaning toward find_dependency, because that includes the gcmake project's package config
+    // file anyways, which has the same effect. And since all gcmake projects are built as part of the
+    // main project, their config files, headers, and libraries should always be installed with the
+    // main project. This means including the package config file for gcmake dependencies should
+    // always be reliable AS LONG AS THE GCMAKE DEPENDENCY EXISTS IN THE TREE.
+
+    // I need to specify that CMake needs to search the current project's install tree.
+    // Not sure if I need to use CMAKE_CURRENT_LIST_DIR or CMAKE_INSTALL_PREFIX. Probably
+    // CMAKE_INSTALL_PREFIX.
+
+    for gcmake_dep_name in needed_public_gcmake_projects.deref().borrow().iter() {
+      writeln!(&self.cmake_config_in_file,
+        "find_dependency( {} \n\tPATHS\n\t\t\"${{CMAKE_CURRENT_LIST_DIR}}/../{}\"\n)",
+        gcmake_dep_name,
+        gcmake_dep_name
+      )?
+    }
+
     writeln!(&self.cmake_config_in_file,
       "include( \"${{CMAKE_CURRENT_LIST_DIR}}/{}Targets.cmake\" )",
       self.project_data.get_project_name()
     )?;
-    
     Ok(())
   }
 
-  fn write_cmakelists(&self) -> io::Result<()> {
+  fn write_cmakelists(&mut self) -> io::Result<()> {
     let project_type: &FinalProjectType = self.project_data.get_project_type();
     self.write_project_header()?;
 
@@ -551,8 +719,23 @@ impl<'a> CMakeListsWriter<'a> {
     dep_info: &PredefinedSubdirDep,
     maybe_custom_populate: &Option<Rc<PredefinedCMakeDepHookFile>>
   ) -> io::Result<()> {
+    // Subdir dependencies which have this 'custom import' script
+    // might be installed in a weird way due to how CMake's FILE_SET
+    // currently populates directories for its files.
+    // Because of this, the custom_populate.cmake script for that dependency
+    // should set this variable instead.
+    if !dep_info.requires_custom_fetchcontent_populate() {
+      self.set_basic_var(
+        "\n",
+        &format!("{}_RELATIVE_DEP_PATH", dep_name),
+        dep_info.custom_relative_include_dir_name()
+          .as_ref()
+          .map_or(dep_name, |dep_name_string| dep_name_string.as_str())
+      )?;
+    }
+
     writeln!(&self.cmakelists_file,
-      "\nFetchContent_Declare(\n\t{}\n\tSOURCE_DIR ${{CMAKE_CURRENT_SOURCE_DIR}}/dep/{}\n\tGIT_REPOSITORY {}\n\tGIT_PROGRESS TRUE",
+      "FetchContent_Declare(\n\t{}\n\tSOURCE_DIR ${{CMAKE_CURRENT_SOURCE_DIR}}/dep/{}\n\tGIT_REPOSITORY {}\n\tGIT_PROGRESS TRUE",
       dep_name,
       dep_name,
       dep_info.repo_url()
@@ -606,6 +789,12 @@ impl<'a> CMakeListsWriter<'a> {
 
   fn write_gcmake_dependencies(&self) -> io::Result<()> {
     for (dep_name, dep_info) in self.project_data.get_gcmake_dependencies() {
+      self.set_basic_var(
+        "\n",
+        &format!("{}_RELATIVE_DEP_PATH", dep_name),
+        &format!("dep/{}", dep_name)
+      )?;
+
       writeln!(&self.cmakelists_file,
         "\nFetchContent_Declare(\n\t{}\n\tSOURCE_DIR ${{CMAKE_CURRENT_SOURCE_DIR}}/dep/{}\n\tGIT_REPOSITORY {}\n\tGIT_PROGRESS TRUE",
         dep_name,
@@ -744,7 +933,12 @@ impl<'a> CMakeListsWriter<'a> {
     Ok(())
   }
 
-  fn set_basic_var(&self, spacer: &str, var_name: &str, var_value: &str) -> io::Result<()> {
+  fn set_basic_var(
+    &self,
+    spacer: &str,
+    var_name: &str,
+    var_value: &str
+  ) -> io::Result<()> {
     writeln!(&self.cmakelists_file, "{}set( {} {} )", spacer, var_name, var_value)?;
     Ok(())
   }
@@ -833,7 +1027,10 @@ impl<'a> CMakeListsWriter<'a> {
     // Write libraries first
     for (output_name, output_data) in self.project_data.get_outputs() {
       match output_data.get_output_type() {
-        CompiledItemType::StaticLib | CompiledItemType::SharedLib => {
+        CompiledItemType::StaticLib
+          | CompiledItemType::SharedLib
+          | CompiledItemType::HeaderOnlyLib =>
+        {
           self.write_defined_type_library(
             output_data,
             output_name,
@@ -1061,12 +1258,18 @@ impl<'a> CMakeListsWriter<'a> {
   fn write_defines_for_output(
     &self,
     output_name: &str,
-    _output_data: &CompiledOutputItem
+    output_data: &CompiledOutputItem
   ) -> io::Result<()> {
+    let inheritance_method: &str = match output_data.get_output_type() {
+      CompiledItemType::HeaderOnlyLib => "INTERFACE",
+      _ => "PRIVATE"
+    };
+
     // Compiler defines
     writeln!(&self.cmakelists_file,
-      "target_compile_definitions( {}\n\tPRIVATE ",
-      output_name
+      "target_compile_definitions( {}\n\t{} ",
+      output_name,
+      inheritance_method
     )?;
 
     for (config, _) in self.project_data.get_build_configs() {
@@ -1089,12 +1292,18 @@ impl<'a> CMakeListsWriter<'a> {
   fn write_target_link_options_for_output(
     &self,
     output_name: &str,
-    _output_data: &CompiledOutputItem
+    output_data: &CompiledOutputItem
   ) -> io::Result<()> {
+    let inheritance_method: &str = match output_data.get_output_type() {
+      CompiledItemType::HeaderOnlyLib => "INTERFACE",
+      _ => "PRIVATE"
+    };
+
     // Linker flags
     writeln!(&self.cmakelists_file,
-      "target_link_options( {}\n\tPRIVATE ",
-      output_name
+      "target_link_options( {}\n\t{} ",
+      output_name,
+      inheritance_method
     )?;
 
     for (config, _) in self.project_data.get_build_configs() {
@@ -1117,12 +1326,18 @@ impl<'a> CMakeListsWriter<'a> {
   fn write_target_compile_options_for_output(
     &self,
     output_name: &str,
-    _output_data: &CompiledOutputItem
+    output_data: &CompiledOutputItem
   ) -> io::Result<()> {
+    let inheritance_method: &str = match output_data.get_output_type() {
+      CompiledItemType::HeaderOnlyLib => "INTERFACE",
+      _ => "PRIVATE"
+    };
+
     // Compiler flags
     writeln!(&self.cmakelists_file,
-      "target_compile_options( {}\n\tPRIVATE ",
-      output_name
+      "target_compile_options( {}\n\t{} ",
+      output_name,
+      inheritance_method
     )?;
 
     for (config, _) in self.project_data.get_build_configs() {
@@ -1141,8 +1356,9 @@ impl<'a> CMakeListsWriter<'a> {
 
     // Language standard and extensions config
     writeln!(&self.cmakelists_file,
-      "target_compile_features( {}\n\tPRIVATE ",
-      output_name
+      "target_compile_features( {}\n\t{} ",
+      output_name,
+      inheritance_method
     )?;
 
     writeln!(&self.cmakelists_file, "\t\tc_std_${{PROJECT_C_LANGUAGE_STANDARD}}")?;
@@ -1160,34 +1376,49 @@ impl<'a> CMakeListsWriter<'a> {
     output_name: &str,
     output_data: &CompiledOutputItem
   ) -> io::Result<()> {
-    if let Some(output_link_map) = output_data.get_links() {
+    if output_data.has_links() {
+      let links = output_data.get_links();
+
       writeln!(&self.cmakelists_file,
-        "target_link_libraries( {}",
+        "target_link_libraries( {} ",
         output_name
       )?;
 
-      // TODO: Use subproject name for namespacing once namespaced output targets are implemented.
-      // Or at least use the subproject name to get the subproject, and derive its namespace name
-      // from that.
-      for (project_name, lib_names_linking) in output_link_map {
-        let maybe_matching_namespaced_lib_names: Option<Vec<String>> =
-          self.project_data.get_namespaced_library_target_names(
-            DependencySearchMode::AsParent,
-            project_name,
-            lib_names_linking
-          )
-          .map_err(|msg| io::Error::new(io::ErrorKind::Other, msg))?;
+      for (output_link_map, link_mode) in links.iter_link_maps() {
+        if !output_link_map.is_empty() {
+          let inheritance_method: &str = match link_mode {
+            LinkMode::Public => "PUBLIC",
+            LinkMode::Private => "PRIVATE",
+            LinkMode::Interface => "INTERFACE",
+          };
 
-        match maybe_matching_namespaced_lib_names {
-          None => unreachable!("No link libraries were found even though they were defined. This code shouldn't be reached, since library existence is checked when project is configured."),
-          Some(namespaced_lib_names) => {
-            for namespaced_lib_name in namespaced_lib_names {
-              writeln!(&self.cmakelists_file,
-                "\t{}",
-                namespaced_lib_name
-              )?;
+          writeln!(&self.cmakelists_file,
+            "\t{}",
+            inheritance_method
+          )?;
+
+          for (project_name, lib_names_linking) in output_link_map {
+            let maybe_matching_namespaced_lib_names: Option<Vec<String>> =
+              self.project_data.get_namespaced_library_target_names(
+                DependencySearchMode::AsParent,
+                project_name,
+                lib_names_linking
+              )
+              .map_err(|msg| io::Error::new(io::ErrorKind::Other, msg))?;
+
+            match maybe_matching_namespaced_lib_names {
+              None => unreachable!("No link libraries were found even though they were defined. This code shouldn't be reached, since library existence is checked when project is configured."),
+              Some(namespaced_lib_names) => {
+                for namespaced_lib_name in namespaced_lib_names {
+                  writeln!(&self.cmakelists_file,
+                    "\t\t{}",
+                    namespaced_lib_name
+                  )?;
+                }
+              }
             }
           }
+
         }
       }
 
@@ -1250,10 +1481,11 @@ impl<'a> CMakeListsWriter<'a> {
   ) -> io::Result<()> {
     self.write_output_title(output_name)?;
 
-    let lib_type_string: &'static str = match output_data.get_output_type() {
+    let lib_type_string: &'static str = match *output_data.get_output_type() {
       CompiledItemType::StaticLib => "STATIC",
       CompiledItemType::SharedLib => "SHARED",
-      _ => panic!("Defined type library does not have a static or shared output type.")
+      CompiledItemType::HeaderOnlyLib => "INTERFACE",
+      _ => panic!("Defined type library is not StaticLib or SharedLib, and is not a HeaderOnlyLib")
     };
 
     writeln!(&self.cmakelists_file,
@@ -1321,6 +1553,10 @@ impl<'a> CMakeListsWriter<'a> {
     template_impls_var_name: &str,
     src_var_name: &str
   ) -> io::Result<()> {
+    let lib_spec_string: &str = if output_data.is_header_only_type()
+      { "HEADER_ONLY_LIB" }
+      else { "COMPILED_LIB" };
+
     writeln!(&self.cmakelists_file,
       "add_library( {} ALIAS {} )",
       self.project_data.prefix_with_namespace(output_name),
@@ -1335,8 +1571,9 @@ impl<'a> CMakeListsWriter<'a> {
     self.write_newline()?;
 
     writeln!(&self.cmakelists_file,
-      "apply_lib_files( {} \"${{CMAKE_CURRENT_SOURCE_DIR}}/{}\" \"${{{}}}\" \"${{{}}}\" \"${{{}}}\" )",
+      "apply_lib_files( {} {} \"${{CMAKE_CURRENT_SOURCE_DIR}}/{}\" \"${{{}}}\" \"${{{}}}\" \"${{{}}}\" )",
       output_name,
+      lib_spec_string,
       output_data.get_entry_file().replace("./", ""),
       src_var_name,
       includes_var_name,
@@ -1344,8 +1581,9 @@ impl<'a> CMakeListsWriter<'a> {
     )?;
 
     writeln!(&self.cmakelists_file,
-      "apply_include_dirs( {} COMPILED_LIB \"${{{}}}\" )",
+      "apply_include_dirs( {} {} \"${{{}}}\" )",
       output_name,
+      lib_spec_string,
       &project_include_dir_varname
     )?;
     self.write_newline()?;
@@ -1434,38 +1672,75 @@ impl<'a> CMakeListsWriter<'a> {
     Ok(())
   }
 
+
+  fn pass_into_extra_install_targets(
+    &self,
+    extra_targets_to_install_no_export: &mut HashMap<String, String>,
+    lib_container: &str,
+    lib_names: &Vec<String>
+  ) -> io::Result<()> {
+    self.project_data.get_namespaced_library_target_names(
+      DependencySearchMode::AsParent,
+      lib_container,
+      lib_names
+    )
+      .map_err(|err_message| io::Error::new(io::ErrorKind::Other, err_message))?
+      .iter()
+      .for_each(|namespaced_lib_names|
+        for namespaced_target in namespaced_lib_names {
+          extra_targets_to_install_no_export.insert(
+            namespaced_target.to_string(),
+            lib_container.to_string()
+          );
+        }
+      );
+
+    Ok(())
+  }
+
   // See this page for help and a good example:
   // https://cmake.org/cmake/help/latest/guide/tutorial/Adding%20Export%20Configuration.html
   fn write_installation_and_exports(&self) -> io::Result<()> {
-    let mut extra_targets_to_install_no_export: HashMap<String, String> = HashMap::new();
+    let mut extra_targets_to_install: HashMap<String, String> = HashMap::new();
 
     for (_output_name, output_data) in self.project_data.get_outputs() {
-      if let Some(links) = output_data.get_links() {
-        for (lib_container, lib_names) in links {
+      if output_data.has_links() {
+        for ref lib_container in output_data.get_links().all_projects_linked() {
+          let used_public_and_interface_links: Vec<String> = output_data
+            .get_links()
+            .get(lib_container)
+            .unwrap()
+            .iter_by_link_mode([LinkMode::Public, LinkMode::Interface])
+            // .iter_all()
+            .map(|the_str| the_str.to_string())
+            .collect();
+
+          let has_public_or_interface_links: bool = !used_public_and_interface_links.is_empty();
+
           if let Some(predep_config) = self.project_data.get_predefined_dependencies().get(lib_container) {
-            if predep_config.should_install_if_linked() {
-              self.project_data.get_namespaced_library_target_names(
-                DependencySearchMode::AsParent,
+            if has_public_or_interface_links && predep_config.should_install_if_public_linked() {
+              self.pass_into_extra_install_targets(
+                &mut extra_targets_to_install,
                 lib_container,
-                lib_names
-              )
-                .map_err(|err_message| io::Error::new(io::ErrorKind::Other, err_message))?
-                .iter()
-                .for_each(|namespaced_lib_names|
-                  for namespaced_target in namespaced_lib_names {
-                    extra_targets_to_install_no_export.insert(
-                      namespaced_target.to_string(),
-                      lib_container.to_string()
-                    );
-                  }
-                )
+                &used_public_and_interface_links
+              )?;
+            }
+          }
+
+          if let Some(_) = self.project_data.get_gcmake_dependencies().get(lib_container) {
+            if has_public_or_interface_links {
+              self.pass_into_extra_install_targets(
+                &mut extra_targets_to_install,
+                lib_container,
+                &used_public_and_interface_links
+              )?;
             }
           }
         }
       }
     }
 
-    for (namespaced_target, container_lib) in extra_targets_to_install_no_export {
+    for (namespaced_target, container_lib) in extra_targets_to_install {
       writeln!(&self.cmakelists_file,
         "add_to_install_no_export_list( {} \"${{{}_RELATIVE_DEP_PATH}}\" )",
         namespaced_target,

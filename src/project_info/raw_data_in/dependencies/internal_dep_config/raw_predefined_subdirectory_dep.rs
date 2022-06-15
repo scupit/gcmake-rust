@@ -13,7 +13,6 @@ pub struct GitRepoConfig {
 }
 
 fn default_requires_custom_populate() -> bool { false }
-fn default_install_if_linked() -> bool { false }
 
 // A predefined dependency which exists within the project build tree.
 // These should always be inside the dep/ folder.
@@ -21,16 +20,11 @@ fn default_install_if_linked() -> bool { false }
 #[serde(deny_unknown_fields)]
 pub struct RawSubdirectoryDependency {
   namespace_config: NamespaceConfig,
+  pub include_dir_name: Option<String>,
   pub git_repo: GitRepoConfig,
   pub target_names: Vec<String>,
   #[serde(default = "default_requires_custom_populate")]
-  pub requires_custom_fetchcontent_populate: bool,
-
-  // When set to true, any target in the dependency linked to an output
-  // will be added to the "additional_install_no_exports" target list
-  // using "add_to_install_no_export_list(...)".
-  #[serde(default = "default_install_if_linked")]
-  pub install_if_linked: bool
+  pub requires_custom_fetchcontent_populate: bool
 }
 
 impl RawSubdirectoryDependency {

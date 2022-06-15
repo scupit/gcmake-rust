@@ -2,7 +2,7 @@ use std::{collections::{HashMap, HashSet}, iter::FromIterator};
 
 use crate::project_info::raw_data_in::{RawProject, RawSubproject, ProjectLike, SpecificCompilerSpecifier, RawCompiledItem, CompiledItemType, BuildType, BuildConfigCompilerSpecifier, BuildConfig, SingleLanguageConfig, LanguageConfigMap};
 
-use self::configuration::{MainFileLanguage, OutputLibType, ProjectOutputType};
+use self::configuration::{MainFileLanguage, OutputLibType, CreationProjectOutputType};
 
 pub mod configuration {
   #[derive(Clone, Copy)]
@@ -14,10 +14,11 @@ pub mod configuration {
   pub enum OutputLibType {
     Static,
     Shared,
-    ToggleStaticOrShared
+    ToggleStaticOrShared,
+    HeaderOnly
   }
 
-  pub enum ProjectOutputType {
+  pub enum CreationProjectOutputType {
     Library(OutputLibType),
     Executable
   }
@@ -41,7 +42,7 @@ pub fn get_default_project_config(
   project_name: &str,
   include_prefix: &str,
   project_lang: &MainFileLanguage,
-  project_type: &ProjectOutputType,
+  project_type: &CreationProjectOutputType,
   project_description: &str
 ) -> RawProject {
   RawProject {
@@ -67,11 +68,12 @@ pub fn get_default_project_config(
       (String::from("Main"), RawCompiledItem {
         entry_file: String::from(main_file_name(&project_lang, &project_type)),
         output_type: match project_type {
-          ProjectOutputType::Executable => CompiledItemType::Executable,
-          ProjectOutputType::Library(lib_type) => match lib_type {
+          CreationProjectOutputType::Executable => CompiledItemType::Executable,
+          CreationProjectOutputType::Library(lib_type) => match lib_type {
             OutputLibType::Static => CompiledItemType::StaticLib,
             OutputLibType::Shared => CompiledItemType::SharedLib,
-            OutputLibType::ToggleStaticOrShared => CompiledItemType::Library
+            OutputLibType::ToggleStaticOrShared => CompiledItemType::Library,
+            OutputLibType::HeaderOnly => CompiledItemType::HeaderOnlyLib
           }
         },
         link: None,
@@ -175,7 +177,7 @@ pub fn get_default_subproject_config(
   project_name: &str,
   include_prefix: &str,
   project_lang: &MainFileLanguage,
-  project_type: &ProjectOutputType,
+  project_type: &CreationProjectOutputType,
   project_description: &str
 ) -> RawSubproject {
   RawSubproject::from(
@@ -189,16 +191,16 @@ pub fn get_default_subproject_config(
   )
 }
 
-pub fn main_file_name(project_lang: &MainFileLanguage, project_type: &ProjectOutputType) -> String {
+pub fn main_file_name(project_lang: &MainFileLanguage, project_type: &CreationProjectOutputType) -> String {
   let extension_prefix: &str;
   let file_name: &str;
 
   match *project_type {
-    ProjectOutputType::Executable => {
+    CreationProjectOutputType::Executable => {
       extension_prefix = "c";
       file_name = "main";
     },
-    ProjectOutputType::Library(_) => {
+    CreationProjectOutputType::Library(_) => {
       extension_prefix = "h";
       file_name = "lib";
     }

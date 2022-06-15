@@ -1,5 +1,5 @@
 use std::rc::Rc;
-use crate::{cli_config::{NewProjectCommand}, project_info::{path_manipulation::cleaned_path_str, final_project_data::{FinalProjectData}}, logger::exit_error_log, project_generator::{configuration::{MainFileLanguage, ProjectOutputType, OutputLibType}, create_project_at}};
+use crate::{cli_config::{NewProjectCommand}, project_info::{path_manipulation::cleaned_path_str, final_project_data::{FinalProjectData}}, logger::exit_error_log, project_generator::{configuration::{MainFileLanguage, CreationProjectOutputType, OutputLibType}, create_project_at}};
 
 pub enum ProjectTypeCreating {
   RootProject,
@@ -64,14 +64,14 @@ pub fn handle_create_project(
     None
   };
 
-  let maybe_project_output_type: Option<ProjectOutputType> = if command.executable {
-    Some(ProjectOutputType::Executable)
+  let maybe_project_output_type: Option<CreationProjectOutputType> = if command.executable {
+    Some(CreationProjectOutputType::Executable)
   } else if command.library {
-    Some(ProjectOutputType::Library(OutputLibType::ToggleStaticOrShared))
+    Some(CreationProjectOutputType::Library(OutputLibType::ToggleStaticOrShared))
   } else if command.static_lib {
-    Some(ProjectOutputType::Library(OutputLibType::Static))
+    Some(CreationProjectOutputType::Library(OutputLibType::Static))
   } else if command.shared_lib {
-    Some(ProjectOutputType::Library(OutputLibType::Shared))
+    Some(CreationProjectOutputType::Library(OutputLibType::Shared))
   } else {
     None
   };

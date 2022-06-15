@@ -22,6 +22,7 @@ There are a whole bunch of things which need doing. This is the place to list th
         header-only libraries, and PUBLIC or PRIVATE for compiled libraries (see above).
 - [ ] Change `Library` output type to `CompiledLib` or `BinaryLib`, so it won't be confused with
         header-only libraries.
+- [ ] When generating a library project, name the entry_file the same as the project name.
 
 ## Configuration TODO
 

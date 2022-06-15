@@ -1,6 +1,6 @@
 use std::{io::{self, stdin, Write}, convert::TryInto};
 
-use super::configuration::{MainFileLanguage, ProjectOutputType, OutputLibType};
+use super::configuration::{MainFileLanguage, CreationProjectOutputType, OutputLibType};
 
 #[derive(Debug)]
 pub enum PromptResult {
@@ -151,11 +151,11 @@ pub fn prompt_for_language() -> io::Result<MainFileLanguage> {
   );
 }
 
-pub fn prompt_for_project_output_type() -> io::Result<ProjectOutputType> {
+pub fn prompt_for_project_output_type() -> io::Result<CreationProjectOutputType> {
   return prompt_with_choices(
     "Choose Project Type",
     &[
-      ("Executable", Box::new(|| ProjectOutputType::Executable)),
+      ("Executable", Box::new(|| CreationProjectOutputType::Executable)),
       ("Library", Box::new(|| {
         let mut lib_output_type: Option<OutputLibType> = None;
 
@@ -165,7 +165,7 @@ pub fn prompt_for_project_output_type() -> io::Result<ProjectOutputType> {
           }
 
           if let Some(lib_type) = lib_output_type {
-            break ProjectOutputType::Library(lib_type)
+            break CreationProjectOutputType::Library(lib_type)
           }
         }
       })),
@@ -179,7 +179,8 @@ fn prompt_for_lib_output_type() -> io::Result<OutputLibType> {
     &[
       ("Static", Box::new(|| OutputLibType::Static)),
       ("Shared", Box::new(|| OutputLibType::Shared)),
-      ("Toggleable (type selected at configure time)", Box::new(|| OutputLibType::ToggleStaticOrShared))
+      ("Toggleable (type selected at configure time)", Box::new(|| OutputLibType::ToggleStaticOrShared)),
+      ("Header-Only", Box::new(|| OutputLibType::HeaderOnly))
     ]
   );
 }

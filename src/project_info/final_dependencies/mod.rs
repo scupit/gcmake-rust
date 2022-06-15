@@ -10,7 +10,7 @@ pub use final_predefined_cmake_components_module_dep::*;
 pub use final_gcmake_project_dep::*;
 pub use final_predefined_cmake_module_dep::*;
 
-use super::raw_data_in::dependencies::{internal_dep_config::{SingleRawPredefinedDependencyConfigGroup, AllRawPredefinedDependencies, RawPredefinedDependencyInfo, PredefinedCMakeDepHookFile}, user_given_dep_config::UserGivenPredefinedDependencyConfig};
+use super::raw_data_in::dependencies::{internal_dep_config::{AllRawPredefinedDependencies, RawPredefinedDependencyInfo, PredefinedCMakeDepHookFile}, user_given_dep_config::UserGivenPredefinedDependencyConfig};
 
 type HookScriptContainer = Option<Rc<PredefinedCMakeDepHookFile>>;
 
@@ -104,9 +104,13 @@ impl FinalPredefinedDependencyConfig {
     }
   }
 
-  pub fn should_install_if_linked(&self) -> bool {
+  pub fn should_install_if_public_linked(&self) -> bool {
     return match &self.predep_info {
-      FinalPredepInfo::Subdirectory(subdir_info) => subdir_info.should_install_if_linked(),
+      // TODO: Figure out which one of these is correct. I think subdir dependencies should always be
+      // installed (added to the install exports for the current project) when public/interface linked,
+      // however I'm not sure about that yet.
+      // FinalPredepInfo::Subdirectory(subdir_dep) => subdir_dep.requires_custom_fetchcontent_populate(),
+      FinalPredepInfo::Subdirectory(_) => true,
       _ => false
     }
   }

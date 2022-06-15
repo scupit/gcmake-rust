@@ -8,7 +8,7 @@ use serde::Serialize;
 
 use std::{fs::{File, remove_dir_all, create_dir_all, create_dir}, io::{self, ErrorKind}, path::Path};
 
-use crate::{project_generator::{c_file_generation::generate_c_main, cpp_file_generation::generate_cpp_main, default_project_config::{DefaultProject, configuration::{MainFileLanguage, ProjectOutputType}, get_default_project_config, get_default_subproject_config, main_file_name}, prompt::{prompt_once, prompt_for_project_output_type, prompt_for_language, prompt_for_description}}, program_actions::ProjectTypeCreating};
+use crate::{project_generator::{c_file_generation::generate_c_main, cpp_file_generation::generate_cpp_main, default_project_config::{DefaultProject, configuration::{MainFileLanguage, CreationProjectOutputType}, get_default_project_config, get_default_subproject_config, main_file_name}, prompt::{prompt_once, prompt_for_project_output_type, prompt_for_language, prompt_for_description}}, program_actions::ProjectTypeCreating};
 
 use self::{prompt::{prompt_until_boolean, PromptResult}};
 
@@ -21,7 +21,7 @@ pub fn create_project_at(
   new_project_root: &str,
   project_type_creating: ProjectTypeCreating,
   project_lang: Option<MainFileLanguage>,
-  project_output_type: Option<ProjectOutputType>
+  project_output_type: Option<CreationProjectOutputType>
 ) -> io::Result<Option<DefaultProject>> {
   let project_name: &str;
 
@@ -77,7 +77,7 @@ pub fn create_project_at(
       create_dir_all(extended_path)?;
     }
 
-    let output_type_selection: ProjectOutputType = project_output_type
+    let output_type_selection: CreationProjectOutputType = project_output_type
       .unwrap_or(prompt_for_project_output_type()?);
 
     let lang_selection: MainFileLanguage = project_lang.unwrap_or(prompt_for_language()?);
@@ -125,7 +125,7 @@ fn build_default_project_info(
   project_name: &str,
   include_prefix: &str,
   lang_selection: &MainFileLanguage,
-  output_type_selection: &ProjectOutputType,
+  output_type_selection: &CreationProjectOutputType,
   project_description: &str
 ) -> DefaultProject {
   if let ProjectTypeCreating::Subproject(_) = project_type_creating {

@@ -6,11 +6,18 @@ pub use create_project::*;
 pub use code_file_creator::*;
 pub use manage_dependencies::{local_dep_config_repo_location, update_dependency_config_repo, DepConfigUpdateResult};
 
-use crate::{project_info::{raw_data_in::dependencies::internal_dep_config::AllRawPredefinedDependencies, final_project_data::{FinalProjectData, UseableFinalProjectDataGroup, ProjectLoadFailureReason}}};
+use crate::{project_info::{raw_data_in::dependencies::internal_dep_config::AllRawPredefinedDependencies, final_project_data::{FinalProjectData, UseableFinalProjectDataGroup, ProjectLoadFailureReason}, path_manipulation::absolute_path}};
 
 pub fn parse_project_info(
   project_root_dir: &str,
   dep_config: &AllRawPredefinedDependencies
 ) -> Result<UseableFinalProjectDataGroup, ProjectLoadFailureReason> {
   FinalProjectData::new(project_root_dir, dep_config)
+    .map_err(|failure_reason| failure_reason.map_message(|err_message|{
+      format!(
+        "When loading project using path '{}':\n{}",
+        absolute_path(project_root_dir).unwrap().to_str().unwrap(),
+        err_message
+      )
+    }))
 }

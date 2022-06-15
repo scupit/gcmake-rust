@@ -116,21 +116,28 @@ endfunction()
 
 function( apply_lib_files
   lib_target
+  lib_type_spec
   entry_file
   sources
   headers
   template_impls
 )
-  clean_list( "${sources}" all_sources)
+  if( NOT "${lib_type_spec}" STREQUAL "COMPILED_LIB" AND NOT "${lib_type_spec}" STREQUAL "HEADER_ONLY_LIB" )
+    message( FATAL_ERROR "Invalid lib type spec '${lib_type_spec}' given to apply_lib_files(...)" )
+  endif()
 
-  if( NOT "${all_sources}" STREQUAL "" )
-    get_without_source_dir_prefix( "${all_sources}" all_sources_install_interface )
+  if( "${lib_type_spec}" STREQUAL "COMPILED_LIB" )
+    clean_list( "${sources}" all_sources)
 
-    make_generators( "${all_sources}" "${all_sources_install_interface}" source_gens )
-    target_sources( ${lib_target} PUBLIC
-      ${source_gens_b}
-      ${source_gens_i}
-    )
+    if( NOT "${all_sources}" STREQUAL "" )
+      get_without_source_dir_prefix( "${all_sources}" all_sources_install_interface )
+
+      make_generators( "${all_sources}" "${all_sources_install_interface}" source_gens )
+      target_sources( ${lib_target} PUBLIC
+        ${source_gens_b}
+        ${source_gens_i}
+      )
+    endif()
   endif()
 
   set( all_headers "${entry_file};${headers};${template_impls}" )
@@ -138,11 +145,18 @@ function( apply_lib_files
 
   get_without_source_dir_prefix( "${all_headers}" all_headers_install_interface )
 
+  if( "${lib_type_spec}" STREQUAL "HEADER_ONLY_LIB" )
+    set( header_inheritance_mode INTERFACE )
+  else()
+    set( header_inheritance_mode PUBLIC )
+  endif()
+
   make_generators( "${all_headers}" "${all_headers_install_interface}" header_gens )
-  target_sources( ${lib_target} PUBLIC FILE_SET HEADERS
-    FILES
-      ${header_gens_b}
-      ${header_gens_i}
+  target_sources( ${lib_target} ${header_inheritance_mode}
+    FILE_SET HEADERS
+      FILES
+        ${header_gens_b}
+        ${header_gens_i}
   )
 endfunction()
 
@@ -151,7 +165,7 @@ function( apply_include_dirs
   target_type
   project_include_dir
 )
-  if( "${target_type}" STREQUAL "COMPILED_LIB" )
+  if( "${target_type}" STREQUAL "COMPILED_LIB" OR "${target_type}" STREQUAL "HEADER_ONLY_LIB" )
     set( BUILD_INTERFACE_INCLUDE_DIRS "${CMAKE_CURRENT_SOURCE_DIR};${project_include_dir}")
   elseif( "${target_type}" STREQUAL "EXE" )
     set( BUILD_INTERFACE_INCLUDE_DIRS "${project_include_dir}")
@@ -159,8 +173,14 @@ function( apply_include_dirs
     message( FATAL_ERROR "Invalid target_type '${target_type}' given to function 'apply_include_dirs'" )
   endif()
 
+  if( "${target_type}" STREQUAL "HEADER_ONLY_LIB" )
+    set( include_dir_inheritance_mode INTERFACE )
+  else()
+    set( include_dir_inheritance_mode PUBLIC )
+  endif()
+
   target_include_directories( ${target}
-    PUBLIC
+    ${include_dir_inheritance_mode}
       "$<BUILD_INTERFACE:${BUILD_INTERFACE_INCLUDE_DIRS}>"
       "$<INSTALL_INTERFACE:include>"
       "$<INSTALL_INTERFACE:include/${TOPLEVEL_INCLUDE_PREFIX}/include>"
@@ -305,6 +325,7 @@ const INSTALLATION_CONFIGURE_TEXT: &'static str = r#"function( configure_install
     endif()
 
     if( has_additional_installs )
+      message( "Additional installs: ${additional_installs_no_export}" )
       install( TARGETS ${additional_installs_no_export}
         EXPORT ${PROJECT_NAME}Targets
         RUNTIME 
@@ -374,7 +395,13 @@ macro( add_to_install_no_export_list
   target_name
   relative_dep_path
 )
-  set( MY_ADDITIONAL_INSTALL_NO_EXPORT_TARGETS "${MY_ADDITIONAL_INSTALL_NO_EXPORT_TARGETS}" "${target_name}" )
+  get_target_property( unaliased_lib_name ${target_name} ALIASED_TARGET )
+
+  if( NOT unaliased_lib_name )
+    set( unaliased_lib_name ${target_name} )
+  endif()
+
+  set( MY_ADDITIONAL_INSTALL_NO_EXPORT_TARGETS "${MY_ADDITIONAL_INSTALL_NO_EXPORT_TARGETS}" ${unaliased_lib_name} )
   set( MY_ADDITIONAL_RELATIVE_DEP_PATHS "${MY_ADDITIONAL_RELATIVE_DEP_PATHS}" "${relative_dep_path}" )
 endmacro()
 

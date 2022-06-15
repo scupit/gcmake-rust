@@ -1,8 +1,8 @@
-use std::{collections::{HashMap, HashSet}, path::{Path, PathBuf}, io, rc::Rc};
+use std::{collections::{HashMap, HashSet}, path::{Path, PathBuf}, io, rc::Rc, iter};
 
 use crate::project_info::path_manipulation::cleaned_pathbuf;
 
-use super::{path_manipulation::{cleaned_path_str, relative_to_project_root, find_first_dir_named, absolute_path}, final_dependencies::{FinalGCMakeDependency, FinalPredefinedDependencyConfig, FinalPredepInfo}, raw_data_in::{RawProject, ProjectLike, dependencies::internal_dep_config::AllRawPredefinedDependencies, BuildConfigMap, BuildType, LanguageConfigMap, CompiledItemType, PreBuildConfigIn, SpecificCompilerSpecifier, ProjectMetadata, BuildConfigCompilerSpecifier, TargetBuildConfigMap, TargetSpecificBuildType}, final_project_configurables::{FinalProjectType, SubprojectOnlyOptions}, CompiledOutputItem, helpers::{create_subproject_data, create_project_data, validate_raw_project, populate_files, find_prebuild_script, PrebuildScriptFile, parse_project_metadata}, PreBuildScript};
+use super::{path_manipulation::{cleaned_path_str, relative_to_project_root, find_first_dir_named, absolute_path}, final_dependencies::{FinalGCMakeDependency, FinalPredefinedDependencyConfig, FinalPredepInfo}, raw_data_in::{RawProject, ProjectLike, dependencies::internal_dep_config::AllRawPredefinedDependencies, BuildConfigMap, BuildType, LanguageConfigMap, CompiledItemType, PreBuildConfigIn, SpecificCompilerSpecifier, ProjectMetadata, BuildConfigCompilerSpecifier, TargetBuildConfigMap, TargetSpecificBuildType, LinkSection}, final_project_configurables::{FinalProjectType, SubprojectOnlyOptions}, CompiledOutputItem, helpers::{create_subproject_data, create_project_data, populate_files, find_prebuild_script, PrebuildScriptFile, parse_project_metadata, validate_raw_project_outputs, ProjectOutputType, RetrievedCodeFileType, retrieve_file_type}, PreBuildScript, OutputItemLinks};
 
 pub struct ThreePartVersion (u32, u32, u32);
 
@@ -54,8 +54,12 @@ fn resolve_prebuild_script(project_root: &str, pre_build_config: &PreBuildConfig
           output_type: CompiledItemType::Executable,
           entry_file: relative_to_project_root(project_root, entry_file_pathbuf),
           links: match &pre_build_config.link {
-            Some(raw_links) => Some(CompiledOutputItem::make_link_map(raw_links)?),
-            None => None
+            Some(raw_links) => CompiledOutputItem::make_link_map(
+              &format!("Pre-build script"),
+              &CompiledItemType::Executable,
+              &LinkSection::Uncategorized(raw_links.clone())
+            )?,
+            None => OutputItemLinks::new_empty()
           },
           build_config: pre_build_config.build_config.clone()
         })
@@ -113,6 +117,16 @@ pub enum ProjectLoadFailureReason {
 }
 
 impl ProjectLoadFailureReason {
+  pub fn map_message(
+    self,
+    mapper: impl FnOnce(String) -> String
+  ) -> Self {
+    match self {
+      Self::MissingYaml(err_message) => Self::MissingYaml(mapper(err_message)),
+      Self::Other(err_message) => Self::Other(mapper(err_message))
+    }
+  }
+
   pub fn extract_message(self) -> String {
     match self {
       Self::MissingYaml(msg) => msg,
@@ -133,6 +147,7 @@ struct ParentProjectInfo {
 
 pub struct FinalProjectData {
   project_type: FinalProjectType,
+  project_output_type: ProjectOutputType,
   project_root: String,
   absolute_project_root: PathBuf,
   pub version: ThreePartVersion,
@@ -236,9 +251,10 @@ impl FinalProjectData {
       project_type = FinalProjectType::Root;
     };
 
-    if let Err(err_message) = validate_raw_project(&raw_project) {
-      return Err(ProjectLoadFailureReason::Other(err_message));
-    }
+    let project_output_type: ProjectOutputType = match validate_raw_project_outputs(&raw_project) {
+      Ok(project_output_type) => project_output_type,
+      Err(err_message) => return Err(ProjectLoadFailureReason::Other(err_message))
+    };
 
     let full_include_prefix: String;
     let target_namespace_prefix: String;
@@ -276,7 +292,14 @@ impl FinalProjectData {
             target_namespace_prefix: target_namespace_prefix.clone()
           }),
           all_dep_config
-        )?;
+        )
+          .map_err(|failure_reason| {
+            failure_reason.map_message(|err_message| format!(
+              "\t-> in subproject '{}'\n{}",
+              subproject_dirname,
+              err_message
+            ))
+          })?;
 
         // Subprojects must inherit these from their parent project in order to properly
         // set compiler flags and other properties per output item.
@@ -322,8 +345,10 @@ impl FinalProjectData {
     for (output_name, raw_output_item) in raw_project.get_output() {
       output_items.insert(
         output_name.to_owned(),
-        CompiledOutputItem::from(raw_output_item)
-          .map_err(ProjectLoadFailureReason::Other)?
+        CompiledOutputItem::from(output_name, raw_output_item)
+          .map_err(|err_message| ProjectLoadFailureReason::Other(
+            format!("When creating output item named '{}':\n{}", output_name, err_message)
+          ))?
       );
     }
 
@@ -370,6 +395,7 @@ impl FinalProjectData {
       language_config_map: raw_project.languages,
       supported_compilers: raw_project.supported_compilers,
       project_type,
+      project_output_type,
       absolute_project_root: absolute_path(&project_root)
         .map_err(ProjectLoadFailureReason::Other)?,
       project_root,
@@ -418,6 +444,23 @@ impl FinalProjectData {
     }
   }
 
+  pub fn recurse_subprojects_and_current(
+    &self,
+    callback: &dyn Fn(&FinalProjectData)
+  ) {
+    self.recurse_subprojects(&callback);
+    callback(self);
+  }
+
+  pub fn recurse_subprojects(
+    &self,
+    callback: &dyn Fn(&FinalProjectData)
+  ) {
+    for (_, subproject) in &self.subprojects {
+      subproject.recurse_subprojects_and_current(&callback);
+    }
+  }
+
   // Visit the toplevel root project and all its subprojects.
   fn find_with_root(
     absolute_root: &PathBuf,
@@ -444,17 +487,15 @@ impl FinalProjectData {
     for (dep_name, predefined_dep) in &mut self.predefined_dependencies {
       if let FinalPredepInfo::CMakeComponentsModule(components_dep) = predefined_dep.mut_predef_dep_info() {
         for (_, output_item) in &self.output {
-          if let Some(links) = output_item.get_links() {
-            if let Some(linked_component_names) = links.get(dep_name) {
-              components_dep.mark_multiple_components_used(dep_name, linked_component_names.iter())?;
-            }
+          if let Some(links) = output_item.get_links().get(dep_name) {
+            components_dep.mark_multiple_components_used(dep_name, links.iter_all())?;
           }
         }
 
         if let Some(prebuild_script) = &self.prebuild_script {
-          if let PreBuildScript::Exe(CompiledOutputItem { links: Some(links), ..}) = prebuild_script {
-            if let Some(linked_component_names) = links.get(dep_name) {
-              components_dep.mark_multiple_components_used(dep_name, linked_component_names.iter())?;
+          if let PreBuildScript::Exe(CompiledOutputItem { links , ..}) = prebuild_script {
+            if let Some(links) = links.get(dep_name) {
+              components_dep.mark_multiple_components_used(dep_name, links.iter_all())?;
             }
           }
         }
@@ -467,99 +508,102 @@ impl FinalProjectData {
   fn ensure_links_are_valid(
     &self,
     item_name: &str,
-    links: &Option<HashMap<String, Vec<String>>>,
+    item: &CompiledOutputItem,
     is_prebuild_script: bool
   ) -> Result<(), String> {
-    if let Some(link_map) = links {
-      // Each library linked to an output item should be member of a subproject or dependency
-      // project. This loop checks that each of the referenced sub/dependency project names
-      // exist and if they do, that the linked libraries from withing those projects exist
-      // as well.
-      for (project_name_containing_libraries, lib_names_linking) in link_map {
-        // Check if it's linked to a subproject
-        if let Some(matching_subproject) = self.subprojects.get(project_name_containing_libraries) {
-          if is_prebuild_script {
-            return Err(format!(
-              "{}'s pre-build script tried to link to a library in subproject '{}', but pre-build scripts can't link to subprojects.",
-              self.get_project_name(),
-              matching_subproject.get_project_name()
-            ));
+
+    if item.has_links() {
+      for (link_map, _) in item.get_links().iter_link_maps() {
+        // Each library linked to an output item should be member of a subproject or dependency
+        // project. This loop checks that each of the referenced sub/dependency project names
+        // exist and if they do, that the linked libraries from withing those projects exist
+        // as well.
+        for (project_name_containing_libraries, lib_names_linking) in link_map {
+          // Check if it's linked to a subproject
+          if let Some(matching_subproject) = self.subprojects.get(project_name_containing_libraries) {
+            if is_prebuild_script {
+              return Err(format!(
+                "{}'s pre-build script tried to link to a library in subproject '{}', but pre-build scripts can't link to subprojects.",
+                self.get_project_name(),
+                matching_subproject.get_project_name()
+              ));
+            }
+            else {
+              for lib_name_linking in lib_names_linking {
+                if !matching_subproject.has_library_output_named(lib_name_linking) {
+                  return Err(format!(
+                    "Output item '{}' in project '{}' tries to link to a nonexistent library '{}' in subproject '{}'.",
+                    item_name,
+                    self.get_project_name(),
+                    lib_name_linking,
+                    project_name_containing_libraries
+                  ));
+                }
+              }
+            }
           }
-          else {
+          // Check if it's linked to a predefined dependency
+          else if let Some(final_dep) = self.predefined_dependencies.get(project_name_containing_libraries) {
             for lib_name_linking in lib_names_linking {
-              if !matching_subproject.has_library_output_named(lib_name_linking) {
+              match final_dep.predefined_dep_info() {
+                FinalPredepInfo::Subdirectory(subdir_dep) => {
+                  if !subdir_dep.has_target_named(lib_name_linking) {
+                    return Err(format!(
+                      "Output item '{}' in project '{}' tries to link to a nonexistent target '{}' in predefined dependency '{}'.",
+                      item_name,
+                      self.get_project_name(),
+                      lib_name_linking,
+                      project_name_containing_libraries
+                    ))
+                  }
+                },
+                FinalPredepInfo::CMakeComponentsModule(components_dep) => {
+                  if !components_dep.has_component_named(lib_name_linking) {
+                    return Err(format!(
+                      "Output item '{}' in project '{}' tries to link to a nonexistent component '{}' in predefined dependency '{}'.",
+                      item_name,
+                      self.get_project_name(),
+                      lib_name_linking,
+                      project_name_containing_libraries
+                    ))
+                  }
+                },
+                FinalPredepInfo::CMakeModule(find_module_dep) => {
+                  if !find_module_dep.has_target_named(lib_name_linking) {
+                    return Err(format!(
+                      "Output item '{}' in project '{}' tries to link to a nonexistent target '{}' in predefined dependency '{}'.",
+                      item_name,
+                      self.get_project_name(),
+                      lib_name_linking,
+                      project_name_containing_libraries
+                    ))
+                  }
+                }
+              }
+              
+            }
+          }
+          else if let Some(final_gcmake_dep) = self.gcmake_dependency_projects.get(project_name_containing_libraries) {
+            for lib_name_linking in lib_names_linking {
+              if final_gcmake_dep.get_linkable_target_name(lib_name_linking)?.is_none() {
                 return Err(format!(
-                  "Output item '{}' in project '{}' tries to link to a nonexistent library '{}' in subproject '{}'.",
+                  "Output item '{}' in project '{}' tries to link to a nonexistent target '{}' in gcmake dependency '{}'.",
                   item_name,
                   self.get_project_name(),
                   lib_name_linking,
                   project_name_containing_libraries
-                ));
+                ))
               }
             }
           }
-        }
-        // Check if it's linked to a predefined dependency
-        else if let Some(final_dep) = self.predefined_dependencies.get(project_name_containing_libraries) {
-          for lib_name_linking in lib_names_linking {
-            match final_dep.predefined_dep_info() {
-              FinalPredepInfo::Subdirectory(subdir_dep) => {
-                if !subdir_dep.has_target_named(lib_name_linking) {
-                  return Err(format!(
-                    "Output item '{}' in project '{}' tries to link to a nonexistent target '{}' in predefined dependency '{}'.",
-                    item_name,
-                    self.get_project_name(),
-                    lib_name_linking,
-                    project_name_containing_libraries
-                  ))
-                }
-              },
-              FinalPredepInfo::CMakeComponentsModule(components_dep) => {
-                if !components_dep.has_component_named(lib_name_linking) {
-                  return Err(format!(
-                    "Output item '{}' in project '{}' tries to link to a nonexistent component '{}' in predefined dependency '{}'.",
-                    item_name,
-                    self.get_project_name(),
-                    lib_name_linking,
-                    project_name_containing_libraries
-                  ))
-                }
-              },
-              FinalPredepInfo::CMakeModule(find_module_dep) => {
-                if !find_module_dep.has_target_named(lib_name_linking) {
-                  return Err(format!(
-                    "Output item '{}' in project '{}' tries to link to a nonexistent target '{}' in predefined dependency '{}'.",
-                    item_name,
-                    self.get_project_name(),
-                    lib_name_linking,
-                    project_name_containing_libraries
-                  ))
-                }
-              }
-            }
-            
+          else {
+            return Err(format!(
+              "Output item '{}' in project '{}' tries to link to libraries in a project named '{}', however that project doesn't exist.",
+              item_name,
+              self.get_project_name(),
+              project_name_containing_libraries
+            ));
           }
-        }
-        else if let Some(final_gcmake_dep) = self.gcmake_dependency_projects.get(project_name_containing_libraries) {
-          for lib_name_linking in lib_names_linking {
-            if final_gcmake_dep.get_linkable_target_name(lib_name_linking)?.is_none() {
-              return Err(format!(
-                "Output item '{}' in project '{}' tries to link to a nonexistent target '{}' in gcmake dependency '{}'.",
-                item_name,
-                self.get_project_name(),
-                lib_name_linking,
-                project_name_containing_libraries
-              ))
-            }
-          }
-        }
-        else {
-          return Err(format!(
-            "Output item '{}' in project '{}' tries to link to libraries in a project named '{}', however that project doesn't exist.",
-            item_name,
-            self.get_project_name(),
-            project_name_containing_libraries
-          ));
         }
       }
     }
@@ -630,11 +674,18 @@ impl FinalProjectData {
 
     self.ensure_language_config_correctness()?;
     self.ensure_build_config_correctness()?;
+    self.validate_project_type_specific_info()?;
 
     for (output_name, output_item) in &self.output {
+      self.validate_entry_file_type(
+        output_name,
+        output_item,
+        false
+      )?;
+
       self.ensure_links_are_valid(
         output_name,
-        output_item.get_links(),
+        output_item,
         false
       )?;
 
@@ -650,9 +701,15 @@ impl FinalProjectData {
         PreBuildScript::Exe(script_exe_config) => {
           let the_item_name: String = format!("{}'s pre-build script", self.get_project_name());
 
+          self.validate_entry_file_type(
+            &the_item_name,
+            script_exe_config,
+            true
+          )?;
+
           self.ensure_links_are_valid(
             &the_item_name,
-            script_exe_config.get_links(),
+            script_exe_config,
             true
           )?;
 
@@ -664,6 +721,83 @@ impl FinalProjectData {
 
         },
         PreBuildScript::Python(_) => ()
+      }
+    }
+
+    Ok(())
+  }
+
+  fn validate_entry_file_type(
+    &self,
+    output_name: &str,
+    output_item: &CompiledOutputItem,
+    is_prebuild_script: bool
+  ) -> Result<(), String> {
+    let entry_file_type: RetrievedCodeFileType = retrieve_file_type(output_item.get_entry_file());
+    let item_string: String = if is_prebuild_script
+      { String::from("prebuild script") }
+      else { format!("output item '{}'", output_name )};
+
+    match *output_item.get_output_type() {
+      CompiledItemType::Executable => {
+        if entry_file_type != RetrievedCodeFileType::Source {
+          return Err(format!(
+            "The entry_file for executable {} in project '{}' should be a source file, but isn't.",
+            item_string,
+            self.get_project_name()
+          ));
+        }
+      },
+      CompiledItemType::Library
+        | CompiledItemType::StaticLib
+        | CompiledItemType::SharedLib
+        | CompiledItemType::HeaderOnlyLib =>
+      {
+        if entry_file_type != RetrievedCodeFileType::Header {
+          return Err(format!(
+            "The entry_file for library {} in project '{}' should be a header file, but isn't.",
+            item_string,
+            self.get_project_name()
+          ));
+        }
+      }
+    }
+    
+    Ok(())
+  }
+
+  fn validate_project_type_specific_info(&self) -> Result<(), String> {
+    match &self.project_output_type {
+      ProjectOutputType::ExeProject => (),
+      ProjectOutputType::CompiledLibProject => {
+        assert!(
+          self.output.len() == 1,
+          "CompiledLibProject should contain only one output."
+        );
+
+        if self.src_files.is_empty() {
+          return Err(format!(
+            "Project '{}' builds a compiled library '{}', however the project contains no source (.c or .cpp) files. Compiled libraries must contain at least one source file. If this is supposed to be a header-only library, change the output_type to '{}'",
+            self.get_project_name(),
+            self.get_outputs().keys().collect::<Vec<&String>>()[0],
+            CompiledItemType::HeaderOnlyLib.name_string()
+          ));
+        }
+      },
+      ProjectOutputType::HeaderOnlyLibProject => {
+        assert!(
+          self.output.len() == 1,
+          "HeaderOnlyLibProject should contain only one output."
+        );
+
+        if !self.src_files.is_empty() {
+          return Err(format!(
+            "Project '{}' builds a header-only library '{}', however the project contains some source (.c or .cpp) files. Header-only libraries should not have any source files. If this is supposed to be a compiled library, change the output_type to '{}' or another compiled library type.",
+            self.get_project_name(),
+            self.get_outputs().keys().collect::<Vec<&String>>()[0],
+            CompiledItemType::Library.name_string()
+          ))
+        }
       }
     }
 
@@ -729,7 +863,6 @@ impl FinalProjectData {
 
     Ok(())
   }
-
 
   pub fn nested_include_prefix(&self, next_include_prefix: &str) -> String {
     return format!("{}/{}", &self.full_include_prefix, next_include_prefix);
