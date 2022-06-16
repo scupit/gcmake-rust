@@ -450,11 +450,14 @@ output:
 
 ### output link
 
-> Optional `List<`[LinkSpecifier](#link-specifier)`>`
+> Optional [LinkSection](#linksection)`<`[LinkSpecifier](#link-specifier-string)`>`
 
 The list of libraries to link to the output item. Libraries must be namespaced with their
 "project" name. See the [link specifier section](#link-specifier) for a full in-depth
 explanation.
+
+> **Important Note:** The link section format changes based on the type of item being linked to.
+> See the [section on LinkSection](#linksection) for details.
 
 Link specifiers can be written in one of two formats:
 
@@ -466,6 +469,10 @@ Where *dependency name is explicitly listed in cmake_data.yaml* as one of:
 - [subprojects](./missing_link.md)
 - [predefined_dependencies](./missing_link.md)
 - [gcmake_dependencies](./missing_link.md)
+
+#### Output link Examples
+
+Assume the following examples have access to these dependencies.
 
 ``` yaml
 subprojects:
@@ -479,6 +486,11 @@ gcmake_dependencies:
   gcmake-test-project:
     repo_url: "git@github.com:scupit/gcmake-test-project.git"
     commit_hash: "ee752d23db561793511b5723750ebab9b78ef78e"
+```
+
+An executable example:
+
+``` yaml
 output:
   my-complex-exe:
     output_type: Executable
@@ -488,8 +500,47 @@ output:
       # a name listed in one of the dependency section above.
       - nested-lib::file-helper
       - nlohmann_json::nlohmann_json
-      - SFML::{ system, window, main }
+      - SFML::{ system, window }
       - gcmake-test-project::{ dll-lib, toggle-lib }
+```
+
+A compiled library example
+
+``` yaml
+output:
+  my-complex-library:
+    output_type: StaticLib
+    entry_file: main.hpp
+    # Important! Notice how the links are categorized as either public or private.
+    # This is important, because it denotes how the public interface of libraries linked to
+    # my-complex-library are "inherited" by libraries which make use of my-complex-library.
+    # What does that mean?
+    # Essentially, nlohmann_json and SFML are both #included somewhere in my-complex-library's
+    # HEADER files, and therefore consumers of my-complex-library must have access to the headers
+    # (and compiled shared libraries, where applicable) of nlohmann_json and SFML. Because they were
+    # included into this project's headers, nlohmann_json and SFML became part of my-complex-library's
+    # PUBLIC interface. However, gcmake-test-project is only included and used 
+    # in this project's SOURCE files, not its headers. Due to this, consumers of my-complex-library
+    # don't need any knowledge of gcmake-test-project or its headers. This makes gcmake-test-project
+    # part of my-complex-library's PRIVATE interface.
+    link:
+      public:
+        - nlohmann_json::nlohmann_json
+        - SFML::{ system, window }
+      private:
+        - gcmake-test-project::{ dll-lib, toggle-lib }
+```
+
+A header-only library example
+
+``` yaml
+output:
+  my-complex-library:
+    output_type: HeaderOnlyLib
+    entry_file: main.hpp
+    link:
+      public:
+        - nlohmann_json::nlohmann_json
 ```
 
 ### output build_config
@@ -772,7 +823,7 @@ languages:
 #### Linking Libraries to the C/C++ Pre-build Script
 
 Libraries can be linked to the pre-build script in the
-[same way they are linked to outputs](./cmake_data.md#output-link).
+[same way they are linked to executable outputs](./cmake_data.md#output-link).
 
 See the [link specifier section](./cmake_data.md#link-specifier) for formatting and more general information
 on link specifiers.
@@ -886,8 +937,48 @@ usage details.
 - `Library`: Either a static or shared library. The type is selected at CMake configure time.
 - `StaticLib`: A static library
 - `SharedLib`: A shared libary (DLL)
+- `HeaderOnlyLib`: A header-only library
 
-### Link Specifier
+### LinkSection
+
+This represents the section where links are specified for output items and executable pre-build scripts.
+
+For *executables* (including pre-build scripts) and *header-only libraries*, links are specified as a
+flat, uncategorized list of [link specifier strings](#link-specifier-string).
+
+``` yaml
+output:
+  my-output-item:
+    # output_type: HeaderOnlyLib
+    # entry_file: my-output-item.hpp
+
+    output_type: Executable
+    entry_file: main.cpp
+
+    links:
+      - nlohmann_json::nlohmann_json
+      - fmt::fmt
+```
+
+Links to *compiled libraries* are specified as separate `public` and `private` lists of
+[link specifier strings](#link-specifier-string). For an explanation of why this is necessary,
+see the [linking information page](linking_information.md).
+
+``` yaml
+output:
+  my-compiled_lib:
+    output_type: StaticLib
+    # output_type: SharedLib
+    # output_type: Library
+    entry_file: my-compiled_lib.hpp
+    links:
+      public:
+        - nlohmann_json::nlohmann_json
+      private:
+        - fmt::fmt
+```
+
+### Link Specifier String
 
 A specially formatted String describing which libraries to [link to an output item](#output-link) or
 [link to a pre-build script](./missing_link.md). Link specifiers can be written in two formats:

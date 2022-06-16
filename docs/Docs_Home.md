@@ -11,15 +11,18 @@ configuration work together.
 
 1. [Project Overview](overview.md)
 2. [cmake_data.yaml Configuration](cmake_data.md)
-3. [Predefined Dependency Compatibility Layer](predefined_dependency_doc.md)
-4. [Project TODOs/Roadmap](TODO.md)
+3. [Additional Linking Explanation](linking_information.md)
+4. [Predefined Dependency Compatibility Layer](predefined_dependency_doc.md)
+5. [Project TODOs/Roadmap](TODO.md)
 
 ## Important Concepts
 
 - ["Include prefix" accumulation](cmake_data.md#prefix-accumulation): How project hierarchy
-  affects each subproject's file inclusion prefix.
+    affects each subproject's file inclusion prefix.
 - [Output item rules and constraints](cmake_data.md#output-rules-and-constraints): Rules dictating
-  output type and quantity per project instance.
+    output type and quantity per project instance.
+- [Link section format](cmake_data.md#linksection): Links are specified differently for compiled libraries
+    than for other output types. 
 - [Using other gcmake-rust projects as dependencies](cmake_data.md#gcmake-dependencies): Requires some
     extra steps at the moment.
 

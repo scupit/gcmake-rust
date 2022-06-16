@@ -11,18 +11,20 @@ There are a whole bunch of things which need doing. This is the place to list th
 
 ## Priorities
 
-- [ ] For compiled libraries (`StaticLib`, `SharedLib`, and `CompiledLib`), links must be explicitly
+- [x] For compiled libraries (`StaticLib`, `SharedLib`, and `CompiledLib`), links must be explicitly
         categorized as 'public' or 'private'. Add a section in the docs to explain this. See
         [this great StackOverflow answer](https://stackoverflow.com/questions/26037954/cmake-target-link-libraries-interface-dependencies)
         for the difference between PUBLIC, PRIVATE, and, INTERFACE in CMake.
-- [ ] Header-only library support. `HeaderOnly`
-- [ ] When generating CMakeLists.txt, make sure to use correct access specifiers.
+- [x] Header-only library support. `HeaderOnly`
+- [x] When generating CMakeLists.txt, make sure to use correct access specifiers.
         Headers should be PRIVATE for executables, INTERFACE for header-only libraries, and
         PUBLIC for compiled libraries. Links should be PRIVATE for executables, INTERFACE for
         header-only libraries, and PUBLIC or PRIVATE for compiled libraries (see above).
 - [ ] Change `Library` output type to `CompiledLib` or `BinaryLib`, so it won't be confused with
         header-only libraries.
 - [ ] When generating a library project, name the entry_file the same as the project name.
+- [x] Add a separate docs page explaining the linking system, and how links are inherited from
+        compiled libraries.
 
 ## Configuration TODO
 
@@ -60,7 +62,7 @@ project, organized as *components*. See [SFML](https://github.com/SFML/SFML) for
 ### Targets
 
 - [x] **Namespaced output targets**
-- [ ] Support for header-only libraries.
+- [x] Support for header-only libraries.
 - [x] Defines and flags per target.
 
 ### Testing
@@ -79,7 +81,7 @@ project, organized as *components*. See [SFML](https://github.com/SFML/SFML) for
 - [ ] Generate *.gitignore* file if it doesn't exist. Ignore:
   - .vscode/
   - build/
-- [ ] Ability to specify linked dependencies as a map of project names, each with its own dependency list.
+- [x] Ability to specify linked dependencies as a map of project names, each with its own dependency list.
 - [ ] (MAYBE) Add all warning flags to Release builds as well.
 
 Support for:
@@ -185,7 +187,7 @@ Other CMake projects:
 - [x] [fmt](https://github.com/fmtlib/fmt)
 - [ ] [JUCE](https://juce.com/)
 - [ ] [yaml-cpp](https://github.com/jbeder/yaml-cpp)
-- [x] [GLFW](https://www.glfw.org/)
+- [x] [glfw3](https://www.glfw.org/)
 - [ ] [OpenCV](https://opencv.org/)
 - [ ] [ffmpeg](https://www.ffmpeg.org/)
 - [ ] [TensorFlow](https://www.tensorflow.org/)
