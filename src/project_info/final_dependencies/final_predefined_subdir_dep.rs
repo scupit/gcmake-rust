@@ -22,7 +22,11 @@ pub struct FinalGitRepoDescriptor {
 
 pub struct PredefinedSubdirDep {
   git_repo: FinalGitRepoDescriptor,
-  include_dir_name: Option<String>,
+  installed_include_dir_name: Option<String>,
+  // Unused for now, but may be used in the future to propagate installed DLLs from the gcmake project
+  // install dir on Windows.
+  // TODO: Do that, actually.
+  config_file_project_name: Option<String>,
   // Map of target base name to the namespaced target name used for linking.
   namespaced_target_map: HashMap<String, String>,
   requires_custom_populate: bool
@@ -30,7 +34,11 @@ pub struct PredefinedSubdirDep {
 
 impl PredefinedSubdirDep {
   pub fn custom_relative_include_dir_name(&self) -> &Option<String> {
-    &self.include_dir_name
+    &self.installed_include_dir_name
+  }
+
+  pub fn different_config_file_project_name(&self) -> &Option<String> {
+    &self.config_file_project_name
   }
 
   pub fn requires_custom_fetchcontent_populate(&self) -> bool {
@@ -89,7 +97,8 @@ impl PredefinedSubdirDep {
           revision_specifier,
           recursive_clone: subdir_dep.git_repo.recursive_clone
         },
-        include_dir_name: subdir_dep.include_dir_name.clone(),
+        installed_include_dir_name: subdir_dep.installed_include_dir_name.clone(),
+        config_file_project_name: subdir_dep.config_file_project_name.clone(),
         namespaced_target_map: target_map ,
         requires_custom_populate: subdir_dep.requires_custom_fetchcontent_populate
       }

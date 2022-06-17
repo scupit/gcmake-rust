@@ -25,6 +25,11 @@ There are a whole bunch of things which need doing. This is the place to list th
 - [ ] When generating a library project, name the entry_file the same as the project name.
 - [x] Add a separate docs page explaining the linking system, and how links are inherited from
         compiled libraries.
+- [ ] **Propagate DLL copies from installed gcmake projects on Windows**. *Projects just*
+        *using CMake should be able to find_package a gcmake project and have the proper DLLs be copied*
+        *to a build directory automatically*. DLL installation can't be guaranteed in this instance.
+        However, DLL installation is already guaranteed for gcmake projects, since dependencies which
+        are gcmake projects are required to be built as subproject dependencies.
 
 ## Configuration TODO
 
@@ -168,11 +173,6 @@ Pre-written CMake find modules:
 - [ ] OpenSceneGraph (maybe) (NOTE: has cmake package config file)
 - [ ] OpenSSL
 - [X] SDL2
-  - [ ] SDL_image
-  - [ ] SDL_mixer
-  - [ ] SDL_net
-  - [ ] SDL_sound
-  - [ ] SDL_ttf
 - [ ] SQLite (3)
 - [X] Threads
 - [x] wxWidgets

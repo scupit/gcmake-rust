@@ -1720,7 +1720,26 @@ impl<'a> CMakeListsWriter<'a> {
           let has_public_or_interface_links: bool = !used_public_and_interface_links.is_empty();
 
           if let Some(predep_config) = self.project_data.get_predefined_dependencies().get(lib_container) {
-            if has_public_or_interface_links && predep_config.should_install_if_public_linked() {
+            let requires_local_install: bool = if let FinalPredepInfo::Subdirectory(subdir_dep) = predep_config.predefined_dep_info()
+              { subdir_dep.requires_custom_fetchcontent_populate() }
+              else { false };
+
+            if requires_local_install {
+              let all_used_link_targets: Vec<String> = output_data
+                .get_links()
+                .get(lib_container)
+                .unwrap()
+                .iter_all()
+                .map(|the_str| the_str.to_string())
+                .collect();
+
+              self.pass_into_extra_install_targets(
+                &mut extra_targets_to_install,
+                lib_container,
+                &all_used_link_targets
+              )?;
+            }
+            else if has_public_or_interface_links && predep_config.should_install_if_public_linked() {
               self.pass_into_extra_install_targets(
                 &mut extra_targets_to_install,
                 lib_container,

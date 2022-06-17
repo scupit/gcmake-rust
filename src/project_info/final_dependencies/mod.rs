@@ -106,10 +106,6 @@ impl FinalPredefinedDependencyConfig {
 
   pub fn should_install_if_public_linked(&self) -> bool {
     return match &self.predep_info {
-      // TODO: Figure out which one of these is correct. I think subdir dependencies should always be
-      // installed (added to the install exports for the current project) when public/interface linked,
-      // however I'm not sure about that yet.
-      // FinalPredepInfo::Subdirectory(subdir_dep) => subdir_dep.requires_custom_fetchcontent_populate(),
       FinalPredepInfo::Subdirectory(_) => true,
       _ => false
     }

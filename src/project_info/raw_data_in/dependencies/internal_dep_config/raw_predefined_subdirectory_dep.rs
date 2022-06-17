@@ -24,7 +24,13 @@ fn default_requires_custom_populate() -> bool { false }
 #[serde(deny_unknown_fields)]
 pub struct RawSubdirectoryDependency {
   namespace_config: NamespaceConfig,
-  pub include_dir_name: Option<String>,
+  // Name of the include directory the library will be installed to. Usually this is the same as the
+  // project name, but not always. For example, nlohmann_json installs its package config to the
+  // nlohmann_json directory, but uses 'nlohmann' as its include dir.
+  pub installed_include_dir_name: Option<String>,
+  // Name of the directory the project is installed to. The directory name should be the name
+  // of the project the 
+  pub config_file_project_name: Option<String>,
   pub git_repo: GitRepoConfig,
   pub target_names: Vec<String>,
   #[serde(default = "default_requires_custom_populate")]
