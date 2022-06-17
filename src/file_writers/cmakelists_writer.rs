@@ -464,7 +464,7 @@ impl<'a> CMakeListsWriter<'a> {
 
     writeln!(&self.cmakelists_file, "initialize_target_list()")?;
     writeln!(&self.cmakelists_file, "initialize_needed_bin_files_list()")?;
-    writeln!(&self.cmakelists_file, "initialize_install_no_export_list()")?;
+    writeln!(&self.cmakelists_file, "initialize_install_list()")?;
 
     Ok(())
   }
@@ -1677,7 +1677,7 @@ impl<'a> CMakeListsWriter<'a> {
 
   fn pass_into_extra_install_targets(
     &self,
-    extra_targets_to_install_no_export: &mut HashMap<String, String>,
+    extra_targets_to_install: &mut HashMap<String, String>,
     lib_container: &str,
     lib_names: &Vec<String>
   ) -> io::Result<()> {
@@ -1690,7 +1690,7 @@ impl<'a> CMakeListsWriter<'a> {
       .iter()
       .for_each(|namespaced_lib_names|
         for namespaced_target in namespaced_lib_names {
-          extra_targets_to_install_no_export.insert(
+          extra_targets_to_install.insert(
             namespaced_target.to_string(),
             lib_container.to_string()
           );
@@ -1763,7 +1763,7 @@ impl<'a> CMakeListsWriter<'a> {
 
     for (namespaced_target, container_lib) in extra_targets_to_install {
       writeln!(&self.cmakelists_file,
-        "add_to_install_no_export_list( {} \"${{{}_RELATIVE_DEP_PATH}}\" )",
+        "add_to_install_list( {} \"${{{}_RELATIVE_DEP_PATH}}\" )",
         namespaced_target,
         container_lib
       )?;
@@ -1771,7 +1771,7 @@ impl<'a> CMakeListsWriter<'a> {
 
     writeln!(&self.cmakelists_file, "clean_target_list()")?;
     writeln!(&self.cmakelists_file, "clean_needed_bin_files_list()")?;
-    writeln!(&self.cmakelists_file, "clean_install_no_export_list()")?;
+    writeln!(&self.cmakelists_file, "clean_install_list()")?;
 
     match &self.project_data.get_project_type() {
       FinalProjectType::Root => {
@@ -1785,7 +1785,7 @@ impl<'a> CMakeListsWriter<'a> {
       FinalProjectType::Subproject(_) => {
         writeln!(&self.cmakelists_file, "raise_target_list()")?;
         writeln!(&self.cmakelists_file, "raise_needed_bin_files_list()")?;
-        writeln!(&self.cmakelists_file, "raise_install_no_export_list()")?;
+        writeln!(&self.cmakelists_file, "raise_install_list()")?;
       }
     }
 

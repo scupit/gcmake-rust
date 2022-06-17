@@ -293,8 +293,8 @@ const INSTALLATION_CONFIGURE_TEXT: &'static str = r#"function( configure_install
   set( targets_installing "${MY_INSTALLABLE_TARGETS}" )
   set( bin_files_installing "${MY_NEEDED_BIN_FILES}" )
 
-  set( additional_installs_no_export "${MY_ADDITIONAL_INSTALL_NO_EXPORT_TARGETS}" )
-  list( REMOVE_DUPLICATES additional_installs_no_export )
+  set( additional_installs "${MY_ADDITIONAL_INSTALL_TARGETS}" )
+  list( REMOVE_DUPLICATES additional_installs )
 
   set( additional_relative_dep_paths "${MY_ADDITIONAL_RELATIVE_DEP_PATHS}" )
   list( TRANSFORM additional_relative_dep_paths PREPEND "include/" )
@@ -302,7 +302,7 @@ const INSTALLATION_CONFIGURE_TEXT: &'static str = r#"function( configure_install
 
   list( LENGTH targets_installing has_targets_to_install )
   list( LENGTH bin_files_installing has_files_to_install )
-  list( LENGTH additional_installs_no_export has_additional_installs )
+  list( LENGTH additional_installs has_additional_installs )
 
   if( has_targets_to_install )
     install( TARGETS ${targets_installing}
@@ -325,8 +325,8 @@ const INSTALLATION_CONFIGURE_TEXT: &'static str = r#"function( configure_install
     endif()
 
     if( has_additional_installs )
-      message( "Additional installs: ${additional_installs_no_export}" )
-      install( TARGETS ${additional_installs_no_export}
+      message( "Additional installs: ${additional_installs}" )
+      install( TARGETS ${additional_installs}
         EXPORT ${PROJECT_NAME}Targets
         RUNTIME 
           DESTINATION bin
@@ -381,17 +381,17 @@ const INSTALLATION_CONFIGURE_TEXT: &'static str = r#"function( configure_install
   endif()
 endfunction()
 
-macro( initialize_install_no_export_list )
-  set( MY_ADDITIONAL_INSTALL_NO_EXPORT_TARGETS "" )
+macro( initialize_install_list )
+  set( MY_ADDITIONAL_INSTALL_TARGETS "" )
   set( MY_ADDITIONAL_RELATIVE_DEP_PATHS "" )
 endmacro()
 
-macro( clean_install_no_export_list )
-  clean_list( "${MY_ADDITIONAL_INSTALL_NO_EXPORT_TARGETS}" MY_ADDITIONAL_INSTALL_NO_EXPORT_TARGETS )
+macro( clean_install_list )
+  clean_list( "${MY_ADDITIONAL_INSTALL_TARGETS}" MY_ADDITIONAL_INSTALL_TARGETS )
   clean_list( "${MY_ADDITIONAL_RELATIVE_DEP_PATHS}" MY_ADDITIONAL_RELATIVE_DEP_PATHS )
 endmacro()
 
-macro( add_to_install_no_export_list
+macro( add_to_install_list
   target_name
   relative_dep_path
 )
@@ -401,12 +401,12 @@ macro( add_to_install_no_export_list
     set( unaliased_lib_name ${target_name} )
   endif()
 
-  set( MY_ADDITIONAL_INSTALL_NO_EXPORT_TARGETS "${MY_ADDITIONAL_INSTALL_NO_EXPORT_TARGETS}" ${unaliased_lib_name} )
+  set( MY_ADDITIONAL_INSTALL_TARGETS "${MY_ADDITIONAL_INSTALL_TARGETS}" ${unaliased_lib_name} )
   set( MY_ADDITIONAL_RELATIVE_DEP_PATHS "${MY_ADDITIONAL_RELATIVE_DEP_PATHS}" "${relative_dep_path}" )
 endmacro()
 
-macro( raise_install_no_export_list )
-  set( LATEST_INSTALL_NO_EXPORT_LIST "${MY_ADDITIONAL_INSTALL_NO_EXPORT_TARGETS}" PARENT_SCOPE )
+macro( raise_install_list )
+  set( LATEST_INSTALL_LIST "${MY_ADDITIONAL_INSTALL_TARGETS}" PARENT_SCOPE )
   set( LATEST_RELATIVE_DEP_PATHS "${MY_ADDITIONAL_RELATIVE_DEP_PATHS}" PARENT_SCOPE )
 endmacro()
 
@@ -471,14 +471,14 @@ function( configure_subproject
     set( MY_NEEDED_BIN_FILES "${combined_list}" PARENT_SCOPE )
   endif()
 
-  if( NOT "${LATEST_INSTALL_NO_EXPORT_LIST}" STREQUAL "" )
-    if( "${MY_ADDITIONAL_INSTALL_NO_EXPORT_TARGETS}" STREQUAL "" )
-      set( combined_list "${LATEST_INSTALL_NO_EXPORT_LIST}" )
+  if( NOT "${LATEST_INSTALL_LIST}" STREQUAL "" )
+    if( "${MY_ADDITIONAL_INSTALL_TARGETS}" STREQUAL "" )
+      set( combined_list "${LATEST_INSTALL_LIST}" )
     else()
-      set( combined_list "${MY_ADDITIONAL_INSTALL_NO_EXPORT_TARGETS}" "${LATEST_INSTALL_NO_EXPORT_LIST}" )
+      set( combined_list "${MY_ADDITIONAL_INSTALL_TARGETS}" "${LATEST_INSTALL_LIST}" )
     endif()
 
-    set( MY_ADDITIONAL_INSTALL_NO_EXPORT_TARGETS "${combined_list}" PARENT_SCOPE )
+    set( MY_ADDITIONAL_INSTALL_TARGETS "${combined_list}" PARENT_SCOPE )
   endif()
 
   if( NOT "${LATEST_RELATIVE_DEP_PATHS}" STREQUAL "" )
