@@ -66,7 +66,7 @@ pub fn get_default_project_config(
     },
     output: HashMap::from_iter([
       (String::from("Main"), RawCompiledItem {
-        entry_file: String::from(main_file_name(&project_lang, &project_type)),
+        entry_file: String::from(main_file_name(project_name, &project_lang, &project_type)),
         output_type: match project_type {
           CreationProjectOutputType::Executable => OutputItemType::Executable,
           CreationProjectOutputType::Library(lib_type) => match lib_type {
@@ -191,7 +191,11 @@ pub fn get_default_subproject_config(
   )
 }
 
-pub fn main_file_name(project_lang: &MainFileLanguage, project_type: &CreationProjectOutputType) -> String {
+pub fn main_file_name(
+  project_name: &str,
+  project_lang: &MainFileLanguage,
+  project_type: &CreationProjectOutputType
+) -> String {
   let extension_prefix: &str;
   let file_name: &str;
 
@@ -202,7 +206,7 @@ pub fn main_file_name(project_lang: &MainFileLanguage, project_type: &CreationPr
     },
     CreationProjectOutputType::Library(_) => {
       extension_prefix = "h";
-      file_name = "lib";
+      file_name = project_name;
     }
   };
 

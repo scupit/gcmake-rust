@@ -105,14 +105,14 @@ pub fn create_project_at(
     }
 
     let mut main_file_path = project_root.to_owned();
-    main_file_path.push(main_file_name(&lang_selection, &output_type_selection));
+    main_file_path.push(main_file_name(project_name, &lang_selection, &output_type_selection));
 
     match lang_selection {
       MainFileLanguage::C => generate_c_main(main_file_path, &output_type_selection)?,
       MainFileLanguage::Cpp => generate_cpp_main(main_file_path, &output_type_selection)?
     }
 
-    println!("Generated {}", main_file_name(&lang_selection, &output_type_selection));
+    println!("Generated {}", main_file_name(project_name, &lang_selection, &output_type_selection));
 
     return Ok(Some(project_info));
   }
