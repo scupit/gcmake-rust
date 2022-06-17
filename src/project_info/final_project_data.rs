@@ -2,7 +2,7 @@ use std::{collections::{HashMap, HashSet}, path::{Path, PathBuf}, io, rc::Rc, it
 
 use crate::project_info::path_manipulation::cleaned_pathbuf;
 
-use super::{path_manipulation::{cleaned_path_str, relative_to_project_root, find_first_dir_named, absolute_path}, final_dependencies::{FinalGCMakeDependency, FinalPredefinedDependencyConfig, FinalPredepInfo}, raw_data_in::{RawProject, ProjectLike, dependencies::internal_dep_config::AllRawPredefinedDependencies, BuildConfigMap, BuildType, LanguageConfigMap, CompiledItemType, PreBuildConfigIn, SpecificCompilerSpecifier, ProjectMetadata, BuildConfigCompilerSpecifier, TargetBuildConfigMap, TargetSpecificBuildType, LinkSection}, final_project_configurables::{FinalProjectType, SubprojectOnlyOptions}, CompiledOutputItem, helpers::{create_subproject_data, create_project_data, populate_files, find_prebuild_script, PrebuildScriptFile, parse_project_metadata, validate_raw_project_outputs, ProjectOutputType, RetrievedCodeFileType, retrieve_file_type}, PreBuildScript, OutputItemLinks};
+use super::{path_manipulation::{cleaned_path_str, relative_to_project_root, find_first_dir_named, absolute_path}, final_dependencies::{FinalGCMakeDependency, FinalPredefinedDependencyConfig, FinalPredepInfo}, raw_data_in::{RawProject, ProjectLike, dependencies::internal_dep_config::AllRawPredefinedDependencies, BuildConfigMap, BuildType, LanguageConfigMap, OutputItemType, PreBuildConfigIn, SpecificCompilerSpecifier, ProjectMetadata, BuildConfigCompilerSpecifier, TargetBuildConfigMap, TargetSpecificBuildType, LinkSection}, final_project_configurables::{FinalProjectType, SubprojectOnlyOptions}, CompiledOutputItem, helpers::{create_subproject_data, create_project_data, populate_files, find_prebuild_script, PrebuildScriptFile, parse_project_metadata, validate_raw_project_outputs, ProjectOutputType, RetrievedCodeFileType, retrieve_file_type}, PreBuildScript, OutputItemLinks};
 
 pub struct ThreePartVersion (u32, u32, u32);
 
@@ -51,12 +51,12 @@ fn resolve_prebuild_script(project_root: &str, pre_build_config: &PreBuildConfig
     Some(match script_file {
       PrebuildScriptFile::Exe(entry_file_pathbuf) => {
         PreBuildScript::Exe(CompiledOutputItem {
-          output_type: CompiledItemType::Executable,
+          output_type: OutputItemType::Executable,
           entry_file: relative_to_project_root(project_root, entry_file_pathbuf),
           links: match &pre_build_config.link {
             Some(raw_links) => CompiledOutputItem::make_link_map(
               &format!("Pre-build script"),
-              &CompiledItemType::Executable,
+              &OutputItemType::Executable,
               &LinkSection::Uncategorized(raw_links.clone())
             )?,
             None => OutputItemLinks::new_empty()
@@ -739,7 +739,7 @@ impl FinalProjectData {
       else { format!("output item '{}'", output_name )};
 
     match *output_item.get_output_type() {
-      CompiledItemType::Executable => {
+      OutputItemType::Executable => {
         if entry_file_type != RetrievedCodeFileType::Source {
           return Err(format!(
             "The entry_file for executable {} in project '{}' should be a source file, but isn't.",
@@ -748,10 +748,10 @@ impl FinalProjectData {
           ));
         }
       },
-      CompiledItemType::Library
-        | CompiledItemType::StaticLib
-        | CompiledItemType::SharedLib
-        | CompiledItemType::HeaderOnlyLib =>
+      OutputItemType::CompiledLib
+        | OutputItemType::StaticLib
+        | OutputItemType::SharedLib
+        | OutputItemType::HeaderOnlyLib =>
       {
         if entry_file_type != RetrievedCodeFileType::Header {
           return Err(format!(
@@ -780,7 +780,7 @@ impl FinalProjectData {
             "Project '{}' builds a compiled library '{}', however the project contains no source (.c or .cpp) files. Compiled libraries must contain at least one source file. If this is supposed to be a header-only library, change the output_type to '{}'",
             self.get_project_name(),
             self.get_outputs().keys().collect::<Vec<&String>>()[0],
-            CompiledItemType::HeaderOnlyLib.name_string()
+            OutputItemType::HeaderOnlyLib.name_string()
           ));
         }
       },
@@ -795,7 +795,7 @@ impl FinalProjectData {
             "Project '{}' builds a header-only library '{}', however the project contains some source (.c or .cpp) files. Header-only libraries should not have any source files. If this is supposed to be a compiled library, change the output_type to '{}' or another compiled library type.",
             self.get_project_name(),
             self.get_outputs().keys().collect::<Vec<&String>>()[0],
-            CompiledItemType::Library.name_string()
+            OutputItemType::CompiledLib.name_string()
           ))
         }
       }

@@ -177,9 +177,9 @@ fn prompt_for_lib_output_type() -> io::Result<OutputLibType> {
   return prompt_with_choices(
     "Choose library type",
     &[
+      ("Compiled (either static or shared)", Box::new(|| OutputLibType::ToggleStaticOrShared)),
       ("Static", Box::new(|| OutputLibType::Static)),
       ("Shared", Box::new(|| OutputLibType::Shared)),
-      ("Toggleable (type selected at configure time)", Box::new(|| OutputLibType::ToggleStaticOrShared)),
       ("Header-Only", Box::new(|| OutputLibType::HeaderOnly))
     ]
   );

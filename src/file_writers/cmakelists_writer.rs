@@ -1,6 +1,6 @@
 use std::{collections::{HashMap, HashSet}, fs::File, io::{self, Write}, path::{Path, PathBuf}, rc::Rc, cell::RefCell, borrow::BorrowMut, ops::{Deref, DerefMut}};
 
-use crate::{file_writers::cmake_utils_writer::CMakeUtilWriter, project_info::{final_project_data::{FinalProjectData, DependencySearchMode, UseableFinalProjectDataGroup}, path_manipulation::cleaned_path_str, final_dependencies::{GitRevisionSpecifier, PredefinedCMakeComponentsModuleDep, PredefinedSubdirDep, PredefinedCMakeModuleDep, FinalPredepInfo}, raw_data_in::{BuildType, BuildConfig, BuildConfigCompilerSpecifier, SpecificCompilerSpecifier, CompiledItemType, LanguageConfigMap, TargetSpecificBuildType, dependencies::internal_dep_config::{CMakeModuleType, PredefinedCMakeDepHookFile}}, FinalProjectType, CompiledOutputItem, PreBuildScript, LinkMode, LinkView}};
+use crate::{file_writers::cmake_utils_writer::CMakeUtilWriter, project_info::{final_project_data::{FinalProjectData, DependencySearchMode, UseableFinalProjectDataGroup}, path_manipulation::cleaned_path_str, final_dependencies::{GitRevisionSpecifier, PredefinedCMakeComponentsModuleDep, PredefinedSubdirDep, PredefinedCMakeModuleDep, FinalPredepInfo}, raw_data_in::{BuildType, BuildConfig, BuildConfigCompilerSpecifier, SpecificCompilerSpecifier, OutputItemType, LanguageConfigMap, TargetSpecificBuildType, dependencies::internal_dep_config::{CMakeModuleType, PredefinedCMakeDepHookFile}}, FinalProjectType, CompiledOutputItem, PreBuildScript, LinkMode, LinkView}};
 
 const RUNTIME_BUILD_DIR_VAR: &'static str = "${MY_RUNTIME_OUTPUT_DIR}";
 const LIB_BUILD_DIR_VAR: &'static str = "${MY_LIBRARY_OUTPUT_DIR}";
@@ -1029,9 +1029,9 @@ impl<'a> CMakeListsWriter<'a> {
     // Write libraries first
     for (output_name, output_data) in self.project_data.get_outputs() {
       match output_data.get_output_type() {
-        CompiledItemType::StaticLib
-          | CompiledItemType::SharedLib
-          | CompiledItemType::HeaderOnlyLib =>
+        OutputItemType::StaticLib
+          | OutputItemType::SharedLib
+          | OutputItemType::HeaderOnlyLib =>
         {
           self.write_defined_type_library(
             output_data,
@@ -1042,7 +1042,7 @@ impl<'a> CMakeListsWriter<'a> {
             &project_include_dir_varname
           )?;
         }
-        CompiledItemType::Library => {
+        OutputItemType::CompiledLib => {
           self.write_toggle_type_library(
             output_data,
             output_name,
@@ -1059,7 +1059,7 @@ impl<'a> CMakeListsWriter<'a> {
     // Write executables after libraries, because the library targets must exist before the executables
     // can link to them.
     for (output_name, output_data) in self.project_data.get_outputs() {
-      if let CompiledItemType::Executable = output_data.get_output_type() {
+      if let OutputItemType::Executable = output_data.get_output_type() {
         self.write_executable(
           output_data,
           output_name,
@@ -1263,7 +1263,7 @@ impl<'a> CMakeListsWriter<'a> {
     output_data: &CompiledOutputItem
   ) -> io::Result<()> {
     let inheritance_method: &str = match output_data.get_output_type() {
-      CompiledItemType::HeaderOnlyLib => "INTERFACE",
+      OutputItemType::HeaderOnlyLib => "INTERFACE",
       _ => "PRIVATE"
     };
 
@@ -1297,7 +1297,7 @@ impl<'a> CMakeListsWriter<'a> {
     output_data: &CompiledOutputItem
   ) -> io::Result<()> {
     let inheritance_method: &str = match output_data.get_output_type() {
-      CompiledItemType::HeaderOnlyLib => "INTERFACE",
+      OutputItemType::HeaderOnlyLib => "INTERFACE",
       _ => "PRIVATE"
     };
 
@@ -1331,7 +1331,7 @@ impl<'a> CMakeListsWriter<'a> {
     output_data: &CompiledOutputItem
   ) -> io::Result<()> {
     let inheritance_method: &str = match output_data.get_output_type() {
-      CompiledItemType::HeaderOnlyLib => "INTERFACE",
+      OutputItemType::HeaderOnlyLib => "INTERFACE",
       _ => "PRIVATE"
     };
 
@@ -1484,9 +1484,9 @@ impl<'a> CMakeListsWriter<'a> {
     self.write_output_title(output_name)?;
 
     let lib_type_string: &'static str = match *output_data.get_output_type() {
-      CompiledItemType::StaticLib => "STATIC",
-      CompiledItemType::SharedLib => "SHARED",
-      CompiledItemType::HeaderOnlyLib => "INTERFACE",
+      OutputItemType::StaticLib => "STATIC",
+      OutputItemType::SharedLib => "SHARED",
+      OutputItemType::HeaderOnlyLib => "INTERFACE",
       _ => panic!("Defined type library is not StaticLib or SharedLib, and is not a HeaderOnlyLib")
     };
 
@@ -1496,7 +1496,7 @@ impl<'a> CMakeListsWriter<'a> {
       lib_type_string
     )?;
 
-    if let CompiledItemType::SharedLib = output_data.get_output_type() {
+    if let OutputItemType::SharedLib = output_data.get_output_type() {
       writeln!(&self.cmakelists_file,
         "set_target_properties( {}\n\tPROPERTIES\n\t\tWINDOWS_EXPORT_ALL_SYMBOLS TRUE\n)",
         output_name

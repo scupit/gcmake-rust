@@ -158,22 +158,22 @@ pub struct BuildConfig {
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq)]
 #[serde(deny_unknown_fields)]
-pub enum CompiledItemType {
+pub enum OutputItemType {
   Executable,
-  Library,
+  CompiledLib,
   StaticLib,
   SharedLib,
   HeaderOnlyLib
 }
 
-impl CompiledItemType {
+impl OutputItemType {
   pub fn name_string(&self) -> &str {
     match *self {
-      CompiledItemType::Executable => "Executable",
-      CompiledItemType::Library => "Library",
-      CompiledItemType::StaticLib => "StaticLib",
-      CompiledItemType::SharedLib => "SharedLib",
-      CompiledItemType::HeaderOnlyLib => "HeaderOnlyLib",
+      OutputItemType::Executable => "Executable",
+      OutputItemType::CompiledLib => "CompiledLib",
+      OutputItemType::StaticLib => "StaticLib",
+      OutputItemType::SharedLib => "SharedLib",
+      OutputItemType::HeaderOnlyLib => "HeaderOnlyLib",
     }
   }
 }
@@ -237,7 +237,7 @@ pub enum LinkSection {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(deny_unknown_fields)]
 pub struct RawCompiledItem {
-  pub output_type: CompiledItemType,
+  pub output_type: OutputItemType,
   pub entry_file: String,
   // Link order can be important. Eventually figure out how to make/use an ordered Set.
   // Single format: subproject_name::lib_name
@@ -255,27 +255,27 @@ impl RawCompiledItem {
     return &self.entry_file;
   }
 
-  pub fn get_output_type(&self) -> &CompiledItemType {
+  pub fn get_output_type(&self) -> &OutputItemType {
     return &self.output_type;
   }
 
   pub fn is_header_only_type(&self) -> bool {
-    self.output_type == CompiledItemType::HeaderOnlyLib
+    self.output_type == OutputItemType::HeaderOnlyLib
   }
 
   pub fn is_library_type(&self) -> bool {
     match self.output_type {
-      CompiledItemType::Library
-      | CompiledItemType::SharedLib
-      | CompiledItemType::StaticLib
-      | CompiledItemType::HeaderOnlyLib => true,
-      CompiledItemType::Executable => false
+      OutputItemType::CompiledLib
+      | OutputItemType::SharedLib
+      | OutputItemType::StaticLib
+      | OutputItemType::HeaderOnlyLib => true,
+      OutputItemType::Executable => false
     }
   }
 
   pub fn is_executable_type(&self) -> bool {
     match self.output_type {
-      CompiledItemType::Executable => true,
+      OutputItemType::Executable => true,
       _ => false
     }
   }

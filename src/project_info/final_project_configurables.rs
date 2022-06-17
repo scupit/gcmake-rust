@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
-use super::{raw_data_in::{CompiledItemType, RawCompiledItem, BuildConfigMap, TargetSpecificBuildType, TargetBuildConfigMap, LinkSection}, helpers::{get_link_info, retrieve_file_type, RetrievedCodeFileType}};
+use super::{raw_data_in::{OutputItemType, RawCompiledItem, BuildConfigMap, TargetSpecificBuildType, TargetBuildConfigMap, LinkSection}, helpers::{get_link_info, retrieve_file_type, RetrievedCodeFileType}};
 
 pub struct SubprojectOnlyOptions {
   // TODO: Add subproject only options (such as optional_build)
@@ -142,7 +142,7 @@ impl OutputItemLinks {
 }
 
 pub struct CompiledOutputItem {
-  pub output_type: CompiledItemType,
+  pub output_type: OutputItemType,
   pub entry_file: String,
   pub links: OutputItemLinks,
   pub build_config: Option<TargetBuildConfigMap>
@@ -151,13 +151,13 @@ pub struct CompiledOutputItem {
 impl CompiledOutputItem {
   pub fn make_link_map(
     output_name: &str,
-    output_type: &CompiledItemType,
+    output_type: &OutputItemType,
     raw_links: &LinkSection
   ) -> Result<OutputItemLinks, String> {
     let mut output_links = OutputItemLinks::new_empty();
 
     match output_type {
-      CompiledItemType::Executable => match raw_links {
+      OutputItemType::Executable => match raw_links {
         LinkSection::PublicPrivateCategorized {..} => {
           return Err(format!(
             "Links given to an executable should not be categorized as public: or private:, however the links provided to this executable are categorized. Please remove the 'public:' and/or 'private:' keys."
@@ -170,7 +170,7 @@ impl CompiledOutputItem {
           )?;
         }
       },
-      CompiledItemType::HeaderOnlyLib => match raw_links {
+      OutputItemType::HeaderOnlyLib => match raw_links {
         LinkSection::PublicPrivateCategorized {..} => {
           return Err(format!(
             "Links given to header-only library should not be categorized as public: or private:, however the links provided to this header-only library are categorized. Please remove the 'public:' and/or 'private:' keys."
@@ -273,27 +273,27 @@ impl CompiledOutputItem {
     return &self.entry_file;
   }
 
-  pub fn get_output_type(&self) -> &CompiledItemType {
+  pub fn get_output_type(&self) -> &OutputItemType {
     return &self.output_type;
   }
 
   pub fn is_header_only_type(&self) -> bool {
-    self.output_type == CompiledItemType::HeaderOnlyLib
+    self.output_type == OutputItemType::HeaderOnlyLib
   }
 
   pub fn is_library_type(&self) -> bool {
     match self.output_type {
-      CompiledItemType::Library
-      | CompiledItemType::SharedLib
-      | CompiledItemType::StaticLib 
-      | CompiledItemType::HeaderOnlyLib => true,
-      CompiledItemType::Executable => false
+      OutputItemType::CompiledLib
+      | OutputItemType::SharedLib
+      | OutputItemType::StaticLib 
+      | OutputItemType::HeaderOnlyLib => true,
+      OutputItemType::Executable => false
     }
   }
 
   pub fn is_executable_type(&self) -> bool {
     match self.output_type {
-      CompiledItemType::Executable => true,
+      OutputItemType::Executable => true,
       _ => false
     }
   }

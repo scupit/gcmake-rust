@@ -2,7 +2,7 @@ use std::{path::{PathBuf, Path}, fs, io, os::raw, any};
 
 use regex::{Captures, Regex};
 
-use super::{raw_data_in::{RawProject, RawSubproject, ProjectLike, ProjectMetadata, CompiledItemType}, path_manipulation::cleaned_pathbuf, final_project_configurables::LinkInfo, final_project_data::ProjectLoadFailureReason};
+use super::{raw_data_in::{RawProject, RawSubproject, ProjectLike, ProjectMetadata, OutputItemType}, path_manipulation::cleaned_pathbuf, final_project_configurables::LinkInfo, final_project_data::ProjectLoadFailureReason};
 
 #[derive(PartialEq, Eq)]
 pub enum RetrievedCodeFileType {
@@ -184,11 +184,11 @@ pub fn validate_raw_project_outputs(raw_project: &RawProject) -> Result<ProjectO
 
   for (_, raw_output_data) in raw_project.get_output() {
     match *raw_output_data.get_output_type() {
-      CompiledItemType::Executable => num_exes += 1,
-      CompiledItemType::HeaderOnlyLib => num_header_only_libs += 1,
-      CompiledItemType::Library
-      | CompiledItemType::StaticLib
-      | CompiledItemType::SharedLib => num_compiled_libs += 1
+      OutputItemType::Executable => num_exes += 1,
+      OutputItemType::HeaderOnlyLib => num_header_only_libs += 1,
+      OutputItemType::CompiledLib
+      | OutputItemType::StaticLib
+      | OutputItemType::SharedLib => num_compiled_libs += 1
     }
   }
 

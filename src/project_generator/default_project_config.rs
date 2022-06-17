@@ -1,6 +1,6 @@
 use std::{collections::{HashMap, HashSet}, iter::FromIterator};
 
-use crate::project_info::raw_data_in::{RawProject, RawSubproject, ProjectLike, SpecificCompilerSpecifier, RawCompiledItem, CompiledItemType, BuildType, BuildConfigCompilerSpecifier, BuildConfig, SingleLanguageConfig, LanguageConfigMap};
+use crate::project_info::raw_data_in::{RawProject, RawSubproject, ProjectLike, SpecificCompilerSpecifier, RawCompiledItem, OutputItemType, BuildType, BuildConfigCompilerSpecifier, BuildConfig, SingleLanguageConfig, LanguageConfigMap};
 
 use self::configuration::{MainFileLanguage, OutputLibType, CreationProjectOutputType};
 
@@ -68,12 +68,12 @@ pub fn get_default_project_config(
       (String::from("Main"), RawCompiledItem {
         entry_file: String::from(main_file_name(&project_lang, &project_type)),
         output_type: match project_type {
-          CreationProjectOutputType::Executable => CompiledItemType::Executable,
+          CreationProjectOutputType::Executable => OutputItemType::Executable,
           CreationProjectOutputType::Library(lib_type) => match lib_type {
-            OutputLibType::Static => CompiledItemType::StaticLib,
-            OutputLibType::Shared => CompiledItemType::SharedLib,
-            OutputLibType::ToggleStaticOrShared => CompiledItemType::Library,
-            OutputLibType::HeaderOnly => CompiledItemType::HeaderOnlyLib
+            OutputLibType::Static => OutputItemType::StaticLib,
+            OutputLibType::Shared => OutputItemType::SharedLib,
+            OutputLibType::ToggleStaticOrShared => OutputItemType::CompiledLib,
+            OutputLibType::HeaderOnly => OutputItemType::HeaderOnlyLib
           }
         },
         link: None,
