@@ -390,13 +390,13 @@ impl<'a> CMakeListsWriter<'a> {
     self.write_newline()?;
 
     writeln!(&self.cmakelists_file,
-      "if( IS_SUBSEQUENT_CONFIGURE )"
+      "if( FETCHCONTENT_VERBOSE_POPULATE )"
     )?;
     self.set_basic_var("\t", "FETCHCONTENT_QUIET", "ON")?;
 
     writeln!(&self.cmakelists_file, "else()")?;
     self.set_basic_var("\t", "FETCHCONTENT_QUIET", "OFF")?;
-    self.set_basic_var("\t", "IS_SUBSEQUENT_CONFIGURE", "TRUE CACHE BOOL INTERNAL")?;
+    self.set_basic_var("\t", "FETCHCONTENT_VERBOSE_POPULATE", "TRUE CACHE BOOL \"Whether to show verbose FetchContent population info on configure\"")?;
 
     writeln!(&self.cmakelists_file, "endif()\n")?;
 
