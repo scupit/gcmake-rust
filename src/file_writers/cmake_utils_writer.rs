@@ -17,7 +17,8 @@ impl CMakeUtilWriter {
         ("pre-build-configuration-utils", PREBUILD_STEP_UTILS_TEXT),
         ("resource-copy-util", RESOURCE_COPY_UTIL_TEXT),
         ("general-utils", GENERAL_FUNCTIONS_UTIL_TEXT),
-        ("installation-utils", INSTALLATION_CONFIGURE_TEXT)
+        ("installation-utils", INSTALLATION_CONFIGURE_TEXT),
+        ("gcmake-cpack-utils", GCMAKE_CPACK_CONFIGURE_TEXT)
       ])
     }
   }
@@ -325,7 +326,7 @@ const INSTALLATION_CONFIGURE_TEXT: &'static str = r#"function( configure_install
     endif()
 
     if( has_additional_installs )
-      message( "Additional installs: ${additional_installs}" )
+      message( "${PROJECT_NAME} additional installs: ${additional_installs}" )
       install( TARGETS ${additional_installs}
         EXPORT ${PROJECT_NAME}Targets
         RUNTIME 
@@ -490,5 +491,50 @@ function( configure_subproject
 
     set( MY_ADDITIONAL_RELATIVE_DEP_PATHS "${combined_list}" PARENT_SCOPE )
   endif()
+endfunction()
+"#;
+
+const GCMAKE_CPACK_CONFIGURE_TEXT: &'static str = r#"
+# Should only be called from the root project, and only from the toplevel project being built.
+# if( "${CMAKE_SOURCE_DIR}" STREQUAL "${CMAKE_CURRENT_SOURCE_DIR}" )
+function( gcmake_configure_cpack
+  vendor_name
+)
+  include( ProcessorCount )
+  ProcessorCount( num_cpu_cores )
+
+  if( num_cpu_cores EQUAL 0 )
+    set( num_cpu_cores 1 )
+  endif()
+
+  set( CMAKE_NUM_PACKAGER_THREADS ${num_cpu_cores} CACHE STRING "Number of threads to use for CPack jobs" )
+
+  set( CPACK_THREADS ${CMAKE_NUM_PACKAGER_THREADS} )
+  set( CPACK_ARCHIVE_THREADS ${CMAKE_NUM_PACKAGER_THREADS} )
+
+  # Currently don't support Apple because I have no way to test it.
+  if( WIN32 )
+    option( CPACK_WIX_ENABLED "Generate installer using WiX" ON )
+    option( CPACK_NSIS_ENABLED "Generate installer using NSIS" OFF )
+
+    set( CPACK_GENERATOR "7Z" "ZIP" )
+    set( CPACK_SOURCE_GENERATOR "ZIP" "7Z" )
+
+    if( CPACK_WIX_ENABLED )
+      list( APPEND CPACK_GENERATOR "WIX" )
+    endif()
+
+    if( CPACK_NSIS_ENABLED )
+      list( APPEND CPACK_GENERATOR "NSIS" )
+    endif()
+  elseif( UNIX AND NOT APPLE )
+    set( CPACK_GENERATOR "TGZ" "TXZ" "DEB" "RPM" "FreeBSD" )
+    set( CPACK_SOURCE_GENERATOR "TGZ" "TXZ" "ZIP" "7Z" )
+  endif()
+
+  set( CPACK_PACKAGE_VENDOR "${vendor_name}" )
+  set( CPACK_SOURCE_IGNORE_FILES "/\\\\.git/" "/\\\\.vscode/" "/build/" "/dep/" "/__pycache__/" "/\\\\.mypy_cache/" )
+
+  include( CPack )
 endfunction()
 "#;

@@ -1,6 +1,6 @@
-use std::{collections::{HashMap, HashSet}, fs::File, io::{self, Write}, path::{Path, PathBuf}, rc::Rc, cell::RefCell, borrow::BorrowMut, ops::{Deref, DerefMut}};
+use std::{collections::{HashMap, HashSet}, fs::File, io::{self, Write}, path::{Path, PathBuf}, rc::Rc, cell::RefCell, ops::{Deref}};
 
-use crate::{file_writers::cmake_utils_writer::CMakeUtilWriter, project_info::{final_project_data::{FinalProjectData, DependencySearchMode, UseableFinalProjectDataGroup}, path_manipulation::cleaned_path_str, final_dependencies::{GitRevisionSpecifier, PredefinedCMakeComponentsModuleDep, PredefinedSubdirDep, PredefinedCMakeModuleDep, FinalPredepInfo}, raw_data_in::{BuildType, BuildConfig, BuildConfigCompilerSpecifier, SpecificCompilerSpecifier, OutputItemType, LanguageConfigMap, TargetSpecificBuildType, dependencies::internal_dep_config::{CMakeModuleType, PredefinedCMakeDepHookFile}}, FinalProjectType, CompiledOutputItem, PreBuildScript, LinkMode, LinkView}};
+use crate::{file_writers::cmake_utils_writer::CMakeUtilWriter, project_info::{final_project_data::{FinalProjectData, DependencySearchMode, UseableFinalProjectDataGroup}, path_manipulation::cleaned_path_str, final_dependencies::{GitRevisionSpecifier, PredefinedCMakeComponentsModuleDep, PredefinedSubdirDep, PredefinedCMakeModuleDep, FinalPredepInfo}, raw_data_in::{BuildType, BuildConfig, BuildConfigCompilerSpecifier, SpecificCompilerSpecifier, OutputItemType, LanguageConfigMap, TargetSpecificBuildType, dependencies::internal_dep_config::{CMakeModuleType, PredefinedCMakeDepHookFile}}, FinalProjectType, CompiledOutputItem, PreBuildScript, LinkMode}};
 
 const RUNTIME_BUILD_DIR_VAR: &'static str = "${MY_RUNTIME_OUTPUT_DIR}";
 const LIB_BUILD_DIR_VAR: &'static str = "${MY_LIBRARY_OUTPUT_DIR}";
@@ -101,11 +101,6 @@ fn flattened_maybe_linker_flags_string(maybe_flags: &Option<HashSet<String>>) ->
     Some(linker_flags) => flattened_linker_flags_string(linker_flags),
     None => String::from(" ")
   }
-}
-
-enum WritingTo {
-  CMakeLists,
-  CMakeConfigIn
 }
 
 struct CMakeListsWriter<'a> {
@@ -351,6 +346,10 @@ impl<'a> CMakeListsWriter<'a> {
     self.write_section_header("Installation and Export configuration")?;
     self.write_installation_and_exports()?;
 
+    if self.project_data.is_root_project() {
+      self.write_toplevel_cpack_config()?;
+    }
+
     Ok(())
   }
 
@@ -362,9 +361,10 @@ impl<'a> CMakeListsWriter<'a> {
 
     // Project metadata
     writeln!(&self.cmakelists_file,
-      "project( {} VERSION {} )",
+      "project( {}\n\tVERSION {}\n\tDESCRIPTION \"{}\"\n)",
       self.project_data.get_project_name(),
-      self.project_data.version.to_string()
+      self.project_data.version.to_string(),
+      self.project_data.get_description()
     )?;
 
     Ok(())
@@ -392,11 +392,11 @@ impl<'a> CMakeListsWriter<'a> {
     writeln!(&self.cmakelists_file,
       "if( FETCHCONTENT_VERBOSE_POPULATE )"
     )?;
-    self.set_basic_var("\t", "FETCHCONTENT_QUIET", "ON")?;
-
-    writeln!(&self.cmakelists_file, "else()")?;
     self.set_basic_var("\t", "FETCHCONTENT_QUIET", "OFF")?;
     self.set_basic_var("\t", "FETCHCONTENT_VERBOSE_POPULATE", "TRUE CACHE BOOL \"Whether to show verbose FetchContent population info on configure\"")?;
+
+    writeln!(&self.cmakelists_file, "else()")?;
+    self.set_basic_var("\t", "FETCHCONTENT_QUIET", "ON")?;
 
     writeln!(&self.cmakelists_file, "endif()\n")?;
 
@@ -548,7 +548,6 @@ impl<'a> CMakeListsWriter<'a> {
       Cpp
     } = self.project_data.get_language_info();
 
-    // Write C info
     self.write_newline()?;
     self.set_basic_var(
       "",
@@ -556,18 +555,21 @@ impl<'a> CMakeListsWriter<'a> {
       &C.standard.to_string()
     )?;
 
-    // TODO: Only write these messages if the project is toplevel.
-    // CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR
-    self.write_message("", "Using at least C${PROJECT_C_LANGUAGE_STANDARD} standard")?;
-
-    // Write C++ Info
     self.set_basic_var(
       "",
       "PROJECT_CXX_LANGUAGE_STANDARD",
       &Cpp.standard.to_string()
     )?;
 
-    self.write_message("", "Using at least C++${PROJECT_CXX_LANGUAGE_STANDARD} standard")?;
+    writeln!(&self.cmakelists_file,
+      "\nif( \"${{CMAKE_SOURCE_DIR}}\" STREQUAL \"${{CMAKE_CURRENT_SOURCE_DIR}}\" )"
+    )?;
+
+    self.write_message("\t", "${PROJECT_NAME} is using C${PROJECT_C_LANGUAGE_STANDARD}")?;
+    self.write_message("\t", "${PROJECT_NAME} is using C++${PROJECT_CXX_LANGUAGE_STANDARD}")?;
+
+    writeln!(&self.cmakelists_file, "endif()")?;
+
     Ok(())
   }
 
@@ -1789,6 +1791,20 @@ impl<'a> CMakeListsWriter<'a> {
       }
     }
 
+    Ok(())
+  }
+
+  fn write_toplevel_cpack_config(&self) -> io::Result<()> {
+    writeln!(&self.cmakelists_file,
+      "if( ${{CMAKE_SOURCE_DIR}} STREQUAL ${{CMAKE_CURRENT_SOURCE_DIR}} )"
+    )?;
+
+    writeln!(&self.cmakelists_file,
+      "gcmake_configure_cpack( \"{}\" )",
+      self.project_data.get_vendor()
+    )?;
+
+    writeln!(&self.cmakelists_file, "endif()")?;
     Ok(())
   }
 }

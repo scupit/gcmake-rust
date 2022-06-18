@@ -42,31 +42,38 @@ Each configuration directory can be configured using these files:
     needed by gcmake in order to properly import the project.
 - `pre_load.cmake`: CMake script to be included just *before* the dependency is imported.
 - `post_load.cmake`: CMake script to be included just *after* the dependency is imported. A common use case
-    for this is finding and copying DLLs on Windows for libraries which are already installed on the system.
-- `README.md`: Any helpful information on using the dependency, including import examples, installation help,
-    caveats, etc.
+    for this is finding and copying DLLs on Windows for libraries which are already installed on the
+    system.
+- `custom_populate.cmake`: This file provides the custom FetchContent population code for
+    "subdirectory dependencies" which do not contain a CMakeLists.txt. "Custom population" involves
+    creating usable library targets, populating include directories, and ensuring the headers for each
+    target are installed correctly.
+- `README.md`: Any helpful information on using the dependency, including import examples,
+    installation help, caveats, etc.
 
 > **NOTE:** `dep_config.yaml` is the only required file.
 
 ## dep_config.yaml
 
-*dep_config.yaml* is the file which actually makes gcmake-rust able to generate CMake code to import
-dependencies.
+*dep_config.yaml* is the collection of metadata which makes non-gcmake projects compatible with the
+gcmake tool. Essentially, this file contains project-specific information which allows 
 
 A *dep_config.yaml* is split into sections, where each root object key begins the section for the
 specified dependency type to be configured. These dependency type sections are supported:
 
 - [`as_subdirectory`](#assubdirectory)
-- [`cmake_builtin_find_module`](#cmakebuiltinfindmodule)
-- [`cmake_builtin_find_components_module`](#cmakebuiltinfindcomponentsmodule)
+- [`cmake_module`](#cmakemodule)
+- [`cmake_components_module`](#cmakecomponentsmodule)
 
-However, only one dependency type/section is required to be specified and configured.
+However, **only one dependency type/section is required to be specified and configured**.
 
 ``` yaml
 # Example dep_config.yaml
 as_subdirectory:
   # ... its configuration
-cmake_builtin_find_module:
+cmake_module:
+  # ... its configuration
+cmake_components_module:
   # ... its configuration
 ```
 
@@ -95,9 +102,9 @@ you have installed on your system (WxWidgets, GLEW, etc.). These translate to a
 
 **Full example:** [gcmake-dependency-configs/OpenGL/dep_config.yaml](https://github.com/scupit/gcmake-dependency-configs/blob/develop/OpenGL/dep_config.yaml)
 
-### cmake_builtin_find_components_module
+### cmake_components_module
 
-This is very similar to [normal cmake module configs](#cmakebuiltinfindmodule), except
+This is very similar to [normal cmake module configs](#cmakemodule), except
 the library being imported is composed of several components which may be optionally imported. See
 the sample usage example in
 [CMake's FindwxWidgets module page](https://cmake.org/cmake/help/latest/module/FindwxWidgets.html)

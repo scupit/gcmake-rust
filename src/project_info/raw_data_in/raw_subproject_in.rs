@@ -55,11 +55,12 @@ impl From<RawProject> for RawSubproject {
 impl Into<RawProject> for RawSubproject {
   fn into(self) -> RawProject {
     RawProject {
-      name: self.name,
+      name: self.name.clone(),
       // If possible, should be the same as the project name
       include_prefix: self.include_prefix,
       description: self.description,
       version: self.version,
+      vendor: self.name,
       // NOTE: This language config is only a placeholder. Subprojects will inherit
       // language info from their parent project.
       languages: LanguageConfigMap {

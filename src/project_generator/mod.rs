@@ -8,7 +8,7 @@ use serde::Serialize;
 
 use std::{fs::{File, remove_dir_all, create_dir_all, create_dir}, io::{self, ErrorKind}, path::Path};
 
-use crate::{project_generator::{c_file_generation::generate_c_main, cpp_file_generation::generate_cpp_main, default_project_config::{DefaultProject, configuration::{MainFileLanguage, CreationProjectOutputType}, get_default_project_config, get_default_subproject_config, main_file_name}, prompt::{prompt_once, prompt_for_project_output_type, prompt_for_language, prompt_for_description}}, program_actions::ProjectTypeCreating};
+use crate::{project_generator::{c_file_generation::generate_c_main, cpp_file_generation::generate_cpp_main, default_project_config::{DefaultProject, configuration::{MainFileLanguage, CreationProjectOutputType}, get_default_project_config, get_default_subproject_config, main_file_name}, prompt::{prompt_once, prompt_for_project_output_type, prompt_for_language, prompt_for_description, prompt_for_vendor}}, program_actions::ProjectTypeCreating};
 
 use self::{prompt::{prompt_until_boolean, PromptResult}};
 
@@ -81,6 +81,9 @@ pub fn create_project_at(
       .unwrap_or(prompt_for_project_output_type()?);
 
     let lang_selection: MainFileLanguage = project_lang.unwrap_or(prompt_for_language()?);
+    let project_vendor: String = if let ProjectTypeCreating::RootProject = &project_type_creating
+      { prompt_for_vendor()? }
+      else { String::from("No vendor") };
     let project_description: String = prompt_for_description()?;
 
     let project_info: DefaultProject = build_default_project_info(
@@ -89,7 +92,8 @@ pub fn create_project_at(
       &include_prefix,
       &lang_selection,
       &output_type_selection,
-      &project_description
+      &project_description,
+      &project_vendor
     );
 
     let cmake_data_file = File::create(
@@ -126,27 +130,29 @@ fn build_default_project_info(
   include_prefix: &str,
   lang_selection: &MainFileLanguage,
   output_type_selection: &CreationProjectOutputType,
-  project_description: &str
+  project_description: &str,
+  project_vendor: &str
 ) -> DefaultProject {
   if let ProjectTypeCreating::Subproject(_) = project_type_creating {
     DefaultProject::Subproject(
       get_default_subproject_config(
-        &project_name,
-        &include_prefix,
-        &lang_selection,
-        &output_type_selection,
-        &project_description
+        project_name,
+        include_prefix,
+        lang_selection,
+        output_type_selection,
+        project_description
       )
     ) 
   }
   else {
     DefaultProject::MainProject(
       get_default_project_config(
-        &project_name,
-        &include_prefix,
-        &lang_selection,
-        &output_type_selection,
-        &project_description
+        project_name,
+        include_prefix,
+        lang_selection,
+        output_type_selection,
+        project_description,
+        project_vendor
       )
     )
   }

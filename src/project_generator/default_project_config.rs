@@ -43,12 +43,14 @@ pub fn get_default_project_config(
   include_prefix: &str,
   project_lang: &MainFileLanguage,
   project_type: &CreationProjectOutputType,
-  project_description: &str
+  project_description: &str,
+  project_vendor: &str
 ) -> RawProject {
   RawProject {
     name: project_name.to_string(),
     include_prefix: include_prefix.to_owned(),
     description: String::from(project_description),
+    vendor: String::from(project_vendor),
     version: String::from("0.0.1"),
     supported_compilers: HashSet::from_iter([
       SpecificCompilerSpecifier::GCC,
@@ -186,7 +188,8 @@ pub fn get_default_subproject_config(
       include_prefix,
       project_lang,
       project_type,
-      project_description
+      project_description,
+      "No vendor"
     )
   )
 }

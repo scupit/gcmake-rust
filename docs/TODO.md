@@ -30,6 +30,19 @@ There are a whole bunch of things which need doing. This is the place to list th
         *to a build directory automatically*. DLL installation can't be guaranteed in this instance.
         However, DLL installation is already guaranteed for gcmake projects, since dependencies which
         are gcmake projects are required to be built as subproject dependencies.
+- [ ] CPack installer generation
+
+[Available CPack Generators](https://cmake.org/cmake/help/latest/cpack_gen/archive.html)
+
+[CPack Docs Page](https://cmake.org/cmake/help/latest/module/CPack.html#variable:CPACK_PACKAGE_DESCRIPTION_SUMMARY)
+
+- [ ] CTest tests and *\<project name\>_BUILD_TESTS* variable. Tests should be in *tests/* directory,
+        Each test should have its own directory.
+- [ ] Generate a placeholder header and source file when creating a new compiled library. Currently,
+        the intial CMakeLists generation step for the new compiled library project fails because the
+        project doesn't contain any source files; just the 'entry point' header.
+- [ ] Separate the `new` command into `project` and `subproject`. This opens the door for adding other
+        things, such as `new test`.
 
 ## Configuration TODO
 

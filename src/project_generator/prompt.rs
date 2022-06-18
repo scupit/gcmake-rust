@@ -141,6 +141,11 @@ fn prompt_with_choices<T>(
   return Ok(value_resolver());
 }
 
+pub fn prompt_for_vendor() -> io::Result<String> {
+  return prompt_until_value("Vendor name (your name or organization)")
+    .map(|the_result| the_result.unwrap_custom());
+}
+
 pub fn prompt_for_language() -> io::Result<MainFileLanguage> {
   return prompt_with_choices(
     "Choose Language",

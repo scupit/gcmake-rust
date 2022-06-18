@@ -29,6 +29,7 @@ pub struct RawProject {
   // If possible, should be the same as the project name
   pub include_prefix: String,
   pub description: String,
+  pub vendor: String,
   pub version: String,
   pub default_build_type: BuildType,
   pub languages: LanguageConfigMap,
@@ -106,7 +107,7 @@ pub struct SingleLanguageConfig {
   pub standard: i8
 }
 
-#[derive(Serialize, Deserialize, Debug, Eq, PartialEq, Hash, Clone)]
+#[derive(Serialize, Deserialize, Debug, Eq, PartialEq, Hash, Clone, PartialOrd, Ord)]
 #[serde(deny_unknown_fields)]
 pub enum BuildType {
   Debug,

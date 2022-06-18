@@ -154,6 +154,8 @@ pub struct FinalProjectData {
   // project: RawProject,
   supported_compilers: HashSet<SpecificCompilerSpecifier>,
   project_name: String,
+  description: String,
+  vendor: String,
   build_config_map: BuildConfigMap,
   default_build_config: BuildType,
   language_config_map: LanguageConfigMap,
@@ -386,7 +388,9 @@ impl FinalProjectData {
 
     let mut finalized_project_data = FinalProjectData {
       project_name: raw_project.name.to_string(),
+      description: raw_project.description.to_string(),
       version: maybe_version.unwrap(),
+      vendor: raw_project.vendor.clone(),
       full_include_prefix,
       base_include_prefix: raw_project.get_include_prefix().to_string(),
       global_defines: raw_project.global_defines,
@@ -1048,6 +1052,14 @@ impl FinalProjectData {
 
   pub fn get_project_name(&self) -> &str {
     &self.project_name
+  }
+
+  pub fn get_description(&self) -> &str {
+    &self.description
+  }
+
+  pub fn get_vendor(&self) -> &str {
+    &self.vendor
   }
 
   pub fn get_src_dir(&self) -> &str {
