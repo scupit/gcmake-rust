@@ -10,9 +10,10 @@ use logger::exit_error_log;
 use clap::Clap;
 use cli_config::{Opts, SubCommand, NewProjectCommand, CreateFilesCommand, UpdateDependencyConfigsCommand};
 use program_actions::*;
-use project_info::final_project_data::UseableFinalProjectDataGroup;
+use project_generator::GeneralNewProjectInfo;
+use project_info::final_project_data::{UseableFinalProjectDataGroup, ProjectConstructorConfig};
 
-use crate::{project_info::{raw_data_in::dependencies::{all_raw_supported_dependency_configs, internal_dep_config::AllRawPredefinedDependencies}, final_project_data::ProjectLoadFailureReason}, file_writers::write_configurations, cli_config::DepConfigSubCommand};
+use crate::{project_info::{raw_data_in::dependencies::{all_raw_supported_dependency_configs, internal_dep_config::AllRawPredefinedDependencies}, final_project_data::ProjectLoadFailureReason}, file_writers::write_configurations, cli_config::{DepConfigSubCommand, FileCreationLang}, project_generator::configuration::{MainFileLanguage, CreationProjectOutputType}};
 
 // fn print_project_info(project_data_group: UseableFinalProjectDataGroup) {
 //   println!("PROJECT INFORMATION\n----------------------------------------");
@@ -52,18 +53,51 @@ fn main() {
   let mut given_root_dir: String = opts.project_root;
   let mut should_generate_cmakelists: bool = true;
 
+  println!("");
+
   if let Some(subcommand) = opts.subcommand {
     match subcommand {
-      SubCommand::New(command) => do_new_project_subcommand(
-        command,
-        &dep_config,
-        &mut given_root_dir,
-        &mut should_generate_cmakelists
-      ),
+      SubCommand::New(command) => {
+        let maybe_project_info = do_new_project_subcommand(
+          command,
+          &dep_config,
+          &mut given_root_dir,
+          &mut should_generate_cmakelists
+        );
+
+
+        if let Some(new_project_info) = maybe_project_info {
+          if let CreationProjectOutputType::Library(lib_type) = new_project_info.project_output_type {
+            if lib_type.is_compiled_lib() {
+              // TODO: Refactor this somehow. Right now, this parses all cmake_data.yaml files 
+              // for the whole project, then does it again when generating the CMakeLists.
+              // While that isn't causing problems, it shouldn't have to be done twice
+              // Potential fix: make a command chain builder. A string of commands should be built and
+              // executed, reusing the same FinalProjectData tree and all that. That's a TODO for future
+              // refactoring though, since this works fine.
+              do_new_files_subcommand(
+                CreateFilesCommand {
+                  language: match new_project_info.project_lang {
+                    MainFileLanguage::C => FileCreationLang::Cpp,
+                    MainFileLanguage::Cpp => FileCreationLang::Cpp
+                  },
+                  file_name: String::from("Placeholder"),
+                  file_types: String::from("hs"),
+                  use_pragma_guards: false
+                },
+                &new_project_info.project_root,
+                &dep_config,
+                Some(new_project_info.project_root.clone())
+              );
+            }
+          }
+        }
+      },
       SubCommand::GenFile(command) => do_new_files_subcommand(
         command,
         &given_root_dir,
-        &dep_config
+        &dep_config,
+        None
       ),
       SubCommand::DepConfig(_) => {
         unreachable!();
@@ -74,7 +108,8 @@ fn main() {
   if should_generate_cmakelists {
     do_generate_project_configs(
       &given_root_dir,
-      &dep_config
+      &dep_config,
+      None
     );
   }
 
@@ -83,9 +118,10 @@ fn main() {
 
 fn do_generate_project_configs(
   given_root_dir: &str,
-  dep_config: &AllRawPredefinedDependencies
+  dep_config: &AllRawPredefinedDependencies,
+  just_created_project_at: Option<String>
 ) {
-  match parse_project_info(&given_root_dir, &dep_config) {
+  match parse_project_info(&given_root_dir, &dep_config, just_created_project_at) {
     Ok(project_data_group) => {
       // print_project_info(project_data_group);
       write_configurations(
@@ -107,9 +143,10 @@ fn do_generate_project_configs(
 fn do_new_files_subcommand(
   command: CreateFilesCommand,
   given_root_dir: &str,
-  dep_config: &AllRawPredefinedDependencies
+  dep_config: &AllRawPredefinedDependencies,
+  just_created_project_at: Option<String>
 ) {
-  match parse_project_info(&given_root_dir, &dep_config) {
+  match parse_project_info(&given_root_dir, &dep_config, just_created_project_at) {
     Ok(project_data_group) => {
       // print_project_info(project_data_group);
       if let None = project_data_group.operating_on {
@@ -130,15 +167,21 @@ fn do_new_project_subcommand(
   dep_config: &AllRawPredefinedDependencies,
   given_root_dir: &mut String,
   should_generate_cmakelists: &mut bool
-) {
+) -> Option<GeneralNewProjectInfo> {
   match get_parent_project_for_new_project(&given_root_dir.clone(), dep_config) {
     Ok(maybe_project_info) => {
-      handle_create_project(
+      let maybe_general_new_project_info = handle_create_project(
         command,
         &maybe_project_info.map(|it| it.operating_on).flatten(),
         given_root_dir,
         should_generate_cmakelists
       );
+
+      if let Some(new_project_info) = &maybe_general_new_project_info {
+        *given_root_dir = new_project_info.project_root.clone();
+      }
+
+      return maybe_general_new_project_info;
     },
     Err(error_message) => exit_error_log(&error_message)
   }
@@ -179,7 +222,11 @@ fn get_parent_project_for_new_project(
   current_root: &str,
   dep_config: &AllRawPredefinedDependencies
 ) -> Result<Option<UseableFinalProjectDataGroup>, String> {
-  match parse_project_info(current_root, dep_config) {
+  match parse_project_info(
+    current_root,
+    dep_config,
+    None
+  ) {
     Ok(project_data_group) => Ok(Some(project_data_group)),
     Err(failure_reason) => match failure_reason {
       ProjectLoadFailureReason::MissingYaml(_) => Ok(None),

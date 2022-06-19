@@ -145,6 +145,10 @@ struct ParentProjectInfo {
   target_namespace_prefix: String
 }
 
+pub struct ProjectConstructorConfig {
+  pub just_created_library_project_at: Option<String>
+}
+
 pub struct FinalProjectData {
   project_type: FinalProjectType,
   project_output_type: ProjectOutputType,
@@ -175,14 +179,15 @@ pub struct FinalProjectData {
   predefined_dependencies: HashMap<String, FinalPredefinedDependencyConfig>,
   gcmake_dependency_projects: HashMap<String, FinalGCMakeDependency>,
   prebuild_script: Option<PreBuildScript>,
-  target_namespace_prefix: String
+  target_namespace_prefix: String,
+  was_just_created: bool
 }
 
 impl FinalProjectData {
-
   pub fn new(
     unclean_given_root: &str,
-    dep_config: &AllRawPredefinedDependencies
+    dep_config: &AllRawPredefinedDependencies,
+    constructor_config: ProjectConstructorConfig
   ) -> Result<UseableFinalProjectDataGroup, ProjectLoadFailureReason> {
     let metadata: ProjectMetadata = parse_project_metadata(unclean_given_root)?;
     let cleaned_given_root: String = cleaned_path_str(unclean_given_root);
@@ -213,11 +218,12 @@ impl FinalProjectData {
       real_project_root_using = real_project_root_using;
     }
 
-
     let root_project: Rc<FinalProjectData> = Rc::new(Self::create_new(
       real_project_root_using.to_str().unwrap(),
       None,
-      dep_config
+      dep_config,
+      &constructor_config.just_created_library_project_at
+        .map(|creation_root| absolute_path(creation_root).unwrap())
     )?);
 
     root_project.validate_correctness()
@@ -236,7 +242,8 @@ impl FinalProjectData {
   fn create_new(
     unclean_project_root: &str,
     parent_project_info: Option<ParentProjectInfo>,
-    all_dep_config: &AllRawPredefinedDependencies
+    all_dep_config: &AllRawPredefinedDependencies,
+    just_created_project_at: &Option<PathBuf>
   ) -> Result<FinalProjectData, ProjectLoadFailureReason> {
     // NOTE: Subprojects are still considered whole projects, however they are not allowed to specify
     // top level build configuration data. This means that language data, build configs, etc. are not
@@ -293,7 +300,8 @@ impl FinalProjectData {
             include_prefix: full_include_prefix.clone(),
             target_namespace_prefix: target_namespace_prefix.clone()
           }),
-          all_dep_config
+          all_dep_config,
+          just_created_project_at
         )
           .map_err(|failure_reason| {
             failure_reason.map_message(|err_message| format!(
@@ -326,7 +334,8 @@ impl FinalProjectData {
           Some(Rc::new(Self::create_new(
             &dep_path,
             None,
-            all_dep_config
+            all_dep_config,
+            just_created_project_at
           )?))
         }
         else { None };
@@ -414,7 +423,13 @@ impl FinalProjectData {
       predefined_dependencies,
       gcmake_dependency_projects,
       prebuild_script,
-      target_namespace_prefix
+      target_namespace_prefix,
+      was_just_created: false
+    };
+
+    finalized_project_data.was_just_created = match just_created_project_at {
+      Some(created_root) => *created_root == finalized_project_data.absolute_project_root,
+      None => false
     };
 
     finalized_project_data.populate_used_components()
@@ -446,6 +461,10 @@ impl FinalProjectData {
       FinalProjectType::Root => true,
       _ => false
     }
+  }
+
+  pub fn mark_just_created(&mut self, was_just_created: bool) {
+    self.was_just_created = was_just_created;
   }
 
   pub fn recurse_subprojects_and_current(
@@ -779,7 +798,7 @@ impl FinalProjectData {
           "CompiledLibProject should contain only one output."
         );
 
-        if self.src_files.is_empty() {
+        if self.src_files.is_empty() && !self.was_just_created {
           return Err(format!(
             "Project '{}' builds a compiled library '{}', however the project contains no source (.c or .cpp) files. Compiled libraries must contain at least one source file. If this is supposed to be a header-only library, change the output_type to '{}'",
             self.get_project_name(),

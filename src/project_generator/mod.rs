@@ -8,7 +8,7 @@ use serde::Serialize;
 
 use std::{fs::{File, remove_dir_all, create_dir_all, create_dir}, io::{self, ErrorKind}, path::Path};
 
-use crate::{project_generator::{c_file_generation::generate_c_main, cpp_file_generation::generate_cpp_main, default_project_config::{DefaultProject, configuration::{MainFileLanguage, CreationProjectOutputType}, get_default_project_config, get_default_subproject_config, main_file_name}, prompt::{prompt_once, prompt_for_project_output_type, prompt_for_language, prompt_for_description, prompt_for_vendor}}, program_actions::ProjectTypeCreating};
+use crate::{project_generator::{c_file_generation::generate_c_main, cpp_file_generation::generate_cpp_main, default_project_config::{DefaultProject, configuration::{MainFileLanguage, CreationProjectOutputType}, get_default_project_config, get_default_subproject_config, main_file_name}, prompt::{prompt_once, prompt_for_project_output_type, prompt_for_language, prompt_for_description, prompt_for_vendor}}, program_actions::{ProjectTypeCreating, handle_create_files}, cli_config::{CreateFilesCommand, FileCreationLang}, project_info::final_project_data::FinalProjectData};
 
 use self::{prompt::{prompt_until_boolean, PromptResult}};
 
@@ -16,13 +16,19 @@ const SRC_DIR: &'static str = "src";
 const INCLUDE_DIR: &'static str = "include";
 const TEMPLATE_IMPL_DIR: &'static str = "template_impls";
 
+pub struct GeneralNewProjectInfo {
+  pub project: DefaultProject,
+  pub project_lang: MainFileLanguage,
+  pub project_output_type: CreationProjectOutputType,
+  pub project_root: String
+}
 
 pub fn create_project_at(
   new_project_root: &str,
   project_type_creating: ProjectTypeCreating,
   project_lang: Option<MainFileLanguage>,
   project_output_type: Option<CreationProjectOutputType>
-) -> io::Result<Option<DefaultProject>> {
+) -> io::Result<Option<GeneralNewProjectInfo>> {
   let project_name: &str;
 
   {
@@ -101,6 +107,8 @@ pub fn create_project_at(
       project_root.to_str().unwrap())
     )?;
 
+    println!("");
+
     match &project_info {
       DefaultProject::MainProject(project_info) => 
         write_cmake_yaml(&cmake_data_file, project_info)?,
@@ -118,7 +126,12 @@ pub fn create_project_at(
 
     println!("Generated {}", main_file_name(project_name, &lang_selection, &output_type_selection));
 
-    return Ok(Some(project_info));
+    return Ok(Some( GeneralNewProjectInfo {
+      project: project_info,
+      project_lang: lang_selection.clone(),
+      project_output_type: output_type_selection,
+      project_root: project_root.to_str().unwrap().to_string(), 
+    }));
   }
 
   Ok(None)

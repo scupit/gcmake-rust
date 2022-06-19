@@ -1,5 +1,5 @@
 use std::rc::Rc;
-use crate::{cli_config::{NewProjectCommand}, project_info::{path_manipulation::cleaned_path_str, final_project_data::{FinalProjectData}}, logger::exit_error_log, project_generator::{configuration::{MainFileLanguage, CreationProjectOutputType, OutputLibType}, create_project_at}};
+use crate::{cli_config::{NewProjectCommand}, project_info::{path_manipulation::cleaned_path_str, final_project_data::{FinalProjectData}, raw_data_in::ProjectLike}, logger::exit_error_log, project_generator::{configuration::{MainFileLanguage, CreationProjectOutputType, OutputLibType}, create_project_at, GeneralNewProjectInfo}, program_actions::parse_project_info};
 
 pub enum ProjectTypeCreating {
   RootProject,
@@ -33,7 +33,7 @@ pub fn handle_create_project(
   maybe_current_project: &Option<Rc<FinalProjectData>>,
   project_root_dir: &mut String,
   should_generate_cmakelists: &mut bool
-) {
+) -> Option<GeneralNewProjectInfo> {
   let project_creation_info = make_project_creating_info(&command, maybe_current_project);
 
   if cleaned_path_str(&command.new_project_name).contains("/") {
@@ -83,8 +83,8 @@ pub fn handle_create_project(
     maybe_project_output_type
   ) {
     Ok(maybe_project) => match maybe_project {
-      Some(default_project) => {
-        let project_like = default_project.unwrap_projectlike();
+      Some(general_new_project_info) => {
+        let project_like = general_new_project_info.project.unwrap_projectlike();
 
         println!("{} created successfully", project_like.get_name());
 
@@ -96,6 +96,8 @@ pub fn handle_create_project(
             command.new_project_name
           );
         }
+
+        return Some(general_new_project_info);
       },
       None => {
         println!("Project not created. Skipping CMakeLists generation.");
@@ -104,4 +106,6 @@ pub fn handle_create_project(
     },
     Err(err) => println!("{}", err)
   }
+
+  return None;
 }

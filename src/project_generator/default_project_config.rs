@@ -18,6 +18,15 @@ pub mod configuration {
     HeaderOnly
   }
 
+  impl OutputLibType {
+    pub fn is_compiled_lib(&self) -> bool {
+      return match self {
+        Self::HeaderOnly => false,
+        _ => true
+      }
+    }
+  }
+
   pub enum CreationProjectOutputType {
     Library(OutputLibType),
     Executable
