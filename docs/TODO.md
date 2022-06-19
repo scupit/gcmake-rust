@@ -30,7 +30,7 @@ There are a whole bunch of things which need doing. This is the place to list th
         *to a build directory automatically*. DLL installation can't be guaranteed in this instance.
         However, DLL installation is already guaranteed for gcmake projects, since dependencies which
         are gcmake projects are required to be built as subproject dependencies.
-- [ ] CPack installer generation
+- [x] CPack installer generation
 
 [Available CPack Generators](https://cmake.org/cmake/help/latest/cpack_gen/archive.html)
 
@@ -43,6 +43,10 @@ There are a whole bunch of things which need doing. This is the place to list th
         project doesn't contain any source files; just the 'entry point' header.
 - [ ] Separate the `new` command into `project` and `subproject`. This opens the door for adding other
         things, such as `new test`.
+-  Improvements to installers, such as:
+  - [ ] Ability to specify an installer icon (where applicable)
+  - [ ] Name the uninstaller `Uninstall_<project name>` (where applicable)
+- Expose system endianness to the project using `CMAKE_<LANG>_BYTE_ORDER`.
 
 ## Configuration TODO
 

@@ -1,9 +1,14 @@
 use std::{collections::HashMap, fs::{self}, io, iter::FromIterator, path::{PathBuf}};
 
 
+pub struct CMakeUtilFile {
+  pub util_name: &'static str,
+  pub util_contents: &'static str
+}
+
 pub struct CMakeUtilWriter {
   cmake_utils_path: PathBuf,
-  utils: HashMap<&'static str, &'static str>
+  utils: Vec<CMakeUtilFile>
 }
 
 impl CMakeUtilWriter {
@@ -12,14 +17,36 @@ impl CMakeUtilWriter {
       cmake_utils_path,
       // TODO: Make all these their own *.cmake files, so they are easier to maintain.
       // Load them here using a pre-build script.
-      utils: HashMap::from_iter([
-        ("toggle-lib-util", TOGGLE_LIB_UTIL_TEXT),
-        ("pre-build-configuration-utils", PREBUILD_STEP_UTILS_TEXT),
-        ("resource-copy-util", RESOURCE_COPY_UTIL_TEXT),
-        ("general-utils", GENERAL_FUNCTIONS_UTIL_TEXT),
-        ("installation-utils", INSTALLATION_CONFIGURE_TEXT),
-        ("gcmake-cpack-utils", GCMAKE_CPACK_CONFIGURE_TEXT)
-      ])
+      utils: vec![
+        CMakeUtilFile {
+          util_name: "gcmake-variables",
+          util_contents: USEFUL_VARIABLES_TEXT
+        },
+        CMakeUtilFile {
+          util_name: "toggle-lib-util",
+          util_contents: TOGGLE_LIB_UTIL_TEXT
+        },
+        CMakeUtilFile {
+          util_name: "pre-build-configuration-utils",
+          util_contents: PREBUILD_STEP_UTILS_TEXT
+        },
+        CMakeUtilFile {
+          util_name: "resource-copy-util",
+          util_contents: RESOURCE_COPY_UTIL_TEXT
+        },
+        CMakeUtilFile {
+          util_name: "general-utils",
+          util_contents: GENERAL_FUNCTIONS_UTIL_TEXT
+        },
+        CMakeUtilFile {
+          util_name: "installation-utils",
+          util_contents: INSTALLATION_CONFIGURE_TEXT
+        },
+        CMakeUtilFile {
+          util_name: "gcmake-cpack-utils",
+          util_contents: GCMAKE_CPACK_CONFIGURE_TEXT
+        }
+      ]
     }
   }
 
@@ -28,7 +55,8 @@ impl CMakeUtilWriter {
       fs::create_dir(&self.cmake_utils_path)?;
     }
 
-    for (util_name, util_contents) in &self.utils {
+    // for (util_name, util_contents) in &self.utils {
+    for CMakeUtilFile {util_name, util_contents} in &self.utils {
       let mut util_file_path = self.cmake_utils_path.join(util_name);
       util_file_path.set_extension("cmake");
 
@@ -41,10 +69,44 @@ impl CMakeUtilWriter {
     Ok(())
   }
 
-  pub fn get_utils(&self) -> &HashMap<&'static str, &'static str> {
+  pub fn get_utils(&self) -> &Vec<CMakeUtilFile> {
     &self.utils
   }
 }
+
+const USEFUL_VARIABLES_TEXT: &'static str =
+r#"if( "${CMAKE_C_COMPILER_ID}" MATCHES "GNU" OR "${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU" )
+  set( USING_GCC TRUE )
+else()
+  set( USING_GCC FALSE )
+endif()
+
+if( "${CMAKE_C_COMPILER_ID}" MATCHES "Clang" OR "${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang" )
+  set( USING_CLANG TRUE )
+else()
+  set( USING_CLANG FALSE )
+endif()
+
+set( USING_MSVC ${MSVC} )
+
+if( CMAKE_HOST_UNIX AND NOT CMAKE_HOST_APPLE )
+  set( CURRENT_SYSTEM_IS_LINUX TRUE )
+else()
+  set( CURRENT_SYSTEM_IS_LINUX FALSE )
+endif()
+
+set( CURRENT_SYSTEM_IS_WINDOWS ${CMAKE_HOST_WIN32} )
+set( CURRENT_SYSTEM_IS_APPLE ${CMAKE_HOST_APPLE} )
+
+if( UNIX AND NOT APPLE )
+  set( TARGET_SYSTEM_IS_LINUX TRUE )
+else()
+  set( TARGET_SYSTEM_IS_LINUX FALSE )
+endif()
+
+set( TARGET_SYSTEM_IS_WINDOWS ${WIN32} )
+set( TARGET_SYSTEM_IS_APPLE ${APPLE} )
+"#;
 
 const GENERAL_FUNCTIONS_UTIL_TEXT: &'static str = 
 r#"function( clean_list

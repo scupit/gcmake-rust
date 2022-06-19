@@ -2,6 +2,8 @@ use std::{collections::{HashMap, HashSet}, fs::File, io::{self, Write}, path::{P
 
 use crate::{file_writers::cmake_utils_writer::CMakeUtilWriter, project_info::{final_project_data::{FinalProjectData, DependencySearchMode, UseableFinalProjectDataGroup}, path_manipulation::cleaned_path_str, final_dependencies::{GitRevisionSpecifier, PredefinedCMakeComponentsModuleDep, PredefinedSubdirDep, PredefinedCMakeModuleDep, FinalPredepInfo}, raw_data_in::{BuildType, BuildConfig, BuildConfigCompilerSpecifier, SpecificCompilerSpecifier, OutputItemType, LanguageConfigMap, TargetSpecificBuildType, dependencies::internal_dep_config::{CMakeModuleType, PredefinedCMakeDepHookFile}}, FinalProjectType, CompiledOutputItem, PreBuildScript, LinkMode}};
 
+use super::cmake_utils_writer::CMakeUtilFile;
+
 const RUNTIME_BUILD_DIR_VAR: &'static str = "${MY_RUNTIME_OUTPUT_DIR}";
 const LIB_BUILD_DIR_VAR: &'static str = "${MY_LIBRARY_OUTPUT_DIR}";
 
@@ -32,9 +34,9 @@ fn configure_cmake_helper(project_data: &FinalProjectData) -> io::Result<()> {
 
 fn compiler_matcher_string(compiler_specifier: &SpecificCompilerSpecifier) -> &str {
   match compiler_specifier {
-    SpecificCompilerSpecifier::GCC => "${CMAKE_C_COMPILER_ID} MATCHES \"GNU\" OR ${CMAKE_CXX_COMPILER_ID} MATCHES \"GNU\"",
-    SpecificCompilerSpecifier::Clang => "${CMAKE_C_COMPILER_ID} MATCHES \"Clang\" OR ${CMAKE_CXX_COMPILER_ID} MATCHES \"Clang\"",
-    SpecificCompilerSpecifier::MSVC => "${MSVC}"
+    SpecificCompilerSpecifier::GCC => "USING_GCC",
+    SpecificCompilerSpecifier::Clang => "USING_CLANG",
+    SpecificCompilerSpecifier::MSVC => "USING_MSVC"
   }
 }
 
@@ -347,6 +349,7 @@ impl<'a> CMakeListsWriter<'a> {
     self.write_installation_and_exports()?;
 
     if self.project_data.is_root_project() {
+      self.write_newline()?;
       self.write_toplevel_cpack_config()?;
     }
 
@@ -454,7 +457,7 @@ impl<'a> CMakeListsWriter<'a> {
     }
 
     if self.project_data.is_root_project() {
-      for (util_name, _) in self.util_writer.get_utils() {
+      for CMakeUtilFile { util_name, .. } in self.util_writer.get_utils() {
         writeln!(&self.cmakelists_file,
           "include( cmake/{}.cmake )",
           util_name
@@ -1800,7 +1803,7 @@ impl<'a> CMakeListsWriter<'a> {
     )?;
 
     writeln!(&self.cmakelists_file,
-      "gcmake_configure_cpack( \"{}\" )",
+      "\tgcmake_configure_cpack( \"{}\" )",
       self.project_data.get_vendor()
     )?;
 
