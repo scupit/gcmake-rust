@@ -46,7 +46,8 @@ There are a whole bunch of things which need doing. This is the place to list th
 -  Improvements to installers, such as:
   - [ ] Ability to specify an installer icon (where applicable)
   - [ ] Name the uninstaller `Uninstall_<project name>` (where applicable)
-- Expose system endianness to the project using `CMAKE_<LANG>_BYTE_ORDER`.
+- [ ] Expose system endianness to the project using `CMAKE_<LANG>_BYTE_ORDER`.
+- [ ] Figure out cross-compiling
 
 ## Configuration TODO
 
