@@ -575,7 +575,7 @@ function( gcmake_configure_cpack
   set( CPACK_ARCHIVE_THREADS ${CMAKE_NUM_PACKAGER_THREADS} )
 
   # Currently don't support Apple because I have no way to test it.
-  if( WIN32 )
+  if( CURRENT_SYSTEM_IS_WINDOWS )
     option( CPACK_WIX_ENABLED "Generate installer using WiX" ON )
     option( CPACK_NSIS_ENABLED "Generate installer using NSIS" OFF )
 
@@ -589,8 +589,25 @@ function( gcmake_configure_cpack
     if( CPACK_NSIS_ENABLED )
       list( APPEND CPACK_GENERATOR "NSIS" )
     endif()
-  elseif( UNIX AND NOT APPLE )
-    set( CPACK_GENERATOR "TGZ" "TXZ" "DEB" "RPM" "FreeBSD" )
+  elseif( CURRENT_SYSTEM_IS_LINUX )
+    option( CPACK_DEB_ENABLED "Generate DEB installer" OFF )
+    option( CPACK_RPM_ENABLED "Generate RPM installer" OFF )
+    option( CPACK_FreeBSD_ENABLED "Generate FreeBSD installer" OFF )
+
+    set( CPACK_GENERATOR "TGZ" "TXZ" )
+
+    if( CPACK_DEB_ENABLED )
+      list( APPEND CPACK_GENERATOR "DEB" )
+    endif()
+
+    if( CPACK_RPM_ENABLED )
+      list( APPEND CPACK_GENERATOR "RPM" )
+    endif()
+
+    if( CPACK_FreeBSD_ENABLED )
+      list( APPEND CPACK_GENERATOR "FreeBSD" )
+    endif()
+
     set( CPACK_SOURCE_GENERATOR "TGZ" "TXZ" "ZIP" "7Z" )
   endif()
 
