@@ -317,11 +317,7 @@ impl<'a> CMakeListsWriter<'a> {
       self.write_gcmake_dependencies()?;
     }
 
-    writeln!(&self.cmakelists_file, "expose_uncached_deps()")?;
-
-    if self.project_data.has_any_fetchcontent_dependencies() {
-      self.write_fetchcontent_makeavailable()?;
-    }
+    self.write_apply_dependencies()?;
 
     if let FinalProjectType::Root = project_type {
       self.write_section_header("Language Configuration")?;
@@ -444,7 +440,7 @@ impl<'a> CMakeListsWriter<'a> {
   fn include_utils(&self) -> io::Result<()> {
     self.write_newline()?;
 
-    if self.project_data.has_any_fetchcontent_dependencies() {
+    if self.project_data.has_any_fetchcontent_ready_dependencies() {
       writeln!(&self.cmakelists_file,
         "if( NOT DEFINED FETCHCONTENT_QUIET )"
       )?;
@@ -809,17 +805,20 @@ impl<'a> CMakeListsWriter<'a> {
     Ok(()) 
   }
 
-  // Is only run if there are dependencies which need to be made available this way.
-  fn write_fetchcontent_makeavailable(&self) -> io::Result<()> {
-    writeln!(&self.cmakelists_file, "\nFetchContent_MakeAvailable(")?;
+  fn write_apply_dependencies(&self) -> io::Result<()> {
+    writeln!(&self.cmakelists_file, "expose_uncached_deps()")?;
 
-    for dep_name in self.project_data.fetchcontent_dep_names() {
-      writeln!(&self.cmakelists_file,
-        "\t{}",
-        dep_name
-      )?;
+    if self.project_data.has_any_fetchcontent_ready_dependencies() {
+      writeln!(&self.cmakelists_file, "\nFetchContent_MakeAvailable(")?;
+
+      for dep_name in self.project_data.fetchcontent_dep_names() {
+        writeln!(&self.cmakelists_file,
+          "\t{}",
+          dep_name
+        )?;
+      }
+      writeln!(&self.cmakelists_file, ")")?;
     }
-    writeln!(&self.cmakelists_file, ")")?;
 
     for (dep_name, combined_dep_info) in self.project_data.get_predefined_dependencies() {
       if let FinalPredepInfo::Subdirectory(dep_info) = combined_dep_info.predefined_dep_info() {
