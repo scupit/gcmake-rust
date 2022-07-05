@@ -712,6 +712,55 @@ impl<'a> CMakeListsWriter<'a> {
     Ok(())
   }
 
+  fn write_dep_clone_code(
+    &self,
+    dep_name: &str,
+    git_revison: &GitRevisionSpecifier,
+    repo_url: &str,
+    should_recursive_clone: bool
+  ) -> io::Result<()> {
+    let git_revision_spec: String = match git_revison {
+      GitRevisionSpecifier::Tag(tag_string) => {
+        format!("\tGIT_TAG {}", tag_string)
+      },
+      GitRevisionSpecifier::CommitHash(hash_string) => {
+        format!("\tGIT_TAG {}", hash_string)
+      }
+    };
+
+    let should_rec_clone_string: String = should_recursive_clone.to_string().to_uppercase();
+
+    writeln!(&self.cmakelists_file,
+      "if( NOT IS_DIRECTORY \"${{GCMAKE_DEP_CACHE_DIR}}/{}\" )",
+      dep_name
+    )?;
+    writeln!(&self.cmakelists_file,
+      "\tFetchContent_Declare(\n\t\tgcmake_cached_{}\n\t\tSOURCE_DIR \"${{GCMAKE_DEP_CACHE_DIR}}/{}\"\n\t\tGIT_REPOSITORY {}\n\t\t{}\n\t\tGIT_PROGRESS TRUE\n\t\tGIT_SHALLOW FALSE\n\t\tGIT_SUBMODULES_RECURSE {}\n\t)",
+      dep_name,
+      dep_name,
+      repo_url,
+      git_revision_spec,
+      &should_rec_clone_string
+    )?;
+    writeln!(&self.cmakelists_file,
+      "\tappend_to_uncached_dep_list( gcmake_cached_{} )",
+      dep_name
+    )?;
+    writeln!(&self.cmakelists_file, "endif()")?;
+    self.write_newline()?;
+
+    writeln!(&self.cmakelists_file,
+      "FetchContent_Declare(\n\t{}\n\tSOURCE_DIR ${{CMAKE_CURRENT_SOURCE_DIR}}/dep/{}\n\tGIT_REPOSITORY \"${{GCMAKE_DEP_CACHE_DIR}}/{}\"\n\t{}\n\tGIT_PROGRESS TRUE\n\tGIT_SUBMODULES_RECURSE {}\n)",
+      dep_name,
+      dep_name,
+      dep_name,
+      git_revision_spec,
+      should_rec_clone_string
+    )?;
+    
+    Ok(())
+  }
+
   fn write_predefined_subdirectory_dependency(
     &self,
     dep_name: &str,
@@ -732,42 +781,11 @@ impl<'a> CMakeListsWriter<'a> {
       )?;
     }
 
-    // TODO: Refactor this
-    let git_revision: String = match dep_info.revision() {
-      GitRevisionSpecifier::Tag(tag_string) => {
-        format!("\tGIT_TAG {}", tag_string)
-      },
-      GitRevisionSpecifier::CommitHash(hash_string) => {
-        format!("\tGIT_TAG {}", hash_string)
-      }
-    };
-
-    writeln!(&self.cmakelists_file,
-      "if( NOT IS_DIRECTORY \"${{GCMAKE_DEP_CACHE_DIR}}/{}\" )",
-      dep_name
-    )?;
-    writeln!(&self.cmakelists_file,
-      "\tFetchContent_Declare(\n\t\tgcmake_cached_{}\n\t\tSOURCE_DIR \"${{GCMAKE_DEP_CACHE_DIR}}/{}\"\n\t\tGIT_REPOSITORY {}\n\t\t{}\n\t\tGIT_PROGRESS TRUE\n\t\tGIT_SHALLOW FALSE\n\t\tGIT_SUBMODULES_RECURSE {}\n\t)",
+    self.write_dep_clone_code(
       dep_name,
-      dep_name,
+      dep_info.revision(),
       dep_info.repo_url(),
-      git_revision,
-      dep_info.should_recursive_clone().to_string().to_uppercase()
-    )?;
-    writeln!(&self.cmakelists_file,
-      "\tappend_to_uncached_dep_list( gcmake_cached_{} )",
-      dep_name
-    )?;
-    writeln!(&self.cmakelists_file, "endif()")?;
-    self.write_newline()?;
-
-    writeln!(&self.cmakelists_file,
-      "FetchContent_Declare(\n\t{}\n\tSOURCE_DIR ${{CMAKE_CURRENT_SOURCE_DIR}}/dep/{}\n\tGIT_REPOSITORY \"${{GCMAKE_DEP_CACHE_DIR}}/{}\"\n\t{}\n\tGIT_PROGRESS TRUE\n\tGIT_SHALLOW TRUE\n\tGIT_SUBMODULES_RECURSE {}\n)",
-      dep_name,
-      dep_name,
-      dep_name,
-      git_revision,
-      dep_info.should_recursive_clone().to_string().to_uppercase()
+      dep_info.should_recursive_clone()
     )?;
     Ok(())
   }
@@ -780,42 +798,11 @@ impl<'a> CMakeListsWriter<'a> {
         &format!("dep/{}", dep_name)
       )?;
 
-      // TODO: Refactor this
-      let git_revision: String = match dep_info.revision() {
-        GitRevisionSpecifier::Tag(tag_string) => {
-          format!("\tGIT_TAG {}", tag_string)
-        },
-        GitRevisionSpecifier::CommitHash(hash_string) => {
-          format!("\tGIT_TAG {}", hash_string)
-        }
-      };
-
-      writeln!(&self.cmakelists_file,
-        "if( NOT IS_DIRECTORY \"${{GCMAKE_DEP_CACHE_DIR}}/{}\" )",
-        dep_name
-      )?;
-      writeln!(&self.cmakelists_file,
-        "\tFetchContent_Declare(\n\t\tgcmake_cached_{}\n\t\tSOURCE_DIR ${{GCMAKE_DEP_CACHE_DIR}}/{}\n\t\tGIT_REPOSITORY {}\n\t\t{}\n\t\tGIT_PROGRESS TRUE\n\t\tGIT_SHALLOW FALSE\n\t\tGIT_SUBMODULES_RECURSE {}\n)",
+      self.write_dep_clone_code(
         dep_name,
-        dep_name,
+        dep_info.revision(),
         dep_info.repo_url(),
-        git_revision,
-        dep_info.should_recursive_clone().to_string().to_uppercase()
-      )?;
-      writeln!(&self.cmakelists_file,
-        "append_to_uncached_dep_list( gcmake_cached_{} )",
-        dep_name
-      )?;
-      writeln!(&self.cmakelists_file, "endif()")?;
-      self.write_newline()?;
-
-      writeln!(&self.cmakelists_file,
-        "\nFetchContent_Declare(\n\t{}\n\tSOURCE_DIR ${{CMAKE_CURRENT_SOURCE_DIR}}/dep/{}\n\tGIT_REPOSITORY \"${{GCMAKE_DEP_CACHE_DIR}}/{}\"\n\t{}\n\tGIT_PROGRESS TRUE\n\tGIT_SHALLOW TRUE\n\tGIT_SUBMODULES_RECURSE {}\n)",
-        dep_name,
-        dep_name,
-        dep_name,
-        git_revision,
-        dep_info.should_recursive_clone().to_string().to_uppercase()
+        dep_info.should_recursive_clone()
       )?;
     }
 
