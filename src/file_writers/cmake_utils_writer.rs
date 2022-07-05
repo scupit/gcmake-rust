@@ -23,6 +23,10 @@ impl CMakeUtilWriter {
           util_contents: USEFUL_VARIABLES_TEXT
         },
         CMakeUtilFile {
+          util_name: "gcmake-dir-config",
+          util_contents: GCMAKE_DIR_CONFIG_UTIL_TEXT
+        },
+        CMakeUtilFile {
           util_name: "toggle-lib-util",
           util_contents: TOGGLE_LIB_UTIL_TEXT
         },
@@ -106,6 +110,48 @@ endif()
 
 set( TARGET_SYSTEM_IS_WINDOWS ${WIN32} )
 set( TARGET_SYSTEM_IS_APPLE ${APPLE} )
+
+if( CURRENT_SYSTEM_IS_WINDOWS )
+  cmake_path( CONVERT "$ENV{USERPROFILE}" TO_CMAKE_PATH_LIST USER_HOME_DIR )
+else()
+  set( USER_HOME_DIR "$ENV{HOME}" )
+endif()
+
+set( GCMAKE_CONFIG_DIR "${USER_HOME_DIR}/.gcmake" )
+set( GCMAKE_DEP_CACHE_DIR "${GCMAKE_CONFIG_DIR}/dep-cache" )
+"#;
+
+const GCMAKE_DIR_CONFIG_UTIL_TEXT: &'static str =
+r#"function( ensure_gcmake_config_dirs_exist )
+  if( "${CMAKE_SOURCE_DIR}" STREQUAL "${CMAKE_CURRENT_SOURCE_DIR}" )
+    if( NOT IS_DIRECTORY "${GCMAKE_CONFIG_DIR}" )
+      execute_process( COMMAND ${CMAKE_COMMAND} -E make_directory "${GCMAKE_CONFIG_DIR}" )
+    endif()
+    if( NOT IS_DIRECTORY "${GCMAKE_DEP_CACHE_DIR}" )
+      execute_process( COMMAND ${CMAKE_COMMAND} -E make_directory "${GCMAKE_DEP_CACHE_DIR}" )
+    endif()
+  endif()
+endfunction()
+
+macro( initialize_uncached_dep_list )
+  set( UNCACHED_DEP_LIST "" )
+endmacro()
+
+macro( append_to_uncached_dep_list
+  dep_name
+)
+  list( APPEND UNCACHED_DEP_LIST ${dep_name} )
+endmacro()
+
+function( expose_uncached_deps )
+  foreach( UNCACHED_DEP IN LISTS UNCACHED_DEP_LIST )
+    FetchContent_GetProperties( ${UNCACHED_DEP} )
+    if( NOT ${UNCACHED_DEP}_POPULATED )
+      message( "Caching ${UNCACHED_DEP}..." )
+      FetchContent_Populate( ${UNCACHED_DEP} )
+    endif()
+  endforeach()
+endfunction()
 "#;
 
 const GENERAL_FUNCTIONS_UTIL_TEXT: &'static str = 

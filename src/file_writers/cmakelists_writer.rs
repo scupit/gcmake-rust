@@ -317,6 +317,8 @@ impl<'a> CMakeListsWriter<'a> {
       self.write_gcmake_dependencies()?;
     }
 
+    writeln!(&self.cmakelists_file, "expose_uncached_deps()")?;
+
     if self.project_data.has_any_fetchcontent_dependencies() {
       self.write_fetchcontent_makeavailable()?;
     }
@@ -374,6 +376,7 @@ impl<'a> CMakeListsWriter<'a> {
   }
 
   fn write_toplevel_tweaks(&self) -> io::Result<()> {
+    writeln!(&self.cmakelists_file, "ensure_gcmake_config_dirs_exist()")?;
     writeln!(&self.cmakelists_file, "get_property( isMultiConfigGenerator GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)")?;
     self.set_basic_var(
       "",
@@ -391,17 +394,6 @@ impl<'a> CMakeListsWriter<'a> {
       "${CMAKE_CURRENT_SOURCE_DIR}"
     )?;
     self.write_newline()?;
-
-    writeln!(&self.cmakelists_file,
-      "if( FETCHCONTENT_VERBOSE_POPULATE )"
-    )?;
-    self.set_basic_var("\t", "FETCHCONTENT_QUIET", "OFF")?;
-    self.set_basic_var("\t", "FETCHCONTENT_VERBOSE_POPULATE", "TRUE CACHE BOOL \"Whether to show verbose FetchContent population info on configure\"")?;
-
-    writeln!(&self.cmakelists_file, "else()")?;
-    self.set_basic_var("\t", "FETCHCONTENT_QUIET", "ON")?;
-
-    writeln!(&self.cmakelists_file, "endif()\n")?;
 
     let config_names: Vec<&'static str> = self.project_data.get_build_configs()
       .iter()
@@ -453,6 +445,11 @@ impl<'a> CMakeListsWriter<'a> {
     self.write_newline()?;
 
     if self.project_data.has_any_fetchcontent_dependencies() {
+      writeln!(&self.cmakelists_file,
+        "if( NOT DEFINED FETCHCONTENT_QUIET )"
+      )?;
+      self.set_basic_var("", "FETCHCONTENT_QUIET", "OFF CACHE BOOL \"Enables QUIET option for all content population\"")?;
+      writeln!(&self.cmakelists_file, "endif()\n")?;
       writeln!(&self.cmakelists_file, "include(FetchContent)")?;
     }
 
@@ -468,6 +465,7 @@ impl<'a> CMakeListsWriter<'a> {
     writeln!(&self.cmakelists_file, "initialize_target_list()")?;
     writeln!(&self.cmakelists_file, "initialize_needed_bin_files_list()")?;
     writeln!(&self.cmakelists_file, "initialize_install_list()")?;
+    writeln!(&self.cmakelists_file, "initialize_uncached_dep_list()")?;
 
     Ok(())
   }
@@ -642,11 +640,7 @@ impl<'a> CMakeListsWriter<'a> {
           self.write_predefined_cmake_components_module_dep(dep_name, components_dep)?;
         },
         FinalPredepInfo::Subdirectory(subdir_dep) => {
-          self.write_predefined_subdirectory_dependency(
-            dep_name,
-            subdir_dep,
-            dep_info.custom_populate_script()
-          )?;
+          self.write_predefined_subdirectory_dependency(dep_name, subdir_dep)?;
         }
       }
 
@@ -721,8 +715,7 @@ impl<'a> CMakeListsWriter<'a> {
   fn write_predefined_subdirectory_dependency(
     &self,
     dep_name: &str,
-    dep_info: &PredefinedSubdirDep,
-    maybe_custom_populate: &Option<Rc<PredefinedCMakeDepHookFile>>
+    dep_info: &PredefinedSubdirDep
   ) -> io::Result<()> {
     // Subdir dependencies which have this 'custom import' script
     // might be installed in a weird way due to how CMake's FILE_SET
@@ -739,57 +732,43 @@ impl<'a> CMakeListsWriter<'a> {
       )?;
     }
 
+    // TODO: Refactor this
+    let git_revision: String = match dep_info.revision() {
+      GitRevisionSpecifier::Tag(tag_string) => {
+        format!("\tGIT_TAG {}", tag_string)
+      },
+      GitRevisionSpecifier::CommitHash(hash_string) => {
+        format!("\tGIT_TAG {}", hash_string)
+      }
+    };
+
     writeln!(&self.cmakelists_file,
-      "FetchContent_Declare(\n\t{}\n\tSOURCE_DIR ${{CMAKE_CURRENT_SOURCE_DIR}}/dep/{}\n\tGIT_REPOSITORY {}\n\tGIT_PROGRESS TRUE\n\tGIT_SHALLOW TRUE\n\tGIT_SUBMODULES_RECURSE {}",
+      "if( NOT IS_DIRECTORY \"${{GCMAKE_DEP_CACHE_DIR}}/{}\" )",
+      dep_name
+    )?;
+    writeln!(&self.cmakelists_file,
+      "\tFetchContent_Declare(\n\t\tgcmake_cached_{}\n\t\tSOURCE_DIR \"${{GCMAKE_DEP_CACHE_DIR}}/{}\"\n\t\tGIT_REPOSITORY {}\n\t\t{}\n\t\tGIT_PROGRESS TRUE\n\t\tGIT_SHALLOW FALSE\n\t\tGIT_SUBMODULES_RECURSE {}\n\t)",
       dep_name,
       dep_name,
       dep_info.repo_url(),
+      git_revision,
       dep_info.should_recursive_clone().to_string().to_uppercase()
     )?;
-    
-    // TODO: Refactor this
-    match dep_info.revision() {
-      GitRevisionSpecifier::Tag(tag_string) => {
-        writeln!(&self.cmakelists_file,
-          "\tGIT_TAG {}",
-          tag_string
-        )?;
-      },
-      GitRevisionSpecifier::CommitHash(hash_string) => {
-        writeln!(&self.cmakelists_file,
-          "\tGIT_TAG {}",
-          hash_string
-        )?;
-      }
-    }
+    writeln!(&self.cmakelists_file,
+      "\tappend_to_uncached_dep_list( gcmake_cached_{} )",
+      dep_name
+    )?;
+    writeln!(&self.cmakelists_file, "endif()")?;
+    self.write_newline()?;
 
-    writeln!(&self.cmakelists_file, ")")?;
-
-    if dep_info.requires_custom_fetchcontent_populate() {
-      writeln!(&self.cmakelists_file,
-        "FetchContent_GetProperties( {} )",
-        dep_name
-      )?;
-
-      writeln!(&self.cmakelists_file,
-        "if( NOT {}_POPULATED )\n\tFetchContent_Populate( {} )",
-        dep_name,
-        dep_name
-      )?;
-
-      // The predefined dependency config loader guarantees that a custom_populate
-      // script exists when a subdirectory dependency specifies that it must
-      // be populated manually.
-      for line in maybe_custom_populate.as_ref().unwrap().contents_ref().lines() {
-        writeln!(&self.cmakelists_file,
-          "\t{}",
-          line
-        )?;
-      }
-
-      writeln!(&self.cmakelists_file, "endif()")?;
-    }
-
+    writeln!(&self.cmakelists_file,
+      "FetchContent_Declare(\n\t{}\n\tSOURCE_DIR ${{CMAKE_CURRENT_SOURCE_DIR}}/dep/{}\n\tGIT_REPOSITORY \"${{GCMAKE_DEP_CACHE_DIR}}/{}\"\n\t{}\n\tGIT_PROGRESS TRUE\n\tGIT_SHALLOW TRUE\n\tGIT_SUBMODULES_RECURSE {}\n)",
+      dep_name,
+      dep_name,
+      dep_name,
+      git_revision,
+      dep_info.should_recursive_clone().to_string().to_uppercase()
+    )?;
     Ok(())
   }
 
@@ -801,31 +780,43 @@ impl<'a> CMakeListsWriter<'a> {
         &format!("dep/{}", dep_name)
       )?;
 
+      // TODO: Refactor this
+      let git_revision: String = match dep_info.revision() {
+        GitRevisionSpecifier::Tag(tag_string) => {
+          format!("\tGIT_TAG {}", tag_string)
+        },
+        GitRevisionSpecifier::CommitHash(hash_string) => {
+          format!("\tGIT_TAG {}", hash_string)
+        }
+      };
+
       writeln!(&self.cmakelists_file,
-        "\nFetchContent_Declare(\n\t{}\n\tSOURCE_DIR ${{CMAKE_CURRENT_SOURCE_DIR}}/dep/{}\n\tGIT_REPOSITORY {}\n\tGIT_PROGRESS TRUE\n\tGIT_SHALLOW TRUE\n\tGIT_SUBMODULES_RECURSE {}",
+        "if( NOT IS_DIRECTORY \"${{GCMAKE_DEP_CACHE_DIR}}/{}\" )",
+        dep_name
+      )?;
+      writeln!(&self.cmakelists_file,
+        "\tFetchContent_Declare(\n\t\tgcmake_cached_{}\n\t\tSOURCE_DIR ${{GCMAKE_DEP_CACHE_DIR}}/{}\n\t\tGIT_REPOSITORY {}\n\t\t{}\n\t\tGIT_PROGRESS TRUE\n\t\tGIT_SHALLOW FALSE\n\t\tGIT_SUBMODULES_RECURSE {}\n)",
         dep_name,
         dep_name,
         dep_info.repo_url(),
+        git_revision,
         dep_info.should_recursive_clone().to_string().to_uppercase()
       )?;
-      
-      // TODO: Refactor this
-      match dep_info.revision() {
-        GitRevisionSpecifier::Tag(tag_string) => {
-          writeln!(&self.cmakelists_file,
-            "\tGIT_TAG {}",
-            tag_string
-          )?;
-        },
-        GitRevisionSpecifier::CommitHash(hash_string) => {
-          writeln!(&self.cmakelists_file,
-            "\tGIT_TAG {}",
-            hash_string
-          )?;
-        }
-      }
+      writeln!(&self.cmakelists_file,
+        "append_to_uncached_dep_list( gcmake_cached_{} )",
+        dep_name
+      )?;
+      writeln!(&self.cmakelists_file, "endif()")?;
+      self.write_newline()?;
 
-      writeln!(&self.cmakelists_file, ")")?;
+      writeln!(&self.cmakelists_file,
+        "\nFetchContent_Declare(\n\t{}\n\tSOURCE_DIR ${{CMAKE_CURRENT_SOURCE_DIR}}/dep/{}\n\tGIT_REPOSITORY \"${{GCMAKE_DEP_CACHE_DIR}}/{}\"\n\t{}\n\tGIT_PROGRESS TRUE\n\tGIT_SHALLOW TRUE\n\tGIT_SUBMODULES_RECURSE {}\n)",
+        dep_name,
+        dep_name,
+        dep_name,
+        git_revision,
+        dep_info.should_recursive_clone().to_string().to_uppercase()
+      )?;
     }
 
     Ok(()) 
@@ -842,6 +833,35 @@ impl<'a> CMakeListsWriter<'a> {
       )?;
     }
     writeln!(&self.cmakelists_file, ")")?;
+
+    for (dep_name, combined_dep_info) in self.project_data.get_predefined_dependencies() {
+      if let FinalPredepInfo::Subdirectory(dep_info) = combined_dep_info.predefined_dep_info() {
+        if dep_info.requires_custom_fetchcontent_populate() {
+          writeln!(&self.cmakelists_file,
+            "\nFetchContent_GetProperties( {} )",
+            dep_name
+          )?;
+
+          writeln!(&self.cmakelists_file,
+            "if( NOT {}_POPULATED )\n\tFetchContent_Populate( {} )",
+            dep_name,
+            dep_name
+          )?;
+
+          // The predefined dependency config loader guarantees that a custom_populate
+          // script exists when a subdirectory dependency specifies that it must
+          // be populated manually.
+          for line in combined_dep_info.custom_populate_script().as_ref().unwrap().contents_ref().lines() {
+            writeln!(&self.cmakelists_file,
+              "\t{}",
+              line
+            )?;
+          }
+
+          writeln!(&self.cmakelists_file, "endif()")?;
+        }
+      }
+    }
 
     Ok(())
   }
@@ -1799,7 +1819,7 @@ impl<'a> CMakeListsWriter<'a> {
 
   fn write_toplevel_cpack_config(&self) -> io::Result<()> {
     writeln!(&self.cmakelists_file,
-      "if( ${{CMAKE_SOURCE_DIR}} STREQUAL ${{CMAKE_CURRENT_SOURCE_DIR}} )"
+      "if( \"${{CMAKE_SOURCE_DIR}}\" STREQUAL \"${{CMAKE_CURRENT_SOURCE_DIR}}\" )"
     )?;
 
     writeln!(&self.cmakelists_file,
