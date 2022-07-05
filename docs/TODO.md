@@ -48,8 +48,9 @@ There are a whole bunch of things which need doing. This is the place to list th
   - [ ] Name the uninstaller `Uninstall_<project name>` (where applicable)
 - [ ] Expose system endianness to the project using `CMAKE_<LANG>_BYTE_ORDER`.
 - [ ] Figure out cross-compiling
-- [ ] Cache dependencies in *~/.gcmake/dep-cache*. It's a pain to clone dependencies over wi-fi every
+- [x] Cache dependencies in *~/.gcmake/dep-cache*. It's a pain to clone dependencies over wi-fi every
         time they are needed.
+- [ ] Add CLI commands for cleaning and updating the dep-cache. Not exactly sure how updating should work yet.
 
 ## Configuration TODO
 
