@@ -1,10 +1,7 @@
+mod cmake_writer;
+
 use std::{io};
 use crate::project_info::final_project_data::{FinalProjectData, UseableFinalProjectDataGroup};
-
-use self::{cmakelists_writer::configure_cmake};
-
-mod cmake_utils_writer;
-mod cmakelists_writer;
 
 pub struct ProjectWriteConfiguration {
   name: String,
@@ -23,7 +20,7 @@ pub fn write_configurations<'a, FBefore, FAfter>(
   let project_configurers = [
     ProjectWriteConfiguration {
       name: String::from("CMake"),
-      config_func: configure_cmake
+      config_func: cmake_writer::configure_cmake
     }
   ];
 

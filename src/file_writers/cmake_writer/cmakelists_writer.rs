@@ -1,17 +1,13 @@
-use std::{collections::{HashMap, HashSet}, fs::File, io::{self, Write}, path::{Path, PathBuf}, rc::Rc, cell::RefCell, ops::{Deref}};
+use std::{collections::{HashMap, HashSet}, fs::File, io::{self, Write}, path::{PathBuf, Path}, rc::Rc, cell::RefCell, ops::{Deref}};
 
-use crate::{file_writers::cmake_utils_writer::CMakeUtilWriter, project_info::{final_project_data::{FinalProjectData, DependencySearchMode, UseableFinalProjectDataGroup}, path_manipulation::cleaned_path_str, final_dependencies::{GitRevisionSpecifier, PredefinedCMakeComponentsModuleDep, PredefinedSubdirDep, PredefinedCMakeModuleDep, FinalPredepInfo}, raw_data_in::{BuildType, BuildConfig, BuildConfigCompilerSpecifier, SpecificCompilerSpecifier, OutputItemType, LanguageConfigMap, TargetSpecificBuildType, dependencies::internal_dep_config::{CMakeModuleType, PredefinedCMakeDepHookFile}}, FinalProjectType, CompiledOutputItem, PreBuildScript, LinkMode}};
+use crate::{project_info::{final_project_data::{FinalProjectData, DependencySearchMode}, path_manipulation::cleaned_path_str, final_dependencies::{GitRevisionSpecifier, PredefinedCMakeComponentsModuleDep, PredefinedSubdirDep, PredefinedCMakeModuleDep, FinalPredepInfo}, raw_data_in::{BuildType, BuildConfig, BuildConfigCompilerSpecifier, SpecificCompilerSpecifier, OutputItemType, LanguageConfigMap, TargetSpecificBuildType, dependencies::internal_dep_config::{CMakeModuleType}}, FinalProjectType, CompiledOutputItem, PreBuildScript, LinkMode}};
 
-use super::cmake_utils_writer::CMakeUtilFile;
+use super::cmake_utils_writer::{CMakeUtilFile, CMakeUtilWriter};
 
 const RUNTIME_BUILD_DIR_VAR: &'static str = "${MY_RUNTIME_OUTPUT_DIR}";
 const LIB_BUILD_DIR_VAR: &'static str = "${MY_LIBRARY_OUTPUT_DIR}";
 
-pub fn configure_cmake(project_data: &UseableFinalProjectDataGroup) -> io::Result<()> {
-  configure_cmake_helper(&project_data.root_project)
-}
-
-fn configure_cmake_helper(project_data: &FinalProjectData) -> io::Result<()> {
+pub fn configure_cmake_helper(project_data: &FinalProjectData) -> io::Result<()> {
   for (_, subproject) in project_data.get_subprojects() {
     configure_cmake_helper(subproject)?;
   }
