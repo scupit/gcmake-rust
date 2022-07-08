@@ -1,7 +1,7 @@
 mod cmake_writer;
 
 use std::{io};
-use crate::project_info::final_project_data::{FinalProjectData, UseableFinalProjectDataGroup};
+use crate::project_info::final_project_data::{UseableFinalProjectDataGroup};
 
 pub struct ProjectWriteConfiguration {
   name: String,
