@@ -21,7 +21,7 @@ and subprojects.
 ## Requirements
 
 - [Git](https://git-scm.com/) must be installed on the system
-- [CMake 3.23](https://cmake.org/download/) or higher
+- [CMake 3.24](https://cmake.org/download/) or higher
 
 ## Installation/Getting Started
 

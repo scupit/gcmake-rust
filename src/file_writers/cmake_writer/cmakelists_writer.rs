@@ -352,9 +352,9 @@ impl<'a> CMakeListsWriter<'a> {
 
   fn write_project_header(&self) -> io::Result<()> {
     // CMake Version header
-    // As of writing, latest version is 3.23. This version is required because it added
-    // FILE_SET for headers, which makes installing header files much easier.
-    writeln!(&self.cmakelists_file, "cmake_minimum_required( VERSION 3.23 )")?;
+    // 3.23: FILE_SET functionality is used.
+    // 3.24: Updated FindwxWidgets find module needed to use new wxWidgets 3.2.0 release.
+    writeln!(&self.cmakelists_file, "cmake_minimum_required( VERSION 3.24 )")?;
 
     // Project metadata
     writeln!(&self.cmakelists_file,
