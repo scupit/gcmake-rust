@@ -425,6 +425,13 @@ impl<'a> CMakeListsWriter<'a> {
       "if( \"${{CMAKE_CURRENT_SOURCE_DIR}}\" STREQUAL \"${{CMAKE_SOURCE_DIR}}\" )"
     )?;
 
+    // For 'Unix Makefiles' and 'Ninja' generators, CMake will create a compile_commands.json
+    // file in the build directory.
+    // https://cmake.org/cmake/help/latest/variable/CMAKE_EXPORT_COMPILE_COMMANDS.html
+    // https://clang.llvm.org/docs/JSONCompilationDatabase.html
+    // This allows clangd (and likely other tools) to more easily work with a project.
+    self.set_basic_var("\t", "CMAKE_EXPORT_COMPILE_COMMANDS", "TRUE")?;
+
     self.set_basic_var("\t", "CMAKE_RUNTIME_OUTPUT_DIRECTORY", RUNTIME_BUILD_DIR_VAR)?;
     self.set_basic_var("\t", "CMAKE_LIBRARY_OUTPUT_DIRECTORY", LIB_BUILD_DIR_VAR)?;
     self.set_basic_var("\t", "CMAKE_ARCHIVE_OUTPUT_DIRECTORY", LIB_BUILD_DIR_VAR)?;
