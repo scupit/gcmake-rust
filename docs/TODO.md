@@ -207,7 +207,7 @@ Other CMake projects:
 - [x] [SFML](https://www.sfml-dev.org/)
 - [x] [fmt](https://github.com/fmtlib/fmt)
 - [ ] [JUCE](https://juce.com/)
-- [ ] [yaml-cpp](https://github.com/jbeder/yaml-cpp)
+- [x] [yaml-cpp](https://github.com/jbeder/yaml-cpp)
 - [x] [glfw3](https://www.glfw.org/)
 - [ ] [OpenCV](https://opencv.org/)
 - [ ] [ffmpeg](https://www.ffmpeg.org/)
