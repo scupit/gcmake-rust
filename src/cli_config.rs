@@ -3,7 +3,7 @@ use clap::{AppSettings, Clap, ArgEnum};
 const SKY: &'static str = "Skylar Cupit";
 
 #[derive(Clap)]
-#[clap(version = "1.3.2", author = SKY)]
+#[clap(version = "1.3.3", author = SKY)]
 #[clap(setting = AppSettings::ColoredHelp)]
 pub struct Opts {
   #[clap(default_value = ".")]
