@@ -115,7 +115,7 @@ Support for:
 - [ ] `.clang-format`
 - [ ] `.clang-tidy`
 - [ ] valgrind? (not sure if this needs a configuration file or not, needs research)
-- [ ] CPack installer generation
+- [x] CPack installer generation
 
 ### Compiler Cheat Sheet
 

@@ -2,7 +2,7 @@ use std::{env, path::{PathBuf, Path}, process::{self, Output, Stdio}, io, fs};
 
 const GCMAKE_DEP_CONFIG_REPO_SSH_URL: &'static str = "git@github.com:scupit/gcmake-dependency-configs.git";
 
-fn gcmake_config_root_dir() -> PathBuf {
+pub fn gcmake_config_root_dir() -> PathBuf {
   let user_home_var_name: &str = if cfg!(windows)
     { "USERPROFILE" }
     else { "HOME" };

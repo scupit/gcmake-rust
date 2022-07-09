@@ -1,5 +1,5 @@
-use std::rc::Rc;
-use crate::{cli_config::{NewProjectCommand}, project_info::{path_manipulation::cleaned_path_str, final_project_data::{FinalProjectData}, raw_data_in::ProjectLike}, logger::exit_error_log, project_generator::{configuration::{MainFileLanguage, CreationProjectOutputType, OutputLibType}, create_project_at, GeneralNewProjectInfo}, program_actions::parse_project_info};
+use std::{rc::Rc, fs, path::PathBuf};
+use crate::{cli_config::{NewProjectCommand}, project_info::{path_manipulation::cleaned_path_str, final_project_data::{FinalProjectData}, raw_data_in::ProjectLike}, logger::exit_error_log, project_generator::{configuration::{MainFileLanguage, CreationProjectOutputType, OutputLibType}, create_project_at, GeneralNewProjectInfo}, program_actions::{parse_project_info, manage_dependencies::gcmake_config_root_dir}};
 
 pub enum ProjectTypeCreating {
   RootProject,

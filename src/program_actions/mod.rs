@@ -4,7 +4,7 @@ mod manage_dependencies;
 
 pub use create_project::*;
 pub use code_file_creator::*;
-pub use manage_dependencies::{local_dep_config_repo_location, update_dependency_config_repo, DepConfigUpdateResult};
+pub use manage_dependencies::*;
 
 use crate::{project_info::{raw_data_in::dependencies::internal_dep_config::AllRawPredefinedDependencies, final_project_data::{FinalProjectData, UseableFinalProjectDataGroup, ProjectLoadFailureReason, ProjectConstructorConfig}, path_manipulation::absolute_path}};
 

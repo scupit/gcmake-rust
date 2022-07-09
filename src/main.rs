@@ -126,7 +126,7 @@ fn do_generate_project_configs(
       // print_project_info(project_data_group);
       write_configurations(
         &project_data_group,
-        |config_name| println!("Beginning {} configuration step...", config_name),
+        |config_name| println!("\nBeginning {} configuration step...", config_name),
         |(config_name, config_result)| match config_result {
           Ok(_) => println!("{} configuration written successfully!", config_name),
           Err(err) => {

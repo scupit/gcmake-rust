@@ -6,9 +6,9 @@ mod prompt;
 pub use default_project_config::configuration;
 use serde::Serialize;
 
-use std::{fs::{File, remove_dir_all, create_dir_all, create_dir}, io::{self, ErrorKind}, path::Path};
+use std::{fs::{File, remove_dir_all, create_dir_all, create_dir, self}, io::{self, ErrorKind}, path::{Path, PathBuf}};
 
-use crate::{project_generator::{c_file_generation::generate_c_main, cpp_file_generation::generate_cpp_main, default_project_config::{DefaultProject, configuration::{MainFileLanguage, CreationProjectOutputType}, get_default_project_config, get_default_subproject_config, main_file_name}, prompt::{prompt_once, prompt_for_project_output_type, prompt_for_language, prompt_for_description, prompt_for_vendor}}, program_actions::{ProjectTypeCreating, handle_create_files}, cli_config::{CreateFilesCommand, FileCreationLang}, project_info::final_project_data::FinalProjectData};
+use crate::{project_generator::{c_file_generation::generate_c_main, cpp_file_generation::generate_cpp_main, default_project_config::{DefaultProject, configuration::{MainFileLanguage, CreationProjectOutputType}, get_default_project_config, get_default_subproject_config, main_file_name}, prompt::{prompt_once, prompt_for_project_output_type, prompt_for_language, prompt_for_description, prompt_for_vendor}}, program_actions::{ProjectTypeCreating, handle_create_files, gcmake_config_root_dir}, cli_config::{CreateFilesCommand, FileCreationLang}, project_info::final_project_data::FinalProjectData};
 
 use self::{prompt::{prompt_until_boolean, PromptResult}};
 
@@ -83,10 +83,16 @@ pub fn create_project_at(
       create_dir_all(extended_path)?;
     }
 
-    let output_type_selection: CreationProjectOutputType = project_output_type
-      .unwrap_or(prompt_for_project_output_type()?);
+    let output_type_selection: CreationProjectOutputType = match project_output_type {
+      Some(out_type) => out_type,
+      None => prompt_for_project_output_type()?
+    };
 
-    let lang_selection: MainFileLanguage = project_lang.unwrap_or(prompt_for_language()?);
+    let lang_selection: MainFileLanguage = match project_lang {
+      Some(lang) => lang,
+      None => prompt_for_language()?
+    };
+
     let project_vendor: String = if let ProjectTypeCreating::RootProject = &project_type_creating
       { prompt_for_vendor()? }
       else { String::from("No vendor") };
@@ -125,6 +131,42 @@ pub fn create_project_at(
     }
 
     println!("Generated {}", main_file_name(project_name, &lang_selection, &output_type_selection));
+
+    if let ProjectTypeCreating::RootProject = &project_type_creating {
+      println!("Checking for default .clang-format...");
+
+      // Copy .clang-format from the gcmake config dir, if the file exists.
+      let mut clang_format_file_path: PathBuf = gcmake_config_root_dir();
+      clang_format_file_path.push(".clang-format");
+
+      if clang_format_file_path.is_symlink() {
+        println!("{} is a symlink. Resolving...", clang_format_file_path.to_str().unwrap());
+        clang_format_file_path = fs::read_link(&clang_format_file_path)?;
+        println!(
+          "The .clang-format symlink points to '{}'. Using that path instead.",
+          clang_format_file_path.to_str().unwrap()
+        );
+      }
+
+      if clang_format_file_path.is_file() {
+        let mut destination = PathBuf::from(&project_root);
+        destination.push(".clang-format");
+
+        fs::copy(&clang_format_file_path, destination)
+          .map_err(|the_err| {
+            println!("Failed to copy {}. Reason:", clang_format_file_path.to_str().unwrap());
+            the_err
+          })?;
+
+        println!("Default .clang-format successfully copied into project.");
+      }
+      else {
+        println!(
+          "Skipped Clang format file copy because '{}' was not found.",
+          clang_format_file_path.to_str().unwrap()
+        );
+      }
+    }
 
     return Ok(Some( GeneralNewProjectInfo {
       project: project_info,

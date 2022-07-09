@@ -13,7 +13,8 @@ configuration work together.
 2. [cmake_data.yaml Configuration](cmake_data.md)
 3. [Additional Linking Explanation](linking_information.md)
 4. [Predefined Dependency Compatibility Layer](predefined_dependency_doc.md)
-5. [Project TODOs/Roadmap](TODO.md)
+5. [The Configuration Directory](tool_configuration_directory.md)
+6. [Project TODOs/Roadmap](TODO.md)
 
 ## Important Concepts
 
@@ -37,6 +38,7 @@ configuration work together.
 - [Adding a pre-build script](cmake_data.md#pre-build-script)
 - [Managing dependencies](cmake_data.md#using-dependencies)
 - [Subprojects (nested projects)](cmake_data.md#subprojects)
+- [Using a default .clang-format](the_configuration_directory.md#manual-configuration)
 
 ## GCMake Repository Links
 

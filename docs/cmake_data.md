@@ -996,5 +996,5 @@ which is explicitly listed in one of the project properties:
 **library_name** (or each library name in the list) is the *case sensitive* name of a library/target exposed
 by the given project or dependency.
 
-> In the future, the [`show linkable`](./TODO.md#show) command will print a list of dependencies which can
+> In the future, the [`show linkable`](tool_configuration_directory#show) command will print a list of dependencies which can
 > be linked to the current project. **However, this has yet to be implemented.**
