@@ -112,7 +112,7 @@ project, organized as *components*. See [SFML](https://github.com/SFML/SFML) for
 
 Support for:
 
-- [ ] `.clang-format`
+- [x] `.clang-format`
 - [ ] `.clang-tidy`
 - [ ] valgrind? (not sure if this needs a configuration file or not, needs research)
 - [x] CPack installer generation
