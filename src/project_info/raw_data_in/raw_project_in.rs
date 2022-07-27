@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 use serde::{Serialize, Deserialize};
 
-use super::dependencies::user_given_dep_config::{UserGivenPredefinedDependencyConfig, UserGivenGCMakeProjectDependency};
+use super::{dependencies::user_given_dep_config::{UserGivenPredefinedDependencyConfig}, project_common_types::{PredefinedDepMap, GCMakeDepMap}};
 
 pub type BuildTypeOptionMap = HashMap<BuildConfigCompilerSpecifier, BuildConfig>;
 pub type BuildConfigMap = HashMap<BuildType, BuildTypeOptionMap>;
@@ -10,17 +10,36 @@ pub type TargetBuildConfigMap = HashMap<TargetSpecificBuildType, BuildTypeOption
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(deny_unknown_fields)]
 pub struct LanguageConfigMap {
-  pub C: SingleLanguageConfig,
-  pub Cpp: SingleLanguageConfig
+  #[serde(rename = "C")]
+  pub c: SingleLanguageConfig,
+  #[serde(rename = "Cpp")]
+  pub cpp: SingleLanguageConfig
 }
 
-pub trait ProjectLike {
-  fn get_name(&self) -> &str;
-  fn get_include_prefix(&self) -> &str;
-  fn get_description(&self) -> &str;
-  fn get_version(&self) -> &str;
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(deny_unknown_fields)]
+pub enum RawTestFramework {
+  Catch2(UserGivenPredefinedDependencyConfig),
+  // GoogleTest(UserGivenPredefinedDependencyConfig),
+  // #[serde(rename = "doctest")]
+  // DocTest(UserGivenPredefinedDependencyConfig),
 }
 
+impl RawTestFramework {
+  pub fn lib_config(&self) -> &UserGivenPredefinedDependencyConfig {
+    match self {
+      Self::Catch2(lib) => lib
+    }
+  }
+
+  pub fn name(&self) -> &str {
+    match self {
+      Self::Catch2(_) => "Catch2",
+      // Self::DocTest(_) => "doctest",
+      // Self::GoogleTest(_) => "GoogleTest"
+    }
+  }
+}
 
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(deny_unknown_fields)]
@@ -38,27 +57,10 @@ pub struct RawProject {
   pub output: HashMap<String, RawCompiledItem>,
   pub global_defines: Option<HashSet<String>>,
   pub subprojects: Option<HashSet<String>>,
-  pub predefined_dependencies: Option<HashMap<String, UserGivenPredefinedDependencyConfig>>,
-  pub gcmake_dependencies: Option<HashMap<String, UserGivenGCMakeProjectDependency>>,
+  pub predefined_dependencies: Option<PredefinedDepMap>,
+  pub gcmake_dependencies: Option<GCMakeDepMap>,
   pub build_configs: BuildConfigMap,
-}
-
-impl ProjectLike for RawProject {
-  fn get_include_prefix(&self) -> &str {
-    &self.include_prefix
-  }
-
-  fn get_name(&self) -> &str {
-    &self.name
-  }
-
-  fn get_description(&self) -> &str {
-    &self.description
-  }
-
-  fn get_version(&self) -> &str {
-    &self.version
-  }
+  pub test_framework: Option<RawTestFramework>
 }
 
 impl RawProject {
@@ -66,8 +68,28 @@ impl RawProject {
     &self.subprojects
   }
 
+  pub fn get_include_prefix(&self) -> &str {
+    &self.include_prefix
+  }
+
+  pub fn get_name(&self) -> &str {
+    &self.name
+  }
+
+  pub fn get_description(&self) -> &str {
+    &self.description
+  }
+
+  pub fn get_version(&self) -> &str {
+    &self.version
+  }
+
   pub fn get_output(&self) -> &HashMap<String, RawCompiledItem> {
-    return &self.output;
+    &self.output
+  }
+
+  pub fn get_output_mut(&mut self) -> &mut HashMap<String, RawCompiledItem> {
+    &mut self.output
   }
 
   pub fn get_build_configs(&self) -> &BuildConfigMap {
@@ -156,7 +178,6 @@ pub struct BuildConfig {
   pub defines: Option<HashSet<String>>
 }
 
-
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub enum OutputItemType {
@@ -232,6 +253,26 @@ pub enum LinkSection {
   PublicPrivateCategorized {
     public: Option<Vec<String>>,
     private: Option<Vec<String>>
+  }
+}
+
+impl LinkSection {
+  pub fn add_exe_link(
+    &mut self,
+    container_name: &str,
+    lib_name: &str
+  ) {
+    let formatted_link: String = format!("{}::{}", container_name, lib_name);
+
+    match self {
+      Self::Uncategorized(links) => links.push(formatted_link),
+      Self::PublicPrivateCategorized { private, .. } => match private {
+        Some(existing_links) => existing_links.push(formatted_link),
+        None => {
+          *private = Some(vec![formatted_link]);
+        }
+      }
+    }
   }
 }
 

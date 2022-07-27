@@ -3,12 +3,12 @@ mod cpp_file_generation;
 mod default_project_config;
 mod prompt;
 
-pub use default_project_config::configuration;
+pub use default_project_config::{*, configuration::*};
 use serde::Serialize;
 
 use std::{fs::{File, remove_dir_all, create_dir_all, create_dir, self}, io::{self, ErrorKind}, path::{Path, PathBuf}};
 
-use crate::{project_generator::{c_file_generation::generate_c_main, cpp_file_generation::generate_cpp_main, default_project_config::{DefaultProject, configuration::{MainFileLanguage, CreationProjectOutputType}, get_default_project_config, get_default_subproject_config, main_file_name}, prompt::{prompt_once, prompt_for_project_output_type, prompt_for_language, prompt_for_description, prompt_for_vendor}}, program_actions::{ProjectTypeCreating, handle_create_files, gcmake_config_root_dir}, cli_config::{CreateFilesCommand, FileCreationLang}, project_info::final_project_data::FinalProjectData};
+use crate::{project_generator::{c_file_generation::generate_c_main, cpp_file_generation::generate_cpp_main, prompt::{prompt_once, prompt_for_project_output_type, prompt_for_language, prompt_for_description, prompt_for_vendor}}, program_actions::{ProjectTypeCreating, gcmake_config_root_dir}};
 
 use self::{prompt::{prompt_until_boolean, PromptResult}};
 
@@ -17,7 +17,7 @@ const INCLUDE_DIR: &'static str = "include";
 const TEMPLATE_IMPL_DIR: &'static str = "template_impls";
 
 pub struct GeneralNewProjectInfo {
-  pub project: DefaultProject,
+  pub project: CreatedProject,
   pub project_lang: MainFileLanguage,
   pub project_output_type: CreationProjectOutputType,
   pub project_root: String
@@ -56,7 +56,7 @@ pub fn create_project_at(
   }
 
   if should_create_project {
-    create_dir(project_root)?;
+    create_dir_all(project_root)?;
 
     for nested_dir in [SRC_DIR, INCLUDE_DIR, TEMPLATE_IMPL_DIR, "subprojects"] {
       let mut extended_path = project_root.to_path_buf();
@@ -72,9 +72,15 @@ pub fn create_project_at(
       &format!("include prefix ({}): ", &default_prefix)
     )?.unwrap_or(default_prefix);
 
-    let folder_generation_include_prefix: String = if let ProjectTypeCreating::Subproject(current_project_context) = &project_type_creating
-      { current_project_context.nested_include_prefix(&include_prefix) }
-      else { include_prefix.clone() };
+    let folder_generation_include_prefix: String = match &project_type_creating {
+      ProjectTypeCreating::RootProject => include_prefix.clone(),
+      ProjectTypeCreating::Subproject { parent_project } => {
+        parent_project.nested_include_prefix(&include_prefix)
+      },
+      ProjectTypeCreating::Test { parent_project } => {
+        parent_project.nested_include_prefix(&include_prefix)
+      }
+    };
 
     for source_code_dir in [SRC_DIR, INCLUDE_DIR, TEMPLATE_IMPL_DIR] {
       let mut extended_path = project_root.to_path_buf();
@@ -93,12 +99,15 @@ pub fn create_project_at(
       None => prompt_for_language()?
     };
 
-    let project_vendor: String = if let ProjectTypeCreating::RootProject = &project_type_creating
-      { prompt_for_vendor()? }
-      else { String::from("No vendor") };
+    let project_vendor: String = match &project_type_creating {
+      ProjectTypeCreating::RootProject => prompt_for_vendor()?,
+      ProjectTypeCreating::Subproject { .. }
+        | ProjectTypeCreating::Test { .. } => String::from("THIS IS IGNORED")
+    };
+    
     let project_description: String = prompt_for_description()?;
 
-    let project_info: DefaultProject = build_default_project_info(
+    let project_info: DefaultProjectInfo = build_default_project_info(
       &project_type_creating,
       project_name,
       &include_prefix,
@@ -116,10 +125,12 @@ pub fn create_project_at(
     println!("");
 
     match &project_info {
-      DefaultProject::MainProject(project_info) => 
+      DefaultProjectInfo::RootProject(project_info) => 
         write_cmake_yaml(&cmake_data_file, project_info)?,
-      DefaultProject::Subproject(project_info) => 
-        write_cmake_yaml(&cmake_data_file, project_info)?
+      DefaultProjectInfo::Subproject(subproject_info) => 
+        write_cmake_yaml(&cmake_data_file, subproject_info)?,
+      DefaultProjectInfo::TestProject(test_project_info) =>
+        write_cmake_yaml(&cmake_data_file, test_project_info)?
     }
 
     let mut main_file_path = project_root.to_owned();
@@ -169,10 +180,13 @@ pub fn create_project_at(
     }
 
     return Ok(Some( GeneralNewProjectInfo {
-      project: project_info,
+      project: CreatedProject {
+        name: project_name.to_string(),
+        info: project_info,
+      },
       project_lang: lang_selection.clone(),
       project_output_type: output_type_selection,
-      project_root: project_root.to_str().unwrap().to_string(), 
+      project_root: project_root.to_str().unwrap().to_string(),
     }));
   }
 
@@ -187,29 +201,42 @@ fn build_default_project_info(
   output_type_selection: &CreationProjectOutputType,
   project_description: &str,
   project_vendor: &str
-) -> DefaultProject {
-  if let ProjectTypeCreating::Subproject(_) = project_type_creating {
-    DefaultProject::Subproject(
-      get_default_subproject_config(
-        project_name,
-        include_prefix,
-        lang_selection,
-        output_type_selection,
-        project_description
+) -> DefaultProjectInfo {
+  match project_type_creating {
+    ProjectTypeCreating::RootProject => {
+      DefaultProjectInfo::RootProject(
+        get_default_project_config(
+          project_name,
+          include_prefix,
+          lang_selection,
+          output_type_selection,
+          project_description,
+          project_vendor
+        )
       )
-    ) 
-  }
-  else {
-    DefaultProject::MainProject(
-      get_default_project_config(
-        project_name,
-        include_prefix,
-        lang_selection,
-        output_type_selection,
-        project_description,
-        project_vendor
+    },
+    ProjectTypeCreating::Subproject { .. } => {
+      DefaultProjectInfo::Subproject(
+        get_default_subproject_config(
+          project_name,
+          include_prefix,
+          lang_selection,
+          output_type_selection,
+          project_description
+        )
       )
-    )
+    },
+    ProjectTypeCreating::Test { parent_project } => {
+      DefaultProjectInfo::TestProject(
+        get_default_test_project_config(
+          project_name,
+          include_prefix,
+          lang_selection,
+          output_type_selection,
+          project_description
+        )
+      )
+    }
   }
 }
 

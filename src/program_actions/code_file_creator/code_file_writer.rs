@@ -1,4 +1,4 @@
-use crate::{project_info::{final_project_data::FinalProjectData, path_manipulation::cleaned_pathbuf}, cli_config::FileCreationLang};
+use crate::{project_info::{final_project_data::FinalProjectData, path_manipulation::cleaned_pathbuf}, cli_config::clap_cli_config::FileCreationLang};
 
 use super::file_creation_info::{FileTypeGeneratingInfo, SharedFileInfo, FileGuardStyle};
 use std::{io::{self, Write}, path::{PathBuf, Path}, fs::{self, File}};

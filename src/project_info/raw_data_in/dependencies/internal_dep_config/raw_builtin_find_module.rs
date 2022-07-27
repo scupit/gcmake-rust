@@ -2,7 +2,7 @@ use std::collections::HashSet;
 
 use serde::{Deserialize};
 
-use super::ComponentsFindModuleLinks;
+use super::{ComponentsFindModuleLinks, target_config_common::RawPredefinedTargetMapIn};
 
 #[derive(Deserialize, Clone)]
 #[serde(deny_unknown_fields)]
@@ -24,12 +24,12 @@ pub struct RawModuleDep {
   pub module_type: CMakeModuleType,
   pub links: ComponentsFindModuleLinks,
   namespace_config: BuiltinFindModuleNamespaceConfig,
-  pub targets: HashSet<String>
+  pub targets: RawPredefinedTargetMapIn
 }
 
 impl RawModuleDep {
   pub fn namespaced_target(&self, target_name: &str) -> Option<String> {
-    return if self.targets.contains(target_name) {
+    return if self.targets.contains_key(target_name) {
       Some(format!(
         "{}{}",
         &self.namespace_config.cmakelists_linking,

@@ -41,12 +41,23 @@ function( apply_exe_files
   headers
   template_impls
 )
-  set( all_sources ${entry_file};${sources} )
-  clean_list( "${all_sources}" all_sources )
-  get_without_source_dir_prefix( "${all_sources}" all_sources_install_interface )
+  set( receiver_interface_lib ${exe_target}_exe_data_receiver )
 
-  make_generators( "${all_sources}" "${all_sources_install_interface}" source_gens )
-  target_sources( ${exe_target} PUBLIC
+  clean_list( "${entry_file}" entry_source )
+  get_without_source_dir_prefix( "${entry_source}" entry_source_install_interface )
+  make_generators( "${entry_source}" "${entry_source_install_interface}" entry_source_gens )
+  target_sources( ${exe_target} PRIVATE
+    ${entry_source_gens_b}
+    ${entry_source_gens_i}
+  )
+
+  # set( non_entry_sources ${entry_file};${sources} )
+  set( non_entry_sources ${sources} )
+  clean_list( "${non_entry_sources}" non_entry_sources )
+  get_without_source_dir_prefix( "${non_entry_sources}" all_sources_install_interface )
+
+  make_generators( "${non_entry_sources}" "${all_sources_install_interface}" source_gens )
+  target_sources( ${receiver_interface_lib} INTERFACE
     ${source_gens_b}
     ${source_gens_i}
   )
@@ -58,10 +69,11 @@ function( apply_exe_files
     get_without_source_dir_prefix( "${all_headers}" all_headers_install_interface )
 
     make_generators( "${all_headers}" "${all_headers_install_interface}" header_gens )
-    target_sources( ${exe_target} PUBLIC FILE_SET HEADERS
-      FILES
-        ${header_gens_b}
-        ${header_gens_i}
+    target_sources( ${receiver_interface_lib} INTERFACE
+      FILE_SET HEADERS
+        FILES
+          ${header_gens_b}
+          ${header_gens_i}
     )
   endif()
 endfunction()
@@ -79,12 +91,12 @@ function( apply_lib_files
   endif()
 
   if( "${lib_type_spec}" STREQUAL "COMPILED_LIB" )
-    clean_list( "${sources}" all_sources)
+    clean_list( "${sources}" non_entry_sources)
 
-    if( NOT "${all_sources}" STREQUAL "" )
-      get_without_source_dir_prefix( "${all_sources}" all_sources_install_interface )
+    if( NOT "${non_entry_sources}" STREQUAL "" )
+      get_without_source_dir_prefix( "${non_entry_sources}" all_sources_install_interface )
 
-      make_generators( "${all_sources}" "${all_sources_install_interface}" source_gens )
+      make_generators( "${non_entry_sources}" "${all_sources_install_interface}" source_gens )
       target_sources( ${lib_target} PUBLIC
         ${source_gens_b}
         ${source_gens_i}
@@ -137,4 +149,14 @@ function( apply_include_dirs
       "$<INSTALL_INTERFACE:include>"
       "$<INSTALL_INTERFACE:include/${TOPLEVEL_INCLUDE_PREFIX}/include>"
   )
+endfunction()
+
+function( initialize_build_tests_var )
+  set( option_description "Whether to build tests for the ${PROJECT_NAME} project tree." )
+
+  if( "${CMAKE_SOURCE_DIR}" STREQUAL "${CMAKE_CURRENT_SOURCE_DIR}" )
+    option( ${LOCAL_TOPLEVEL_PROJECT_NAME}_BUILD_TESTS "${option_description}" ON )
+  else()
+    option( ${LOCAL_TOPLEVEL_PROJECT_NAME}_BUILD_TESTS "${option_description}" OFF )
+  endif()
 endfunction()

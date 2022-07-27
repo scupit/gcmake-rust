@@ -2,7 +2,7 @@ use std::collections::HashSet;
 
 use serde::{Serialize, Deserialize};
 
-use super::CMakeModuleType;
+use super::{CMakeModuleType, target_config_common::RawPredefinedTargetMapIn};
 
 #[derive(Deserialize, Clone)]
 #[serde(deny_unknown_fields)]
@@ -40,5 +40,5 @@ pub struct RawComponentsModuleDep {
   pub links: ComponentsFindModuleLinks,
   pub module_type: CMakeModuleType,
   pub cmakelists_usage: ComponentsFindModuleUsage,
-  pub components: HashSet<String>
+  pub components: RawPredefinedTargetMapIn
 }

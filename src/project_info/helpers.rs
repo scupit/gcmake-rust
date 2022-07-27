@@ -1,8 +1,6 @@
-use std::{path::{PathBuf, Path}, fs, io, os::raw, any};
+use std::{path::{PathBuf, Path}, fs, io};
 
-use regex::{Captures, Regex};
-
-use super::{raw_data_in::{RawProject, RawSubproject, ProjectLike, ProjectMetadata, OutputItemType}, path_manipulation::cleaned_pathbuf, final_project_configurables::LinkInfo, final_project_data::ProjectLoadFailureReason};
+use super::{raw_data_in::{RawProject, RawSubproject, ProjectMetadata, OutputItemType, RawTestProject}, path_manipulation::cleaned_pathbuf, final_project_data::ProjectLoadFailureReason};
 
 #[derive(PartialEq, Eq)]
 pub enum RetrievedCodeFileType {
@@ -90,11 +88,15 @@ pub fn parse_project_metadata(project_root: &str) -> YamlParseResult<ProjectMeta
   yaml_parse_helper(project_root)
 }
 
-pub fn create_project_data(project_root: &str) -> YamlParseResult<RawProject> {
+pub fn parse_root_project_data(project_root: &str) -> YamlParseResult<RawProject> {
   yaml_parse_helper(project_root)
 }
 
-pub fn create_subproject_data(project_root: &str) -> YamlParseResult<RawSubproject> {
+pub fn parse_subproject_data(project_root: &str) -> YamlParseResult<RawSubproject> {
+  yaml_parse_helper(project_root)
+}
+
+pub fn parse_test_project_data(project_root: &str) -> YamlParseResult<RawTestProject> {
   yaml_parse_helper(project_root)
 }
 
@@ -111,64 +113,6 @@ pub fn populate_files(dir: &Path, file_list: &mut Vec<PathBuf>) -> io::Result<()
     }
   }
   Ok(())
-}
-
-// Note that index 0 containes the whole capture (string matching)
-pub fn extract_capture_str<'a>(captures: &'a Captures, index: usize) -> &'a str {
-  return captures.get(index)
-    .unwrap()
-    .as_str()
-}
-
-// Note that index 0 containes the whole capture (string matching)
-pub fn extract_capture_string(captures: &Captures, index: usize) -> String {
-  return extract_capture_str(captures, index).to_owned()
-}
-
-pub fn get_link_info(link_str: &str) -> Result<LinkInfo, String> {
-  /* Matches subproject_name::lib_name
-    Capture 1: subproject_name
-    Capture 2: lib_name
-  */
-  let single_link_matcher = Regex::new(r"^([a-zA-z0-9_\-.]+)::([a-zA-z0-9_\-.]+)$").unwrap();
-
-  /* 
-    Matches subproject_name::{ lib_name }
-    Matches subproject_name::{ lib_name, another_lib_name }
-
-    Capture 1: subproject_name
-    Capture 2: { lib_name, another_lib_name }
-    
-    The second capture matches the whole list including brackets.
-  */
-  let mutli_link_matcher = Regex::new(r"^([a-zA-z0-9_\-.]+)::(\{ ?(?:[a-zA-z0-9_\-.]+, ?)*[a-zA-z0-9_\-.]+ ?\})$").unwrap();
-
-
-  if let Some(captures) = single_link_matcher.captures(link_str) {
-    return Ok(LinkInfo {
-      from_project_name: extract_capture_string(&captures, 1),
-      library_names: vec![extract_capture_string(&captures, 2)]
-    });
-  }
-  else if let Some(captures) = mutli_link_matcher.captures(link_str) {
-    let mut lib_links_list: &str = extract_capture_str(&captures, 2);
-
-    {
-      let open_bracket_index: usize = lib_links_list.find('{').unwrap();
-      let close_bracket_index: usize = lib_links_list.rfind('}').unwrap();
-
-      lib_links_list = (&lib_links_list[open_bracket_index + 1 .. close_bracket_index]).trim();
-    }
-    
-    return Ok(LinkInfo {
-      from_project_name: extract_capture_string(&captures, 1),
-      library_names: lib_links_list.split(',')
-        .map(|lib_name| lib_name.trim().to_owned())
-        .collect()
-    });
-  }
-
-  return Err(format!("Link specifier \"{}\" is in an invalid format", link_str));
 }
 
 pub enum ProjectOutputType {

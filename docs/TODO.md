@@ -184,18 +184,22 @@ Types of libraries which need support, from easiest to hardest:
 Pre-written CMake find modules:
 
 - [ ] Boost
+- [ ] BZip2
 - [ ] CURL
 - [ ] Curses (ncurses)
 - [ ] Doxygen
 - [ ] FreeType
 - [x] GLEW
+- [ ] LibLZMA
 - [ ] OpenAL-soft
 - [X] OpenGL
 - [ ] OpenSceneGraph (maybe) (NOTE: has cmake package config file)
 - [ ] OpenSSL
+- [ ] PNG
 - [X] SDL2
 - [ ] SQLite (3)
 - [X] Threads
+- [ ] TIFF
 - [x] wxWidgets
 - [ ] Vulkan
 - [ ] ZLIB
@@ -214,6 +218,12 @@ Other CMake projects:
 - [ ] [TensorFlow](https://www.tensorflow.org/)
 - [ ] [imgui](https://github.com/ocornut/imgui)
 - [x] [GLM (OpenGL Mathematics)](https://github.com/g-truc/glm)
+
+Testing Frameworks:
+
+- [ ] [Catch2](https://github.com/catchorg/Catch2)
+- [ ] [doctest](https://github.com/doctest/doctest)
+- [ ] [GoogleTest](https://github.com/google/googletest)
 
 Other projects:
 

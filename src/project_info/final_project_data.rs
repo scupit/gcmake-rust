@@ -1,8 +1,8 @@
-use std::{collections::{HashMap, HashSet}, path::{Path, PathBuf}, io, rc::Rc, iter};
+use std::{collections::{HashMap, HashSet}, path::{Path, PathBuf}, io, rc::Rc, fs::{self}, borrow::Borrow};
 
 use crate::project_info::path_manipulation::cleaned_pathbuf;
 
-use super::{path_manipulation::{cleaned_path_str, relative_to_project_root, find_first_dir_named, absolute_path}, final_dependencies::{FinalGCMakeDependency, FinalPredefinedDependencyConfig, FinalPredepInfo}, raw_data_in::{RawProject, ProjectLike, dependencies::internal_dep_config::AllRawPredefinedDependencies, BuildConfigMap, BuildType, LanguageConfigMap, OutputItemType, PreBuildConfigIn, SpecificCompilerSpecifier, ProjectMetadata, BuildConfigCompilerSpecifier, TargetBuildConfigMap, TargetSpecificBuildType, LinkSection}, final_project_configurables::{FinalProjectType, SubprojectOnlyOptions}, CompiledOutputItem, helpers::{create_subproject_data, create_project_data, populate_files, find_prebuild_script, PrebuildScriptFile, parse_project_metadata, validate_raw_project_outputs, ProjectOutputType, RetrievedCodeFileType, retrieve_file_type}, PreBuildScript, OutputItemLinks};
+use super::{path_manipulation::{cleaned_path_str, relative_to_project_root, find_first_dir_named, absolute_path}, final_dependencies::{FinalGCMakeDependency, FinalPredefinedDependencyConfig, FinalPredepInfo}, raw_data_in::{RawProject, dependencies::internal_dep_config::AllRawPredefinedDependencies, BuildConfigMap, BuildType, LanguageConfigMap, OutputItemType, PreBuildConfigIn, SpecificCompilerSpecifier, ProjectMetadata, BuildConfigCompilerSpecifier, TargetBuildConfigMap, TargetSpecificBuildType, LinkSection, RawTestFramework}, final_project_configurables::{FinalProjectType}, CompiledOutputItem, helpers::{parse_subproject_data, parse_root_project_data, populate_files, find_prebuild_script, PrebuildScriptFile, parse_project_metadata, validate_raw_project_outputs, ProjectOutputType, RetrievedCodeFileType, retrieve_file_type, parse_test_project_data}, PreBuildScript, OutputItemLinks, FinalTestFramework, dependency_graph::DependencyGraph};
 
 pub struct ThreePartVersion (u32, u32, u32);
 
@@ -110,9 +110,11 @@ fn project_level(
 }
 
 type SubprojectMap = HashMap<String, Rc<FinalProjectData>>;
+type TestProjectMap = SubprojectMap;
 
 pub enum ProjectLoadFailureReason {
   MissingYaml(String),
+  MissingRequiredTestFramework(String),
   Other(String)
 }
 
@@ -123,14 +125,16 @@ impl ProjectLoadFailureReason {
   ) -> Self {
     match self {
       Self::MissingYaml(err_message) => Self::MissingYaml(mapper(err_message)),
-      Self::Other(err_message) => Self::Other(mapper(err_message))
+      Self::Other(err_message) => Self::Other(mapper(err_message)),
+      Self::MissingRequiredTestFramework(err_message) => Self::MissingRequiredTestFramework(mapper(err_message))
     }
   }
 
   pub fn extract_message(self) -> String {
     match self {
       Self::MissingYaml(msg) => msg,
-      Self::Other(msg) => msg
+      Self::Other(msg) => msg,
+      Self::MissingRequiredTestFramework(msg) => msg
     }
   }
 }
@@ -140,7 +144,14 @@ pub enum DependencySearchMode {
   AsSubproject
 }
 
-struct ParentProjectInfo {
+enum ChildParseMode {
+  Subproject,
+  TestProject
+}
+
+struct NeededParseInfoFromParent {
+  parse_mode: ChildParseMode,
+  test_framework: Option<FinalTestFramework>,
   include_prefix: String,
   target_namespace_prefix: String
 }
@@ -149,6 +160,7 @@ pub struct ProjectConstructorConfig {
   pub just_created_library_project_at: Option<String>
 }
 
+// NOTE: Link validity is now checked using the DependencyGraph.
 pub struct FinalProjectData {
   project_type: FinalProjectType,
   project_output_type: ProjectOutputType,
@@ -172,12 +184,16 @@ pub struct FinalProjectData {
   pub src_files: Vec<PathBuf>,
   pub include_files: Vec<PathBuf>,
   pub template_impl_files: Vec<PathBuf>,
-  // subproject_names: HashSet<String>,
-  // subprojects: Vec<FinalProjectData>,
   subprojects: SubprojectMap,
+  test_framework: Option<FinalTestFramework>,
+  tests: TestProjectMap,
   output: HashMap<String, CompiledOutputItem>,
-  predefined_dependencies: HashMap<String, FinalPredefinedDependencyConfig>,
-  gcmake_dependency_projects: HashMap<String, FinalGCMakeDependency>,
+
+  // TODO: Put these in "Root project only" configuration
+  // once the dependency graph is implemented.
+  predefined_dependencies: HashMap<String, Rc<FinalPredefinedDependencyConfig>>,
+  gcmake_dependency_projects: HashMap<String, Rc<FinalGCMakeDependency>>,
+
   prebuild_script: Option<PreBuildScript>,
   target_namespace_prefix: String,
   was_just_created: bool
@@ -241,7 +257,7 @@ impl FinalProjectData {
 
   fn create_new(
     unclean_project_root: &str,
-    parent_project_info: Option<ParentProjectInfo>,
+    parent_project_info: Option<NeededParseInfoFromParent>,
     all_dep_config: &AllRawPredefinedDependencies,
     just_created_project_at: &Option<PathBuf>
   ) -> Result<FinalProjectData, ProjectLoadFailureReason> {
@@ -249,16 +265,67 @@ impl FinalProjectData {
     // top level build configuration data. This means that language data, build configs, etc. are not
     // defined in subprojects, and shouldn't be written. Build configuration related data is inherited
     // from the parent project.
-    let raw_project: RawProject;
+    let mut raw_project: RawProject;
     let project_type: FinalProjectType;
 
-    if parent_project_info.is_some() {
-      raw_project = create_subproject_data(&unclean_project_root)?.into();
-      project_type = FinalProjectType::Subproject(SubprojectOnlyOptions { })
-    } else {
-      raw_project = create_project_data(&unclean_project_root)?;
-      project_type = FinalProjectType::Root;
-    };
+    // TODO: Resolve the given predefined dependency (which corresponds to the test framework)
+    // and use it here.
+    let final_test_framework: Option<FinalTestFramework>;
+
+    match &parent_project_info {
+      None => {
+        raw_project = parse_root_project_data(&unclean_project_root)?;
+        project_type = FinalProjectType::Root;
+        final_test_framework = match &raw_project.test_framework {
+          None => None,
+          Some(raw_framework_info) => {
+            let test_framework_lib: Rc<FinalPredefinedDependencyConfig> = FinalPredefinedDependencyConfig::new(
+              all_dep_config,
+              raw_framework_info.lib_config(),
+              raw_framework_info.name()
+            )
+              .map(|config| Rc::new(config))
+              .map_err(ProjectLoadFailureReason::Other)?;
+            
+            match raw_framework_info {
+              RawTestFramework::Catch2(_) => Some(FinalTestFramework::Catch2(test_framework_lib)),
+              // TODO: Add DocTest and GoogleTest later
+            }
+          }
+        };
+      }
+      Some(NeededParseInfoFromParent { parse_mode: ChildParseMode::TestProject, test_framework, .. }) => {
+        let project_path = PathBuf::from(cleaned_path_str(unclean_project_root));
+        let test_project_name: &str = project_path
+          .file_name()
+          .unwrap()
+          .to_str()
+          .unwrap();
+
+        raw_project = parse_test_project_data(unclean_project_root)?
+          .into_raw_subproject(test_project_name)
+          .into();
+
+        match test_framework {
+          None => return Err(ProjectLoadFailureReason::MissingRequiredTestFramework(format!(
+            "Tried to configure test project '{}' (path: '{}'), however the toplevel project did not specify a test framework. To enable testing, specify a test_framework in the toplevel project.",
+            test_project_name,
+            cleaned_path_str(unclean_project_root)
+          ))),
+          Some(framework) => {
+            project_type = FinalProjectType::Test {
+              framework: framework.clone()
+            };
+          }
+        }
+        final_test_framework = test_framework.clone();
+      },
+      Some(NeededParseInfoFromParent { parse_mode: ChildParseMode::Subproject, test_framework, .. }) => {
+        raw_project = parse_subproject_data(&unclean_project_root)?.into();
+        project_type = FinalProjectType::Subproject { };
+        final_test_framework = test_framework.clone();
+      }
+    }
 
     let project_output_type: ProjectOutputType = match validate_raw_project_outputs(&raw_project) {
       Ok(project_output_type) => project_output_type,
@@ -268,17 +335,19 @@ impl FinalProjectData {
     let full_include_prefix: String;
     let target_namespace_prefix: String;
 
-    if let Some(parent_project) = parent_project_info {
-      full_include_prefix = format!(
-        "{}/{}",
-        parent_project.include_prefix,
-        raw_project.get_include_prefix()
-      );
-      target_namespace_prefix = parent_project.target_namespace_prefix;
-    }
-    else {
-      full_include_prefix = raw_project.get_include_prefix().to_string();
-      target_namespace_prefix = raw_project.get_name().to_string();
+    match parent_project_info {
+      Some(parent_project) => {
+        full_include_prefix = format!(
+          "{}/{}",
+          parent_project.include_prefix,
+          raw_project.get_include_prefix()
+        );
+        target_namespace_prefix = parent_project.target_namespace_prefix;
+      },
+      None => {
+        full_include_prefix = raw_project.get_include_prefix().to_string();
+        target_namespace_prefix = raw_project.get_name().to_string();
+      }
     }
 
     let project_root: String = cleaned_path_str(&unclean_project_root).to_string();
@@ -287,16 +356,66 @@ impl FinalProjectData {
     let include_dir = format!("{}/include/{}", &project_root, &full_include_prefix);
     let template_impls_dir = format!("{}/template-impl/{}", &project_root, &full_include_prefix);
 
-    let mut subprojects: SubprojectMap = HashMap::new();
-    // let mut subprojects: Vec<FinalProjectData> = Vec::new();
-    // let mut subproject_names: HashSet<String> = HashSet::new();
+    let mut subprojects: SubprojectMap = SubprojectMap::new();
+
+    let mut test_project_map: SubprojectMap = SubprojectMap::new();
+
+    let test_dir_path: PathBuf = PathBuf::from(format!("{}/tests", &project_root));
+
+    if test_dir_path.is_dir() {
+      let tests_dir_iter = fs::read_dir(test_dir_path.as_path())
+        .map_err(|err| ProjectLoadFailureReason::Other(err.to_string()))?;
+
+      for dir_entry in tests_dir_iter {
+        let test_project_path: PathBuf = match dir_entry {
+          Ok(entry) => entry.path(),
+          Err(err) => return Err(ProjectLoadFailureReason::Other(err.to_string()))
+        };
+      
+        if test_project_path.is_dir() {
+          let mut new_test_project: FinalProjectData = Self::create_new(
+            test_project_path.to_str().unwrap(),
+            Some(NeededParseInfoFromParent {
+              parse_mode: ChildParseMode::TestProject,
+              test_framework: final_test_framework.clone(), 
+              include_prefix: full_include_prefix.clone(),
+              target_namespace_prefix: target_namespace_prefix.clone()
+            }),
+            all_dep_config,
+            just_created_project_at
+          )
+            .map_err(|failure_reason| {
+              failure_reason.map_message(|err_message| format!(
+                "\t-> in test project '{}'\n{}",
+                test_project_path.to_str().unwrap(),
+                err_message
+              ))
+            })?;
+
+          // Subprojects must inherit these from their parent project in order to properly
+          // set compiler flags and other properties per output item.
+          // NOTE: This might not be true anymore if projects are able to explicitly
+          // reference the toplevel project.
+          new_test_project.build_config_map = raw_project.build_configs.clone();
+          new_test_project.language_config_map = raw_project.languages.clone();
+          new_test_project.supported_compilers = raw_project.supported_compilers.clone();
+
+          test_project_map.insert(
+            test_project_path.file_name().unwrap().to_str().unwrap().to_string(),
+            Rc::new(new_test_project)
+          );
+        }
+      }
+    }
 
     if let Some(dirnames) = raw_project.get_subproject_dirnames() {
       for subproject_dirname in dirnames {
         let full_subproject_dir = format!("{}/subprojects/{}", &project_root, subproject_dirname);
         let mut new_subproject: FinalProjectData = Self::create_new(
           &full_subproject_dir,
-          Some(ParentProjectInfo {
+          Some(NeededParseInfoFromParent {
+            parse_mode: ChildParseMode::Subproject,
+            test_framework: final_test_framework.clone(),
             include_prefix: full_include_prefix.clone(),
             target_namespace_prefix: target_namespace_prefix.clone()
           }),
@@ -324,7 +443,7 @@ impl FinalProjectData {
       }
     }
 
-    let mut gcmake_dependency_projects: HashMap<String, FinalGCMakeDependency> = HashMap::new();
+    let mut gcmake_dependency_projects: HashMap<String, Rc<FinalGCMakeDependency>> = HashMap::new();
 
     if let Some(gcmake_dep_map) = &raw_project.gcmake_dependencies {
       for (dep_name, dep_config) in gcmake_dep_map {
@@ -342,18 +461,30 @@ impl FinalProjectData {
 
         gcmake_dependency_projects.insert(
           dep_name.clone(),
-          FinalGCMakeDependency::new(
-            &dep_name,
-            dep_config,
-            maybe_dep_project
-          ).map_err(ProjectLoadFailureReason::Other)?
+          Rc::new(
+            FinalGCMakeDependency::new(
+              &dep_name,
+              dep_config,
+              maybe_dep_project
+            )
+            .map_err(ProjectLoadFailureReason::Other)?
+          )
         );
       }
     }
 
     let mut output_items: HashMap<String, CompiledOutputItem> = HashMap::new();
 
-    for (output_name, raw_output_item) in raw_project.get_output() {
+    for (output_name, raw_output_item) in raw_project.get_output_mut() {
+      if let FinalProjectType::Test { framework } = &project_type {
+        if let Some(link_map) = &mut raw_output_item.link {
+          link_map.add_exe_link(
+            framework.project_dependency_name(),
+            framework.main_link_target_name()
+          );
+        }
+      }
+
       output_items.insert(
         output_name.to_owned(),
         CompiledOutputItem::from(output_name, raw_output_item)
@@ -363,7 +494,22 @@ impl FinalProjectData {
       );
     }
 
-    let mut predefined_dependencies: HashMap<String, FinalPredefinedDependencyConfig> = HashMap::new();
+    let mut predefined_dependencies: HashMap<String, Rc<FinalPredefinedDependencyConfig>> = HashMap::new();
+
+    if let FinalProjectType::Root = &project_type {
+      if let Some(framework) = &final_test_framework {
+        let framework_project_dep_name = framework.project_dependency_name();
+
+        match framework {
+          FinalTestFramework::Catch2(predep_config) => {
+            predefined_dependencies.insert(
+              framework_project_dep_name.to_string(),
+              Rc::clone(predep_config)
+            )
+          }
+        };
+      }
+    }
 
     if let Some(pre_deps) = &raw_project.predefined_dependencies {
       for (dep_name, user_given_config) in pre_deps {
@@ -374,7 +520,7 @@ impl FinalProjectData {
         )
           .map_err(ProjectLoadFailureReason::Other)?;
 
-        predefined_dependencies.insert(dep_name.clone(), finalized_dep);
+        predefined_dependencies.insert(dep_name.clone(), Rc::new(finalized_dep));
       }
     }
 
@@ -424,6 +570,8 @@ impl FinalProjectData {
       gcmake_dependency_projects,
       prebuild_script,
       target_namespace_prefix,
+      test_framework: final_test_framework,
+      tests: test_project_map,
       was_just_created: false
     };
 
@@ -431,9 +579,6 @@ impl FinalProjectData {
       Some(created_root) => *created_root == finalized_project_data.absolute_project_root,
       None => false
     };
-
-    finalized_project_data.populate_used_components()
-      .map_err(ProjectLoadFailureReason::Other)?;
 
     populate_files(
       Path::new(&finalized_project_data.src_dir),
@@ -454,6 +599,13 @@ impl FinalProjectData {
       .map_err(|err| ProjectLoadFailureReason::Other(err.to_string()))?;
 
     return Ok(finalized_project_data);
+  }
+
+  pub fn is_test_project(&self) -> bool {
+    match &self.project_type {
+      FinalProjectType::Test { .. } => true,
+      _ => false
+    }
   }
 
   pub fn is_root_project(&self) -> bool {
@@ -501,151 +653,15 @@ impl FinalProjectData {
     None
   }
 
-  // Component-based predefined dependencies need to be told which of their components have been used
-  // for the entire project, not per target. Why? find_package requires components to be specified
-  // when called (not when linking libraries to target), and also likely populates the library
-  // in such a way where the component names are not the same as the targets (or variables) CMake
-  // needs to use to link to.
-  fn populate_used_components(&mut self) -> Result<(), String> {
-    for (dep_name, predefined_dep) in &mut self.predefined_dependencies {
-      if let FinalPredepInfo::CMakeComponentsModule(components_dep) = predefined_dep.mut_predef_dep_info() {
-        for (_, output_item) in &self.output {
-          if let Some(links) = output_item.get_links().get(dep_name) {
-            components_dep.mark_multiple_components_used(dep_name, links.iter_all())?;
-          }
-        }
-
-        if let Some(prebuild_script) = &self.prebuild_script {
-          if let PreBuildScript::Exe(CompiledOutputItem { links , ..}) = prebuild_script {
-            if let Some(links) = links.get(dep_name) {
-              components_dep.mark_multiple_components_used(dep_name, links.iter_all())?;
-            }
-          }
-        }
-      }
-    }
-
-    Ok(())
-  }
-
-  fn ensure_links_are_valid(
-    &self,
-    item_name: &str,
-    item: &CompiledOutputItem,
-    is_prebuild_script: bool
-  ) -> Result<(), String> {
-
-    if item.has_links() {
-      for (link_map, _) in item.get_links().iter_link_maps() {
-        // Each library linked to an output item should be member of a subproject or dependency
-        // project. This loop checks that each of the referenced sub/dependency project names
-        // exist and if they do, that the linked libraries from withing those projects exist
-        // as well.
-        for (project_name_containing_libraries, lib_names_linking) in link_map {
-          // Check if it's linked to a subproject
-          if let Some(matching_subproject) = self.subprojects.get(project_name_containing_libraries) {
-            if is_prebuild_script {
-              return Err(format!(
-                "{}'s pre-build script tried to link to a library in subproject '{}', but pre-build scripts can't link to subprojects.",
-                self.get_project_name(),
-                matching_subproject.get_project_name()
-              ));
-            }
-            else {
-              for lib_name_linking in lib_names_linking {
-                if !matching_subproject.has_library_output_named(lib_name_linking) {
-                  return Err(format!(
-                    "Output item '{}' in project '{}' tries to link to a nonexistent library '{}' in subproject '{}'.",
-                    item_name,
-                    self.get_project_name(),
-                    lib_name_linking,
-                    project_name_containing_libraries
-                  ));
-                }
-              }
-            }
-          }
-          // Check if it's linked to a predefined dependency
-          else if let Some(final_dep) = self.predefined_dependencies.get(project_name_containing_libraries) {
-            for lib_name_linking in lib_names_linking {
-              match final_dep.predefined_dep_info() {
-                FinalPredepInfo::Subdirectory(subdir_dep) => {
-                  if !subdir_dep.has_target_named(lib_name_linking) {
-                    return Err(format!(
-                      "Output item '{}' in project '{}' tries to link to a nonexistent target '{}' in predefined dependency '{}'.",
-                      item_name,
-                      self.get_project_name(),
-                      lib_name_linking,
-                      project_name_containing_libraries
-                    ))
-                  }
-                },
-                FinalPredepInfo::CMakeComponentsModule(components_dep) => {
-                  if !components_dep.has_component_named(lib_name_linking) {
-                    return Err(format!(
-                      "Output item '{}' in project '{}' tries to link to a nonexistent component '{}' in predefined dependency '{}'.",
-                      item_name,
-                      self.get_project_name(),
-                      lib_name_linking,
-                      project_name_containing_libraries
-                    ))
-                  }
-                },
-                FinalPredepInfo::CMakeModule(find_module_dep) => {
-                  if !find_module_dep.has_target_named(lib_name_linking) {
-                    return Err(format!(
-                      "Output item '{}' in project '{}' tries to link to a nonexistent target '{}' in predefined dependency '{}'.",
-                      item_name,
-                      self.get_project_name(),
-                      lib_name_linking,
-                      project_name_containing_libraries
-                    ))
-                  }
-                }
-              }
-              
-            }
-          }
-          else if let Some(final_gcmake_dep) = self.gcmake_dependency_projects.get(project_name_containing_libraries) {
-            for lib_name_linking in lib_names_linking {
-              if final_gcmake_dep.get_linkable_target_name(lib_name_linking)?.is_none() {
-                return Err(format!(
-                  "Output item '{}' in project '{}' tries to link to a nonexistent target '{}' in gcmake dependency '{}'.",
-                  item_name,
-                  self.get_project_name(),
-                  lib_name_linking,
-                  project_name_containing_libraries
-                ))
-              }
-            }
-          }
-          else {
-            return Err(format!(
-              "Output item '{}' in project '{}' tries to link to libraries in a project named '{}', however that project doesn't exist.",
-              item_name,
-              self.get_project_name(),
-              project_name_containing_libraries
-            ));
-          }
-        }
-      }
-    }
-
-    Ok(())
-  }
-
   fn ensure_language_config_correctness(&self) -> Result<(), String> {
-    let LanguageConfigMap {
-      C,
-      Cpp
-    } = self.get_language_info();
+    let LanguageConfigMap { c, cpp } = self.get_language_info();
 
-    match C.standard {
+    match c.standard {
       99 | 11 | 17 => (),
       standard => return Err(format!("C Language standard must be one of [99, 11, 17], but {} was given", standard))
     }
 
-    match Cpp.standard {
+    match cpp.standard {
       11 | 14 | 17 | 20 => (),
       standard => return Err(format!("C++ Language standard must be one of [11, 14, 17, 20], but {} was given", standard))
     }
@@ -691,6 +707,19 @@ impl FinalProjectData {
       ));
     }
 
+    for (_, test_project) in &self.tests {
+      if let ProjectOutputType::ExeProject = &test_project.project_output_type {
+        test_project.validate_correctness()?;
+      }
+      else {
+        return Err(format!(
+          "Test project '{}' in '{}' is not an executable project. All tests must output only executables.",
+          test_project.get_project_name(),
+          self.get_project_name()
+        ));
+      }
+    }
+
     for (_, subproject) in &self.subprojects {
       subproject.validate_correctness()?;
     }
@@ -701,12 +730,6 @@ impl FinalProjectData {
 
     for (output_name, output_item) in &self.output {
       self.validate_entry_file_type(
-        output_name,
-        output_item,
-        false
-      )?;
-
-      self.ensure_links_are_valid(
         output_name,
         output_item,
         false
@@ -725,12 +748,6 @@ impl FinalProjectData {
           let the_item_name: String = format!("{}'s pre-build script", self.get_project_name());
 
           self.validate_entry_file_type(
-            &the_item_name,
-            script_exe_config,
-            true
-          )?;
-
-          self.ensure_links_are_valid(
             &the_item_name,
             script_exe_config,
             true
@@ -902,6 +919,10 @@ impl FinalProjectData {
     !self.subprojects.is_empty()
   }
 
+  pub fn has_tests(&self) -> bool {
+    !self.tests.is_empty()
+  }
+
   pub fn has_predefined_dependencies(&self) -> bool {
     !self.predefined_dependencies.is_empty()
   }
@@ -1045,6 +1066,10 @@ impl FinalProjectData {
       .collect()
   }
 
+  pub fn get_test_framework(&self) -> &Option<FinalTestFramework> {
+    &self.test_framework
+  }
+
   pub fn get_outputs(&self) -> &HashMap<String, CompiledOutputItem> {
     &self.output
   }
@@ -1109,6 +1134,10 @@ impl FinalProjectData {
     &self.global_defines
   }
   
+  pub fn get_test_projects(&self) -> &SubprojectMap {
+    &self.tests
+  }
+
   pub fn get_subprojects(&self) -> &SubprojectMap {
     &self.subprojects
   }
@@ -1117,11 +1146,15 @@ impl FinalProjectData {
     &self.project_type
   }
 
-  pub fn get_predefined_dependencies(&self) -> &HashMap<String, FinalPredefinedDependencyConfig> {
+  pub fn get_project_output_type(&self) -> &ProjectOutputType {
+    &self.project_output_type
+  }
+
+  pub fn get_predefined_dependencies(&self) -> &HashMap<String, Rc<FinalPredefinedDependencyConfig>> {
     &self.predefined_dependencies
   }
 
-  pub fn get_gcmake_dependencies(&self) -> &HashMap<String, FinalGCMakeDependency> {
+  pub fn get_gcmake_dependencies(&self) -> &HashMap<String, Rc<FinalGCMakeDependency>> {
     &self.gcmake_dependency_projects
   }
 }

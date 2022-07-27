@@ -1,10 +1,12 @@
 mod raw_components_builtin_find_module;
 mod raw_predefined_subdirectory_dep;
 mod raw_builtin_find_module;
+mod target_config_common;
 
 pub use raw_predefined_subdirectory_dep::*;
 pub use raw_components_builtin_find_module::*;
 pub use raw_builtin_find_module::*;
+pub use target_config_common::*;
 
 use std::{collections::HashMap, path::{PathBuf, Path}, fs, io, rc::Rc};
 use serde::{Deserialize};

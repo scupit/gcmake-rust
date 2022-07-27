@@ -1,28 +1,14 @@
 use std::collections::HashSet;
 
-use crate::project_info::raw_data_in::dependencies::{internal_dep_config::{RawComponentsModuleDep, ComponentsFindModuleLinks, ComponentsFindModuleUsage, UsageMode, CMakeModuleType}, user_given_dep_config::{self, UserGivenPredefinedDependencyConfig}};
+use crate::project_info::raw_data_in::dependencies::{internal_dep_config::{RawComponentsModuleDep, ComponentsFindModuleLinks, UsageMode, CMakeModuleType}, user_given_dep_config::{UserGivenPredefinedDependencyConfig}};
 
-struct OrganizedComponents {
-  available: HashSet<String>,
-  used_component_set: HashSet<String>,
-  used_ordered_components: Vec<String>
-}
+use super::{predep_module_common::PredefinedDepFunctionality, final_target_map_common::{FinalTargetConfigMap, make_final_target_config_map}};
 
-impl OrganizedComponents {
-  fn new(available_components: &HashSet<String>) -> Self {
-    Self {
-      available: available_components.clone(),
-      used_component_set: HashSet::new(),
-      // CMake component inclusion order is important for some projects (ex: wxWidgets)
-      // and compilers (ex: MinGW)
-      used_ordered_components: Vec::new()
-    }
-  }
-}
-
+#[derive(Clone)]
 pub struct PredefinedCMakeComponentsModuleDep {
   raw_dep: RawComponentsModuleDep,
-  components: OrganizedComponents
+  lib_link_mode: UsageMode,
+  components: FinalTargetConfigMap
 }
 
 impl PredefinedCMakeComponentsModuleDep {
@@ -35,15 +21,18 @@ impl PredefinedCMakeComponentsModuleDep {
   }
 
   pub fn has_component_named(&self, name_searching: &str) -> bool {
-    self.components.available.contains(name_searching)
-  }
-
-  pub fn get_ordered_used_components(&self) -> &Vec<String> {
-    &self.components.used_ordered_components
+    return self.components.contains_key(name_searching);
   }
 
   pub fn found_varname(&self) -> &str {
     &self.raw_dep.cmakelists_usage.found_var
+  }
+
+  pub fn whole_lib_links_using_variable(&self) -> bool {
+    return match &self.lib_link_mode {
+      UsageMode::Variable => true,
+      UsageMode::Target => false
+    }
   }
 
   pub fn linkable_string(&self) -> String {
@@ -56,46 +45,37 @@ impl PredefinedCMakeComponentsModuleDep {
     }
   }
 
-  pub fn mark_multiple_components_used(
-    &mut self,
-    dep_name: &str,
-    component_names: impl Iterator<Item=impl AsRef<str>>
-  ) -> Result<(), String> {
-    for name in component_names {
-      self.mark_component_used(dep_name, name.as_ref())?;
-    }
-    Ok(())
-  }
-
-  pub fn mark_component_used(
-    &mut self,
-    dep_name: &str,
-    component_name: &str,
-  ) -> Result<(), String> {
-    if !self.components.available.contains(component_name) {
-      return Err(format!(
-        "Component '{}' not found in dependency '{}'.",
-        component_name,
-        dep_name
-      ));
-    }
-
-    if !self.components.used_component_set.contains(component_name) {
-      self.components.used_component_set.insert(component_name.to_string());
-      self.components.used_ordered_components.push(component_name.to_string());
-    }
-
-    Ok(())
-  }
-
   pub fn from_components_find_module_dep(
     dep: &RawComponentsModuleDep,
     user_given_dep_config: &UserGivenPredefinedDependencyConfig,
     dep_name: &str
-  ) -> Self {
-    Self {
-      components: OrganizedComponents::new(&dep.components),
+  ) -> Result<Self, String> {
+    let components = make_final_target_config_map(
+      dep_name,
+      &dep.components
+    )
+      .map_err(|err_msg| format!(
+        "When loading predefined CMake Components Module dependency \"{}\":\n{}",
+        dep_name,
+        err_msg
+      ))?;
+
+    return Ok(Self {
+      components,
+      lib_link_mode: dep.cmakelists_usage.link_format.clone(),
       raw_dep: dep.clone()
-    }
+    });
+  }
+}
+
+impl PredefinedDepFunctionality for PredefinedCMakeComponentsModuleDep {
+  fn get_target_config_map(&self) -> &FinalTargetConfigMap {
+    &self.components
+  }
+
+  fn target_name_set(&self) -> HashSet<String> {
+    return self.components.keys()
+      .map(|key_string| key_string.clone())
+      .collect()
   }
 }

@@ -1,11 +1,13 @@
 use std::collections::{HashMap, HashSet};
 use serde::{Serialize, Deserialize};
 
-use super::{dependencies::user_given_dep_config::{UserGivenPredefinedDependencyConfig, UserGivenGCMakeProjectDependency}, raw_project_in::{RawCompiledItem, ProjectLike, RawProject, BuildType}, PreBuildConfigIn, SingleLanguageConfig, LanguageConfigMap};
+use super::{raw_project_in::{RawCompiledItem, RawProject, BuildType}, PreBuildConfigIn, SingleLanguageConfig, LanguageConfigMap, project_common_types::{PredefinedDepMap, GCMakeDepMap}};
 
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(deny_unknown_fields)]
 pub struct RawSubproject {
+  // TODO: Remove subproject name. A subproject's project name should be its directory name
+  // prefixed with the root project's name.
   name: String,
   // If possible, should be the same as the project name
   include_prefix: String,
@@ -14,24 +16,24 @@ pub struct RawSubproject {
   prebuild_config: Option<PreBuildConfigIn>,
   output: HashMap<String, RawCompiledItem>,
   subprojects: Option<HashSet<String>>,
-  pub predefined_dependencies: Option<HashMap<String, UserGivenPredefinedDependencyConfig>>,
-  pub gcmake_dependencies: Option<HashMap<String, UserGivenGCMakeProjectDependency>>
+  // pub predefined_dependencies: Option<PredefinedDepMap>,
+  // pub gcmake_dependencies: Option<GCMakeDepMap>
 }
 
-impl ProjectLike for RawSubproject {
-  fn get_name(&self) -> &str {
+impl RawSubproject {
+  pub fn get_name(&self) -> &str {
     &self.name
   }
   
-  fn get_description(&self) -> &str {
+  pub fn get_description(&self) -> &str {
     &self.description
   }
 
-  fn get_include_prefix(&self) -> &str {
+  pub fn get_include_prefix(&self) -> &str {
     &self.include_prefix
   }
 
-  fn get_version(&self) -> &str {
+  pub fn get_version(&self) -> &str {
     &self.version
   }
 }
@@ -45,9 +47,7 @@ impl From<RawProject> for RawSubproject {
       version: project_data.version,
       prebuild_config: project_data.prebuild_config,
       output: project_data.output,
-      subprojects: project_data.subprojects,
-      predefined_dependencies: project_data.predefined_dependencies,
-      gcmake_dependencies: project_data.gcmake_dependencies
+      subprojects: project_data.subprojects
     }
   }
 }
@@ -64,23 +64,65 @@ impl Into<RawProject> for RawSubproject {
       // NOTE: This language config is only a placeholder. Subprojects will inherit
       // language info from their parent project.
       languages: LanguageConfigMap {
-        C: SingleLanguageConfig {
+        c: SingleLanguageConfig {
           standard: 11
         },
-        Cpp: SingleLanguageConfig {
+        cpp: SingleLanguageConfig {
           standard: 17
         }
       },
+      // Placeholder, no meaning
+      test_framework: None,
+      // Placeholder, no meaning
       supported_compilers: HashSet::new(),
+      // Placeholder, no meaning
       default_build_type: BuildType::Debug,
       prebuild_config: self.prebuild_config,
       // Build configs are also inherited from the parent project.
       build_configs: HashMap::new(),
+      // Placeholder, no meaning
       global_defines: None,
       output: self.output,
       subprojects: self.subprojects,
-      predefined_dependencies: self.predefined_dependencies,
-      gcmake_dependencies: self.gcmake_dependencies
+      predefined_dependencies: None,
+      gcmake_dependencies: None
+    }
+  }
+}
+
+
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(deny_unknown_fields)]
+pub struct RawTestProject {
+  description: String,
+  version: String,
+  prebuild_config: Option<PreBuildConfigIn>,
+  output: HashMap<String, RawCompiledItem>
+}
+
+impl RawTestProject {
+  pub fn into_raw_subproject(self, name: impl AsRef<str>) -> RawSubproject {
+    let name_string: String = name.as_ref().to_string();
+
+    return RawSubproject {
+      name: name_string.clone(),
+      include_prefix: format!("TESTING/{}", &name_string),
+      description: self.description,
+      version: self.version,
+      prebuild_config: self.prebuild_config,
+      output: self.output,
+      subprojects: None
+    }
+  }
+}
+
+impl From<RawSubproject> for RawTestProject {
+  fn from(raw_subproject: RawSubproject) -> Self {
+    return Self {
+      description: raw_subproject.description,
+      version: raw_subproject.version,
+      prebuild_config: raw_subproject.prebuild_config,
+      output: raw_subproject.output
     }
   }
 }

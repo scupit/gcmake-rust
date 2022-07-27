@@ -1,4 +1,8 @@
+use std::collections::HashMap;
+
 use serde::{Deserialize};
+
+use super::target_config_common::RawPredefinedTargetMapIn;
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -32,18 +36,16 @@ pub struct RawSubdirectoryDependency {
   // of the project the 
   pub config_file_project_name: Option<String>,
   pub git_repo: GitRepoConfig,
-  pub target_names: Vec<String>,
+  pub target_configs: RawPredefinedTargetMapIn,
   #[serde(default = "default_requires_custom_populate")]
   pub requires_custom_fetchcontent_populate: bool
 }
 
 impl RawSubdirectoryDependency {
   pub fn namespaced_target(&self, target_name: &str) -> Option<String> {
-    for raw_target_name in &self.target_names {
-      if raw_target_name == target_name {
-        return Some(format!("{}{}", self.namespace_config.cmakelists_linking, target_name))
-      }
+    return if self.target_configs.contains_key(target_name) {
+      Some(format!("{}{}", self.namespace_config.cmakelists_linking, target_name))
     }
-    None
+    else { None };
   }
 }

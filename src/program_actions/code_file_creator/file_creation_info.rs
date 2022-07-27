@@ -1,4 +1,4 @@
-use crate::{project_info::path_manipulation::{relative_to_project_root, cleaned_path_str}, cli_config::FileCreationLang};
+use crate::{project_info::path_manipulation::{relative_to_project_root, cleaned_path_str}, cli_config::clap_cli_config::FileCreationLang};
 
 pub struct FileTypeGeneratingInfo {
   pub generating_header: bool,

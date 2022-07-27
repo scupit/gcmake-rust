@@ -1,19 +1,37 @@
-use std::collections::{HashMap, HashSet};
+use std::{collections::{HashMap}, rc::Rc};
 
-use super::{raw_data_in::{OutputItemType, RawCompiledItem, BuildConfigMap, TargetSpecificBuildType, TargetBuildConfigMap, LinkSection}, helpers::{get_link_info, retrieve_file_type, RetrievedCodeFileType}};
+use super::{raw_data_in::{OutputItemType, RawCompiledItem, TargetBuildConfigMap, LinkSection}, final_dependencies::FinalPredefinedDependencyConfig, LinkSpecifier, link_spec_parser::LinkAccessMode};
 
-pub struct SubprojectOnlyOptions {
-  // TODO: Add subproject only options (such as optional_build)
+#[derive(Clone)]
+pub enum FinalTestFramework {
+  Catch2(Rc<FinalPredefinedDependencyConfig>),
+  // GoogleTest(FinalPredefinedDependencyConfig),
+  // #[serde(rename = "doctest")]
+  // DocTest(FinalPredefinedDependencyConfig),
+}
+
+impl FinalTestFramework {
+  pub fn project_dependency_name(&self) -> &str {
+    match self {
+      Self::Catch2(_) => "Catch2"
+    }
+  }
+
+  pub fn main_link_target_name(&self) -> &str {
+    match self {
+      Self::Catch2(_) => "Catch2WithMain"
+    }
+  }
 }
 
 pub enum FinalProjectType {
   Root,
-  Subproject(SubprojectOnlyOptions)
-}
+  Subproject {
 
-pub struct LinkInfo {
-  pub from_project_name: String,
-  pub library_names: Vec<String>
+  },
+  Test {
+    framework: FinalTestFramework
+  }
 }
 
 pub enum PreBuildScript {
@@ -21,11 +39,12 @@ pub enum PreBuildScript {
   Python(String)
 }
 
-#[derive(Clone)]
+// Ordered from most permissive to least permissive.
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum LinkMode {
   Public,
-  Private,
-  Interface
+  Interface,
+  Private
 }
 
 impl LinkMode {
@@ -36,9 +55,13 @@ impl LinkMode {
       Self::Interface => "interface",
     }
   }
-}
 
-type LinkMap = HashMap<String, Vec<String>>;
+  pub fn more_permissive(first: Self, second: Self) -> Self {
+    return if first > second
+      { first }
+      else { second }
+  }
+}
 
 pub struct LinkView<'a> {
   public_links: Option<&'a Vec<String>>,
@@ -84,62 +107,23 @@ impl<'a> LinkView<'a> {
   }
 }
 
+#[derive(Clone)]
 pub struct OutputItemLinks {
-  cmake_public: LinkMap,
-  cmake_interface: LinkMap,
-  cmake_private: LinkMap
+  pub cmake_public: Vec<LinkSpecifier>,
+  pub cmake_interface: Vec<LinkSpecifier>,
+  pub cmake_private: Vec<LinkSpecifier>
 }
 
 impl OutputItemLinks {
   pub fn new_empty() -> Self {
     Self {
-      cmake_public: LinkMap::new(),
-      cmake_private: LinkMap::new(),
-      cmake_interface: LinkMap::new()
+      cmake_public: Vec::new(),
+      cmake_private: Vec::new(),
+      cmake_interface: Vec::new()
     }
-  }
-
-  pub fn has_links_for_project(
-    &self,
-    container_project_name: impl AsRef<str>
-  ) -> bool {
-    return self.iter_link_maps()
-      .any(|(link_map, _)| link_map.contains_key(container_project_name.as_ref()))
-  }
-
-  pub fn get(&self, container_project_name_val: impl AsRef<str>) -> Option<LinkView> {
-    let container_project_name = container_project_name_val.as_ref();
-
-    return if self.has_links_for_project(container_project_name) {
-      Some(LinkView {
-        public_links: self.cmake_public.get(container_project_name),
-        private_links: self.cmake_private.get(container_project_name),
-        interface_links: self.cmake_interface.get(container_project_name)
-      })
-    }
-    else {
-      None
-    }
-  }
-
-  pub fn iter_link_maps(&self) -> impl Iterator<Item=(&LinkMap, LinkMode)> {
-    return vec![
-      (&self.cmake_public, LinkMode::Public),
-      (&self.cmake_private, LinkMode::Private),
-      (&self.cmake_interface, LinkMode::Interface)
-    ].into_iter();
-  }
-
-  pub fn all_projects_linked(&self) -> HashSet<String> {
-    let mut key_set: HashSet<String> = HashSet::new();
-
-    for (link_map, _) in self.iter_link_maps() {
-      key_set.extend(link_map.keys().map(|k| k.to_string()));
-    }
-
-    return key_set;
   }
 }
+
 
 pub struct CompiledOutputItem {
   pub output_type: OutputItemType,
@@ -164,7 +148,7 @@ impl CompiledOutputItem {
           ));
         },
         LinkSection::Uncategorized(link_strings) => {
-          combine_links_into(
+          parse_all_links_into(
             link_strings,
             &mut output_links.cmake_private
           )?;
@@ -177,7 +161,7 @@ impl CompiledOutputItem {
           ));
         }
         LinkSection::Uncategorized(link_strings) => {
-          combine_links_into(
+          parse_all_links_into(
             link_strings,
             &mut output_links.cmake_interface
           )?;
@@ -186,14 +170,14 @@ impl CompiledOutputItem {
       compiled_lib => match raw_links {
         LinkSection::PublicPrivateCategorized { public , private } => {
           if let Some(public_links) = public {
-            combine_links_into(
+            parse_all_links_into(
               public_links,
               &mut output_links.cmake_public
             )?;
           }
 
           if let Some(private_links) = private {
-            combine_links_into(
+            parse_all_links_into(
               private_links,
               &mut output_links.cmake_private
             )?;
@@ -208,30 +192,6 @@ impl CompiledOutputItem {
     }
 
     let mut already_used: HashMap<String, LinkMode> = HashMap::new();
-
-    for ref container_project in output_links.all_projects_linked() {
-      for (link_map, ref map_link_mode) in output_links.iter_link_maps() {
-        if let Some(linked_libs) = link_map.get(container_project) {
-          for lib_name in linked_libs {
-            match already_used.get(lib_name) {
-              Some(existing_link_mode) => {
-                return Err(format!(
-                  "Library {}::{} is linked to '{}' in both {} and {} categories. Libraries should only be linked to an item from a single inheritance category. Make sure the library is listed in either public: or private: lists, but not both.",
-                  container_project,
-                  lib_name,
-                  output_name,
-                  existing_link_mode.to_str(),
-                  map_link_mode.to_str()
-                ));
-              },
-              None => {
-                already_used.insert(lib_name.clone(), map_link_mode.clone());
-              }
-            }
-          }
-        }
-      }
-    }
 
     return Ok(output_links);
   }
@@ -260,9 +220,11 @@ impl CompiledOutputItem {
   }
 
   pub fn has_links(&self) -> bool {
-    return self.links
-      .iter_link_maps()
-      .any(|(link_map, _)| !link_map.is_empty());
+    return !(
+      self.links.cmake_public.is_empty()
+      || self.links.cmake_private.is_empty()
+      || self.links.cmake_interface.is_empty()
+    )
   }
 
   pub fn get_build_config_map(&self) -> &Option<TargetBuildConfigMap> {
@@ -299,27 +261,12 @@ impl CompiledOutputItem {
   }
 }
 
-fn combine_links_into(
+fn parse_all_links_into(
   link_strings: &Vec<String>,
-  destination_map: &mut HashMap<String, Vec<String>>
+  destination_vec: &Vec<LinkSpecifier>
 ) -> Result<(), String> {
   for link_str in link_strings {
-    let LinkInfo {
-      from_project_name,
-      library_names
-    } = get_link_info(link_str)?;
-
-    destination_map
-      .entry(from_project_name)
-      .and_modify(|lib_list| {
-        for lib_name_adding in &library_names {
-          if !lib_list.contains(lib_name_adding) {
-            lib_list.push(lib_name_adding.clone())
-          }
-        }
-      })
-      .or_insert(library_names);
+    destination_vec.push(LinkSpecifier::parse_from(link_str, LinkAccessMode::UserFacing)?);
   }
-
   Ok(())
 }

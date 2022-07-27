@@ -1,6 +1,7 @@
 mod raw_subproject_in;
 mod raw_project_in;
 mod metadata_only;
+mod project_common_types;
 pub mod dependencies;
 
 pub use raw_project_in::*;

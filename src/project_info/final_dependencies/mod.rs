@@ -2,24 +2,30 @@ mod final_predefined_subdir_dep;
 mod final_predefined_cmake_components_module_dep;
 mod final_gcmake_project_dep;
 mod final_predefined_cmake_module_dep;
+mod predep_module_common;
+mod final_target_map_common;
 
-use std::rc::Rc;
+use std::{rc::Rc, collections::HashSet};
 
 pub use final_predefined_subdir_dep::*;
 pub use final_predefined_cmake_components_module_dep::*;
 pub use final_gcmake_project_dep::*;
 pub use final_predefined_cmake_module_dep::*;
 
-use super::raw_data_in::dependencies::{internal_dep_config::{AllRawPredefinedDependencies, RawPredefinedDependencyInfo, PredefinedCMakeDepHookFile}, user_given_dep_config::UserGivenPredefinedDependencyConfig};
+use self::{predep_module_common::PredefinedDepFunctionality, final_target_map_common::FinalTargetConfigMap};
+
+use super::raw_data_in::dependencies::{internal_dep_config::{AllRawPredefinedDependencies, RawPredefinedDependencyInfo, PredefinedCMakeDepHookFile, RawSubdirectoryDependency}, user_given_dep_config::UserGivenPredefinedDependencyConfig};
 
 type HookScriptContainer = Option<Rc<PredefinedCMakeDepHookFile>>;
 
+#[derive(Clone)]
 pub enum FinalPredepInfo {
   Subdirectory(PredefinedSubdirDep),
   CMakeComponentsModule(PredefinedCMakeComponentsModuleDep),
   CMakeModule(PredefinedCMakeModuleDep)
 }
 
+#[derive(Clone)]
 pub struct FinalPredefinedDependencyConfig {
   predep_info: FinalPredepInfo,
   pre_load: HookScriptContainer,
@@ -110,6 +116,24 @@ impl FinalPredefinedDependencyConfig {
       _ => false
     }
   }
+
+  pub fn target_name_set(&self) -> HashSet<String> {
+    return self.unwrap_dep_common().target_name_set();
+  }
+
+  pub fn get_target_config_map(&self) -> &FinalTargetConfigMap {
+    return self.unwrap_dep_common().get_target_config_map();
+  }
+
+  fn unwrap_dep_common(&self) -> &dyn PredefinedDepFunctionality {
+    let the_dep: &dyn PredefinedDepFunctionality = match &self.predep_info {
+      FinalPredepInfo::Subdirectory(subdir_dep) => subdir_dep,
+      FinalPredepInfo::CMakeModule(module_dep) => module_dep,
+      FinalPredepInfo::CMakeComponentsModule(components_dep) => components_dep
+    };
+
+    return the_dep;
+  }
 }
 
 struct PredefinedDependencyAllConfigs {
@@ -150,19 +174,23 @@ impl PredefinedDependencyAllConfigs {
     }
 
     if let Some(components_find_module_dep) = &dep_info.dep_configs.cmake_components_module {
-      final_config.components_built_in_find_module = Some(PredefinedCMakeComponentsModuleDep::from_components_find_module_dep(
+      let final_components_dep = PredefinedCMakeComponentsModuleDep::from_components_find_module_dep(
         components_find_module_dep,
         user_given_config,
         dep_name
-      ));
+      )?;
+
+      final_config.components_built_in_find_module = Some(final_components_dep);
     }
 
     if let Some(find_module_dep_info) = &dep_info.dep_configs.cmake_module {
-      final_config.built_in_find_module = Some(PredefinedCMakeModuleDep::from_find_module_dep(
+      let final_find_module_info = PredefinedCMakeModuleDep::from_find_module_dep(
         find_module_dep_info,
         user_given_config,
         dep_name
-      ));
+      )?;
+
+      final_config.built_in_find_module = Some(final_find_module_info);
     }
 
     return Ok(final_config);

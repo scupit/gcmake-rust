@@ -1,6 +1,6 @@
 use std::{path::{Path, PathBuf}, rc::Rc};
 
-use crate::{project_info::{final_project_data::FinalProjectData, path_manipulation::relative_to_project_root}, cli_config::CreateFilesCommand};
+use crate::{project_info::{final_project_data::FinalProjectData, path_manipulation::relative_to_project_root}, cli_config::clap_cli_config::CreateFilesCommand};
 use self::{file_creation_info::{FileTypeGeneratingInfo, validate_which_generating, SharedFileInfo, validate_shared_file_info, FileGuardStyle}, code_file_writer::{write_code_files, extension_for, CodeFileType}};
 
 mod code_file_writer;

@@ -1,6 +1,6 @@
 use std::{collections::{HashMap, HashSet}, iter::FromIterator};
 
-use crate::project_info::raw_data_in::{RawProject, RawSubproject, ProjectLike, SpecificCompilerSpecifier, RawCompiledItem, OutputItemType, BuildType, BuildConfigCompilerSpecifier, BuildConfig, SingleLanguageConfig, LanguageConfigMap};
+use crate::project_info::{raw_data_in::{RawProject, RawSubproject, SpecificCompilerSpecifier, RawCompiledItem, OutputItemType, BuildType, BuildConfigCompilerSpecifier, BuildConfig, SingleLanguageConfig, LanguageConfigMap, RawTestProject}, FinalTestFramework, final_dependencies::FinalPredefinedDependencyConfig};
 
 use self::configuration::{MainFileLanguage, OutputLibType, CreationProjectOutputType};
 
@@ -33,18 +33,15 @@ pub mod configuration {
   }
 }
 
-pub enum DefaultProject {
-  MainProject(RawProject),
-  Subproject(RawSubproject)
+pub struct CreatedProject {
+  pub name: String,
+  pub info: DefaultProjectInfo
 }
 
-impl DefaultProject {
-  pub fn unwrap_projectlike(&self) -> Box<&dyn ProjectLike> {
-    match self {
-      Self::MainProject(data) => Box::new(data),
-      Self::Subproject(data) => Box::new(data)
-    }
-  }
+pub enum DefaultProjectInfo {
+  RootProject(RawProject),
+  Subproject(RawSubproject),
+  TestProject(RawTestProject)
 }
 
 pub fn get_default_project_config(
@@ -68,15 +65,15 @@ pub fn get_default_project_config(
     ]),
     prebuild_config: None,
     languages: LanguageConfigMap {
-      C: SingleLanguageConfig {
+      c: SingleLanguageConfig {
         standard: 11
       },
-      Cpp: SingleLanguageConfig {
+      cpp: SingleLanguageConfig {
         standard: 17
       }
     },
     output: HashMap::from_iter([
-      (String::from("Main"), RawCompiledItem {
+      (format!("{}", project_name), RawCompiledItem {
         entry_file: String::from(main_file_name(project_name, &project_lang, &project_type)),
         output_type: match project_type {
           CreationProjectOutputType::Executable => OutputItemType::Executable,
@@ -180,8 +177,9 @@ pub fn get_default_project_config(
     ]),
     default_build_type: BuildType::Debug,
     global_defines: None,
-    subprojects: None
-    }
+    subprojects: None,
+    test_framework: None
+  }
 }
 
 pub fn get_default_subproject_config(
@@ -201,6 +199,25 @@ pub fn get_default_subproject_config(
       "No vendor"
     )
   )
+}
+
+pub fn get_default_test_project_config(
+  project_name: &str,
+  include_prefix: &str,
+  project_lang: &MainFileLanguage,
+  project_type: &CreationProjectOutputType,
+  project_description: &str
+) -> RawTestProject {
+  RawTestProject::from(RawSubproject::from(
+    get_default_project_config(
+      project_name,
+      include_prefix,
+      project_lang,
+      project_type,
+      project_description,
+      "No vendor"
+    )
+  ))
 }
 
 pub fn main_file_name(
