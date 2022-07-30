@@ -6,7 +6,7 @@ mod prompt;
 pub use default_project_config::{*, configuration::*};
 use serde::Serialize;
 
-use std::{fs::{File, remove_dir_all, create_dir_all, create_dir, self}, io::{self, ErrorKind}, path::{Path, PathBuf}};
+use std::{fs::{File, remove_dir_all, create_dir_all, self}, io::{self, ErrorKind}, path::{Path, PathBuf}};
 
 use crate::{project_generator::{c_file_generation::generate_c_main, cpp_file_generation::generate_cpp_main, prompt::{prompt_once, prompt_for_project_output_type, prompt_for_language, prompt_for_description, prompt_for_vendor}}, program_actions::{ProjectTypeCreating, gcmake_config_root_dir}};
 
@@ -210,6 +210,7 @@ fn build_default_project_info(
           include_prefix,
           lang_selection,
           output_type_selection,
+          project_type_creating,
           project_description,
           project_vendor
         )
@@ -222,17 +223,19 @@ fn build_default_project_info(
           include_prefix,
           lang_selection,
           output_type_selection,
+          project_type_creating,
           project_description
         )
       )
     },
-    ProjectTypeCreating::Test { parent_project } => {
+    ProjectTypeCreating::Test { .. } => {
       DefaultProjectInfo::TestProject(
         get_default_test_project_config(
           project_name,
           include_prefix,
           lang_selection,
           output_type_selection,
+          project_type_creating,
           project_description
         )
       )

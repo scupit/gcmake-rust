@@ -1,6 +1,6 @@
 use std::{collections::{HashMap, HashSet}, iter::FromIterator};
 
-use crate::project_info::{raw_data_in::{RawProject, RawSubproject, SpecificCompilerSpecifier, RawCompiledItem, OutputItemType, BuildType, BuildConfigCompilerSpecifier, BuildConfig, SingleLanguageConfig, LanguageConfigMap, RawTestProject}, FinalTestFramework, final_dependencies::FinalPredefinedDependencyConfig};
+use crate::{project_info::{raw_data_in::{RawProject, RawSubproject, SpecificCompilerSpecifier, RawCompiledItem, OutputItemType, BuildType, BuildConfigCompilerSpecifier, BuildConfig, SingleLanguageConfig, LanguageConfigMap, RawTestProject}}, program_actions::ProjectTypeCreating};
 
 use self::configuration::{MainFileLanguage, OutputLibType, CreationProjectOutputType};
 
@@ -48,7 +48,8 @@ pub fn get_default_project_config(
   project_name: &str,
   include_prefix: &str,
   project_lang: &MainFileLanguage,
-  project_type: &CreationProjectOutputType,
+  project_output_type: &CreationProjectOutputType,
+  project_type_creaing: &ProjectTypeCreating,
   project_description: &str,
   project_vendor: &str
 ) -> RawProject {
@@ -74,8 +75,8 @@ pub fn get_default_project_config(
     },
     output: HashMap::from_iter([
       (format!("{}", project_name), RawCompiledItem {
-        entry_file: String::from(main_file_name(project_name, &project_lang, &project_type)),
-        output_type: match project_type {
+        entry_file: String::from(main_file_name(project_name, &project_lang, &project_output_type)),
+        output_type: match project_output_type {
           CreationProjectOutputType::Executable => OutputItemType::Executable,
           CreationProjectOutputType::Library(lib_type) => match lib_type {
             OutputLibType::Static => OutputItemType::StaticLib,
@@ -85,7 +86,11 @@ pub fn get_default_project_config(
           }
         },
         link: None,
-        build_config: None
+        build_config: None,
+        requires_custom_main: match project_type_creaing {
+          ProjectTypeCreating::Test { .. } => Some(false),
+          _ => None
+        }
       })
     ]),
     predefined_dependencies: None,
@@ -186,7 +191,8 @@ pub fn get_default_subproject_config(
   project_name: &str,
   include_prefix: &str,
   project_lang: &MainFileLanguage,
-  project_type: &CreationProjectOutputType,
+  project_output_type: &CreationProjectOutputType,
+  project_type_creaing: &ProjectTypeCreating,
   project_description: &str
 ) -> RawSubproject {
   RawSubproject::from(
@@ -194,7 +200,8 @@ pub fn get_default_subproject_config(
       project_name,
       include_prefix,
       project_lang,
-      project_type,
+      project_output_type,
+      project_type_creaing,
       project_description,
       "No vendor"
     )
@@ -205,7 +212,8 @@ pub fn get_default_test_project_config(
   project_name: &str,
   include_prefix: &str,
   project_lang: &MainFileLanguage,
-  project_type: &CreationProjectOutputType,
+  project_output_type: &CreationProjectOutputType,
+  project_type_creaing: &ProjectTypeCreating,
   project_description: &str
 ) -> RawTestProject {
   RawTestProject::from(RawSubproject::from(
@@ -213,7 +221,8 @@ pub fn get_default_test_project_config(
       project_name,
       include_prefix,
       project_lang,
-      project_type,
+      project_output_type,
+      project_type_creaing,
       project_description,
       "No vendor"
     )

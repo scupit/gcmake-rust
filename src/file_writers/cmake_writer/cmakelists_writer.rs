@@ -1,6 +1,6 @@
-use std::{collections::{HashMap, HashSet}, fs::File, io::{self, Write, ErrorKind}, path::{PathBuf, Path}, rc::Rc, cell::{RefCell, Ref}, ops::{Deref}, borrow::Borrow};
+use std::{collections::{HashMap, HashSet}, fs::File, io::{self, Write, ErrorKind}, path::{PathBuf, Path}, rc::Rc, cell::{RefCell, Ref}};
 
-use crate::{project_info::{final_project_data::{FinalProjectData, DependencySearchMode}, path_manipulation::{cleaned_path_str, relative_to_project_root}, final_dependencies::{GitRevisionSpecifier, PredefinedCMakeComponentsModuleDep, PredefinedSubdirDep, PredefinedCMakeModuleDep, FinalPredepInfo, GCMakeDependencyStatus, FinalPredefinedDependencyConfig}, raw_data_in::{BuildType, BuildConfig, BuildConfigCompilerSpecifier, SpecificCompilerSpecifier, OutputItemType, LanguageConfigMap, TargetSpecificBuildType, dependencies::internal_dep_config::{CMakeModuleType}}, FinalProjectType, CompiledOutputItem, PreBuildScript, LinkMode, ProjectOutputType, FinalTestFramework, dependency_graph_mod::dependency_graph::{DependencyGraph, OrderedTargetInfo, ProjectWrapper, TargetNode}}, file_writers::borrow_target};
+use crate::{project_info::{final_project_data::{FinalProjectData}, path_manipulation::{cleaned_path_str, relative_to_project_root}, final_dependencies::{GitRevisionSpecifier, PredefinedCMakeComponentsModuleDep, PredefinedSubdirDep, PredefinedCMakeModuleDep, FinalPredepInfo, GCMakeDependencyStatus, FinalPredefinedDependencyConfig}, raw_data_in::{BuildType, BuildConfig, BuildConfigCompilerSpecifier, SpecificCompilerSpecifier, OutputItemType, LanguageConfigMap, TargetSpecificBuildType, dependencies::internal_dep_config::{CMakeModuleType}}, FinalProjectType, CompiledOutputItem, PreBuildScript, LinkMode, FinalTestFramework, dependency_graph_mod::dependency_graph::{DependencyGraph, OrderedTargetInfo, ProjectWrapper, TargetNode, SimpleNodeOutputType}}};
 
 use super::cmake_utils_writer::{CMakeUtilFile, CMakeUtilWriter};
 
@@ -229,7 +229,7 @@ impl<'a> CMakeListsWriter<'a> {
     let mut needed_public_gcmake_projects: HashSet<String> = HashSet::new();
 
 
-    for target in &self.sorted_target_info.targets_in_build_order {
+    for target in self.sorted_target_info.targets_in_link_order() {
       let borrowed_target: &TargetNode = &target.as_ref().borrow();
 
       if borrowed_target.should_be_searched_in_package_config() {
@@ -248,7 +248,7 @@ impl<'a> CMakeListsWriter<'a> {
             needed_public_gcmake_projects.insert(container_graph_name);
           },
           ProjectWrapper::PredefinedDependency(predef_dep) => match predef_dep.predefined_dep_info() {
-            FinalPredepInfo::Subdirectory(subdir_dep) => {
+            FinalPredepInfo::Subdirectory(_) => {
               // Nothing needs to happen here, since subdirectory dependencies and their targets are already
               // installed as part of this project.
             },
@@ -271,8 +271,6 @@ impl<'a> CMakeListsWriter<'a> {
                 );
             },
             FinalPredepInfo::CMakeModule(module_dep) => {
-              let target_name: &str = borrowed_target.get_name();
-
               if !needed_find_modules.contains_key(&container_graph_name) {
                 needed_find_modules.insert(
                   container_graph_name,
@@ -348,7 +346,7 @@ impl<'a> CMakeListsWriter<'a> {
 
     writeln!(config_in_file,
       "include( \"${{CMAKE_CURRENT_LIST_DIR}}/{}Targets.cmake\" )",
-      self.project_data.get_project_name()
+      self.project_data.get_full_namespaced_project_name()
     )?;
     Ok(())
   }
@@ -371,9 +369,9 @@ impl<'a> CMakeListsWriter<'a> {
       self.write_gcmake_dependencies()?;
     }
 
-    self.write_apply_dependencies()?;
-
     if self.project_data.is_root_project() {
+      self.write_apply_dependencies()?;
+
       self.write_section_header("Language Configuration")?;
       self.write_language_config()?;
 
@@ -381,30 +379,12 @@ impl<'a> CMakeListsWriter<'a> {
       self.write_build_config_section()?;
     }
 
-    let mut was_pre_build_written: bool = false;
-
-    // NOTE: All subprojects must be added after build configuration in order to
-    // ensure they inherit all build configuration options.
-    if self.project_data.is_root_project() {
-      self.write_section_header("Import Subprojects")?;
-      was_pre_build_written = self.write_subproject_includes()?;
-    }
-
-    if !was_pre_build_written {
-      self.write_section_header("Pre-build script configuration")?;
-      self.write_prebuild_script_use()?;
-    }
-
-    self.write_section_header("'resources' build-time directory copier")?;
-    self.write_resource_dir_copier()?;
-
-    self.write_section_header("Outputs")?;
-    self.write_outputs()?;
-
     if self.project_data.has_tests() {
       self.write_section_header("Tests Configuration")?;
-      self.write_test_section()?;
+      self.write_test_config_section()?;
     }
+
+    self.write_project_order_dependent_info()?;
 
     if !self.project_data.is_test_project() {
       self.write_section_header("Installation and Export configuration")?;
@@ -414,6 +394,55 @@ impl<'a> CMakeListsWriter<'a> {
     if self.project_data.is_root_project() {
       self.write_newline()?;
       self.write_toplevel_cpack_config()?;
+    }
+
+    Ok(())
+  }
+
+  fn write_pre_build_and_outputs(&self) -> io::Result<()> {
+    self.write_section_header("Pre-build script configuration")?;
+    self.write_prebuild_script_use()?;
+
+    self.write_section_header("'resources' build-time directory copier")?;
+    self.write_resource_dir_copier()?;
+
+    self.write_section_header("Outputs")?;
+    self.write_outputs()?;
+
+    Ok(())
+  }
+
+  fn write_project_order_dependent_info(&self) -> io::Result<()> {
+    if !self.project_data.is_root_project() {
+      self.write_pre_build_and_outputs()?;
+    }
+    else {
+      let ordered_projects_in_this_tree = self.sorted_target_info.project_order
+        .iter()
+        .filter(|wrapped_project| {
+          let project_ref = wrapped_project.as_ref().borrow();
+          // This works because this "write_subproject_includes" function is only run when
+          // self's graph is the project root.
+          project_ref.root_project_id() == self.dep_graph_ref().project_id()
+        });
+
+      let root_project_info = self.dep_graph_ref().wrapped_project().clone().unwrap_normal_project();
+      let root_project_root_path: &str = root_project_info.get_project_root();
+
+      for some_project_graph in ordered_projects_in_this_tree {
+        let borrowed_graph = some_project_graph.as_ref().borrow();
+        let subproject_data: Rc<FinalProjectData> = borrowed_graph.wrapped_project().clone().unwrap_normal_project();
+
+        if borrowed_graph.project_id() == self.dep_graph_ref().project_id() {
+          self.write_pre_build_and_outputs()?;
+        }
+        else if !subproject_data.is_test_project() {
+          writeln!( &self.cmakelists_file,
+            "configure_subproject(\n\t\"${{CMAKE_CURRENT_SOURCE_DIR}}/{}\"\n)",
+            relative_to_project_root(root_project_root_path, PathBuf::from(subproject_data.get_project_root()))
+          )?;
+        }
+      }
     }
 
     Ok(())
@@ -430,7 +459,7 @@ impl<'a> CMakeListsWriter<'a> {
     // Project metadata
     writeln!(&self.cmakelists_file,
       "project( {}\n\tVERSION {}\n\tDESCRIPTION \"{}\"\n)",
-      self.project_data.get_project_name(),
+      self.project_data.get_full_namespaced_project_name(),
       self.project_data.version.to_string(),
       self.project_data.get_description()
     )?;
@@ -447,7 +476,7 @@ impl<'a> CMakeListsWriter<'a> {
     self.set_basic_var(
       "",
       "LOCAL_TOPLEVEL_PROJECT_NAME", 
-      &format!("\"{}\"", self.project_data.get_project_name())
+      &format!("\"{}\"", self.project_data.get_full_namespaced_project_name())
     )?;
     self.set_basic_var(
       "",
@@ -545,7 +574,10 @@ impl<'a> CMakeListsWriter<'a> {
     writeln!(&self.cmakelists_file, "initialize_target_list()")?;
     writeln!(&self.cmakelists_file, "initialize_needed_bin_files_list()")?;
     writeln!(&self.cmakelists_file, "initialize_install_list()")?;
-    writeln!(&self.cmakelists_file, "initialize_uncached_dep_list()")?;
+    
+    if self.project_data.is_root_project() {
+      writeln!(&self.cmakelists_file, "initialize_uncached_dep_list()")?;
+    }
 
     Ok(())
   }
@@ -601,41 +633,6 @@ impl<'a> CMakeListsWriter<'a> {
     )?;
 
     Ok(())
-  }
-
-  // Only run on the root project. Doesn't check whether subprojects actually exist.
-  fn write_subproject_includes(&self) -> io::Result<bool> {
-    let ordered_subprojects = self.sorted_target_info.project_order
-      .iter()
-      .filter(|wrapped_project| {
-        let project_ref = wrapped_project.as_ref().borrow();
-        // This works because this "write_subproject_includes" function is only run when
-        // self's graph is the project root.
-        project_ref.root_project_id() == self.dep_graph_ref().project_id()
-      });
-
-    let root_project_info = self.dep_graph_ref().wrapped_project().clone().unwrap_normal_project();
-    let root_project_root_path: &str = root_project_info.get_project_root();
-
-    let mut was_pre_build_written: bool = false;
-
-    for some_project_graph in ordered_subprojects {
-      let borrowed_graph = some_project_graph.as_ref().borrow();
-      let subproject_data: Rc<FinalProjectData> = borrowed_graph.wrapped_project().clone().unwrap_normal_project();
-
-      if borrowed_graph.project_id() == self.dep_graph_ref().project_id() {
-        self.write_prebuild_script_use()?;
-        was_pre_build_written = true;
-      }
-      else if !subproject_data.is_test_project() {
-        writeln!( &self.cmakelists_file,
-          "configure_subproject(\n\t\"${{CMAKE_CURRENT_SOURCE_DIR}}/{}\"\n)",
-          relative_to_project_root(root_project_root_path, PathBuf::from(subproject_data.get_project_root()))
-        )?;
-      }
-    }
-
-    return Ok(was_pre_build_written);
   }
 
   fn write_language_config(&self) -> io::Result<()> {
@@ -759,7 +756,7 @@ impl<'a> CMakeListsWriter<'a> {
   fn write_predefined_cmake_module_dep(
     &self,
     dep_name: &str,
-    predep_graph: &Rc<RefCell<DependencyGraph>>,
+    _predep_graph: &Rc<RefCell<DependencyGraph>>,
     dep_info: &PredefinedCMakeModuleDep
   ) -> io::Result<()> {
     let search_type_spec: &str = match dep_info.module_type() {
@@ -1078,24 +1075,6 @@ impl<'a> CMakeListsWriter<'a> {
     Ok(())
   }
 
-  fn set_basic_option(
-    &self,
-    spacer: &str,
-    var_name: &str,
-    is_initially_enabled: bool,
-    description: &str
-  ) -> io::Result<()> {
-    writeln!(&self.cmakelists_file,
-      "{}option( {} \"{}\" {} )",
-      spacer,
-      var_name,
-      description,
-      is_initially_enabled.to_string().to_uppercase()
-    )?;
-
-    Ok(())
-  }
-
   fn set_file_collection(
     &self,
     var_name: &str,
@@ -1130,7 +1109,7 @@ impl<'a> CMakeListsWriter<'a> {
   }
 
   fn write_outputs(&self) -> io::Result<()> {
-    let project_name: &str = self.project_data.get_project_name();
+    let project_name: &str = self.project_data.get_project_base_name();
     let include_prefix: &str = self.project_data.get_full_include_prefix();
 
     let src_root_varname: String = format!("{}_SRC_ROOT", project_name);
@@ -1585,15 +1564,20 @@ impl<'a> CMakeListsWriter<'a> {
 
         // For compilers where link order matters, libraries must be listed before the libraries they depend on.
         for node in dep_node_list.iter().rev() {
-          let namespaced_target: String = node.as_ref().borrow().get_namespaced_output_target_name().to_string();
+          let borrowed_node: &TargetNode = &node.as_ref().borrow();
+          
+          let linkable_target_name: &str = match borrowed_node.simple_output_type() {
+            SimpleNodeOutputType::Executable => borrowed_node.get_internal_receiver_name(),
+            SimpleNodeOutputType::Library => borrowed_node.get_namespaced_output_target_name()
+          };
 
-          if !already_written.contains(&namespaced_target) {
+          if !already_written.contains(linkable_target_name) {
             writeln!(&self.cmakelists_file,
               "\t\t{}",
-              namespaced_target.clone()
+              linkable_target_name
             )?;
 
-            already_written.insert(namespaced_target);
+            already_written.insert(String::from(linkable_target_name));
           }
         }
       }
@@ -1755,7 +1739,7 @@ impl<'a> CMakeListsWriter<'a> {
     self.write_newline()?;
 
     writeln!(&self.cmakelists_file,
-      "add_to_target_list( {} )",
+      "add_to_target_installation_list( {} )",
       target_name
     )?;
     self.write_newline()?;
@@ -1842,7 +1826,7 @@ impl<'a> CMakeListsWriter<'a> {
 
     if !is_pre_build_script {
       writeln!(&self.cmakelists_file,
-        "add_to_target_list( {} )",
+        "add_to_target_installation_list( {} )",
         target_name
       )?;
 
@@ -1890,7 +1874,7 @@ impl<'a> CMakeListsWriter<'a> {
 
     writeln!(&self.cmakelists_file,
       "target_link_libraries( {} PRIVATE {} )",
-      output_name,
+      target_name,
       receiver_lib_name
     )?;
 
@@ -1904,7 +1888,7 @@ impl<'a> CMakeListsWriter<'a> {
         FinalTestFramework::Catch2(_) => {
           writeln!(&self.cmakelists_file,
             "catch_discover_tests( {} )",
-            output_name
+            target_name
           )?;
         }
       }
@@ -1948,7 +1932,13 @@ impl<'a> CMakeListsWriter<'a> {
 
     match &self.project_data.get_project_type() {
       FinalProjectType::Root => {
-        writeln!(&self.cmakelists_file, "configure_installation()")?;
+        writeln!(&self.cmakelists_file, "if( \"${{CMAKE_SOURCE_DIR}}\" STREQUAL \"${{CMAKE_CURRENT_SOURCE_DIR}}\" )")?;
+        writeln!(&self.cmakelists_file, "\tconfigure_installation()")?;
+        writeln!(&self.cmakelists_file, "else()")?;
+        writeln!(&self.cmakelists_file, "\traise_target_list()")?;
+        writeln!(&self.cmakelists_file, "\traise_needed_bin_files_list()")?;
+        writeln!(&self.cmakelists_file, "\traise_install_list()")?;
+        writeln!(&self.cmakelists_file, "endif()")?;
       },
       FinalProjectType::Subproject { } => {
         writeln!(&self.cmakelists_file, "raise_target_list()")?;
@@ -1978,33 +1968,34 @@ impl<'a> CMakeListsWriter<'a> {
     Ok(())
   }
 
-  // Only run if the project has tests
-  fn write_test_section(&self) -> io::Result<()> {
+  // Is only run if the project has tests
+  fn write_test_config_section(&self) -> io::Result<()> {
     writeln!(&self.cmakelists_file,
-      "if( ${{LOCAL_TOPLEVEL_PROJECT_NAME}}_BUILD_TESTS )\n\tinclude( CTest )\n"
-    )?;
-
-    writeln!(&self.cmakelists_file,
-      "\tif( NOT BUILD_TESTING )\n\t\tenable_testing()\n\tendif()"
+      "if( ${{LOCAL_TOPLEVEL_PROJECT_NAME}}_BUILD_TESTS )"
     )?;
 
     if self.project_data.is_root_project() {
-      assert!(
-        self.project_data.get_test_framework().is_some(),
-        "When tests are being written for a project, the toplevel project has specified a test framework."
-      );
+      writeln!(&self.cmakelists_file,
+        "\tinclude( CTest )\n\tif( NOT BUILD_TESTING )\n\t\tenable_testing()\n\tendif()"
+      )?;
 
-      match self.project_data.get_test_framework().as_ref().unwrap() {
-        FinalTestFramework::Catch2(_) => {
-          writeln!(&self.cmakelists_file,
-            "\n\tinclude( Catch )"
-          )?;
+      if self.project_data.is_root_project() {
+        assert!(
+          self.project_data.get_test_framework().is_some(),
+          "When tests are being written for a project, the toplevel project has specified a test framework."
+        );
+
+        match self.project_data.get_test_framework().as_ref().unwrap() {
+          FinalTestFramework::Catch2(_) => {
+            writeln!(&self.cmakelists_file,
+              "\n\tinclude( Catch )"
+            )?;
+          }
         }
       }
     }
 
     for (test_name, _) in self.project_data.get_test_projects() {
-      // TODO: Write a single CMakeLists.txt in tests/ which adds all these subdirectories.
       writeln!(&self.cmakelists_file,
         "\tadd_subdirectory( \"${{CMAKE_CURRENT_SOURCE_DIR}}/tests/{}\" )",
         test_name

@@ -20,18 +20,6 @@ impl PromptResult {
     }
   }
 
-  fn custom_into<T, F>(self, converter: F) -> T 
-    where F: FnOnce(String) -> T
-  {
-    return converter(self.unwrap_custom())
-  }
-
-  fn custom_into_io_result<T, F>(self, converter: F) -> io::Result<T>
-    where F: FnOnce(String) -> io::Result<T>
-  {
-    return converter(self.unwrap_custom())
-  }
-
   fn unwrap_custom(self) -> String {
     if let Self::Custom(value) = self {
       return value;

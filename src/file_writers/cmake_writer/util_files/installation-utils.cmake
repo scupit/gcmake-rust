@@ -127,7 +127,7 @@ macro( clean_target_list )
   clean_list( "${MY_INSTALLABLE_TARGETS}" MY_INSTALLABLE_TARGETS )
 endmacro()
 
-macro( add_to_target_list
+macro( add_to_target_installation_list
   target_name
 )
   set( MY_INSTALLABLE_TARGETS "${MY_INSTALLABLE_TARGETS}" "${target_name}" )

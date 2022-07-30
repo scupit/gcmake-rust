@@ -1,10 +1,11 @@
-use std::{cell::RefCell, rc::{Rc, Weak}, hash::{Hash, Hasher}, collections::{HashMap, HashSet}, borrow::{Borrow, BorrowMut}, num};
+use std::{cell::RefCell, rc::{Rc, Weak}, hash::{Hash, Hasher}, collections::{HashMap, HashSet}};
 
 use crate::project_info::{LinkMode, link_spec_parser::LinkAccessMode, CompiledOutputItem, PreBuildScript, OutputItemLinks, final_project_data::FinalProjectData, final_dependencies::{FinalGCMakeDependency, FinalPredefinedDependencyConfig, GCMakeDependencyStatus, FinalRequirementSpecifier}, LinkSpecifier, FinalProjectType};
 
 use super::hash_wrapper::RcRefcHashWrapper;
 
-enum SimpleOutputType {
+#[derive(Clone)]
+pub enum SimpleNodeOutputType {
   Executable,
   Library
 }
@@ -140,8 +141,6 @@ enum ContainedItem<'a> {
   PreBuild(&'a PreBuildScript)
 }
 
-
-
 // Weak references to existing nodes.
 enum NonOwningComplexTargetRequirement {
   OneOf(Vec<Weak<RefCell<TargetNode>>>)
@@ -166,7 +165,8 @@ impl OwningComplexTargetRequirement {
 
 enum NodeType {
   PreBuild,
-  Regular
+  ProjectOutput,
+  PredefinedLib
 }
 
 pub struct TargetNode {
@@ -185,14 +185,13 @@ pub struct TargetNode {
   // more than once.
   namespaced_output_target_name: String,
 
-  requires_custom_install_if_public_or_private_linked: bool,
+  requires_custom_install_if_linked_to_output_lib: bool,
   is_linked_to_output_lib: bool,
 
   the_unique_id: TargetId,
-  can_link_to: bool,
   linked_to_count: i32,
   contained_in_graph: Weak<RefCell<DependencyGraph>>,
-  output_type: SimpleOutputType,
+  output_type: SimpleNodeOutputType,
   visibility: LinkAccessMode,
   // depends_on: HashSet<Link>,
   depends_on: HashMap<TargetId, Link>,
@@ -212,38 +211,38 @@ impl TargetNode {
     parent_graph: Weak<RefCell<DependencyGraph>>,
     contained_item: ContainedItem,
     visibility: LinkAccessMode,
-    can_link_to: bool
+    _can_link_to: bool
   ) -> Self {
     let unique_id: TargetId = *id_var;
     *id_var = unique_id + 1;
 
-    let output_type: SimpleOutputType;
+    let output_type: SimpleNodeOutputType;
     let raw_link_specifiers: Option<OutputItemLinks>;
     let node_type: NodeType;
 
     match contained_item {
       ContainedItem::PredefinedLibrary(_) => {
         raw_link_specifiers = None;
-        output_type = SimpleOutputType::Library;
-        node_type = NodeType::Regular;
+        output_type = SimpleNodeOutputType::Library;
+        node_type = NodeType::PredefinedLib;
       },
       ContainedItem::CompiledOutput(output_item) => {
         raw_link_specifiers = Some(output_item.get_links().clone());
         output_type = if output_item.is_library_type()
-          { SimpleOutputType::Library }
-          else { SimpleOutputType::Executable };
-        node_type = NodeType::Regular;
+          { SimpleNodeOutputType::Library }
+          else { SimpleNodeOutputType::Executable };
+        node_type = NodeType::ProjectOutput;
       },
       ContainedItem::PreBuild(pre_build) => match pre_build {
         PreBuildScript::Exe(pre_build_exe) => {
           raw_link_specifiers = Some(pre_build_exe.get_links().clone());
-          output_type = SimpleOutputType::Executable;
+          output_type = SimpleNodeOutputType::Executable;
           node_type = NodeType::PreBuild;
         },
         PreBuildScript::Python(_) => {
           raw_link_specifiers = None;
           // This is just a placeholder. Not sure if this will cause issues yet, but it shouldn't.
-          output_type = SimpleOutputType::Executable;
+          output_type = SimpleNodeOutputType::Executable;
           node_type = NodeType::PreBuild;
         }
       }
@@ -257,7 +256,7 @@ impl TargetNode {
       output_target_name,
       internal_receiver_name,
       namespaced_output_target_name,
-      requires_custom_install_if_public_or_private_linked: should_install_if_linked_to_output_library,
+      requires_custom_install_if_linked_to_output_lib: should_install_if_linked_to_output_library,
       is_linked_to_output_lib: false,
       
       contained_in_graph: parent_graph,
@@ -266,14 +265,17 @@ impl TargetNode {
       // depends_on: HashSet::new(),
       depends_on: HashMap::new(),
       complex_requirements: Vec::new(),
-      can_link_to,
       raw_link_specifiers,
       linked_to_count: 0
     }
   }
 
+  pub fn simple_output_type(&self) -> SimpleNodeOutputType {
+    return self.output_type.clone();
+  }
+
   pub fn must_be_additionally_installed(&self) -> bool {
-    return self.requires_custom_install_if_public_or_private_linked && self.is_linked_to_output_lib;
+    return self.requires_custom_install_if_linked_to_output_lib && self.is_linked_to_output_lib;
   }
 
   // When targets are public/interface linked by libraries produced by the current project, 
@@ -290,8 +292,16 @@ impl TargetNode {
 
   pub fn is_regular_node(&self) -> bool {
     match &self.node_type {
-      NodeType::Regular => true,
+      NodeType::ProjectOutput => true,
+      NodeType::PredefinedLib => true,
       NodeType::PreBuild => false
+    }
+  }
+
+  fn is_predefined_lib(&self) -> bool {
+    match &self.node_type {
+      NodeType::PredefinedLib => true,
+      _ => false
     }
   }
 
@@ -339,13 +349,16 @@ impl TargetNode {
   fn insert_link(&mut self, link: Link) {
     // If this node is a regular node and is PUBLIC or INTERFACE linking to its dependency,
     // mark the dependency node as public/private linked.
-    if self.is_regular_node() {
-      if let SimpleOutputType::Library = &self.output_type {
+    if let NodeType::ProjectOutput = &self.node_type {
+      if let SimpleNodeOutputType::Library = &self.output_type {
         // I think this is already recursively for predefined dependency 'requirement dependencies' since
         // an error is thrown if interdependent 'requirements' are not linked with the same access modifier.
         let target = Weak::upgrade(&link.target).unwrap();
-        unsafe {
-          (*target.as_ptr()).is_linked_to_output_lib = true;
+
+        if target.as_ref().borrow().is_predefined_lib() {
+          unsafe {
+            (*target.as_ptr()).is_linked_to_output_lib = true;
+          }
         }
       }
     }
@@ -386,7 +399,7 @@ pub enum ProjectWrapper {
 impl ProjectWrapper {
   pub fn name(&self) -> &str {
     match self {
-      Self::NormalProject(project_info) => project_info.get_project_name(),
+      Self::NormalProject(project_info) => project_info.get_full_namespaced_project_name(),
       Self::GCMakeDependencyRoot(gcmake_dep) => gcmake_dep.get_name(),
       Self::PredefinedDependency(predef_dep) => predef_dep.get_name()
     }
@@ -425,7 +438,7 @@ enum CycleCheckResult {
 }
 
 pub struct DependencyGraphInfoWrapper {
-  pub dep_graph: Rc<RefCell<DependencyGraph>>,
+  pub root_dep_graph: Rc<RefCell<DependencyGraph>>,
   pub sorted_info: OrderedTargetInfo
 }
 
@@ -508,7 +521,7 @@ impl DependencyGraph {
 
     return Ok(DependencyGraphInfoWrapper {
       sorted_info: sorted_target_info(&all_used_targets),
-      dep_graph: full_graph
+      root_dep_graph: full_graph
     });
   }
 
@@ -629,12 +642,8 @@ impl DependencyGraph {
     return None;
   }
 
-  fn has_any_pre_build(&self) -> bool {
-    return self.pre_build_wrapper.is_some();
-  }
-
   /*
-    TODO: After making associations, ensure correct predefined dependency inclusion for all
+    After making associations, ensure correct predefined dependency inclusion for all
     targets (tests exes, project outputs, and pre-build script) for all non-predefined-dependency projects.
     Although it shouldn't be possible to create cycles while doing this, do it before cycle detection
     anyways just in case. It doesn't hurt to have that extra layer of checking.
@@ -1309,14 +1318,14 @@ impl DependencyGraph {
     target_id_counter: &mut i32,
     graph_id_counter: &mut usize,
     project: &Rc<FinalProjectData>,
-    parent_graph: &Rc<RefCell<DependencyGraph>>,
+    parent_graph: &mut DependencyGraph,
     toplevel_graph: Weak<RefCell<DependencyGraph>>
   ) -> Rc<RefCell<DependencyGraph>> {
     Self::recurse_project_helper(
       target_id_counter,
       graph_id_counter,
       project,
-      Some(Rc::downgrade(parent_graph)),
+      Some(parent_graph),
       Some(toplevel_graph)
     )
   }
@@ -1325,7 +1334,7 @@ impl DependencyGraph {
     target_id_counter: &mut TargetId,
     graph_id_counter: &mut ProjectId,
     project: &Rc<FinalProjectData>,
-    parent_graph: Option<Weak<RefCell<DependencyGraph>>>,
+    parent_graph: Option<&mut DependencyGraph>,
     toplevel_graph: Option<Weak<RefCell<DependencyGraph>>>
   ) -> Rc<RefCell<DependencyGraph>> {
     match project.get_project_type() {
@@ -1357,11 +1366,12 @@ impl DependencyGraph {
       graph_id: *graph_id_counter,
       project_group_id: match project.get_project_type() {
         // Test projects are considered part of the same group as their parent graph.
-        FinalProjectType::Test { .. } => Weak::upgrade(parent_graph.as_ref().unwrap()).unwrap().as_ref().borrow().project_group_id.clone(),
+        FinalProjectType::Test { .. } => parent_graph.as_ref().unwrap().project_group_id.clone(),
         _ => ProjectGroupId(*graph_id_counter)
       },
 
-      parent: parent_graph,
+      parent: parent_graph
+        .map(|pg| Weak::clone(&pg.current_graph_ref)),
       toplevel: Weak::new(),
       current_graph_ref: Weak::new(),
 
@@ -1377,7 +1387,8 @@ impl DependencyGraph {
 
     *graph_id_counter += 1;
 
-    let mut mut_graph = graph.as_ref().borrow_mut();
+    let mut mut_graph_borrow =  graph.as_ref().borrow_mut();
+    let mut_graph: &mut DependencyGraph = &mut mut_graph_borrow;
 
     match &toplevel_graph {
       Some(existing_toplevel) => {
@@ -1455,7 +1466,7 @@ impl DependencyGraph {
             target_id_counter,
             graph_id_counter,
             subproject,
-            &graph,
+            mut_graph,
             Weak::clone(&mut_graph.toplevel)
           ) 
         )
@@ -1471,7 +1482,7 @@ impl DependencyGraph {
             target_id_counter,
             graph_id_counter,
             test_project,
-            &graph,
+            mut_graph,
             Weak::clone(&mut_graph.toplevel)
           ) 
         )
@@ -1506,7 +1517,7 @@ impl DependencyGraph {
       })
       .collect();
 
-    drop(mut_graph);
+    drop(mut_graph_borrow);
 
     return graph;
   }
@@ -1625,7 +1636,7 @@ impl DependencyGraph {
         resolved_project.as_ref().borrow_mut().project_wrapper = ProjectWrapper::GCMakeDependencyRoot(Rc::clone(gcmake_dep));
         resolved_project
       },
-      GCMakeDependencyStatus::NotDownloaded(project_name) => {
+      GCMakeDependencyStatus::NotDownloaded(_) => {
         let graph: Rc<RefCell<DependencyGraph>> = Rc::new(RefCell::new(DependencyGraph {
           graph_id: *graph_id_counter,
           project_group_id: ProjectGroupId(*graph_id_counter),
@@ -1668,7 +1679,7 @@ struct DAGSubGraph {
   // Head nodes are not depended on by any other nodes. At least one of these is guaranteed
   // to exist in a graph which has no cycles.
   pub head_nodes: HashSet<RcRefcHashWrapper<TargetNode>>,
-  pub all_member_nodes: HashSet<RcRefcHashWrapper<TargetNode>>
+  pub _all_member_nodes: HashSet<RcRefcHashWrapper<TargetNode>>
 }
 
 pub struct OrderedTargetInfo {
@@ -1701,6 +1712,10 @@ impl OrderedTargetInfo {
         .map(|(project, _)| project)
         .collect()
     }
+  }
+
+  pub fn targets_in_link_order(&self) -> impl Iterator<Item=&RcRefcHashWrapper<TargetNode>> {
+    return self.targets_in_build_order.iter().rev();
   }
 
   pub fn targets_with_project_id(&self, project_id: ProjectId) -> Vec<RcRefcHashWrapper<TargetNode>> {
@@ -2016,7 +2031,7 @@ fn find_all_dag_subgraphs(
           )
           .map(|head_node| head_node.clone())
           .collect(),
-        all_member_nodes: local_visited
+        _all_member_nodes: local_visited
       });
     }
   }

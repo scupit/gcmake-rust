@@ -11,15 +11,27 @@ pub enum FinalTestFramework {
 }
 
 impl FinalTestFramework {
+  pub fn unwrap_config(&self) -> Rc<FinalPredefinedDependencyConfig> {
+    match self {
+      Self::Catch2(ref predep_config) => Rc::clone(predep_config)
+    }
+  }
+
   pub fn project_dependency_name(&self) -> &str {
     match self {
       Self::Catch2(_) => "Catch2"
     }
   }
 
-  pub fn main_link_target_name(&self) -> &str {
+  pub fn main_provided_link_target_name(&self) -> &str {
     match self {
       Self::Catch2(_) => "Catch2WithMain"
+    }
+  }
+
+  pub fn main_not_provided_link_target_name(&self) -> &str {
+    match self {
+      Self::Catch2(_) => "Catch2"
     }
   }
 }
@@ -48,10 +60,6 @@ pub enum LinkMode {
 }
 
 impl LinkMode {
-  pub fn all_in_order() -> impl Iterator<Item=LinkMode> {
-    vec![Self::Public, Self::Interface, Self::Private].into_iter()
-  }
-
   pub fn to_str(&self) -> &str {
     match self {
       Self::Public => "public",
@@ -64,50 +72,6 @@ impl LinkMode {
     return if first > second
       { first }
       else { second }
-  }
-}
-
-pub struct LinkView<'a> {
-  public_links: Option<&'a Vec<String>>,
-  interface_links: Option<&'a Vec<String>>,
-  private_links: Option<&'a Vec<String>>
-}
-
-impl<'a> LinkView<'a> {
-  pub fn has_public_links(&self) -> bool {
-    return self.public_links.is_some();
-  }
-
-  pub fn has_private_links(&self) -> bool {
-    return self.private_links.is_some();
-  }
-
-  pub fn has_interface_links(&self) -> bool {
-    return self.interface_links.is_some();
-  }
-
-  pub fn iter_by_link_mode(
-    &self,
-    wanted_link_modes: impl IntoIterator<Item=LinkMode>
-  ) -> impl Iterator<Item=&str> {
-    return wanted_link_modes.into_iter()
-      .map(move |mode| match mode {
-        LinkMode::Public => &self.public_links,
-        LinkMode::Private => &self.private_links,
-        LinkMode::Interface => &self.interface_links
-      })
-      .filter(|maybe_link_map| maybe_link_map.is_some())
-      .map(|link_map| link_map.unwrap().iter())
-      .flatten()
-      .map(|string_ref| string_ref.as_str())
-  }
-
-  pub fn iter_all(&self) -> impl Iterator<Item=&str> {
-    return self.iter_by_link_mode([
-      LinkMode::Public,
-      LinkMode::Private,
-      LinkMode::Interface
-    ]);
   }
 }
 
@@ -133,12 +97,13 @@ pub struct CompiledOutputItem {
   pub output_type: OutputItemType,
   pub entry_file: String,
   pub links: OutputItemLinks,
-  pub build_config: Option<TargetBuildConfigMap>
+  pub build_config: Option<TargetBuildConfigMap>,
+  pub requires_custom_main: bool
 }
 
 impl CompiledOutputItem {
   pub fn make_link_map(
-    output_name: &str,
+    _output_name: &str,
     output_type: &OutputItemType,
     raw_links: &LinkSection
   ) -> Result<OutputItemLinks, String> {
@@ -206,7 +171,8 @@ impl CompiledOutputItem {
       output_type: raw_output_item.output_type,
       entry_file: String::from(&raw_output_item.entry_file),
       links: OutputItemLinks::new_empty(),
-      build_config: raw_output_item.build_config.clone()
+      build_config: raw_output_item.build_config.clone(),
+      requires_custom_main: raw_output_item.requires_custom_main.unwrap_or(false)
     };
 
     if let Some(raw_links) = &raw_output_item.link {
@@ -222,14 +188,6 @@ impl CompiledOutputItem {
 
   pub fn get_links(&self) -> &OutputItemLinks {
     &self.links
-  }
-
-  pub fn has_links(&self) -> bool {
-    return !(
-      self.links.cmake_public.is_empty()
-      || self.links.cmake_private.is_empty()
-      || self.links.cmake_interface.is_empty()
-    )
   }
 
   pub fn get_build_config_map(&self) -> &Option<TargetBuildConfigMap> {

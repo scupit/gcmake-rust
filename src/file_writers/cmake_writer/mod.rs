@@ -9,6 +9,6 @@ use crate::project_info::{final_project_data::UseableFinalProjectDataGroup, depe
 use self::cmakelists_writer::configure_cmake_helper;
 
 pub fn configure_cmake(root_graph_info: &DependencyGraphInfoWrapper) -> io::Result<()> {
-  configure_cmake_helper(&root_graph_info.dep_graph, &root_graph_info.sorted_info)?;
+  configure_cmake_helper(&root_graph_info.root_dep_graph, &root_graph_info.sorted_info)?;
   Ok(())
 }

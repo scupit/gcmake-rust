@@ -2,7 +2,7 @@ use std::{collections::{HashMap, HashSet}, path::{Path, PathBuf}, io, rc::Rc, fs
 
 use crate::project_info::path_manipulation::cleaned_pathbuf;
 
-use super::{path_manipulation::{cleaned_path_str, relative_to_project_root, find_first_dir_named, absolute_path}, final_dependencies::{FinalGCMakeDependency, FinalPredefinedDependencyConfig, FinalPredepInfo}, raw_data_in::{RawProject, dependencies::internal_dep_config::AllRawPredefinedDependencies, BuildConfigMap, BuildType, LanguageConfigMap, OutputItemType, PreBuildConfigIn, SpecificCompilerSpecifier, ProjectMetadata, BuildConfigCompilerSpecifier, TargetBuildConfigMap, TargetSpecificBuildType, LinkSection, RawTestFramework}, final_project_configurables::{FinalProjectType}, CompiledOutputItem, helpers::{parse_subproject_data, parse_root_project_data, populate_files, find_prebuild_script, PrebuildScriptFile, parse_project_metadata, validate_raw_project_outputs, ProjectOutputType, RetrievedCodeFileType, retrieve_file_type, parse_test_project_data}, PreBuildScript, OutputItemLinks, FinalTestFramework};
+use super::{path_manipulation::{cleaned_path_str, relative_to_project_root, find_first_dir_named, absolute_path}, final_dependencies::{FinalGCMakeDependency, FinalPredefinedDependencyConfig}, raw_data_in::{RawProject, dependencies::internal_dep_config::AllRawPredefinedDependencies, BuildConfigMap, BuildType, LanguageConfigMap, OutputItemType, PreBuildConfigIn, SpecificCompilerSpecifier, ProjectMetadata, BuildConfigCompilerSpecifier, TargetBuildConfigMap, TargetSpecificBuildType, LinkSection, RawTestFramework}, final_project_configurables::{FinalProjectType}, CompiledOutputItem, helpers::{parse_subproject_data, parse_root_project_data, populate_files, find_prebuild_script, PrebuildScriptFile, parse_project_metadata, validate_raw_project_outputs, ProjectOutputType, RetrievedCodeFileType, retrieve_file_type, parse_test_project_data}, PreBuildScript, OutputItemLinks, FinalTestFramework};
 
 pub struct ThreePartVersion (u32, u32, u32);
 
@@ -61,7 +61,8 @@ fn resolve_prebuild_script(project_root: &str, pre_build_config: &PreBuildConfig
             )?,
             None => OutputItemLinks::new_empty()
           },
-          build_config: pre_build_config.build_config.clone()
+          build_config: pre_build_config.build_config.clone(),
+          requires_custom_main: false
         })
       },
       PrebuildScriptFile::Python(python_file_pathbuf) => PreBuildScript::Python(
@@ -139,17 +140,13 @@ impl ProjectLoadFailureReason {
   }
 }
 
-pub enum DependencySearchMode {
-  AsParent,
-  AsSubproject
-}
-
 enum ChildParseMode {
   Subproject,
   TestProject
 }
 
 struct NeededParseInfoFromParent {
+  parent_project_namespaced_name: String,
   parse_mode: ChildParseMode,
   test_framework: Option<FinalTestFramework>,
   include_prefix: String,
@@ -169,7 +166,8 @@ pub struct FinalProjectData {
   pub version: ThreePartVersion,
   // project: RawProject,
   supported_compilers: HashSet<SpecificCompilerSpecifier>,
-  project_name: String,
+  project_base_name: String,
+  full_namespaced_project_name: String,
   description: String,
   vendor: String,
   build_config_map: BuildConfigMap,
@@ -189,8 +187,6 @@ pub struct FinalProjectData {
   tests: TestProjectMap,
   output: HashMap<String, CompiledOutputItem>,
 
-  // TODO: Put these in "Root project only" configuration
-  // once the dependency graph is implemented.
   predefined_dependencies: HashMap<String, Rc<FinalPredefinedDependencyConfig>>,
   gcmake_dependency_projects: HashMap<String, Rc<FinalGCMakeDependency>>,
 
@@ -267,6 +263,7 @@ impl FinalProjectData {
     // from the parent project.
     let mut raw_project: RawProject;
     let project_type: FinalProjectType;
+    let full_namespaced_project_name: String;
 
     // TODO: Resolve the given predefined dependency (which corresponds to the test framework)
     // and use it here.
@@ -275,6 +272,7 @@ impl FinalProjectData {
     match &parent_project_info {
       None => {
         raw_project = parse_root_project_data(&unclean_project_root)?;
+        full_namespaced_project_name = raw_project.name.clone();
         project_type = FinalProjectType::Root;
         final_test_framework = match &raw_project.test_framework {
           None => None,
@@ -294,7 +292,12 @@ impl FinalProjectData {
           }
         };
       }
-      Some(NeededParseInfoFromParent { parse_mode: ChildParseMode::TestProject, test_framework, .. }) => {
+      Some(NeededParseInfoFromParent {
+        parse_mode: ChildParseMode::TestProject,
+        test_framework,
+        parent_project_namespaced_name,
+        ..
+      }) => {
         let project_path = PathBuf::from(cleaned_path_str(unclean_project_root));
         let test_project_name: &str = project_path
           .file_name()
@@ -305,6 +308,12 @@ impl FinalProjectData {
         raw_project = parse_test_project_data(unclean_project_root)?
           .into_raw_subproject(test_project_name)
           .into();
+
+        full_namespaced_project_name = format!(
+          "{}_TESTPROJECT_{}",
+          parent_project_namespaced_name,
+          raw_project.get_name()
+        );
 
         match test_framework {
           None => return Err(ProjectLoadFailureReason::MissingRequiredTestFramework(format!(
@@ -320,8 +329,18 @@ impl FinalProjectData {
         }
         final_test_framework = test_framework.clone();
       },
-      Some(NeededParseInfoFromParent { parse_mode: ChildParseMode::Subproject, test_framework, .. }) => {
+      Some(NeededParseInfoFromParent {
+        parse_mode: ChildParseMode::Subproject,
+        test_framework,
+        parent_project_namespaced_name,
+        ..
+      }) => {
         raw_project = parse_subproject_data(&unclean_project_root)?.into();
+        full_namespaced_project_name = format!(
+          "{}_S_{}",
+          parent_project_namespaced_name,
+          raw_project.get_name()
+        );
         project_type = FinalProjectType::Subproject { };
         final_test_framework = test_framework.clone();
       }
@@ -337,11 +356,20 @@ impl FinalProjectData {
 
     match parent_project_info {
       Some(parent_project) => {
-        full_include_prefix = format!(
-          "{}/{}",
-          parent_project.include_prefix,
-          raw_project.get_include_prefix()
-        );
+        if let ChildParseMode::TestProject = &parent_project.parse_mode {
+          full_include_prefix = format!(
+            "{}/TEST/{}",
+            parent_project.include_prefix,
+            raw_project.get_include_prefix()
+          );
+        }
+        else {
+          full_include_prefix = format!(
+            "{}/{}",
+            parent_project.include_prefix,
+            raw_project.get_include_prefix()
+          );
+        }
         target_namespace_prefix = parent_project.target_namespace_prefix;
       },
       None => {
@@ -376,6 +404,7 @@ impl FinalProjectData {
           let mut new_test_project: FinalProjectData = Self::create_new(
             test_project_path.to_str().unwrap(),
             Some(NeededParseInfoFromParent {
+              parent_project_namespaced_name: full_namespaced_project_name.clone(),
               parse_mode: ChildParseMode::TestProject,
               test_framework: final_test_framework.clone(), 
               include_prefix: full_include_prefix.clone(),
@@ -414,6 +443,7 @@ impl FinalProjectData {
         let mut new_subproject: FinalProjectData = Self::create_new(
           &full_subproject_dir,
           Some(NeededParseInfoFromParent {
+            parent_project_namespaced_name: full_namespaced_project_name.clone(),
             parse_mode: ChildParseMode::Subproject,
             test_framework: final_test_framework.clone(),
             include_prefix: full_include_prefix.clone(),
@@ -477,12 +507,18 @@ impl FinalProjectData {
 
     for (output_name, raw_output_item) in raw_project.get_output_mut() {
       if let FinalProjectType::Test { framework } = &project_type {
-        if let Some(link_map) = &mut raw_output_item.link {
-          link_map.add_exe_link(
-            framework.project_dependency_name(),
-            framework.main_link_target_name()
-          );
+        if raw_output_item.link.is_none() {
+          raw_output_item.link = Some(LinkSection::Uncategorized(Vec::new()));
         }
+
+        let needed_target_name: &str = if raw_output_item.requires_custom_main.unwrap_or(false)
+          { framework.main_not_provided_link_target_name() }
+          else { framework.main_provided_link_target_name() };
+
+        raw_output_item.link.as_mut().unwrap().add_exe_link(
+          framework.project_dependency_name(),
+          needed_target_name
+        );
       }
 
       output_items.insert(
@@ -498,16 +534,10 @@ impl FinalProjectData {
 
     if let FinalProjectType::Root = &project_type {
       if let Some(framework) = &final_test_framework {
-        let framework_project_dep_name = framework.project_dependency_name();
-
-        match framework {
-          FinalTestFramework::Catch2(predep_config) => {
-            predefined_dependencies.insert(
-              framework_project_dep_name.to_string(),
-              Rc::clone(predep_config)
-            )
-          }
-        };
+        predefined_dependencies.insert(
+          framework.project_dependency_name().to_string(),
+          framework.unwrap_config()
+        );
       }
     }
 
@@ -542,7 +572,8 @@ impl FinalProjectData {
     }
 
     let mut finalized_project_data = FinalProjectData {
-      project_name: raw_project.name.to_string(),
+      project_base_name: raw_project.name.clone(),
+      full_namespaced_project_name,
       description: raw_project.description.to_string(),
       version: maybe_version.unwrap(),
       vendor: raw_project.vendor.clone(),
@@ -619,23 +650,6 @@ impl FinalProjectData {
     self.was_just_created = was_just_created;
   }
 
-  pub fn recurse_subprojects_and_current(
-    &self,
-    callback: &dyn Fn(&FinalProjectData)
-  ) {
-    self.recurse_subprojects(&callback);
-    callback(self);
-  }
-
-  pub fn recurse_subprojects(
-    &self,
-    callback: &dyn Fn(&FinalProjectData)
-  ) {
-    for (_, subproject) in &self.subprojects {
-      subproject.recurse_subprojects_and_current(&callback);
-    }
-  }
-
   // Visit the toplevel root project and all its subprojects.
   fn find_with_root(
     absolute_root: &PathBuf,
@@ -693,10 +707,10 @@ impl FinalProjectData {
   }
 
   fn validate_correctness(&self) -> Result<(), String> {
-    if self.get_project_name().contains(' ') {
+    if self.get_project_base_name().contains(' ') {
       return Err(format!(
         "Project name cannot contain spaces, but does. (Currently: {})",
-        self.get_project_name()
+        self.get_project_base_name()
       ));
     }
 
@@ -714,8 +728,8 @@ impl FinalProjectData {
       else {
         return Err(format!(
           "Test project '{}' in '{}' is not an executable project. All tests must output only executables.",
-          test_project.get_project_name(),
-          self.get_project_name()
+          test_project.get_project_base_name(),
+          self.get_project_base_name()
         ));
       }
     }
@@ -745,7 +759,7 @@ impl FinalProjectData {
     if let Some(existing_script) = &self.prebuild_script {
       match existing_script {
         PreBuildScript::Exe(script_exe_config) => {
-          let the_item_name: String = format!("{}'s pre-build script", self.get_project_name());
+          let the_item_name: String = format!("{}'s pre-build script", self.get_project_base_name());
 
           self.validate_entry_file_type(
             &the_item_name,
@@ -784,7 +798,7 @@ impl FinalProjectData {
           return Err(format!(
             "The entry_file for executable {} in project '{}' should be a source file, but isn't.",
             item_string,
-            self.get_project_name()
+            self.get_project_base_name()
           ));
         }
       },
@@ -797,7 +811,7 @@ impl FinalProjectData {
           return Err(format!(
             "The entry_file for library {} in project '{}' should be a header file, but isn't.",
             item_string,
-            self.get_project_name()
+            self.get_project_base_name()
           ));
         }
       }
@@ -818,7 +832,7 @@ impl FinalProjectData {
         if self.src_files.is_empty() && !self.was_just_created {
           return Err(format!(
             "Project '{}' builds a compiled library '{}', however the project contains no source (.c or .cpp) files. Compiled libraries must contain at least one source file. If this is supposed to be a header-only library, change the output_type to '{}'",
-            self.get_project_name(),
+            self.get_project_base_name(),
             self.get_outputs().keys().collect::<Vec<&String>>()[0],
             OutputItemType::HeaderOnlyLib.name_string()
           ));
@@ -833,7 +847,7 @@ impl FinalProjectData {
         if !self.src_files.is_empty() {
           return Err(format!(
             "Project '{}' builds a header-only library '{}', however the project contains some source (.c or .cpp) files. Header-only libraries should not have any source files. If this is supposed to be a compiled library, change the output_type to '{}' or another compiled library type.",
-            self.get_project_name(),
+            self.get_project_base_name(),
             self.get_outputs().keys().collect::<Vec<&String>>()[0],
             OutputItemType::CompiledLib.name_string()
           ))
@@ -869,7 +883,7 @@ impl FinalProjectData {
             return Err(format!(
               "The {} in project '{}' contains a '{}' configuration, but no '{}' build configuration is provided by the toplevel project.",
               &item_string,
-              self.get_project_name(),
+              self.get_project_base_name(),
               build_type_name,
               build_type_name
             ))
@@ -890,7 +904,7 @@ impl FinalProjectData {
                 "The '{}' build_config for {} in project '{}' contains a configuration for '{}', but '{}' is not supported by the project. If it should be supported, add '{}' to the supported_compilers list in the toplevel project.",
                 build_type_name,
                 &item_string,
-                self.get_project_name(),
+                self.get_project_base_name(),
                 specific_spec_name,
                 specific_spec_name,
                 specific_spec_name
@@ -906,13 +920,6 @@ impl FinalProjectData {
 
   pub fn nested_include_prefix(&self, next_include_prefix: &str) -> String {
     return format!("{}/{}", &self.full_include_prefix, next_include_prefix);
-  }
-
-  pub fn has_library_output_named(&self, lib_name: &str) -> bool {
-    return match self.get_outputs().get(lib_name) {
-      Some(output_item) => output_item.is_library_type(),
-      None => false
-    }
   }
 
   pub fn has_tests(&self) -> bool {
@@ -956,7 +963,7 @@ impl FinalProjectData {
     &self,
     test_target_name: &str
   ) -> String {
-    return format!("{}__TEST__{}", self.get_project_name(), test_target_name);
+    return format!("{}_T_{}", self.get_full_namespaced_project_name(), test_target_name);
   }
 
   pub fn prefix_with_project_namespace(&self, name: &str) -> String {
@@ -967,19 +974,13 @@ impl FinalProjectData {
     &self,
     target_name: &str
   ) -> String {
-    return format!("{}_internal_receiver_lib", target_name);
-  }
-
-  pub fn get_subproject_names(&self) -> HashSet<String> {
-    self.subprojects.iter()
-      .map(|(subproject_name, _)| subproject_name.to_owned())
-      .collect()
+    return format!("{}_INTERNAL_RECEIVER_LIB", target_name);
   }
 
   pub fn prebuild_script_name(&self) -> String {
     return format!(
       "PRE_BUILD_SCRIPT_{}",
-      self.project_name
+      self.project_base_name
     )
   }
 
@@ -1011,8 +1012,12 @@ impl FinalProjectData {
     &self.full_include_prefix
   }
 
-  pub fn get_project_name(&self) -> &str {
-    &self.project_name
+  pub fn get_project_base_name(&self) -> &str {
+    &self.project_base_name
+  }
+
+  pub fn get_full_namespaced_project_name(&self) -> &str {
+    &self.full_namespaced_project_name
   }
 
   pub fn get_description(&self) -> &str {

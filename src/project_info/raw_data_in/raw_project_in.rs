@@ -281,15 +281,10 @@ impl LinkSection {
 pub struct RawCompiledItem {
   pub output_type: OutputItemType,
   pub entry_file: String,
-  // Link order can be important. Eventually figure out how to make/use an ordered Set.
-  // Single format: subproject_name::lib_name
-  // Multiple format: subproject_name::{lib_name, another_lib_name}
-
-  // The link format is namespaced like rust imports. subproject_name is the name of 
-  // the library project which contains the library linking to. Eventually you will be able
-  // to link to items inside dependencies as well, once dependency support is added.
   pub link: Option<LinkSection>,
-  pub build_config: Option<TargetBuildConfigMap>
+  pub build_config: Option<TargetBuildConfigMap>,
+  // Used for tests only
+  pub requires_custom_main: Option<bool>
 }
 
 impl RawCompiledItem {
