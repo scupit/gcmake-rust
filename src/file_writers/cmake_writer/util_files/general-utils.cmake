@@ -7,6 +7,17 @@ function( clean_list
   set( ${output_var} "${cleaned_list_out}" PARENT_SCOPE )
 endfunction()
 
+# TODO: Refactor these two into one delegator function
+function( get_without_toplevel_dir_prefix
+  all_files
+  receiving_var
+)
+  string( REPLACE "${TOPLEVEL_PROJECT_DIR}/" "" with_removed_prefix "${all_files}" )
+  string( REPLACE "./" "" with_removed_prefix "${with_removed_prefix}" )
+  clean_list( "${with_removed_prefix}" with_removed_prefix )
+  set( ${receiving_var} "${with_removed_prefix}" PARENT_SCOPE )
+endfunction()
+
 function( get_without_source_dir_prefix
   all_files
   receiving_var
@@ -27,7 +38,7 @@ function( make_generators
   endforeach()
 
   foreach( file_for_install IN LISTS for_install )
-    set( ${var_name}_i "${${var_name}_i}" "$<INSTALL_INTERFACE:${the_file_for_install}>" )
+    set( ${var_name}_i "${${var_name}_i}" "$<INSTALL_INTERFACE:${file_for_install}>" )
   endforeach()
 
   set( ${var_name}_b "${${var_name}_b}" PARENT_SCOPE )
@@ -36,12 +47,13 @@ endfunction()
 
 function( apply_exe_files
   exe_target
+  receiver_target
   entry_file
   sources
   headers
   template_impls
 )
-  set( receiver_interface_lib ${exe_target}_exe_data_receiver )
+  set( receiver_interface_lib ${receiver_target} )
 
   clean_list( "${entry_file}" entry_source )
   get_without_source_dir_prefix( "${entry_source}" entry_source_install_interface )
@@ -97,9 +109,10 @@ function( apply_lib_files
       get_without_source_dir_prefix( "${non_entry_sources}" all_sources_install_interface )
 
       make_generators( "${non_entry_sources}" "${all_sources_install_interface}" source_gens )
-      target_sources( ${lib_target} PUBLIC
-        ${source_gens_b}
-        ${source_gens_i}
+      target_sources( ${lib_target}
+        PRIVATE
+          ${source_gens_b}
+          ${source_gens_i}
       )
     endif()
   endif()
@@ -131,13 +144,15 @@ function( apply_include_dirs
 )
   if( "${target_type}" STREQUAL "COMPILED_LIB" OR "${target_type}" STREQUAL "HEADER_ONLY_LIB" )
     set( BUILD_INTERFACE_INCLUDE_DIRS "${CMAKE_CURRENT_SOURCE_DIR};${project_include_dir}")
-  elseif( "${target_type}" STREQUAL "EXE" )
+  elseif( "${target_type}" STREQUAL "EXE_RECEIVER" OR "${target_type}")
     set( BUILD_INTERFACE_INCLUDE_DIRS "${project_include_dir}")
   else()
     message( FATAL_ERROR "Invalid target_type '${target_type}' given to function 'apply_include_dirs'" )
   endif()
 
   if( "${target_type}" STREQUAL "HEADER_ONLY_LIB" )
+    set( include_dir_inheritance_mode INTERFACE )
+  elseif( "${target_type}" STREQUAL "EXE_RECEIVER" )
     set( include_dir_inheritance_mode INTERFACE )
   else()
     set( include_dir_inheritance_mode PUBLIC )

@@ -43,6 +43,11 @@ impl PredefinedSubdirDep {
     &self.target_map
   }
 
+  pub fn namespaced_target(&self, target_name: &str) -> Option<&str> {
+    return self.namespaced_target_map.get(target_name)
+      .map(|found_str| &found_str[..]);
+  }
+
   pub fn custom_relative_include_dir_name(&self) -> &Option<String> {
     &self.installed_include_dir_name
   }

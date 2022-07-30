@@ -20,6 +20,11 @@ impl PredefinedCMakeModuleDep {
     &self.raw_dep.module_type
   }
 
+  pub fn namespaced_target(&self, target_name: &str) -> Option<&str> {
+    return self.namespaced_target_map.get(target_name)
+      .map(|found_str| &found_str[..]);
+  }
+
   pub fn found_varname(&self) -> &str {
     &self.raw_dep.found_var
   }

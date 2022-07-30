@@ -1,4 +1,4 @@
-use std::{collections::{HashMap}, rc::Rc};
+use std::{rc::Rc};
 
 use super::{raw_data_in::{OutputItemType, RawCompiledItem, TargetBuildConfigMap, LinkSection}, final_dependencies::FinalPredefinedDependencyConfig, LinkSpecifier, link_spec_parser::LinkAccessMode};
 
@@ -40,7 +40,7 @@ pub enum PreBuildScript {
 }
 
 // Ordered from most permissive to least permissive.
-#[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum LinkMode {
   Public,
   Interface,
@@ -48,6 +48,10 @@ pub enum LinkMode {
 }
 
 impl LinkMode {
+  pub fn all_in_order() -> impl Iterator<Item=LinkMode> {
+    vec![Self::Public, Self::Interface, Self::Private].into_iter()
+  }
+
   pub fn to_str(&self) -> &str {
     match self {
       Self::Public => "public",
@@ -167,7 +171,10 @@ impl CompiledOutputItem {
           )?;
         }
       },
-      compiled_lib => match raw_links {
+      OutputItemType::CompiledLib
+        | OutputItemType::SharedLib
+        | OutputItemType::StaticLib
+      => match raw_links {
         LinkSection::PublicPrivateCategorized { public , private } => {
           if let Some(public_links) = public {
             parse_all_links_into(
@@ -190,8 +197,6 @@ impl CompiledOutputItem {
         }
       }
     }
-
-    let mut already_used: HashMap<String, LinkMode> = HashMap::new();
 
     return Ok(output_links);
   }
@@ -263,7 +268,7 @@ impl CompiledOutputItem {
 
 fn parse_all_links_into(
   link_strings: &Vec<String>,
-  destination_vec: &Vec<LinkSpecifier>
+  destination_vec: &mut Vec<LinkSpecifier>
 ) -> Result<(), String> {
   for link_str in link_strings {
     destination_vec.push(LinkSpecifier::parse_from(link_str, LinkAccessMode::UserFacing)?);

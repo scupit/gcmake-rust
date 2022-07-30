@@ -12,6 +12,7 @@ pub enum GCMakeDependencyStatus {
 }
 
 pub struct FinalGCMakeDependency {
+  name: String,
   git_repo: FinalGitRepoDescriptor,
   dep_project_status: GCMakeDependencyStatus
 }
@@ -33,6 +34,7 @@ impl FinalGCMakeDependency {
     };
 
     return Ok(Self {
+      name: dep_name.to_string(),
       git_repo: FinalGitRepoDescriptor {
         repo_url: given_config.repo_url.clone(),
         revision_specifier: download_specifier,
@@ -43,6 +45,10 @@ impl FinalGCMakeDependency {
         None => GCMakeDependencyStatus::NotDownloaded(dep_name.to_string())
       }
     })
+  }
+
+  pub fn get_name(&self) -> &str {
+    &self.name
   }
 
   pub fn repo_url(&self) -> &str {
@@ -61,17 +67,17 @@ impl FinalGCMakeDependency {
     &self.dep_project_status
   }
 
-  pub fn get_linkable_target_name(&self, base_name: &str) -> Result<Option<String>, String> {
+  pub fn get_linkable_target_name(&self, base_name: &str) -> String {
     match self.project_status() {
       GCMakeDependencyStatus::NotDownloaded(placeholder_prefix) => {
-        Ok(Some(format!(
+        format!(
           "{}::{}",
           placeholder_prefix,
           base_name
-        )))
+        )
       },
       GCMakeDependencyStatus::Available(project_info) => {
-        project_info.get_namespaced_public_linkable_target_name(base_name)
+        project_info.prefix_with_project_namespace(base_name)
       }
     }
   }

@@ -1,5 +1,9 @@
-function( initialize_prebuild_step )
-  add_custom_target( ${PROJECT_NAME}-pre-build-step
+function( initialize_prebuild_step
+  pre_build_name
+)
+  set( PRE_BUILD_TARGET_NAME ${pre_build_name}_PRE_BUILD_STEP )
+  set( PRE_BUILD_TARGET_NAME ${PRE_BUILD_TARGET_NAME} PARENT_SCOPE )
+  add_custom_target( ${PRE_BUILD_TARGET_NAME}
     ALL
     COMMENT "Beginning pre-build processing"
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
@@ -10,7 +14,7 @@ function( use_executable_prebuild_script
   pre_build_executable_target
 )
   add_custom_command(
-    TARGET ${PROJECT_NAME}-pre-build-step
+    TARGET ${PRE_BUILD_TARGET_NAME}
     PRE_BUILD
     COMMAND ${pre_build_executable_target}
     COMMENT "Running ${PROJECT_NAME} pre-build executable script"
@@ -26,7 +30,7 @@ function( use_python_prebuild_script
 
   if( ${Python3_FOUND} AND ${Python3_Interpreter_FOUND} )
     add_custom_command(
-      TARGET ${PROJECT_NAME}-pre-build-step
+      TARGET ${PRE_BUILD_TARGET_NAME}
       PRE_BUILD
       COMMAND Python3::Interpreter ${python_prebuild_file}
       COMMENT "Running ${PROJECT_NAME} pre-build python script"
@@ -39,4 +43,10 @@ function( use_python_prebuild_script
       message( FATAL_ERROR "Unable to find a valid Python 3 configuration when configuring project ${PROJECT_NAME}" )
     endif()
   endif()
+endfunction()
+
+function( add_depends_on_pre_build
+  some_target
+)
+  add_dependencies( ${some_target} ${PRE_BUILD_TARGET_NAME} )
 endfunction()

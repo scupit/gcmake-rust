@@ -11,6 +11,7 @@ pub use final_predefined_subdir_dep::*;
 pub use final_predefined_cmake_components_module_dep::*;
 pub use final_gcmake_project_dep::*;
 pub use final_predefined_cmake_module_dep::*;
+pub use final_target_map_common::FinalRequirementSpecifier;
 
 use self::{predep_module_common::PredefinedDepFunctionality, final_target_map_common::FinalTargetConfigMap};
 
@@ -27,6 +28,7 @@ pub enum FinalPredepInfo {
 
 #[derive(Clone)]
 pub struct FinalPredefinedDependencyConfig {
+  name: String,
   predep_info: FinalPredepInfo,
   pre_load: HookScriptContainer,
   post_load: HookScriptContainer,
@@ -75,11 +77,16 @@ impl FinalPredefinedDependencyConfig {
     } = all_raw_dep_configs.get(dep_name).unwrap(); 
     
     return Ok(Self {
+      name: dep_name.to_string(),
       predep_info,
       pre_load: pre_load.clone(),
       post_load: post_load.clone(),
       custom_populate: custom_populate.clone()
     });
+  }
+
+  pub fn get_name(&self) -> &str {
+    &self.name
   }
 
   pub fn predefined_dep_info(&self) -> &FinalPredepInfo {
@@ -110,7 +117,7 @@ impl FinalPredefinedDependencyConfig {
     }
   }
 
-  pub fn should_install_if_public_linked(&self) -> bool {
+  pub fn should_install_if_linked_to_output_library(&self) -> bool {
     return match &self.predep_info {
       FinalPredepInfo::Subdirectory(_) => true,
       _ => false
@@ -123,6 +130,17 @@ impl FinalPredefinedDependencyConfig {
 
   pub fn get_target_config_map(&self) -> &FinalTargetConfigMap {
     return self.unwrap_dep_common().get_target_config_map();
+  }
+
+  pub fn namespaced_target(&self, target_name: &str) -> Option<String> {
+    match self.predefined_dep_info() {
+      FinalPredepInfo::Subdirectory(subdir_dep) =>
+        subdir_dep.namespaced_target(target_name).map(String::from),
+      FinalPredepInfo::CMakeModule(module_dep) =>
+        module_dep.namespaced_target(target_name).map(String::from),
+      FinalPredepInfo::CMakeComponentsModule(components_dep) =>
+        components_dep.linkable_string(target_name)
+    }
   }
 
   fn unwrap_dep_common(&self) -> &dyn PredefinedDepFunctionality {

@@ -35,13 +35,25 @@ impl PredefinedCMakeComponentsModuleDep {
     }
   }
 
-  pub fn linkable_string(&self) -> String {
+  pub fn linkable_string(&self, target_name: &str) -> Option<String> {
     match &self.raw_dep.cmakelists_usage.link_format {
-      UsageMode::Target => self.raw_dep.cmakelists_usage.link_value.to_string(),
-      UsageMode::Variable => format!(
+      UsageMode::Target => {
+        if self.components.contains_key(target_name) {
+          let target_namespace: &str = &self.raw_dep.cmakelists_usage.link_value;
+          Some(format!(
+            "{}{}",
+            target_namespace,
+            target_name
+          ))
+        }
+        else {
+          None
+        }
+      },
+      UsageMode::Variable => Some(format!(
         "${{{}}}",
         &self.raw_dep.cmakelists_usage.link_value
-      )
+      ))
     }
   }
 

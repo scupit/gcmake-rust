@@ -1,8 +1,8 @@
-use std::{collections::{HashMap, HashSet}, path::{Path, PathBuf}, io, rc::Rc, fs::{self}, borrow::Borrow};
+use std::{collections::{HashMap, HashSet}, path::{Path, PathBuf}, io, rc::Rc, fs::{self}};
 
 use crate::project_info::path_manipulation::cleaned_pathbuf;
 
-use super::{path_manipulation::{cleaned_path_str, relative_to_project_root, find_first_dir_named, absolute_path}, final_dependencies::{FinalGCMakeDependency, FinalPredefinedDependencyConfig, FinalPredepInfo}, raw_data_in::{RawProject, dependencies::internal_dep_config::AllRawPredefinedDependencies, BuildConfigMap, BuildType, LanguageConfigMap, OutputItemType, PreBuildConfigIn, SpecificCompilerSpecifier, ProjectMetadata, BuildConfigCompilerSpecifier, TargetBuildConfigMap, TargetSpecificBuildType, LinkSection, RawTestFramework}, final_project_configurables::{FinalProjectType}, CompiledOutputItem, helpers::{parse_subproject_data, parse_root_project_data, populate_files, find_prebuild_script, PrebuildScriptFile, parse_project_metadata, validate_raw_project_outputs, ProjectOutputType, RetrievedCodeFileType, retrieve_file_type, parse_test_project_data}, PreBuildScript, OutputItemLinks, FinalTestFramework, dependency_graph::DependencyGraph};
+use super::{path_manipulation::{cleaned_path_str, relative_to_project_root, find_first_dir_named, absolute_path}, final_dependencies::{FinalGCMakeDependency, FinalPredefinedDependencyConfig, FinalPredepInfo}, raw_data_in::{RawProject, dependencies::internal_dep_config::AllRawPredefinedDependencies, BuildConfigMap, BuildType, LanguageConfigMap, OutputItemType, PreBuildConfigIn, SpecificCompilerSpecifier, ProjectMetadata, BuildConfigCompilerSpecifier, TargetBuildConfigMap, TargetSpecificBuildType, LinkSection, RawTestFramework}, final_project_configurables::{FinalProjectType}, CompiledOutputItem, helpers::{parse_subproject_data, parse_root_project_data, populate_files, find_prebuild_script, PrebuildScriptFile, parse_project_metadata, validate_raw_project_outputs, ProjectOutputType, RetrievedCodeFileType, retrieve_file_type, parse_test_project_data}, PreBuildScript, OutputItemLinks, FinalTestFramework};
 
 pub struct ThreePartVersion (u32, u32, u32);
 
@@ -915,10 +915,6 @@ impl FinalProjectData {
     }
   }
 
-  pub fn has_subprojects(&self) -> bool {
-    !self.subprojects.is_empty()
-  }
-
   pub fn has_tests(&self) -> bool {
     !self.tests.is_empty()
   }
@@ -956,114 +952,35 @@ impl FinalProjectData {
       .chain(self.gcmake_dependency_projects.keys());
   }
 
-  // These are guaranteed to be valid since all links are checked when gcmake configures the project.
-  // TODO: Refactor this. It can probably be more efficient.
-  pub fn get_namespaced_library_target_names(
+  pub fn full_test_name(
     &self,
-    search_mode: DependencySearchMode,
-    namespace_prefix: &str,
-    item_names: &Vec<String>,
-  ) -> Result<Option<Vec<String>>, String> {
-    if let DependencySearchMode::AsParent = search_mode {
-      if let Some(predef_dep) = self.predefined_dependencies.get(namespace_prefix) {
-        match predef_dep.predefined_dep_info() {
-          FinalPredepInfo::Subdirectory(subdir_dep) => {
-            return Ok(Some(
-              item_names
-                .iter()
-                .map(|base_name| {
-                  subdir_dep.get_linkable_target_name(base_name)
-                    .unwrap()
-                    .to_string()
-                })
-                .collect()
-            ))
-          },
-          FinalPredepInfo::CMakeComponentsModule(components_dep) => {
-            // Here, 'item_names' contains the list of components imported. The components themselves
-            // are not linked directly to targets, which is why they aren't passed to the components_dep.
-            return Ok(Some(vec![components_dep.linkable_string()]));
-          },
-          FinalPredepInfo::CMakeModule(find_module_dep) => {
-            return Ok(Some(
-              item_names
-                .iter()
-                .map(|base_name| {
-                  find_module_dep.get_linkable_target_name(base_name)
-                    .unwrap()
-                    .to_string()
-                })
-                .collect()
-            ))
-          }
-        }
-      }
-
-      if let Some(gcmake_dep) = self.gcmake_dependency_projects.get(namespace_prefix) {
-        let mut namespaced_list: Vec<String> = Vec::new();
-        
-        for base_name in item_names {
-            namespaced_list.push(
-              gcmake_dep
-                .get_linkable_target_name(base_name)?
-                .unwrap()
-            );
-        }
-
-        return Ok(Some(namespaced_list));
-      }
-    }
-
-    if let Some(matching_subproject) = self.subprojects.get(namespace_prefix) {
-      let mut namespaced_list: Vec<String> = Vec::new();
-      
-      for base_name in item_names {
-          namespaced_list.push(
-            matching_subproject
-              .get_namespaced_public_linkable_target_name(base_name)?
-              .unwrap()
-          );
-      }
-
-      return Ok(Some(namespaced_list));      
-    }
-
-    Ok(None)
+    test_target_name: &str
+  ) -> String {
+    return format!("{}__TEST__{}", self.get_project_name(), test_target_name);
   }
 
-  pub fn prefix_with_namespace(&self, name: &str) -> String {
-    format!("{}::{}", self.target_namespace_prefix, name)
+  pub fn prefix_with_project_namespace(&self, name: &str) -> String {
+    return format!("{}::{}", &self.target_namespace_prefix, name);
   }
 
-  pub fn get_namespaced_public_linkable_target_name(&self, base_name: &str) -> Result<Option<String>, String> {
-    if let Some(output) = self.output.get(base_name) {
-      return if output.is_library_type() {
-        Ok(Some(self.prefix_with_namespace(base_name)))
-      }
-      else {
-        Err(format!(
-          "Tried to link to executable target '{}' ({}) in project '{}' (project namespace: {}), but you can only link to library targets.",
-          base_name,
-          self.prefix_with_namespace(base_name),
-          self.get_project_name(),
-          &self.target_namespace_prefix
-        ))
-      }
-    }
-
-    for (_, subproject) in self.get_subprojects() {
-      if let Some(namespaced_target_name) = subproject.get_namespaced_public_linkable_target_name(base_name)? {
-        return Ok(Some(namespaced_target_name));
-      }
-    }
-
-    Ok(None)
+  pub fn receiver_lib_name(
+    &self,
+    target_name: &str
+  ) -> String {
+    return format!("{}_internal_receiver_lib", target_name);
   }
 
   pub fn get_subproject_names(&self) -> HashSet<String> {
     self.subprojects.iter()
       .map(|(subproject_name, _)| subproject_name.to_owned())
       .collect()
+  }
+
+  pub fn prebuild_script_name(&self) -> String {
+    return format!(
+      "PRE_BUILD_SCRIPT_{}",
+      self.project_name
+    )
   }
 
   pub fn get_test_framework(&self) -> &Option<FinalTestFramework> {

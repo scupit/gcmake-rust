@@ -8,6 +8,8 @@ mod cli_config;
 mod project_generator;
 mod program_actions;
 
+use std::io;
+
 use clap::Parser;
 
 use cli_config::{CLIProjectGenerationInfo, clap_cli_config::UpdateDependencyConfigsCommand};
@@ -131,7 +133,7 @@ fn do_generate_project_configs(
   match parse_project_info(&given_root_dir, &dep_config, just_created_project_at) {
     Ok(project_data_group) => {
       // print_project_info(project_data_group);
-      write_configurations(
+      let config_write_result: io::Result<()> = write_configurations(
         &project_data_group,
         |config_name| println!("\nBeginning {} configuration step...", config_name),
         |(config_name, config_result)| match config_result {
@@ -142,6 +144,10 @@ fn do_generate_project_configs(
           }
         }
       ); 
+      
+      if let Err(err) = config_write_result {
+        exit_error_log(err.to_string());
+      }
     },
     Err(failure_reason) => exit_error_log(&failure_reason.extract_message())
   }

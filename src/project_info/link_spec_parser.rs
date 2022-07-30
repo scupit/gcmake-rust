@@ -31,12 +31,17 @@ impl LinkAccessMode {
 // and that the LinkSpecifier contains at least one namespace and at least one target name.
 #[derive(Clone)]
 pub struct LinkSpecifier {
+  original_specifier_string: String,
   namespace_stack: Vec<String>,
   target_list: Vec<String>,
   access_mode: LinkAccessMode
 }
 
 impl LinkSpecifier {
+  pub fn get_spec_string(&self) -> &str {
+    &self.original_specifier_string
+  }
+
   pub fn get_access_mode(&self) -> &LinkAccessMode {
     &self.access_mode
   }
@@ -99,6 +104,7 @@ impl LinkSpecifier {
       };
 
       return Ok(Self {
+        original_specifier_string: specifier_string,
         namespace_stack,
         target_list,
         access_mode
@@ -135,6 +141,7 @@ impl LinkSpecifier {
       namespace_stack.pop();
 
       return Ok(Self {
+        original_specifier_string: specifier_string,
         namespace_stack,
         target_list,
         access_mode
@@ -146,7 +153,9 @@ impl LinkSpecifier {
   fn parse_target_list(target_list_str: &str) -> Result<Vec<String>, String> {
     let mut verified_target_names: Vec<String> = Vec::new();
 
-    for target_name in TARGET_LIST_SEPARATOR_REGEX.split(target_list_str) {
+    for untrimmed_target_name in TARGET_LIST_SEPARATOR_REGEX.split(target_list_str) {
+      let target_name: &str = untrimmed_target_name.trim();
+
       if VALID_SINGLE_ITEM_SPEC_REGEX.is_match(target_name) {
         verified_target_names.push(target_name.to_string());
       }

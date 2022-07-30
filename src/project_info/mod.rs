@@ -4,7 +4,7 @@ pub mod final_project_data;
 pub mod final_dependencies;
 pub mod raw_data_in;
 pub mod final_project_configurables;
-mod dependency_graph;
+pub mod dependency_graph_mod;
 mod link_spec_parser;
 
 pub use final_project_configurables::*;
