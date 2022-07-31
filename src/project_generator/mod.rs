@@ -142,40 +142,43 @@ pub fn create_project_at(
     }
 
     println!("Generated {}", main_file_name(project_name, &lang_selection, &output_type_selection));
-
     if let ProjectTypeCreating::RootProject = &project_type_creating {
-      println!("Checking for default .clang-format...");
+      for default_file in [ ".clang-format", ".gitignore" ] {
+        println!("Checking for default {}...", default_file);
 
-      // Copy .clang-format from the gcmake config dir, if the file exists.
-      let mut clang_format_file_path: PathBuf = gcmake_config_root_dir();
-      clang_format_file_path.push(".clang-format");
+        // Copy file from the gcmake config root dir, if the file exists.
+        let mut full_default_file_path: PathBuf = gcmake_config_root_dir();
+        full_default_file_path.push(default_file);
 
-      if clang_format_file_path.is_symlink() {
-        println!("{} is a symlink. Resolving...", clang_format_file_path.to_str().unwrap());
-        clang_format_file_path = fs::read_link(&clang_format_file_path)?;
-        println!(
-          "The .clang-format symlink points to '{}'. Using that path instead.",
-          clang_format_file_path.to_str().unwrap()
-        );
-      }
+        if full_default_file_path.is_symlink() {
+          println!("{} is a symlink. Resolving...", full_default_file_path.to_str().unwrap());
+          full_default_file_path = fs::read_link(&full_default_file_path)?;
+          println!(
+            "The {} symlink points to '{}'. Using that path instead.",
+            default_file,
+            full_default_file_path.to_str().unwrap()
+          );
+        }
 
-      if clang_format_file_path.is_file() {
-        let mut destination = PathBuf::from(&project_root);
-        destination.push(".clang-format");
+        if full_default_file_path.is_file() {
+          let mut destination = PathBuf::from(&project_root);
+          destination.push(default_file);
 
-        fs::copy(&clang_format_file_path, destination)
-          .map_err(|the_err| {
-            println!("Failed to copy {}. Reason:", clang_format_file_path.to_str().unwrap());
-            the_err
-          })?;
+          fs::copy(&full_default_file_path, destination)
+            .map_err(|the_err| {
+              println!("Failed to copy {}. Reason:", full_default_file_path.to_str().unwrap());
+              the_err
+            })?;
 
-        println!("Default .clang-format successfully copied into project.");
-      }
-      else {
-        println!(
-          "Skipped Clang format file copy because '{}' was not found.",
-          clang_format_file_path.to_str().unwrap()
-        );
+          println!("Default {} successfully copied into project.", default_file);
+        }
+        else {
+          println!(
+            "Skipped {} file copy because '{}' was not found.",
+            default_file,
+            full_default_file_path.to_str().unwrap()
+          );
+        }
       }
     }
 

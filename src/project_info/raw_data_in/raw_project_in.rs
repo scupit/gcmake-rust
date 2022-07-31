@@ -21,21 +21,22 @@ pub struct LanguageConfigMap {
 pub enum RawTestFramework {
   Catch2(UserGivenPredefinedDependencyConfig),
   // GoogleTest(UserGivenPredefinedDependencyConfig),
-  // #[serde(rename = "doctest")]
-  // DocTest(UserGivenPredefinedDependencyConfig),
+  #[serde(rename = "doctest")]
+  DocTest(UserGivenPredefinedDependencyConfig),
 }
 
 impl RawTestFramework {
   pub fn lib_config(&self) -> &UserGivenPredefinedDependencyConfig {
     match self {
-      Self::Catch2(lib) => lib
+      Self::Catch2(lib) => lib,
+      Self::DocTest(lib) => lib
     }
   }
 
   pub fn name(&self) -> &str {
     match self {
       Self::Catch2(_) => "Catch2",
-      // Self::DocTest(_) => "doctest",
+      Self::DocTest(_) => "doctest",
       // Self::GoogleTest(_) => "GoogleTest"
     }
   }

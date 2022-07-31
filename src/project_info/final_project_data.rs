@@ -2,7 +2,7 @@ use std::{collections::{HashMap, HashSet}, path::{Path, PathBuf}, io, rc::Rc, fs
 
 use crate::project_info::path_manipulation::cleaned_pathbuf;
 
-use super::{path_manipulation::{cleaned_path_str, relative_to_project_root, find_first_dir_named, absolute_path}, final_dependencies::{FinalGCMakeDependency, FinalPredefinedDependencyConfig}, raw_data_in::{RawProject, dependencies::internal_dep_config::AllRawPredefinedDependencies, BuildConfigMap, BuildType, LanguageConfigMap, OutputItemType, PreBuildConfigIn, SpecificCompilerSpecifier, ProjectMetadata, BuildConfigCompilerSpecifier, TargetBuildConfigMap, TargetSpecificBuildType, LinkSection, RawTestFramework}, final_project_configurables::{FinalProjectType}, CompiledOutputItem, helpers::{parse_subproject_data, parse_root_project_data, populate_files, find_prebuild_script, PrebuildScriptFile, parse_project_metadata, validate_raw_project_outputs, ProjectOutputType, RetrievedCodeFileType, retrieve_file_type, parse_test_project_data}, PreBuildScript, OutputItemLinks, FinalTestFramework};
+use super::{path_manipulation::{cleaned_path_str, relative_to_project_root, absolute_path}, final_dependencies::{FinalGCMakeDependency, FinalPredefinedDependencyConfig}, raw_data_in::{RawProject, dependencies::internal_dep_config::AllRawPredefinedDependencies, BuildConfigMap, BuildType, LanguageConfigMap, OutputItemType, PreBuildConfigIn, SpecificCompilerSpecifier, ProjectMetadata, BuildConfigCompilerSpecifier, TargetBuildConfigMap, TargetSpecificBuildType, LinkSection, RawTestFramework}, final_project_configurables::{FinalProjectType}, CompiledOutputItem, helpers::{parse_subproject_data, parse_root_project_data, populate_files, find_prebuild_script, PrebuildScriptFile, parse_project_metadata, validate_raw_project_outputs, ProjectOutputType, RetrievedCodeFileType, retrieve_file_type, parse_test_project_data}, PreBuildScript, OutputItemLinks, FinalTestFramework};
 
 pub struct ThreePartVersion (u32, u32, u32);
 
@@ -80,34 +80,39 @@ pub struct UseableFinalProjectDataGroup {
   pub operating_on: Option<Rc<FinalProjectData>>
 }
 
-fn project_level(
-  clean_path_root: &str,
-  include_prefix: &str
-) -> io::Result<Option<usize>> {
-  let search_dir: String = format!("{}/include", clean_path_root);
+fn project_levels_below_root(clean_path_root: &str) -> io::Result<Option<usize>> {
+  let mut levels_up_checked: usize = 0;
+  let mut path_using: PathBuf = absolute_path(clean_path_root).unwrap();
 
-  if let Some(dirty_include_path) = find_first_dir_named(Path::new(&search_dir), include_prefix)? {
-    let include_path: PathBuf = cleaned_pathbuf(dirty_include_path);
-    let path_components: Vec<_> = include_path.components().collect();
+  path_using.push("cmake_data.yaml");
 
-    let include_position: usize = include_path.components()
-      .position(|section| section.as_os_str().to_str().unwrap() == "include")
-      .unwrap();
-
-    let level: usize = path_components.len() - include_position - 2;
-
-    // println!("include_path path: {}", include_path.to_str().unwrap());
-    // println!(
-    //   "include pos: {}, num comps: {}, level: {}",
-    //   include_position,
-    //   path_components.len(),
-    //   level
-    // );
-    
-    return Ok(Some(level));
+  if !path_using.is_file() {
+    return Ok(None);
   }
-  
-  Ok(None)
+
+  path_using.pop();
+
+  while path_using.exists() {
+    path_using.push("cmake_data.yaml");
+    path_using = cleaned_pathbuf(path_using);
+
+    if !path_using.is_file() {
+      return Ok(Some(levels_up_checked - 1));
+    }
+
+    levels_up_checked += 1;
+    path_using.pop();
+    path_using.pop();
+
+    match path_using.file_name().unwrap().to_str().unwrap() {
+      "subprojects" | "tests" => {
+        path_using.pop();
+      },
+      _ => return Ok(Some(levels_up_checked - 1))
+    }
+  }
+
+  return Ok(None);
 }
 
 type SubprojectMap = HashMap<String, Rc<FinalProjectData>>;
@@ -150,7 +155,10 @@ struct NeededParseInfoFromParent {
   parse_mode: ChildParseMode,
   test_framework: Option<FinalTestFramework>,
   include_prefix: String,
-  target_namespace_prefix: String
+  target_namespace_prefix: String,
+  build_config_map: Rc<BuildConfigMap>,
+  language_config_map: Rc<LanguageConfigMap>,
+  supported_compilers: Rc<HashSet<SpecificCompilerSpecifier>>
 }
 
 pub struct ProjectConstructorConfig {
@@ -165,14 +173,14 @@ pub struct FinalProjectData {
   absolute_project_root: PathBuf,
   pub version: ThreePartVersion,
   // project: RawProject,
-  supported_compilers: HashSet<SpecificCompilerSpecifier>,
+  supported_compilers: Rc<HashSet<SpecificCompilerSpecifier>>,
   project_base_name: String,
   full_namespaced_project_name: String,
   description: String,
   vendor: String,
-  build_config_map: BuildConfigMap,
+  build_config_map: Rc<BuildConfigMap>,
   default_build_config: BuildType,
-  language_config_map: LanguageConfigMap,
+  language_config_map: Rc<LanguageConfigMap>,
   global_defines: Option<HashSet<String>>,
   base_include_prefix: String,
   full_include_prefix: String,
@@ -204,15 +212,14 @@ impl FinalProjectData {
     let metadata: ProjectMetadata = parse_project_metadata(unclean_given_root)?;
     let cleaned_given_root: String = cleaned_path_str(unclean_given_root);
 
-    let level: usize = match project_level(cleaned_given_root.as_str(), &metadata.include_prefix) {
+    let levels_below_root: usize = match project_levels_below_root(cleaned_given_root.as_str()) {
       Err(err) => return Err(ProjectLoadFailureReason::Other(
         format!("Error when trying to find project level: {}", err.to_string())
       )),
       Ok(maybe_level) => match maybe_level {
         Some(value) => value,
         None => return Err(ProjectLoadFailureReason::Other(format!(
-          "Unable to find valid include directory with prefix {} in {}",
-          &metadata.include_prefix,
+          "Failed to determine project level using '{}'",
           &cleaned_given_root
         )))
       }
@@ -220,10 +227,10 @@ impl FinalProjectData {
 
     let mut real_project_root_using: PathBuf = PathBuf::from(&cleaned_given_root);
 
-    if level > 0 {
+    if levels_below_root > 0 {
       // Current project is <level> levels deep. Need to go back <level> * 2 dirs, since subprojects
       // are nested in the 'subprojects/<subproject name>' directory
-      for _ in 0..(level * 2) {
+      for _ in 0..(levels_below_root * 2) {
         real_project_root_using.push("..");
       }
 
@@ -269,9 +276,16 @@ impl FinalProjectData {
     // and use it here.
     let final_test_framework: Option<FinalTestFramework>;
 
+    let language_config: Rc<LanguageConfigMap>;
+    let build_config: Rc<BuildConfigMap>;
+    let supported_compiler_set: Rc<HashSet<SpecificCompilerSpecifier>>;
+
     match &parent_project_info {
       None => {
         raw_project = parse_root_project_data(&unclean_project_root)?;
+        language_config = Rc::new(raw_project.languages.clone());
+        build_config = Rc::new(raw_project.build_configs.clone());
+        supported_compiler_set = Rc::new(raw_project.supported_compilers.clone());
         full_namespaced_project_name = raw_project.name.clone();
         project_type = FinalProjectType::Root;
         final_test_framework = match &raw_project.test_framework {
@@ -287,6 +301,7 @@ impl FinalProjectData {
             
             match raw_framework_info {
               RawTestFramework::Catch2(_) => Some(FinalTestFramework::Catch2(test_framework_lib)),
+              RawTestFramework::DocTest(_) => Some(FinalTestFramework::DocTest(test_framework_lib)),
               // TODO: Add DocTest and GoogleTest later
             }
           }
@@ -296,8 +311,15 @@ impl FinalProjectData {
         parse_mode: ChildParseMode::TestProject,
         test_framework,
         parent_project_namespaced_name,
+        supported_compilers,
+        build_config_map,
+        language_config_map,
         ..
       }) => {
+        language_config = Rc::clone(language_config_map);
+        supported_compiler_set = Rc::clone(supported_compilers);
+        build_config = Rc::clone(build_config_map);
+
         let project_path = PathBuf::from(cleaned_path_str(unclean_project_root));
         let test_project_name: &str = project_path
           .file_name()
@@ -310,7 +332,8 @@ impl FinalProjectData {
           .into();
 
         full_namespaced_project_name = format!(
-          "{}_TESTPROJECT_{}",
+          // TP == TESTPROJECT
+          "{}_TP_{}",
           parent_project_namespaced_name,
           raw_project.get_name()
         );
@@ -333,10 +356,18 @@ impl FinalProjectData {
         parse_mode: ChildParseMode::Subproject,
         test_framework,
         parent_project_namespaced_name,
+        language_config_map,
+        supported_compilers,
+        build_config_map,
         ..
       }) => {
+        language_config = Rc::clone(language_config_map);
+        supported_compiler_set = Rc::clone(supported_compilers);
+        build_config = Rc::clone(build_config_map);
+
         raw_project = parse_subproject_data(&unclean_project_root)?.into();
         full_namespaced_project_name = format!(
+          // S == SUBPROJECT
           "{}_S_{}",
           parent_project_namespaced_name,
           raw_project.get_name()
@@ -356,20 +387,23 @@ impl FinalProjectData {
 
     match parent_project_info {
       Some(parent_project) => {
-        if let ChildParseMode::TestProject = &parent_project.parse_mode {
-          full_include_prefix = format!(
-            "{}/TEST/{}",
-            parent_project.include_prefix,
-            raw_project.get_include_prefix()
-          );
-        }
-        else {
-          full_include_prefix = format!(
-            "{}/{}",
-            parent_project.include_prefix,
-            raw_project.get_include_prefix()
-          );
-        }
+        full_include_prefix = match &parent_project.parse_mode {
+          ChildParseMode::TestProject => {
+            format!(
+              "{}/TEST/{}",
+              parent_project.include_prefix,
+              raw_project.get_include_prefix()
+            )
+          },
+          ChildParseMode::Subproject => {
+            format!(
+              "{}/{}",
+              parent_project.include_prefix,
+              raw_project.get_include_prefix()
+            )
+          }
+        };
+
         target_namespace_prefix = parent_project.target_namespace_prefix;
       },
       None => {
@@ -401,14 +435,17 @@ impl FinalProjectData {
         };
       
         if test_project_path.is_dir() {
-          let mut new_test_project: FinalProjectData = Self::create_new(
+          let new_test_project: FinalProjectData = Self::create_new(
             test_project_path.to_str().unwrap(),
             Some(NeededParseInfoFromParent {
               parent_project_namespaced_name: full_namespaced_project_name.clone(),
               parse_mode: ChildParseMode::TestProject,
               test_framework: final_test_framework.clone(), 
               include_prefix: full_include_prefix.clone(),
-              target_namespace_prefix: target_namespace_prefix.clone()
+              target_namespace_prefix: target_namespace_prefix.clone(),
+              build_config_map: Rc::clone(&build_config),
+              language_config_map: Rc::clone(&language_config),
+              supported_compilers: Rc::clone(&supported_compiler_set)
             }),
             all_dep_config,
             just_created_project_at
@@ -421,14 +458,6 @@ impl FinalProjectData {
               ))
             })?;
 
-          // Subprojects must inherit these from their parent project in order to properly
-          // set compiler flags and other properties per output item.
-          // NOTE: This might not be true anymore if projects are able to explicitly
-          // reference the toplevel project.
-          new_test_project.build_config_map = raw_project.build_configs.clone();
-          new_test_project.language_config_map = raw_project.languages.clone();
-          new_test_project.supported_compilers = raw_project.supported_compilers.clone();
-
           test_project_map.insert(
             test_project_path.file_name().unwrap().to_str().unwrap().to_string(),
             Rc::new(new_test_project)
@@ -440,14 +469,17 @@ impl FinalProjectData {
     if let Some(dirnames) = raw_project.get_subproject_dirnames() {
       for subproject_dirname in dirnames {
         let full_subproject_dir = format!("{}/subprojects/{}", &project_root, subproject_dirname);
-        let mut new_subproject: FinalProjectData = Self::create_new(
+        let new_subproject: FinalProjectData = Self::create_new(
           &full_subproject_dir,
           Some(NeededParseInfoFromParent {
             parent_project_namespaced_name: full_namespaced_project_name.clone(),
             parse_mode: ChildParseMode::Subproject,
             test_framework: final_test_framework.clone(),
             include_prefix: full_include_prefix.clone(),
-            target_namespace_prefix: target_namespace_prefix.clone()
+            target_namespace_prefix: target_namespace_prefix.clone(),
+            supported_compilers: Rc::clone(&supported_compiler_set),
+            build_config_map: Rc::clone(&build_config),
+            language_config_map: Rc::clone(&language_config)
           }),
           all_dep_config,
           just_created_project_at
@@ -459,12 +491,6 @@ impl FinalProjectData {
               err_message
             ))
           })?;
-
-        // Subprojects must inherit these from their parent project in order to properly
-        // set compiler flags and other properties per output item.
-        new_subproject.build_config_map = raw_project.build_configs.clone();
-        new_subproject.language_config_map = raw_project.languages.clone();
-        new_subproject.supported_compilers = raw_project.supported_compilers.clone();
 
         subprojects.insert(
           subproject_dirname.clone(),
@@ -580,10 +606,10 @@ impl FinalProjectData {
       full_include_prefix,
       base_include_prefix: raw_project.get_include_prefix().to_string(),
       global_defines: raw_project.global_defines,
-      build_config_map: raw_project.build_configs,
+      build_config_map: build_config,
       default_build_config: raw_project.default_build_type,
-      language_config_map: raw_project.languages,
-      supported_compilers: raw_project.supported_compilers,
+      language_config_map: language_config,
+      supported_compilers: supported_compiler_set,
       project_type,
       project_output_type,
       absolute_project_root: absolute_path(&project_root)

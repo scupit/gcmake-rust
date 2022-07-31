@@ -1,7 +1,8 @@
 use std::collections::{HashMap, HashSet};
+use regex::Regex;
 use serde::{Serialize, Deserialize};
 
-use super::{raw_project_in::{RawCompiledItem, RawProject, BuildType}, PreBuildConfigIn, SingleLanguageConfig, LanguageConfigMap, project_common_types::{PredefinedDepMap, GCMakeDepMap}};
+use super::{raw_project_in::{RawCompiledItem, RawProject, BuildType}, PreBuildConfigIn, SingleLanguageConfig, LanguageConfigMap};
 
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(deny_unknown_fields)]
@@ -18,24 +19,6 @@ pub struct RawSubproject {
   subprojects: Option<HashSet<String>>,
   // pub predefined_dependencies: Option<PredefinedDepMap>,
   // pub gcmake_dependencies: Option<GCMakeDepMap>
-}
-
-impl RawSubproject {
-  pub fn get_name(&self) -> &str {
-    &self.name
-  }
-  
-  pub fn get_description(&self) -> &str {
-    &self.description
-  }
-
-  pub fn get_include_prefix(&self) -> &str {
-    &self.include_prefix
-  }
-
-  pub fn get_version(&self) -> &str {
-    &self.version
-  }
 }
 
 impl From<RawProject> for RawSubproject {
@@ -106,7 +89,8 @@ impl RawTestProject {
 
     return RawSubproject {
       name: name_string.clone(),
-      include_prefix: format!("TESTING/{}", &name_string),
+      // TODO: Do this, plus additional validation for all include prefixes, not just test project ones.
+      include_prefix: Regex::new("[\\- ]").unwrap().replace_all(&name_string, "_").to_uppercase(),
       description: self.description,
       version: self.version,
       prebuild_config: self.prebuild_config,

@@ -10,13 +10,9 @@ pub struct NamespaceConfig {
   cmakelists_linking: String
 }
 
-fn default_recursive_clone() -> bool { true }
-
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct GitRepoConfig {
-  #[serde(default = "default_recursive_clone")]
-  pub recursive_clone: bool,
   pub repo_url: String
 }
 

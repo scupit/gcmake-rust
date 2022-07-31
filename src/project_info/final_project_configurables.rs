@@ -7,31 +7,35 @@ pub enum FinalTestFramework {
   Catch2(Rc<FinalPredefinedDependencyConfig>),
   // GoogleTest(FinalPredefinedDependencyConfig),
   // #[serde(rename = "doctest")]
-  // DocTest(FinalPredefinedDependencyConfig),
+  DocTest(Rc<FinalPredefinedDependencyConfig>),
 }
 
 impl FinalTestFramework {
   pub fn unwrap_config(&self) -> Rc<FinalPredefinedDependencyConfig> {
     match self {
-      Self::Catch2(ref predep_config) => Rc::clone(predep_config)
+      Self::Catch2(ref predep_config) => Rc::clone(predep_config),
+      Self::DocTest(ref predep_config) => Rc::clone(predep_config)
     }
   }
 
   pub fn project_dependency_name(&self) -> &str {
     match self {
-      Self::Catch2(_) => "Catch2"
+      Self::Catch2(_) => "Catch2",
+      Self::DocTest(_) => "doctest"
     }
   }
 
   pub fn main_provided_link_target_name(&self) -> &str {
     match self {
-      Self::Catch2(_) => "Catch2WithMain"
+      Self::Catch2(_) => "Catch2WithMain",
+      Self::DocTest(_) => "doctest_with_main"
     }
   }
 
   pub fn main_not_provided_link_target_name(&self) -> &str {
     match self {
-      Self::Catch2(_) => "Catch2"
+      Self::Catch2(_) => "Catch2",
+      Self::DocTest(_) => "doctest"
     }
   }
 }

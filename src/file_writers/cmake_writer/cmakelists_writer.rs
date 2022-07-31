@@ -831,8 +831,7 @@ impl<'a> CMakeListsWriter<'a> {
     &self,
     dep_name: &str,
     git_revison: &GitRevisionSpecifier,
-    repo_url: &str,
-    should_recursive_clone: bool
+    repo_url: &str
   ) -> io::Result<()> {
     let git_revision_spec: String = match git_revison {
       GitRevisionSpecifier::Tag(tag_string) => {
@@ -843,19 +842,16 @@ impl<'a> CMakeListsWriter<'a> {
       }
     };
 
-    let should_rec_clone_string: String = should_recursive_clone.to_string().to_uppercase();
-
     writeln!(&self.cmakelists_file,
       "if( NOT IS_DIRECTORY \"${{GCMAKE_DEP_CACHE_DIR}}/{}\" )",
       dep_name
     )?;
     writeln!(&self.cmakelists_file,
-      "\tFetchContent_Declare(\n\t\tgcmake_cached_{}\n\t\tSOURCE_DIR \"${{GCMAKE_DEP_CACHE_DIR}}/{}\"\n\t\tGIT_REPOSITORY {}\n\t\t{}\n\t\tGIT_PROGRESS TRUE\n\t\tGIT_SHALLOW FALSE\n\t\tGIT_SUBMODULES_RECURSE {}\n\t)",
+      "\tFetchContent_Declare(\n\t\tgcmake_cached_{}\n\t\tSOURCE_DIR \"${{GCMAKE_DEP_CACHE_DIR}}/{}\"\n\t\tGIT_REPOSITORY {}\n\t\t{}\n\t\tGIT_PROGRESS TRUE\n\t\tGIT_SHALLOW FALSE\n\t\tGIT_SUBMODULES_RECURSE TRUE\n\t)",
       dep_name,
       dep_name,
       repo_url,
-      git_revision_spec,
-      &should_rec_clone_string
+      git_revision_spec
     )?;
     writeln!(&self.cmakelists_file,
       "\tappend_to_uncached_dep_list( gcmake_cached_{} )",
@@ -865,12 +861,11 @@ impl<'a> CMakeListsWriter<'a> {
     self.write_newline()?;
 
     writeln!(&self.cmakelists_file,
-      "FetchContent_Declare(\n\t{}\n\tSOURCE_DIR ${{CMAKE_CURRENT_SOURCE_DIR}}/dep/{}\n\tGIT_REPOSITORY \"${{GCMAKE_DEP_CACHE_DIR}}/{}\"\n\t{}\n\tGIT_PROGRESS TRUE\n\tGIT_SUBMODULES_RECURSE {}\n)",
+      "FetchContent_Declare(\n\t{}\n\tSOURCE_DIR ${{CMAKE_CURRENT_SOURCE_DIR}}/dep/{}\n\tGIT_REPOSITORY \"${{GCMAKE_DEP_CACHE_DIR}}/{}\"\n\t{}\n\tGIT_PROGRESS TRUE\n\tGIT_SUBMODULES_RECURSE TRUE\n)",
       dep_name,
       dep_name,
       dep_name,
-      git_revision_spec,
-      should_rec_clone_string
+      git_revision_spec
     )?;
     
     Ok(())
@@ -899,8 +894,7 @@ impl<'a> CMakeListsWriter<'a> {
     self.write_dep_clone_code(
       dep_name,
       dep_info.revision(),
-      dep_info.repo_url(),
-      dep_info.should_recursive_clone()
+      dep_info.repo_url()
     )?;
     Ok(())
   }
@@ -916,8 +910,7 @@ impl<'a> CMakeListsWriter<'a> {
       self.write_dep_clone_code(
         dep_name,
         dep_info.revision(),
-        dep_info.repo_url(),
-        dep_info.should_recursive_clone()
+        dep_info.repo_url()
       )?;
     }
 
@@ -1890,6 +1883,12 @@ impl<'a> CMakeListsWriter<'a> {
             "catch_discover_tests( {} )",
             target_name
           )?;
+        },
+        FinalTestFramework::DocTest(_) => {
+          writeln!(&self.cmakelists_file,
+            "doctest_discover_tests( {} )",
+            target_name
+          )?;
         }
       }
     }
@@ -1985,10 +1984,18 @@ impl<'a> CMakeListsWriter<'a> {
           "When tests are being written for a project, the toplevel project has specified a test framework."
         );
 
-        match self.project_data.get_test_framework().as_ref().unwrap() {
+        let test_framework: &FinalTestFramework = self.project_data.get_test_framework().as_ref().unwrap();
+
+        match test_framework {
           FinalTestFramework::Catch2(_) => {
             writeln!(&self.cmakelists_file,
               "\n\tinclude( Catch )"
+            )?;
+          },
+          FinalTestFramework::DocTest(_) => {
+            writeln!(&self.cmakelists_file,
+              "\n\tinclude( \"${{TOPLEVEL_PROJECT_DIR}}/dep/{}/scripts/cmake/doctest.cmake\" )",
+              test_framework.project_dependency_name()
             )?;
           }
         }
