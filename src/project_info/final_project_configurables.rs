@@ -5,37 +5,40 @@ use super::{raw_data_in::{OutputItemType, RawCompiledItem, TargetBuildConfigMap,
 #[derive(Clone)]
 pub enum FinalTestFramework {
   Catch2(Rc<FinalPredefinedDependencyConfig>),
-  // GoogleTest(FinalPredefinedDependencyConfig),
-  // #[serde(rename = "doctest")]
-  DocTest(Rc<FinalPredefinedDependencyConfig>),
+  GoogleTest(Rc<FinalPredefinedDependencyConfig>),
+  DocTest(Rc<FinalPredefinedDependencyConfig>)
 }
 
 impl FinalTestFramework {
   pub fn unwrap_config(&self) -> Rc<FinalPredefinedDependencyConfig> {
     match self {
-      Self::Catch2(ref predep_config) => Rc::clone(predep_config),
-      Self::DocTest(ref predep_config) => Rc::clone(predep_config)
+      Self::Catch2(predep_config) => Rc::clone(predep_config),
+      Self::DocTest(predep_config) => Rc::clone(predep_config),
+      Self::GoogleTest(predep_config) => Rc::clone(predep_config)
     }
   }
 
   pub fn project_dependency_name(&self) -> &str {
     match self {
       Self::Catch2(_) => "Catch2",
-      Self::DocTest(_) => "doctest"
+      Self::DocTest(_) => "doctest",
+      Self::GoogleTest(_) => "GoogleTest"
     }
   }
 
   pub fn main_provided_link_target_name(&self) -> &str {
     match self {
       Self::Catch2(_) => "Catch2WithMain",
-      Self::DocTest(_) => "doctest_with_main"
+      Self::DocTest(_) => "doctest_with_main",
+      Self::GoogleTest(_) => "gtest_main"
     }
   }
 
   pub fn main_not_provided_link_target_name(&self) -> &str {
     match self {
       Self::Catch2(_) => "Catch2",
-      Self::DocTest(_) => "doctest"
+      Self::DocTest(_) => "doctest",
+      Self::GoogleTest(_) => "gtest",
     }
   }
 }

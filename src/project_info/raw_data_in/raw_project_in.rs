@@ -20,7 +20,7 @@ pub struct LanguageConfigMap {
 #[serde(deny_unknown_fields)]
 pub enum RawTestFramework {
   Catch2(UserGivenPredefinedDependencyConfig),
-  // GoogleTest(UserGivenPredefinedDependencyConfig),
+  GoogleTest(UserGivenPredefinedDependencyConfig),
   #[serde(rename = "doctest")]
   DocTest(UserGivenPredefinedDependencyConfig),
 }
@@ -29,6 +29,7 @@ impl RawTestFramework {
   pub fn lib_config(&self) -> &UserGivenPredefinedDependencyConfig {
     match self {
       Self::Catch2(lib) => lib,
+      Self::GoogleTest(lib) => lib,
       Self::DocTest(lib) => lib
     }
   }
@@ -37,7 +38,7 @@ impl RawTestFramework {
     match self {
       Self::Catch2(_) => "Catch2",
       Self::DocTest(_) => "doctest",
-      // Self::GoogleTest(_) => "GoogleTest"
+      Self::GoogleTest(_) => "GoogleTest"
     }
   }
 }
@@ -55,13 +56,13 @@ pub struct RawProject {
   pub languages: LanguageConfigMap,
   pub prebuild_config: Option<PreBuildConfigIn>,
   pub supported_compilers: HashSet<SpecificCompilerSpecifier>,
+  pub test_framework: Option<RawTestFramework>,
   pub output: HashMap<String, RawCompiledItem>,
   pub global_defines: Option<HashSet<String>>,
   pub subprojects: Option<HashSet<String>>,
   pub predefined_dependencies: Option<PredefinedDepMap>,
   pub gcmake_dependencies: Option<GCMakeDepMap>,
-  pub build_configs: BuildConfigMap,
-  pub test_framework: Option<RawTestFramework>
+  pub build_configs: BuildConfigMap
 }
 
 impl RawProject {

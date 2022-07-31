@@ -291,6 +291,7 @@ impl FinalProjectData {
         final_test_framework = match &raw_project.test_framework {
           None => None,
           Some(raw_framework_info) => {
+            // REFACTOR: Pretty sure I can refactor this somehow.
             let test_framework_lib: Rc<FinalPredefinedDependencyConfig> = FinalPredefinedDependencyConfig::new(
               all_dep_config,
               raw_framework_info.lib_config(),
@@ -302,7 +303,7 @@ impl FinalProjectData {
             match raw_framework_info {
               RawTestFramework::Catch2(_) => Some(FinalTestFramework::Catch2(test_framework_lib)),
               RawTestFramework::DocTest(_) => Some(FinalTestFramework::DocTest(test_framework_lib)),
-              // TODO: Add DocTest and GoogleTest later
+              RawTestFramework::GoogleTest(_) => Some(FinalTestFramework::GoogleTest(test_framework_lib))
             }
           }
         };

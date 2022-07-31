@@ -1889,6 +1889,12 @@ impl<'a> CMakeListsWriter<'a> {
             "doctest_discover_tests( {} )",
             target_name
           )?;
+        },
+        FinalTestFramework::GoogleTest(_) => {
+          writeln!(&self.cmakelists_file,
+            "gtest_discover_tests( {} )",
+            target_name
+          )?;
         }
       }
     }
@@ -1997,7 +2003,12 @@ impl<'a> CMakeListsWriter<'a> {
               "\n\tinclude( \"${{TOPLEVEL_PROJECT_DIR}}/dep/{}/scripts/cmake/doctest.cmake\" )",
               test_framework.project_dependency_name()
             )?;
-          }
+          },
+          FinalTestFramework::GoogleTest(_) => {
+            writeln!(&self.cmakelists_file,
+              "\n\tinclude( GoogleTest )"
+            )?;
+          },
         }
       }
     }
