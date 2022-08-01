@@ -8,16 +8,9 @@ use serde::Serialize;
 
 use std::{fs::{File, remove_dir_all, create_dir_all, self}, io::{self, ErrorKind}, path::{Path, PathBuf}};
 
-use crate::{project_generator::{c_file_generation::generate_c_main, cpp_file_generation::generate_cpp_main, prompt::{prompt_once, prompt_for_project_output_type, prompt_for_language, prompt_for_description, prompt_for_vendor, prompt_for_needs_custom_main}}, program_actions::{ProjectTypeCreating, gcmake_config_root_dir}, project_info::base_include_prefix_for_test};
+use crate::{project_generator::{c_file_generation::generate_c_main, cpp_file_generation::generate_cpp_main, prompt::{prompt_once, prompt_for_project_output_type, prompt_for_language, prompt_for_description, prompt_for_vendor, prompt_for_needs_custom_main}}, program_actions::{ProjectTypeCreating, gcmake_config_root_dir}, project_info::{base_include_prefix_for_test, gcmake_constants::{TEMPLATE_IMPL_DIR, INCLUDE_DIR, SRC_DIR, ASSETS_DIR, SUBPROJECTS_DIR, TESTS_DIR}}};
 
 use self::{prompt::{prompt_until_boolean, PromptResult}};
-
-const SRC_DIR: &'static str = "src";
-const INCLUDE_DIR: &'static str = "include";
-const TEMPLATE_IMPL_DIR: &'static str = "template_impls";
-const SUBPROJECTS_DIR: &'static str = "subprojects";
-const TESTS_DIR: &'static str = "tests";
-const ASSETS_DIR: &'static str = "resources";
 
 pub struct GeneralNewProjectInfo {
   pub project: CreatedProject,

@@ -2,7 +2,7 @@ use std::{collections::{HashMap, HashSet}, path::{Path, PathBuf}, io, rc::Rc, fs
 
 use crate::project_info::path_manipulation::cleaned_pathbuf;
 
-use super::{path_manipulation::{cleaned_path_str, relative_to_project_root, absolute_path}, final_dependencies::{FinalGCMakeDependency, FinalPredefinedDependencyConfig}, raw_data_in::{RawProject, dependencies::internal_dep_config::AllRawPredefinedDependencies, BuildConfigMap, BuildType, LanguageConfigMap, OutputItemType, PreBuildConfigIn, SpecificCompilerSpecifier, BuildConfigCompilerSpecifier, TargetBuildConfigMap, TargetSpecificBuildType, LinkSection, RawTestFramework}, final_project_configurables::{FinalProjectType}, CompiledOutputItem, helpers::{parse_subproject_data, parse_root_project_data, populate_files, find_prebuild_script, PrebuildScriptFile, validate_raw_project_outputs, ProjectOutputType, RetrievedCodeFileType, retrieve_file_type, parse_test_project_data}, PreBuildScript, OutputItemLinks, FinalTestFramework, base_include_prefix_for_test};
+use super::{path_manipulation::{cleaned_path_str, relative_to_project_root, absolute_path}, final_dependencies::{FinalGCMakeDependency, FinalPredefinedDependencyConfig}, raw_data_in::{RawProject, dependencies::internal_dep_config::AllRawPredefinedDependencies, BuildConfigMap, BuildType, LanguageConfigMap, OutputItemType, PreBuildConfigIn, SpecificCompilerSpecifier, BuildConfigCompilerSpecifier, TargetBuildConfigMap, TargetSpecificBuildType, LinkSection, RawTestFramework}, final_project_configurables::{FinalProjectType}, CompiledOutputItem, helpers::{parse_subproject_data, parse_root_project_data, populate_files, find_prebuild_script, PrebuildScriptFile, validate_raw_project_outputs, ProjectOutputType, RetrievedCodeFileType, retrieve_file_type, parse_test_project_data}, PreBuildScript, OutputItemLinks, FinalTestFramework, base_include_prefix_for_test, gcmake_constants::{SRC_DIR, INCLUDE_DIR, TEMPLATE_IMPL_DIR, TESTS_DIR, SUBPROJECTS_DIR}};
 
 pub struct ThreePartVersion (u32, u32, u32);
 
@@ -151,6 +151,8 @@ enum ChildParseMode {
 }
 
 struct NeededParseInfoFromParent {
+  actual_base_name: String,
+  actual_vendor: String,
   parent_project_namespaced_name: String,
   parse_mode: ChildParseMode,
   test_framework: Option<FinalTestFramework>,
@@ -312,6 +314,8 @@ impl FinalProjectData {
         supported_compilers,
         build_config_map,
         language_config_map,
+        actual_base_name,
+        actual_vendor,
         ..
       }) => {
         language_config = Rc::clone(language_config_map);
@@ -326,8 +330,11 @@ impl FinalProjectData {
           .unwrap();
 
         raw_project = parse_test_project_data(unclean_project_root)?
-          .into_raw_subproject(test_project_name)
+          .into_raw_subproject()
           .into();
+
+        raw_project.name = actual_base_name.clone();
+        raw_project.vendor = actual_vendor.clone();
 
         full_namespaced_project_name = format!(
           // TP == TESTPROJECT
@@ -357,6 +364,8 @@ impl FinalProjectData {
         language_config_map,
         supported_compilers,
         build_config_map,
+        actual_base_name,
+        actual_vendor,
         ..
       }) => {
         language_config = Rc::clone(language_config_map);
@@ -364,6 +373,9 @@ impl FinalProjectData {
         build_config = Rc::clone(build_config_map);
 
         raw_project = parse_subproject_data(&unclean_project_root)?.into();
+        raw_project.name = actual_base_name.clone();
+        raw_project.vendor = actual_vendor.clone();
+
         full_namespaced_project_name = format!(
           // S == SUBPROJECT
           "{}_S_{}",
@@ -405,19 +417,39 @@ impl FinalProjectData {
     }
 
     let project_root: String = cleaned_path_str(&unclean_project_root).to_string();
+    let project_vendor: String = raw_project.vendor.clone();
 
-    let src_dir = format!("{}/src/{}", &project_root, &full_include_prefix);
-    let include_dir = format!("{}/include/{}", &project_root, &full_include_prefix);
-    let template_impls_dir = format!("{}/template-impl/{}", &project_root, &full_include_prefix);
+    let project_src_dir = format!(
+      "{}/{}/{}",
+      &project_root,
+      SRC_DIR,
+      &full_include_prefix
+    );
 
-    let mut subprojects: SubprojectMap = SubprojectMap::new();
+    let project_include_dir = format!(
+      "{}/{}/{}",
+      &project_root,
+      INCLUDE_DIR,
+      &full_include_prefix
+    );
+
+    let project_template_impls_dir = format!(
+      "{}/{}/{}",
+      &project_root,
+      TEMPLATE_IMPL_DIR,
+      &full_include_prefix
+    );
 
     let mut test_project_map: SubprojectMap = SubprojectMap::new();
 
-    let test_dir_path: PathBuf = PathBuf::from(format!("{}/tests", &project_root));
+    let project_test_dir_path: PathBuf = PathBuf::from(format!(
+      "{}/{}",
+      &project_root,
+      TESTS_DIR
+    ));
 
-    if test_dir_path.is_dir() {
-      let tests_dir_iter = fs::read_dir(test_dir_path.as_path())
+    if project_test_dir_path.is_dir() {
+      let tests_dir_iter = fs::read_dir(project_test_dir_path.as_path())
         .map_err(|err| ProjectLoadFailureReason::Other(err.to_string()))?;
 
       for dir_entry in tests_dir_iter {
@@ -427,9 +459,13 @@ impl FinalProjectData {
         };
       
         if test_project_path.is_dir() {
+          let test_project_name: String = test_project_path.file_name().unwrap().to_str().unwrap().to_string();
+
           let new_test_project: FinalProjectData = Self::create_new(
             test_project_path.to_str().unwrap(),
             Some(NeededParseInfoFromParent {
+              actual_base_name: test_project_name.clone(),
+              actual_vendor: project_vendor.clone(),
               parent_project_namespaced_name: full_namespaced_project_name.clone(),
               parse_mode: ChildParseMode::TestProject,
               test_framework: final_test_framework.clone(), 
@@ -445,49 +481,70 @@ impl FinalProjectData {
             .map_err(|failure_reason| {
               failure_reason.map_message(|err_message| format!(
                 "\t-> in test project '{}'\n{}",
-                test_project_path.to_str().unwrap(),
+                cleaned_pathbuf(test_project_path.clone()).to_str().unwrap(),
                 err_message
               ))
             })?;
 
           test_project_map.insert(
-            test_project_path.file_name().unwrap().to_str().unwrap().to_string(),
+            test_project_name,
             Rc::new(new_test_project)
           );
         }
       }
     }
 
-    if let Some(dirnames) = raw_project.get_subproject_dirnames() {
-      for subproject_dirname in dirnames {
-        let full_subproject_dir = format!("{}/subprojects/{}", &project_root, subproject_dirname);
-        let new_subproject: FinalProjectData = Self::create_new(
-          &full_subproject_dir,
-          Some(NeededParseInfoFromParent {
-            parent_project_namespaced_name: full_namespaced_project_name.clone(),
-            parse_mode: ChildParseMode::Subproject,
-            test_framework: final_test_framework.clone(),
-            include_prefix: full_include_prefix.clone(),
-            target_namespace_prefix: target_namespace_prefix.clone(),
-            supported_compilers: Rc::clone(&supported_compiler_set),
-            build_config_map: Rc::clone(&build_config),
-            language_config_map: Rc::clone(&language_config)
-          }),
-          all_dep_config,
-          just_created_project_at
-        )
-          .map_err(|failure_reason| {
-            failure_reason.map_message(|err_message| format!(
-              "\t-> in subproject '{}'\n{}",
-              subproject_dirname,
-              err_message
-            ))
-          })?;
+    let project_subproject_dir_path: PathBuf = PathBuf::from(format!(
+      "{}/{}",
+      &project_root,
+      SUBPROJECTS_DIR
+    ));
 
-        subprojects.insert(
-          subproject_dirname.clone(),
-          Rc::new(new_subproject)
-        );
+    let mut subprojects: SubprojectMap = SubprojectMap::new();
+
+    if project_subproject_dir_path.is_dir() {
+      let subprojects_dir_iter = fs::read_dir(project_subproject_dir_path.as_path())
+        .map_err(|err| ProjectLoadFailureReason::Other(err.to_string()))?;
+
+      for dir_entry in subprojects_dir_iter {
+        let subproject_path: PathBuf = match dir_entry {
+          Ok(entry) => entry.path(),
+          Err(err) => return Err(ProjectLoadFailureReason::Other(err.to_string()))
+        };
+      
+        if subproject_path.is_dir() {
+          let subproject_name: String = subproject_path.file_name().unwrap().to_str().unwrap().to_string();
+
+          let new_subproject: FinalProjectData = Self::create_new(
+            subproject_path.to_str().unwrap(),
+            Some(NeededParseInfoFromParent {
+              actual_base_name: subproject_name.clone(),
+              actual_vendor: project_vendor.clone(),
+              parent_project_namespaced_name: full_namespaced_project_name.clone(),
+              parse_mode: ChildParseMode::Subproject,
+              test_framework: final_test_framework.clone(),
+              include_prefix: full_include_prefix.clone(),
+              target_namespace_prefix: target_namespace_prefix.clone(),
+              supported_compilers: Rc::clone(&supported_compiler_set),
+              build_config_map: Rc::clone(&build_config),
+              language_config_map: Rc::clone(&language_config)
+            }),
+            all_dep_config,
+            just_created_project_at
+          )
+            .map_err(|failure_reason| {
+              failure_reason.map_message(|err_message| format!(
+                "\t-> in subproject '{}'\n{}",
+                cleaned_pathbuf(subproject_path.clone()).to_str().unwrap(),
+                err_message
+              ))
+            })?;
+
+          subprojects.insert(
+            subproject_name,
+            Rc::new(new_subproject)
+          );
+        }
       }
     }
 
@@ -594,7 +651,7 @@ impl FinalProjectData {
       full_namespaced_project_name,
       description: raw_project.description.to_string(),
       version: maybe_version.unwrap(),
-      vendor: raw_project.vendor.clone(),
+      vendor: project_vendor,
       full_include_prefix,
       base_include_prefix: raw_project.get_include_prefix().to_string(),
       global_defines: raw_project.global_defines,
@@ -607,9 +664,9 @@ impl FinalProjectData {
       absolute_project_root: absolute_path(&project_root)
         .map_err(ProjectLoadFailureReason::Other)?,
       project_root,
-      src_dir,
-      include_dir,
-      template_impls_dir,
+      src_dir: project_src_dir,
+      include_dir: project_include_dir,
+      template_impls_dir: project_template_impls_dir,
       src_files: Vec::<PathBuf>::new(),
       include_files: Vec::<PathBuf>::new(),
       template_impl_files: Vec::<PathBuf>::new(),
@@ -918,7 +975,7 @@ impl FinalProjectData {
 
       for (compiler_specifier, _) in config_by_compiler {
         match compiler_specifier {
-          BuildConfigCompilerSpecifier::All => continue,
+          BuildConfigCompilerSpecifier::AllCompilers => continue,
           narrowed_specifier => {
             let specific_specifier: SpecificCompilerSpecifier = narrowed_specifier.to_specific().unwrap();
 

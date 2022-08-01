@@ -114,18 +114,6 @@ pub fn handle_create_project(
     Ok(maybe_project) => match maybe_project {
       Some(general_new_project_info) => {
         println!("{} created successfully", &general_new_project_info.project.name);
-
-        if let CLIProjectTypeGenerating::Subproject = &generation_info.project_type {
-          // TODO: After creating a subproject, add that subproject to the main build file automatically and rewrite it.
-          // This isn't done currently because the default serializer looks messy.
-          // TODO: Actually, just remove the need to explicitly specify subprojects. They can be easily resolved
-          // automatically.
-          println!(
-            "\nMake sure you add your subproject \"{}\" to the main cmake_data.yaml. This is not yet done automatically.",
-            &generation_info.project_name
-          );
-        }
-
         return Some(general_new_project_info);
       },
       None => {

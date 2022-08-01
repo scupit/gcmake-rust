@@ -5,6 +5,7 @@ pub mod final_dependencies;
 pub mod raw_data_in;
 pub mod final_project_configurables;
 pub mod dependency_graph_mod;
+pub mod gcmake_constants;
 mod link_spec_parser;
 
 pub use final_project_configurables::*;

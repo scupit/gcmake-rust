@@ -12,7 +12,7 @@ use std::io;
 
 use clap::Parser;
 
-use cli_config::{CLIProjectGenerationInfo, clap_cli_config::UpdateDependencyConfigsCommand};
+use cli_config::{CLIProjectGenerationInfo, clap_cli_config::UpdateDependencyConfigsCommand, CLIProjectTypeGenerating};
 use logger::exit_error_log;
 
 use program_actions::*;
@@ -181,7 +181,12 @@ fn do_new_project_subcommand(
   given_root_dir: &str,
   should_generate_cmakelists: &mut bool
 ) -> Option<GeneralNewProjectInfo> {
-  match get_parent_project_for_new_project(&given_root_dir.clone(), dep_config) {
+  let requires_project_operating_on: bool = match &command.project_type {
+    CLIProjectTypeGenerating::RootProject => false,
+    _ => true
+  };
+
+  match get_parent_project_for_new_project(&given_root_dir.clone(), dep_config, requires_project_operating_on) {
     Ok(maybe_project_info) => {
       let maybe_general_new_project_info = handle_create_project(
         command,
@@ -229,7 +234,8 @@ fn do_dependency_config_update_subcommand(command: UpdateDependencyConfigsComman
 
 fn get_parent_project_for_new_project(
   current_root: &str,
-  dep_config: &AllRawPredefinedDependencies
+  dep_config: &AllRawPredefinedDependencies,
+  requires_all_yaml_files_present: bool
 ) -> Result<Option<UseableFinalProjectDataGroup>, String> {
   match parse_project_info(
     current_root,
@@ -238,7 +244,11 @@ fn get_parent_project_for_new_project(
   ) {
     Ok(project_data_group) => Ok(Some(project_data_group)),
     Err(failure_reason) => match failure_reason {
-      ProjectLoadFailureReason::MissingYaml(_) => Ok(None),
+      ProjectLoadFailureReason::MissingYaml(error_message) => {
+        if requires_all_yaml_files_present
+          { Err(error_message) }
+          else { Ok(None) }
+      },
       ProjectLoadFailureReason::Other(error_message) => Err(error_message),
       ProjectLoadFailureReason::MissingRequiredTestFramework(error_message) => Err(error_message)
     }

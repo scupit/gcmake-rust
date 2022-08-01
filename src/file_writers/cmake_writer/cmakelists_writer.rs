@@ -699,7 +699,7 @@ impl<'a> CMakeListsWriter<'a> {
     let mut compiler_all_config_map: HashMap<&BuildType, &BuildConfig> = HashMap::new();
 
     for (build_type, build_config) in self.project_data.get_build_configs() {
-      if let Some(all_compilers_config) = build_config.get(&BuildConfigCompilerSpecifier::All) {
+      if let Some(all_compilers_config) = build_config.get(&BuildConfigCompilerSpecifier::AllCompilers) {
         compiler_all_config_map.insert(build_type, all_compilers_config);
       }
     }
@@ -980,7 +980,7 @@ impl<'a> CMakeListsWriter<'a> {
           BuildConfigCompilerSpecifier::GCC => SpecificCompilerSpecifier::GCC,
           BuildConfigCompilerSpecifier::Clang => SpecificCompilerSpecifier::Clang,
           BuildConfigCompilerSpecifier::MSVC => SpecificCompilerSpecifier::MSVC,
-          BuildConfigCompilerSpecifier::All => continue
+          BuildConfigCompilerSpecifier::AllCompilers => continue
         };
 
         if simplified_map.get(&converted_compiler_specifier).is_none() {
@@ -1103,7 +1103,6 @@ impl<'a> CMakeListsWriter<'a> {
 
   fn write_outputs(&self) -> io::Result<()> {
     let project_name: &str = self.project_data.get_project_base_name();
-    let include_prefix: &str = self.project_data.get_full_include_prefix();
 
     let src_root_varname: String = format!("{}_SRC_ROOT", project_name);
     let include_root_varname: String = format!("{}_HEADER_ROOT", project_name);
@@ -1118,11 +1117,11 @@ impl<'a> CMakeListsWriter<'a> {
     self.write_newline()?;
 
     // Variables shared between all targets in the current project
-    self.set_basic_var("", &src_root_varname, &format!("${{CMAKE_CURRENT_SOURCE_DIR}}/src/{}", include_prefix))?;
-    self.set_basic_var("", &include_root_varname, &format!("${{CMAKE_CURRENT_SOURCE_DIR}}/include/{}", include_prefix))?;
-    self.set_basic_var("", &template_impls_root_varname, &format!("${{CMAKE_CURRENT_SOURCE_DIR}}/template_impls/{}", include_prefix))?;
-    self.set_basic_var("", &project_include_dir_varname, "${CMAKE_CURRENT_SOURCE_DIR}/include")?;
     self.set_basic_var("", "PROJECT_INCLUDE_PREFIX", &format!("\"{}\"", self.project_data.get_full_include_prefix()))?;
+    self.set_basic_var("", &src_root_varname, &format!("${{CMAKE_CURRENT_SOURCE_DIR}}/src/${{PROJECT_INCLUDE_PREFIX}}"))?;
+    self.set_basic_var("", &include_root_varname, &format!("${{CMAKE_CURRENT_SOURCE_DIR}}/include/${{PROJECT_INCLUDE_PREFIX}}"))?;
+    self.set_basic_var("", &template_impls_root_varname, &format!("${{CMAKE_CURRENT_SOURCE_DIR}}/template_impls/${{PROJECT_INCLUDE_PREFIX}}"))?;
+    self.set_basic_var("", &project_include_dir_varname, "${CMAKE_CURRENT_SOURCE_DIR}/include")?;
 
     self.write_newline()?;
 
@@ -1279,7 +1278,7 @@ impl<'a> CMakeListsWriter<'a> {
 
         // All configs and all compilers
         if let Some(config_by_compiler) = build_config_map.get(&TargetSpecificBuildType::AllConfigs) {
-          if let Some(always_applicable_config) = config_by_compiler.get(&BuildConfigCompilerSpecifier::All) {
+          if let Some(always_applicable_config) = config_by_compiler.get(&BuildConfigCompilerSpecifier::AllCompilers) {
             for (build_type, _) in self.project_data.get_build_configs() {
               self.append_to_target_build_config_options(
                 "",
@@ -1297,7 +1296,7 @@ impl<'a> CMakeListsWriter<'a> {
         for (build_type, config_by_compiler) in build_config_map {
           for (compiler_or_all, build_config) in config_by_compiler {
             match compiler_or_all {
-              BuildConfigCompilerSpecifier::All => {
+              BuildConfigCompilerSpecifier::AllCompilers => {
                 // Exclude settings configured for "all" compilers and "all" configs, since those were
                 // already written above.
                 if let Some(useable_build_type) = build_type.to_general_build_type() {

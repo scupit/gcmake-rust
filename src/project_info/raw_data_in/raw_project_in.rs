@@ -59,17 +59,12 @@ pub struct RawProject {
   pub test_framework: Option<RawTestFramework>,
   pub output: HashMap<String, RawCompiledItem>,
   pub global_defines: Option<HashSet<String>>,
-  pub subprojects: Option<HashSet<String>>,
   pub predefined_dependencies: Option<PredefinedDepMap>,
   pub gcmake_dependencies: Option<GCMakeDepMap>,
   pub build_configs: BuildConfigMap
 }
 
 impl RawProject {
-  pub fn get_subproject_dirnames(&self) -> &Option<HashSet<String>> {
-    &self.subprojects
-  }
-
   pub fn get_include_prefix(&self) -> &str {
     &self.include_prefix
   }
@@ -154,7 +149,7 @@ impl BuildType {
 #[derive(Serialize, Deserialize, Debug, Eq, PartialEq, Hash, Clone)]
 #[serde(deny_unknown_fields)]
 pub enum BuildConfigCompilerSpecifier {
-  All,
+  AllCompilers,
   GCC,
   MSVC,
   Clang
@@ -163,7 +158,7 @@ pub enum BuildConfigCompilerSpecifier {
 impl BuildConfigCompilerSpecifier {
   pub fn to_specific(&self) -> Option<SpecificCompilerSpecifier> {
     return match *self {
-      Self::All => None,
+      Self::AllCompilers => None,
       Self::GCC => Some(SpecificCompilerSpecifier::GCC),
       Self::Clang => Some(SpecificCompilerSpecifier::Clang),
       Self::MSVC => Some(SpecificCompilerSpecifier::MSVC)

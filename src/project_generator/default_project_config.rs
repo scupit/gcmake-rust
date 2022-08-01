@@ -1,6 +1,6 @@
 use std::{collections::{HashMap, HashSet}, iter::FromIterator};
 
-use crate::{project_info::{raw_data_in::{RawProject, RawSubproject, SpecificCompilerSpecifier, RawCompiledItem, OutputItemType, BuildType, BuildConfigCompilerSpecifier, BuildConfig, SingleLanguageConfig, LanguageConfigMap, RawTestProject}, base_include_prefix_for_test}, program_actions::ProjectTypeCreating};
+use crate::{project_info::{raw_data_in::{RawProject, RawSubproject, SpecificCompilerSpecifier, RawCompiledItem, OutputItemType, BuildType, BuildConfigCompilerSpecifier, BuildConfig, SingleLanguageConfig, LanguageConfigMap, RawTestProject}}, program_actions::ProjectTypeCreating};
 
 use self::configuration::{MainFileLanguage, OutputLibType, CreationProjectOutputType};
 
@@ -112,7 +112,7 @@ pub fn get_default_project_config(
         })
       ])),
       (BuildType::Release, HashMap::from_iter([
-        (BuildConfigCompilerSpecifier::All, BuildConfig {
+        (BuildConfigCompilerSpecifier::AllCompilers, BuildConfig {
           compiler_flags: None,
           linker_flags: None,
           defines: Some(create_string_set(["NDEBUG"]))
@@ -134,7 +134,7 @@ pub fn get_default_project_config(
         })
       ])),
       (BuildType::MinSizeRel, HashMap::from_iter([
-        (BuildConfigCompilerSpecifier::All, BuildConfig {
+        (BuildConfigCompilerSpecifier::AllCompilers, BuildConfig {
           compiler_flags: None,
           linker_flags: None,
           defines: Some(create_string_set(["NDEBUG"]))
@@ -156,7 +156,7 @@ pub fn get_default_project_config(
         })
       ])),
       (BuildType::RelWithDebInfo, HashMap::from_iter([
-        (BuildConfigCompilerSpecifier::All, BuildConfig {
+        (BuildConfigCompilerSpecifier::AllCompilers, BuildConfig {
           compiler_flags: None,
           linker_flags: None,
           defines: Some(create_string_set(["NDEBUG"]))
@@ -180,7 +180,6 @@ pub fn get_default_project_config(
     ]),
     default_build_type: BuildType::Debug,
     global_defines: None,
-    subprojects: None,
     test_framework: None
   }
 }
