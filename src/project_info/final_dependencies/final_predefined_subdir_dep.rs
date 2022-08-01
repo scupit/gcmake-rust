@@ -1,6 +1,6 @@
 use std::{collections::{HashMap, HashSet}, hash::Hash};
 
-use crate::project_info::{raw_data_in::dependencies::{internal_dep_config::{RawSubdirectoryDependency}, user_given_dep_config::{UserGivenPredefinedDependencyConfig}}};
+use crate::project_info::{raw_data_in::dependencies::{internal_dep_config::{RawSubdirectoryDependency, raw_dep_common::RawPredepCommon}, user_given_dep_config::{UserGivenPredefinedDependencyConfig}}};
 
 use super::{predep_module_common::PredefinedDepFunctionality, final_target_map_common::{FinalTargetConfigMap, make_final_target_config_map}};
 
@@ -91,12 +91,9 @@ impl PredefinedSubdirDep {
       return Err(format!("Must specify either a commit_hash or git_tag for dependency '{}'", dep_name));
     };
 
-    let target_map = make_final_target_config_map(
-      dep_name,
-      &subdir_dep.target_configs
-    )
+    let target_map = make_final_target_config_map(dep_name, subdir_dep)
       .map_err(|err_msg| format!(
-        "When loading predefined subdirectory dependency \"{}\":\n{}",
+        "When loading predefined subdirectory dependency \"{}\":\n\n{}",
         dep_name,
         err_msg
       ))?;

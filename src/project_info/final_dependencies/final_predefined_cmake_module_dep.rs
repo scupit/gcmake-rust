@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
-use crate::project_info::raw_data_in::dependencies::{internal_dep_config::{RawModuleDep, CMakeModuleType}, user_given_dep_config::UserGivenPredefinedDependencyConfig};
+use crate::project_info::raw_data_in::dependencies::{internal_dep_config::{RawModuleDep, CMakeModuleType, raw_dep_common::RawPredepCommon}, user_given_dep_config::UserGivenPredefinedDependencyConfig};
 
 use super::{predep_module_common::PredefinedDepFunctionality, final_target_map_common::{FinalTargetConfigMap, make_final_target_config_map}};
 
@@ -43,12 +43,9 @@ impl PredefinedCMakeModuleDep {
     _user_given_dep_config: &UserGivenPredefinedDependencyConfig,
     dep_name: &str
   ) -> Result<Self, String> {
-    let target_map = make_final_target_config_map(
-      dep_name,
-      &dep.targets
-    )
+    let target_map = make_final_target_config_map(dep_name, dep)
       .map_err(|err_msg| format!(
-        "When loading predefined CMake Module dependency \"{}\": \n{}",
+        "When loading predefined CMake Module dependency \"{}\": \n\n{}",
         dep_name,
         err_msg
       ))?;

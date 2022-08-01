@@ -180,7 +180,7 @@ pub fn write_configurations<'a, FBefore, FAfter>(
           OwningComplexTargetRequirement::OneOf(target_list) => {
             let target_list_str: String = target_list
               .iter()
-              .map(|needed_target| borrow_target(needed_target).get_name().to_string())
+              .map(|needed_target| borrow_target(needed_target).get_namespaced_output_target_name().to_string())
               .collect::<Vec<String>>()
               .join(", ");
 
@@ -188,6 +188,19 @@ pub fn write_configurations<'a, FBefore, FAfter>(
               "The target must link to one of: ({}) from '{}'",
               target_list_str,
               borrow_project(dependency_project).project_name()
+            )
+          },
+          OwningComplexTargetRequirement::ExclusiveFrom(excluded_target) => {
+            format!(
+              "The target links to both '{}' and '{}' from '{}', but '{}' and '{}' are mutually exclusive. You can link to one or the other, but not both at once.",
+              borrow_target(dependency).get_name(),
+              borrow_target(excluded_target).get_name(),
+              borrow_project(dependency_project).project_name(),
+              // TODO: For libraries which are linked using a variable instead of per-target,
+              // this will display the variable name. This is currently fine because wxWidgets is the
+              // only lib which links this way, however it could cause problems in the future. 
+              borrow_target(dependency).get_namespaced_output_target_name().to_string(),
+              borrow_target(excluded_target).get_namespaced_output_target_name().to_string()
             )
           }
         };

@@ -16,3 +16,5 @@ pub struct TargetConfig {
 }
 
 pub type RawPredefinedTargetMapIn = HashMap<String, TargetConfig>;
+
+pub type RawMutualExclusionSet = HashSet<String>;

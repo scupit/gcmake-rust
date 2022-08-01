@@ -2,7 +2,7 @@ use std::collections::HashSet;
 
 use serde::{Deserialize};
 
-use super::{ComponentsFindModuleLinks, target_config_common::RawPredefinedTargetMapIn};
+use super::{ComponentsFindModuleLinks, target_config_common::RawPredefinedTargetMapIn, RawMutualExclusionSet, raw_dep_common::RawPredepCommon};
 
 #[derive(Deserialize, Clone)]
 #[serde(deny_unknown_fields)]
@@ -24,6 +24,7 @@ pub struct RawModuleDep {
   pub module_type: CMakeModuleType,
   pub links: ComponentsFindModuleLinks,
   namespace_config: BuiltinFindModuleNamespaceConfig,
+  pub mutually_exclusive: Option<RawMutualExclusionSet>,
   pub targets: RawPredefinedTargetMapIn
 }
 
@@ -37,5 +38,15 @@ impl RawModuleDep {
       ))
     }
     else { None }
+  }
+}
+
+impl RawPredepCommon for RawModuleDep {
+  fn maybe_mutual_exclusion_groups(&self) -> &Option<RawMutualExclusionSet> {
+    &self.mutually_exclusive
+  }
+
+  fn raw_target_map_in(&self) -> &RawPredefinedTargetMapIn {
+    &self.targets
   }
 }

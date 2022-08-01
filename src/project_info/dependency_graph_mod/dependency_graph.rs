@@ -143,22 +143,29 @@ enum ContainedItem<'a> {
 
 // Weak references to existing nodes.
 enum NonOwningComplexTargetRequirement {
-  OneOf(Vec<Weak<RefCell<TargetNode>>>)
+  OneOf(Vec<Weak<RefCell<TargetNode>>>),
+  ExclusiveFrom(Weak<RefCell<TargetNode>>)
 }
 
 // Strong references to existing nodes.
 pub enum OwningComplexTargetRequirement {
-  OneOf(Vec<Rc<RefCell<TargetNode>>>)
+  OneOf(Vec<Rc<RefCell<TargetNode>>>),
+  ExclusiveFrom(Rc<RefCell<TargetNode>>)
 }
 
 impl OwningComplexTargetRequirement {
   fn new_from(weak_requirement: &NonOwningComplexTargetRequirement) -> Self {
     match weak_requirement {
-      NonOwningComplexTargetRequirement::OneOf(weak_target_list) => Self::OneOf(
-        weak_target_list.iter()
-          .map(|weak_ref| Weak::upgrade(weak_ref).unwrap())
-          .collect()
-      )
+      NonOwningComplexTargetRequirement::OneOf(weak_target_list) => {
+        Self::OneOf(
+          weak_target_list.iter()
+            .map(|weak_ref| Weak::upgrade(weak_ref).unwrap())
+            .collect()
+        )
+      },
+      NonOwningComplexTargetRequirement::ExclusiveFrom(target) => {
+        Self::ExclusiveFrom(Weak::upgrade(target).unwrap())
+      }
     }
   }
 }
@@ -320,6 +327,12 @@ impl TargetNode {
   pub fn get_internal_receiver_name(&self) -> &str {
     &self.internal_receiver_name
   }
+
+  // TODO: Differentiate between the linking name used in CMakeLists and linking name used in
+  // cmake_data.yaml
+  // pub fn get_namespaced_yaml_linking_name(&self) -> &str {
+  //   &self.namespaced_output_target_name
+  // }
 
   pub fn get_namespaced_output_target_name(&self) -> &str {
     &self.namespaced_output_target_name
@@ -770,6 +783,12 @@ impl DependencyGraph {
       // At this point, all basic single requirements for the target have been met. Any links
       // which could be automatically added to the target to satisfy the single interdependencies
       // have been. Now we can check for any complex requirements.
+
+      // NOTE: Right now, these associations/requirements are only checked on depenendencies of a target,
+      // not on the target itself. This is fine since these requirements are only specified for predefined
+      // dependencies. However, if a change is made which allows for these additional interdependent
+      // requirements (like mutual exclusion) to be specified for normal gcmake projects, then this will have
+      // to be checked per target as well.
       for (_, link) in &project_output_target.depends_on {
         let link_target: Rc<RefCell<TargetNode>> = Weak::upgrade(&link.target).unwrap();
 
@@ -784,6 +803,22 @@ impl DependencyGraph {
                 });
 
               if !has_one_of_targets {
+                return Err(GraphLoadFailureReason::ComplexTargetRequirementNotSatisfied {
+                  target: Rc::clone(project_output_target_rc),
+                  target_project: project_output_target.container_project(),
+                  dependency_project: link_target.as_ref().borrow().container_project(),
+                  dependency: Rc::clone(&link_target),
+                  failed_requirement: OwningComplexTargetRequirement::new_from(complex_requirement)
+                })
+              }
+            },
+            NonOwningComplexTargetRequirement::ExclusiveFrom(exclusion_target_weak) => {
+              let exclusion_target_id: TargetId = Weak::upgrade(exclusion_target_weak).unwrap()
+                .as_ref()
+                .borrow()
+                .unique_target_id();
+
+              if project_output_target.depends_on.contains_key(&exclusion_target_id) {
                 return Err(GraphLoadFailureReason::ComplexTargetRequirementNotSatisfied {
                   target: Rc::clone(project_output_target_rc),
                   target_project: project_output_target.container_project(),
@@ -1605,6 +1640,11 @@ impl DependencyGraph {
                 .map(|lib_name| Rc::downgrade(targets.get(lib_name).unwrap()))
                 .collect()
             ))
+          },
+          FinalRequirementSpecifier::MutuallyExclusive(exclusion_name) => {
+            single_target.add_complex_requirement(NonOwningComplexTargetRequirement::ExclusiveFrom(
+              Rc::downgrade(targets.get(exclusion_name).unwrap())
+            ))
           }
         }
       }
@@ -1792,6 +1832,11 @@ fn make_dep_map(
 
     for complex_requirement in &target_node.as_ref().borrow().complex_requirements {
       match complex_requirement {
+        NonOwningComplexTargetRequirement::ExclusiveFrom(_) => {
+          // Not added here. This is checked when resolving predefined dependency requirements, meaning
+          // that if the code reaches this point, we can assume the requirement has been excluded from
+          // the target and shouldn't appear in the dep list at this point (for this target).
+        }
         NonOwningComplexTargetRequirement::OneOf(maybe_dependency_list) => {
           // Specify each optional node as a dependency as well. This done so that requirement targets
           // show up in the inverse dep map, which is important for correct ordering.

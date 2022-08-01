@@ -58,24 +58,21 @@ impl PredefinedCMakeComponentsModuleDep {
   }
 
   pub fn from_components_find_module_dep(
-    dep: &RawComponentsModuleDep,
-    user_given_dep_config: &UserGivenPredefinedDependencyConfig,
+    components_dep: &RawComponentsModuleDep,
+    _user_given_dep_config: &UserGivenPredefinedDependencyConfig,
     dep_name: &str
   ) -> Result<Self, String> {
-    let components = make_final_target_config_map(
-      dep_name,
-      &dep.components
-    )
+    let components = make_final_target_config_map(dep_name, components_dep)
       .map_err(|err_msg| format!(
-        "When loading predefined CMake Components Module dependency \"{}\":\n{}",
+        "When loading predefined CMake Components Module dependency \"{}\":\n\n{}",
         dep_name,
         err_msg
       ))?;
 
     return Ok(Self {
       components,
-      lib_link_mode: dep.cmakelists_usage.link_format.clone(),
-      raw_dep: dep.clone()
+      lib_link_mode: components_dep.cmakelists_usage.link_format.clone(),
+      raw_dep: components_dep.clone()
     });
   }
 }

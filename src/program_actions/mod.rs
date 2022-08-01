@@ -22,7 +22,7 @@ pub fn parse_project_info(
   )
     .map_err(|failure_reason| failure_reason.map_message(|err_message|{
       format!(
-        "When loading project using path '{}':\n{}",
+        "When loading project using path '{}':\n\n{}",
         absolute_path(project_root_dir).unwrap().to_str().unwrap(),
         err_message
       )

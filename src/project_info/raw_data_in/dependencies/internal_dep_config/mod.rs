@@ -3,6 +3,8 @@ mod raw_predefined_subdirectory_dep;
 mod raw_builtin_find_module;
 mod target_config_common;
 
+pub mod raw_dep_common;
+
 pub use raw_predefined_subdirectory_dep::*;
 pub use raw_components_builtin_find_module::*;
 pub use raw_builtin_find_module::*;

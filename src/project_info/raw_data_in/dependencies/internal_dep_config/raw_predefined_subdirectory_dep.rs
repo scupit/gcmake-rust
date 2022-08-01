@@ -1,8 +1,8 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use serde::{Deserialize};
 
-use super::target_config_common::RawPredefinedTargetMapIn;
+use super::{target_config_common::RawPredefinedTargetMapIn, RawMutualExclusionSet, raw_dep_common::RawPredepCommon};
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -33,6 +33,7 @@ pub struct RawSubdirectoryDependency {
   pub config_file_project_name: Option<String>,
   pub git_repo: GitRepoConfig,
   pub target_configs: RawPredefinedTargetMapIn,
+  pub mutually_exclusive: Option<RawMutualExclusionSet>,
   #[serde(default = "default_requires_custom_populate")]
   pub requires_custom_fetchcontent_populate: bool
 }
@@ -43,5 +44,15 @@ impl RawSubdirectoryDependency {
       Some(format!("{}{}", self.namespace_config.cmakelists_linking, target_name))
     }
     else { None };
+  }
+}
+
+impl RawPredepCommon for RawSubdirectoryDependency {
+  fn maybe_mutual_exclusion_groups(&self) -> &Option<RawMutualExclusionSet> {
+    &self.mutually_exclusive
+  }
+
+  fn raw_target_map_in(&self) -> &RawPredefinedTargetMapIn {
+    &self.target_configs
   }
 }
