@@ -1,6 +1,6 @@
 use std::{collections::{HashMap, HashSet}, iter::FromIterator};
 
-use crate::{project_info::{raw_data_in::{RawProject, RawSubproject, SpecificCompilerSpecifier, RawCompiledItem, OutputItemType, BuildType, BuildConfigCompilerSpecifier, BuildConfig, SingleLanguageConfig, LanguageConfigMap, RawTestProject}}, program_actions::ProjectTypeCreating};
+use crate::{project_info::{raw_data_in::{RawProject, RawSubproject, SpecificCompilerSpecifier, RawCompiledItem, OutputItemType, BuildType, BuildConfigCompilerSpecifier, BuildConfig, SingleLanguageConfig, LanguageConfigMap, RawTestProject}, base_include_prefix_for_test}, program_actions::ProjectTypeCreating};
 
 use self::configuration::{MainFileLanguage, OutputLibType, CreationProjectOutputType};
 
@@ -49,13 +49,14 @@ pub fn get_default_project_config(
   include_prefix: &str,
   project_lang: &MainFileLanguage,
   project_output_type: &CreationProjectOutputType,
-  project_type_creaing: &ProjectTypeCreating,
+  _project_type_creating: &ProjectTypeCreating,
   project_description: &str,
-  project_vendor: &str
+  project_vendor: &str,
+  requires_custom_main: Option<bool>
 ) -> RawProject {
   RawProject {
     name: project_name.to_string(),
-    include_prefix: include_prefix.to_owned(),
+    include_prefix: include_prefix.to_string(),
     description: String::from(project_description),
     vendor: String::from(project_vendor),
     version: String::from("0.0.1"),
@@ -87,10 +88,7 @@ pub fn get_default_project_config(
         },
         link: None,
         build_config: None,
-        requires_custom_main: match project_type_creaing {
-          ProjectTypeCreating::Test { .. } => Some(false),
-          _ => None
-        }
+        requires_custom_main
       })
     ]),
     predefined_dependencies: None,
@@ -193,17 +191,19 @@ pub fn get_default_subproject_config(
   project_lang: &MainFileLanguage,
   project_output_type: &CreationProjectOutputType,
   project_type_creaing: &ProjectTypeCreating,
-  project_description: &str
+  project_description: &str,
+  requires_custom_main: Option<bool>
 ) -> RawSubproject {
   RawSubproject::from(
     get_default_project_config(
       project_name,
-      include_prefix,
+      &base_include_prefix_for_test(include_prefix),
       project_lang,
       project_output_type,
       project_type_creaing,
       project_description,
-      "No vendor"
+      "VENDOR FIELD NOT USED FOR SUBPROJECTS",
+      requires_custom_main
     )
   )
 }
@@ -214,7 +214,8 @@ pub fn get_default_test_project_config(
   project_lang: &MainFileLanguage,
   project_output_type: &CreationProjectOutputType,
   project_type_creaing: &ProjectTypeCreating,
-  project_description: &str
+  project_description: &str,
+  requires_custom_main: Option<bool>
 ) -> RawTestProject {
   RawTestProject::from(RawSubproject::from(
     get_default_project_config(
@@ -224,7 +225,8 @@ pub fn get_default_test_project_config(
       project_output_type,
       project_type_creaing,
       project_description,
-      "No vendor"
+      "VENDOR FIELD NOT USED FOR TEST PROJECTS",
+      requires_custom_main
     )
   ))
 }

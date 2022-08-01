@@ -2,6 +2,8 @@ use std::collections::{HashMap, HashSet};
 use regex::Regex;
 use serde::{Serialize, Deserialize};
 
+use crate::project_info::base_include_prefix_for_test;
+
 use super::{raw_project_in::{RawCompiledItem, RawProject, BuildType}, PreBuildConfigIn, SingleLanguageConfig, LanguageConfigMap};
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -87,10 +89,15 @@ impl RawTestProject {
   pub fn into_raw_subproject(self, name: impl AsRef<str>) -> RawSubproject {
     let name_string: String = name.as_ref().to_string();
 
+    let sanitized_name_for_prefix = Regex::new("[\\- ]")
+      .unwrap()
+      .replace_all(&name_string, "_")
+      .to_uppercase();
+
     return RawSubproject {
       name: name_string.clone(),
       // TODO: Do this, plus additional validation for all include prefixes, not just test project ones.
-      include_prefix: Regex::new("[\\- ]").unwrap().replace_all(&name_string, "_").to_uppercase(),
+      include_prefix: sanitized_name_for_prefix,
       description: self.description,
       version: self.version,
       prebuild_config: self.prebuild_config,

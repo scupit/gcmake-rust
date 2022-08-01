@@ -8,13 +8,16 @@ use serde::Serialize;
 
 use std::{fs::{File, remove_dir_all, create_dir_all, self}, io::{self, ErrorKind}, path::{Path, PathBuf}};
 
-use crate::{project_generator::{c_file_generation::generate_c_main, cpp_file_generation::generate_cpp_main, prompt::{prompt_once, prompt_for_project_output_type, prompt_for_language, prompt_for_description, prompt_for_vendor}}, program_actions::{ProjectTypeCreating, gcmake_config_root_dir}};
+use crate::{project_generator::{c_file_generation::generate_c_main, cpp_file_generation::generate_cpp_main, prompt::{prompt_once, prompt_for_project_output_type, prompt_for_language, prompt_for_description, prompt_for_vendor, prompt_for_needs_custom_main}}, program_actions::{ProjectTypeCreating, gcmake_config_root_dir}, project_info::base_include_prefix_for_test};
 
 use self::{prompt::{prompt_until_boolean, PromptResult}};
 
 const SRC_DIR: &'static str = "src";
 const INCLUDE_DIR: &'static str = "include";
 const TEMPLATE_IMPL_DIR: &'static str = "template_impls";
+const SUBPROJECTS_DIR: &'static str = "subprojects";
+const TESTS_DIR: &'static str = "tests";
+const ASSETS_DIR: &'static str = "resources";
 
 pub struct GeneralNewProjectInfo {
   pub project: CreatedProject,
@@ -58,10 +61,18 @@ pub fn create_project_at(
   if should_create_project {
     create_dir_all(project_root)?;
 
-    for nested_dir in [SRC_DIR, INCLUDE_DIR, TEMPLATE_IMPL_DIR, "subprojects"] {
+    for nested_dir in [SRC_DIR, INCLUDE_DIR, TEMPLATE_IMPL_DIR, ASSETS_DIR] {
       let mut extended_path = project_root.to_path_buf();
       extended_path.push(nested_dir);
       create_dir_all(extended_path)?;
+    }
+
+    if !project_type_creating.is_test() {
+      for nested_dir in [SUBPROJECTS_DIR, TESTS_DIR] {
+        let mut extended_path = project_root.to_path_buf();
+        extended_path.push(nested_dir);
+        create_dir_all(extended_path)?;
+      }
     }
 
     let default_prefix = project_name
@@ -78,13 +89,13 @@ pub fn create_project_at(
         parent_project.nested_include_prefix(&include_prefix)
       },
       ProjectTypeCreating::Test { parent_project } => {
-        parent_project.nested_include_prefix(&include_prefix)
+        parent_project.nested_include_prefix(&base_include_prefix_for_test(&include_prefix))
       }
     };
 
-    for source_code_dir in [SRC_DIR, INCLUDE_DIR, TEMPLATE_IMPL_DIR] {
+    for dir_requiring_include_suffix in [SRC_DIR, INCLUDE_DIR, TEMPLATE_IMPL_DIR, ASSETS_DIR] {
       let mut extended_path = project_root.to_path_buf();
-      extended_path.push(source_code_dir);
+      extended_path.push(dir_requiring_include_suffix);
       extended_path.push(&folder_generation_include_prefix);
       create_dir_all(extended_path)?;
     }
@@ -101,11 +112,15 @@ pub fn create_project_at(
 
     let project_vendor: String = match &project_type_creating {
       ProjectTypeCreating::RootProject => prompt_for_vendor()?,
-      ProjectTypeCreating::Subproject { .. }
-        | ProjectTypeCreating::Test { .. } => String::from("THIS IS IGNORED")
+      _ => String::from("THIS IS IGNORED")
     };
     
     let project_description: String = prompt_for_description()?;
+
+    let requires_custom_main: Option<bool> = match &project_type_creating {
+      ProjectTypeCreating::Test { .. } => Some(prompt_for_needs_custom_main()?),
+      _ => None
+    };
 
     let project_info: DefaultProjectInfo = build_default_project_info(
       &project_type_creating,
@@ -114,7 +129,8 @@ pub fn create_project_at(
       &lang_selection,
       &output_type_selection,
       &project_description,
-      &project_vendor
+      &project_vendor,
+      requires_custom_main
     );
 
     let cmake_data_file = File::create(
@@ -203,7 +219,8 @@ fn build_default_project_info(
   lang_selection: &MainFileLanguage,
   output_type_selection: &CreationProjectOutputType,
   project_description: &str,
-  project_vendor: &str
+  project_vendor: &str,
+  requires_custom_main: Option<bool>
 ) -> DefaultProjectInfo {
   match project_type_creating {
     ProjectTypeCreating::RootProject => {
@@ -215,7 +232,8 @@ fn build_default_project_info(
           output_type_selection,
           project_type_creating,
           project_description,
-          project_vendor
+          project_vendor,
+          requires_custom_main
         )
       )
     },
@@ -227,7 +245,8 @@ fn build_default_project_info(
           lang_selection,
           output_type_selection,
           project_type_creating,
-          project_description
+          project_description,
+          requires_custom_main
         )
       )
     },
@@ -239,7 +258,8 @@ fn build_default_project_info(
           lang_selection,
           output_type_selection,
           project_type_creating,
-          project_description
+          project_description,
+          requires_custom_main
         )
       )
     }

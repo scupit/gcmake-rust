@@ -10,3 +10,7 @@ mod link_spec_parser;
 pub use final_project_configurables::*;
 pub use helpers::ProjectOutputType;
 pub use link_spec_parser::LinkSpecifier;
+
+pub fn base_include_prefix_for_test(include_prefix: &str) -> String {
+  return format!("TEST/{}", include_prefix);
+}

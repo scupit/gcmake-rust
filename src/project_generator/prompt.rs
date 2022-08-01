@@ -181,3 +181,20 @@ fn prompt_for_lib_output_type() -> io::Result<OutputLibType> {
 pub fn prompt_for_description() -> io::Result<String> {
   Ok(prompt_until_value("Description: ")?.unwrap_custom())
 }
+
+pub fn prompt_for_needs_custom_main() -> io::Result<bool> {
+  let final_answer = prompt_until(
+    "Does this test need to provide its own main? (y or n) [n]:",
+    |answer| match answer {
+      PromptResult::Custom(_) => false,
+      _ => true
+    }
+  )?;
+  
+  return match final_answer {
+    PromptResult::Custom(_) => unreachable!("Input is constrained to be anything but a 'custom' value."),
+    PromptResult::Yes => Ok(true),
+    PromptResult::No => Ok(false),
+    PromptResult::Empty => Ok(false)
+  }
+}

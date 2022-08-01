@@ -2,7 +2,7 @@ use std::{collections::{HashMap, HashSet}, path::{Path, PathBuf}, io, rc::Rc, fs
 
 use crate::project_info::path_manipulation::cleaned_pathbuf;
 
-use super::{path_manipulation::{cleaned_path_str, relative_to_project_root, absolute_path}, final_dependencies::{FinalGCMakeDependency, FinalPredefinedDependencyConfig}, raw_data_in::{RawProject, dependencies::internal_dep_config::AllRawPredefinedDependencies, BuildConfigMap, BuildType, LanguageConfigMap, OutputItemType, PreBuildConfigIn, SpecificCompilerSpecifier, ProjectMetadata, BuildConfigCompilerSpecifier, TargetBuildConfigMap, TargetSpecificBuildType, LinkSection, RawTestFramework}, final_project_configurables::{FinalProjectType}, CompiledOutputItem, helpers::{parse_subproject_data, parse_root_project_data, populate_files, find_prebuild_script, PrebuildScriptFile, parse_project_metadata, validate_raw_project_outputs, ProjectOutputType, RetrievedCodeFileType, retrieve_file_type, parse_test_project_data}, PreBuildScript, OutputItemLinks, FinalTestFramework};
+use super::{path_manipulation::{cleaned_path_str, relative_to_project_root, absolute_path}, final_dependencies::{FinalGCMakeDependency, FinalPredefinedDependencyConfig}, raw_data_in::{RawProject, dependencies::internal_dep_config::AllRawPredefinedDependencies, BuildConfigMap, BuildType, LanguageConfigMap, OutputItemType, PreBuildConfigIn, SpecificCompilerSpecifier, ProjectMetadata, BuildConfigCompilerSpecifier, TargetBuildConfigMap, TargetSpecificBuildType, LinkSection, RawTestFramework}, final_project_configurables::{FinalProjectType}, CompiledOutputItem, helpers::{parse_subproject_data, parse_root_project_data, populate_files, find_prebuild_script, PrebuildScriptFile, parse_project_metadata, validate_raw_project_outputs, ProjectOutputType, RetrievedCodeFileType, retrieve_file_type, parse_test_project_data}, PreBuildScript, OutputItemLinks, FinalTestFramework, base_include_prefix_for_test};
 
 pub struct ThreePartVersion (u32, u32, u32);
 
@@ -388,22 +388,16 @@ impl FinalProjectData {
 
     match parent_project_info {
       Some(parent_project) => {
-        full_include_prefix = match &parent_project.parse_mode {
-          ChildParseMode::TestProject => {
-            format!(
-              "{}/TEST/{}",
-              parent_project.include_prefix,
-              raw_project.get_include_prefix()
-            )
-          },
-          ChildParseMode::Subproject => {
-            format!(
-              "{}/{}",
-              parent_project.include_prefix,
-              raw_project.get_include_prefix()
-            )
-          }
+        let true_base_prefix: String = match &parent_project.parse_mode {
+          ChildParseMode::TestProject => base_include_prefix_for_test(raw_project.get_include_prefix()),
+          _ => raw_project.get_include_prefix().to_string()
         };
+
+        full_include_prefix = format!(
+          "{}/{}",
+          parent_project.include_prefix,
+          true_base_prefix
+        );
 
         target_namespace_prefix = parent_project.target_namespace_prefix;
       },

@@ -1,5 +1,5 @@
 use std::{rc::Rc};
-use crate::{cli_config::{CLIProjectGenerationInfo, CLIProjectTypeGenerating}, project_info::{path_manipulation::cleaned_path_str, final_project_data::{FinalProjectData}}, logger::exit_error_log, project_generator::{configuration::{MainFileLanguage, CreationProjectOutputType, OutputLibType}, create_project_at, GeneralNewProjectInfo}, program_actions::{parse_project_info, manage_dependencies::gcmake_config_root_dir}};
+use crate::{cli_config::{CLIProjectGenerationInfo, CLIProjectTypeGenerating}, project_info::{path_manipulation::cleaned_path_str, final_project_data::{FinalProjectData}}, logger::exit_error_log, project_generator::{GeneralNewProjectInfo, create_project_at}};
 
 pub enum ProjectTypeCreating {
   RootProject,
@@ -12,6 +12,13 @@ pub enum ProjectTypeCreating {
 }
 
 impl ProjectTypeCreating {
+  pub fn is_test(&self) -> bool {
+    return match self {
+      ProjectTypeCreating::Test { .. } => true,
+      _ => false
+    }
+  }
+
   fn from_generation_config(
     generation_info: &CLIProjectGenerationInfo,
     project_operating_on: &Option<Rc<FinalProjectData>>
@@ -20,7 +27,7 @@ impl ProjectTypeCreating {
       CLIProjectTypeGenerating::RootProject => {
         match project_operating_on {
           None => ProjectTypeCreating::RootProject,
-          Some(project_rc) => {
+          Some(_) => {
             exit_error_log(&format!(
               "Generating a root project inside another root project is forbidden. Try generating a subproject instead."
             ));
