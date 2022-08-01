@@ -197,7 +197,7 @@ pub fn get_default_subproject_config(
   RawSubproject::from(
     get_default_project_config(
       project_name,
-      &base_include_prefix_for_test(include_prefix),
+      include_prefix,
       project_lang,
       project_output_type,
       project_type_creaing,

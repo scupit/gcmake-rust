@@ -976,9 +976,6 @@ impl DependencyGraph {
     link_receiver_name: &str,
     link_set: HashSet<Link>
   ) -> Result<(), GraphLoadFailureReason> {
-    // let link_receiver: &mut TargetNode = &mut link_receiver_container.as_ref().borrow_mut();
-    // let mut link_receiver = link_receiver_container.as_ref().borrow_mut();
-    // let link_receiver: &TargetNode = &link_receiver_container.as_ref().borrow();
     let link_receiver = mut_target_node;
 
     for link in link_set {
@@ -1113,7 +1110,7 @@ impl DependencyGraph {
           );
           will_be_outside_original_project_context = false;
         },
-        "parent" => match &self.parent {
+        "parent" | "super" => match &self.parent {
           Some(parent_graph) => {
             next_graph = Weak::upgrade(parent_graph).unwrap();
             assert!(

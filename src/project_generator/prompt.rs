@@ -184,7 +184,7 @@ pub fn prompt_for_description() -> io::Result<String> {
 
 pub fn prompt_for_needs_custom_main() -> io::Result<bool> {
   let final_answer = prompt_until(
-    "Does this test need to provide its own main? (y or n) [n]:",
+    "Does this test need to provide its own main? (y or n) [n]: ",
     |answer| match answer {
       PromptResult::Custom(_) => false,
       _ => true

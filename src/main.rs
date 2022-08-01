@@ -163,7 +163,7 @@ fn do_new_files_subcommand(
     Ok(project_data_group) => {
       // print_project_info(project_data_group);
       if let None = project_data_group.operating_on {
-        exit_error_log("Tried to create files while not operating on a project. Make sure you are inside a project directory containing a cmake_data.{yaml|yml} file.")
+        exit_error_log("Tried to create files while not operating on a project. Make sure you are inside a project directory containing a cmake_data.yaml file.")
       }
 
       match handle_create_files(&project_data_group.operating_on.unwrap(), &command) {

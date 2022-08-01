@@ -1,6 +1,6 @@
 use std::{path::{Path, PathBuf}, rc::Rc};
 
-use crate::{project_info::{final_project_data::FinalProjectData, path_manipulation::relative_to_project_root}, cli_config::clap_cli_config::CreateFilesCommand};
+use crate::{project_info::{final_project_data::FinalProjectData, path_manipulation::{relative_to_project_root, cleaned_path_str, absolute_path}}, cli_config::clap_cli_config::CreateFilesCommand};
 use self::{file_creation_info::{FileTypeGeneratingInfo, validate_which_generating, SharedFileInfo, validate_shared_file_info, FileGuardStyle}, code_file_writer::{write_code_files, extension_for, CodeFileType}};
 
 mod code_file_writer;
@@ -49,9 +49,19 @@ pub fn handle_create_files(
 
   for file_name in maybe_existing_files {
     if Path::new(&file_name).exists() {
+      let file_path_relative_to_working_dir = absolute_path(file_name)?
+        .to_str()
+        .unwrap()
+        .replace(
+          &format!("{}/", project_data.get_absolute_project_root()),
+          ""
+        );
+
+      // TODO: This should skip existing files (and print a message saying so), instead of
+      // throwing an error when one doesn't exist.
       return Err(format!(
         "No files were created because file '{}' already exists and would be overwritten.",
-        file_name
+        file_path_relative_to_working_dir
       ));
     }
   }

@@ -1,6 +1,6 @@
 use std::{path::{PathBuf, Path}, fs, io};
 
-use super::{raw_data_in::{RawProject, RawSubproject, ProjectMetadata, OutputItemType, RawTestProject}, path_manipulation::cleaned_pathbuf, final_project_data::ProjectLoadFailureReason};
+use super::{raw_data_in::{RawProject, RawSubproject, OutputItemType, RawTestProject}, path_manipulation::cleaned_pathbuf, final_project_data::ProjectLoadFailureReason};
 
 #[derive(PartialEq, Eq)]
 pub enum RetrievedCodeFileType {
@@ -39,7 +39,7 @@ fn file_variants(
 }
 
 pub fn yaml_names_from_dir(project_root: &str) -> Vec<PathBuf> {
-  return file_variants(project_root, "cmake_data", vec!["yaml", "yml"]);
+  return file_variants(project_root, "cmake_data", vec!["yaml"]);
 }
 
 pub enum PrebuildScriptFile {
@@ -82,10 +82,6 @@ fn yaml_parse_helper<T: serde::de::DeserializeOwned>(project_root: &str) -> Yaml
     "Unable to find a cmake_data.yaml or cmake_data.yml file in {}",
     project_root
   )));
-}
-
-pub fn parse_project_metadata(project_root: &str) -> YamlParseResult<ProjectMetadata> {
-  yaml_parse_helper(project_root)
 }
 
 pub fn parse_root_project_data(project_root: &str) -> YamlParseResult<RawProject> {

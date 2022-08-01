@@ -2,7 +2,7 @@ use std::{collections::{HashMap, HashSet}, path::{Path, PathBuf}, io, rc::Rc, fs
 
 use crate::project_info::path_manipulation::cleaned_pathbuf;
 
-use super::{path_manipulation::{cleaned_path_str, relative_to_project_root, absolute_path}, final_dependencies::{FinalGCMakeDependency, FinalPredefinedDependencyConfig}, raw_data_in::{RawProject, dependencies::internal_dep_config::AllRawPredefinedDependencies, BuildConfigMap, BuildType, LanguageConfigMap, OutputItemType, PreBuildConfigIn, SpecificCompilerSpecifier, ProjectMetadata, BuildConfigCompilerSpecifier, TargetBuildConfigMap, TargetSpecificBuildType, LinkSection, RawTestFramework}, final_project_configurables::{FinalProjectType}, CompiledOutputItem, helpers::{parse_subproject_data, parse_root_project_data, populate_files, find_prebuild_script, PrebuildScriptFile, parse_project_metadata, validate_raw_project_outputs, ProjectOutputType, RetrievedCodeFileType, retrieve_file_type, parse_test_project_data}, PreBuildScript, OutputItemLinks, FinalTestFramework, base_include_prefix_for_test};
+use super::{path_manipulation::{cleaned_path_str, relative_to_project_root, absolute_path}, final_dependencies::{FinalGCMakeDependency, FinalPredefinedDependencyConfig}, raw_data_in::{RawProject, dependencies::internal_dep_config::AllRawPredefinedDependencies, BuildConfigMap, BuildType, LanguageConfigMap, OutputItemType, PreBuildConfigIn, SpecificCompilerSpecifier, BuildConfigCompilerSpecifier, TargetBuildConfigMap, TargetSpecificBuildType, LinkSection, RawTestFramework}, final_project_configurables::{FinalProjectType}, CompiledOutputItem, helpers::{parse_subproject_data, parse_root_project_data, populate_files, find_prebuild_script, PrebuildScriptFile, validate_raw_project_outputs, ProjectOutputType, RetrievedCodeFileType, retrieve_file_type, parse_test_project_data}, PreBuildScript, OutputItemLinks, FinalTestFramework, base_include_prefix_for_test};
 
 pub struct ThreePartVersion (u32, u32, u32);
 
@@ -209,7 +209,6 @@ impl FinalProjectData {
     dep_config: &AllRawPredefinedDependencies,
     constructor_config: ProjectConstructorConfig
   ) -> Result<UseableFinalProjectDataGroup, ProjectLoadFailureReason> {
-    let metadata: ProjectMetadata = parse_project_metadata(unclean_given_root)?;
     let cleaned_given_root: String = cleaned_path_str(unclean_given_root);
 
     let levels_below_root: usize = match project_levels_below_root(cleaned_given_root.as_str()) {
@@ -218,7 +217,7 @@ impl FinalProjectData {
       )),
       Ok(maybe_level) => match maybe_level {
         Some(value) => value,
-        None => return Err(ProjectLoadFailureReason::Other(format!(
+        None => return Err(ProjectLoadFailureReason::MissingYaml(format!(
           "Failed to determine project level using '{}'",
           &cleaned_given_root
         )))
@@ -233,8 +232,6 @@ impl FinalProjectData {
       for _ in 0..(levels_below_root * 2) {
         real_project_root_using.push("..");
       }
-
-      real_project_root_using = real_project_root_using;
     }
 
     let root_project: Rc<FinalProjectData> = Rc::new(Self::create_new(
@@ -685,6 +682,13 @@ impl FinalProjectData {
         return Some(matching_project);
       }
     }
+
+    for (_, test_project) in &project.tests {
+      if let Some(matching_project) = Self::find_with_root(absolute_root, Rc::clone(test_project)) {
+        return Some(matching_project);
+      }
+    }
+
     None
   }
 
