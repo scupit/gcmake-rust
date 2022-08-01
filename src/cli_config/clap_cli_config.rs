@@ -148,6 +148,6 @@ pub struct UpdateDependencyConfigsCommand {
   /// Selects the branch to be checked out before pulling changes (or after cloning, if the
   /// repo hasn't been installed yet). If no branch is specified, then the current branch is
   /// updated or the repo is cloned into the 'develop' branch.
-  #[clap(long)]
+  #[clap(long = "to-branch", short = 'b')]
   pub branch: Option<String>,
 }
