@@ -1,6 +1,6 @@
-use std::{collections::{HashMap, HashSet}, hash::Hash};
+use std::{collections::{HashMap, HashSet}};
 
-use crate::project_info::{raw_data_in::dependencies::{internal_dep_config::{RawSubdirectoryDependency, raw_dep_common::RawPredepCommon}, user_given_dep_config::{UserGivenPredefinedDependencyConfig}}};
+use crate::project_info::{raw_data_in::dependencies::{internal_dep_config::{RawSubdirectoryDependency}, user_given_dep_config::{UserGivenPredefinedDependencyConfig}}};
 
 use super::{predep_module_common::PredefinedDepFunctionality, final_target_map_common::{FinalTargetConfigMap, make_final_target_config_map}};
 
@@ -33,18 +33,14 @@ pub struct PredefinedSubdirDep {
   config_file_project_name: Option<String>,
   // Map of target base name to the namespaced target name used for linking.
   target_map: FinalTargetConfigMap,
-  namespaced_target_map: HashMap<String, String>,
+  cmake_namespaced_target_map: HashMap<String, String>,
+  yaml_namespaced_target_map: HashMap<String, String>,
   requires_custom_populate: bool
 }
 
 impl PredefinedSubdirDep {
   pub fn get_target_config_map(&self) -> &FinalTargetConfigMap {
     &self.target_map
-  }
-
-  pub fn namespaced_target(&self, target_name: &str) -> Option<&str> {
-    return self.namespaced_target_map.get(target_name)
-      .map(|found_str| &found_str[..]);
   }
 
   pub fn custom_relative_include_dir_name(&self) -> &Option<String> {
@@ -59,8 +55,13 @@ impl PredefinedSubdirDep {
     self.requires_custom_populate
   }
 
-  pub fn get_linkable_target_name(&self, target_name: &str) -> Option<&str> {
-    self.namespaced_target_map.get(target_name)
+  pub fn get_cmake_linkable_target_name(&self, target_name: &str) -> Option<&str> {
+    self.cmake_namespaced_target_map.get(target_name)
+      .map(|str_ref| &str_ref[..])
+  }
+
+  pub fn get_yaml_linkable_target_name(&self, target_name: &str) -> Option<&str> {
+    self.yaml_namespaced_target_map.get(target_name)
       .map(|str_ref| &str_ref[..])
   }
 
@@ -98,12 +99,29 @@ impl PredefinedSubdirDep {
         err_msg
       ))?;
 
-    let mut namespaced_target_map: HashMap<String, String> = HashMap::new();
+    let mut cmake_namespaced_target_map: HashMap<String, String> = HashMap::new();
 
-    for (target_name, _) in &target_map {
-      namespaced_target_map.insert(
+    for (target_name, target_config) in &target_map {
+      cmake_namespaced_target_map.insert(
         target_name.to_string(),
-        subdir_dep.namespaced_target(target_name).unwrap()
+        format!(
+          "{}{}",
+          &subdir_dep.namespace_config.cmakelists_linking,
+          &target_config.cmakelists_name
+        )
+      );
+    }
+
+    let mut yaml_namespaced_target_map: HashMap<String, String> = HashMap::new();
+
+    for (target_name, target_config) in &target_map {
+      yaml_namespaced_target_map.insert(
+        target_name.to_string(),
+        format!(
+          "{}::{}",
+          dep_name.to_string(),
+          &target_config.cmake_yaml_name
+        )
       );
     }
 
@@ -116,7 +134,8 @@ impl PredefinedSubdirDep {
         installed_include_dir_name: subdir_dep.installed_include_dir_name.clone(),
         config_file_project_name: subdir_dep.config_file_project_name.clone(),
         target_map,
-        namespaced_target_map,
+        cmake_namespaced_target_map,
+        yaml_namespaced_target_map,
         requires_custom_populate: subdir_dep.requires_custom_fetchcontent_populate
       }
     )

@@ -1560,7 +1560,7 @@ impl<'a> CMakeListsWriter<'a> {
           
           let linkable_target_name: &str = match borrowed_node.simple_output_type() {
             SimpleNodeOutputType::Executable => borrowed_node.get_internal_receiver_name(),
-            SimpleNodeOutputType::Library => borrowed_node.get_namespaced_output_target_name()
+            SimpleNodeOutputType::Library => borrowed_node.get_cmake_namespaced_target_name()
           };
 
           if !already_written.contains(linkable_target_name) {
@@ -1715,8 +1715,8 @@ impl<'a> CMakeListsWriter<'a> {
 
     {
       let borrowed_node = output_target_node.as_ref().borrow();
-      target_name = borrowed_node.get_output_target_name().to_string();
-      alias_name = output_target_node.as_ref().borrow().get_namespaced_output_target_name().to_string();
+      target_name = borrowed_node.get_cmake_target_base_name().to_string();
+      alias_name = output_target_node.as_ref().borrow().get_cmake_namespaced_target_name().to_string();
     }
 
     let lib_spec_string: &str = if output_data.is_header_only_type()
@@ -1789,7 +1789,7 @@ impl<'a> CMakeListsWriter<'a> {
     project_include_dir_varname: &str
   ) -> io::Result<String> {
     let borrowed_node: &TargetNode = &output_target_node.as_ref().borrow();
-    let target_name: &str = borrowed_node.get_output_target_name();
+    let target_name: &str = borrowed_node.get_cmake_target_base_name();
     let receiver_lib_name: &str = borrowed_node.get_internal_receiver_name();
     let is_pre_build_script: bool = borrowed_node.is_pre_build();
 
@@ -1910,7 +1910,7 @@ impl<'a> CMakeListsWriter<'a> {
 
       for used_target in &self.sorted_target_info.targets_in_build_order {
         let borrowed_target: &TargetNode = &used_target.as_ref().borrow();
-        let namespaced_target_name = borrowed_target.get_namespaced_output_target_name().to_string();
+        let namespaced_target_name = borrowed_target.get_cmake_namespaced_target_name().to_string();
         let container_project_name = borrowed_target.container_project().as_ref().borrow().project_name().to_string();
 
         if borrowed_target.must_be_additionally_installed() {

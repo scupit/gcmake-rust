@@ -1,8 +1,14 @@
 use std::{collections::{HashMap, HashSet}, path::{Path, PathBuf}, io, rc::Rc, fs::{self}};
 
+use regex::Regex;
+
 use crate::project_info::path_manipulation::cleaned_pathbuf;
 
 use super::{path_manipulation::{cleaned_path_str, relative_to_project_root, absolute_path}, final_dependencies::{FinalGCMakeDependency, FinalPredefinedDependencyConfig}, raw_data_in::{RawProject, dependencies::internal_dep_config::AllRawPredefinedDependencies, BuildConfigMap, BuildType, LanguageConfigMap, OutputItemType, PreBuildConfigIn, SpecificCompilerSpecifier, BuildConfigCompilerSpecifier, TargetBuildConfigMap, TargetSpecificBuildType, LinkSection, RawTestFramework}, final_project_configurables::{FinalProjectType}, CompiledOutputItem, helpers::{parse_subproject_data, parse_root_project_data, populate_files, find_prebuild_script, PrebuildScriptFile, validate_raw_project_outputs, ProjectOutputType, RetrievedCodeFileType, retrieve_file_type, parse_test_project_data}, PreBuildScript, OutputItemLinks, FinalTestFramework, base_include_prefix_for_test, gcmake_constants::{SRC_DIR, INCLUDE_DIR, TEMPLATE_IMPL_DIR, TESTS_DIR, SUBPROJECTS_DIR}};
+
+const SUBPROJECT_JOIN_STR: &'static str = "_S_";
+const TEST_PROJECT_JOIN_STR: &'static str = "_TP_";
+const TEST_TARGET_JOIN_STR: &'static str = "_T_";
 
 pub struct ThreePartVersion (u32, u32, u32);
 
@@ -178,6 +184,7 @@ pub struct FinalProjectData {
   supported_compilers: Rc<HashSet<SpecificCompilerSpecifier>>,
   project_base_name: String,
   full_namespaced_project_name: String,
+  project_name_for_error_messages: String,
   description: String,
   vendor: String,
   build_config_map: Rc<BuildConfigMap>,
@@ -337,9 +344,9 @@ impl FinalProjectData {
         raw_project.vendor = actual_vendor.clone();
 
         full_namespaced_project_name = format!(
-          // TP == TESTPROJECT
-          "{}_TP_{}",
+          "{}{}{}",
           parent_project_namespaced_name,
+          TEST_PROJECT_JOIN_STR,
           raw_project.get_name()
         );
 
@@ -377,9 +384,9 @@ impl FinalProjectData {
         raw_project.vendor = actual_vendor.clone();
 
         full_namespaced_project_name = format!(
-          // S == SUBPROJECT
-          "{}_S_{}",
+          "{}{}{}",
           parent_project_namespaced_name,
+          SUBPROJECT_JOIN_STR,
           raw_project.get_name()
         );
         project_type = FinalProjectType::Subproject { };
@@ -646,8 +653,17 @@ impl FinalProjectData {
       )));
     }
 
+    let project_name_for_error_messages: String = full_namespaced_project_name
+      .split(SUBPROJECT_JOIN_STR)
+      .collect::<Vec<&str>>()
+      .join(" => ")
+      .split(TEST_PROJECT_JOIN_STR)
+      .collect::<Vec<&str>>()
+      .join(" -> ");
+
     let mut finalized_project_data = FinalProjectData {
       project_base_name: raw_project.name.clone(),
+      project_name_for_error_messages,
       full_namespaced_project_name,
       description: raw_project.description.to_string(),
       version: maybe_version.unwrap(),
@@ -1045,7 +1061,11 @@ impl FinalProjectData {
     &self,
     test_target_name: &str
   ) -> String {
-    return format!("{}_T_{}", self.get_full_namespaced_project_name(), test_target_name);
+    return format!("{}{}{}",
+      self.get_full_namespaced_project_name(),
+      TEST_TARGET_JOIN_STR,
+      test_target_name
+    );
   }
 
   pub fn prefix_with_project_namespace(&self, name: &str) -> String {
@@ -1100,6 +1120,10 @@ impl FinalProjectData {
 
   pub fn get_full_namespaced_project_name(&self) -> &str {
     &self.full_namespaced_project_name
+  }
+
+  pub fn get_name_for_error_messages(&self) -> &str {
+    &self.project_name_for_error_messages
   }
 
   pub fn get_description(&self) -> &str {

@@ -12,7 +12,8 @@ type RequirementSpecifier = String;
 #[derive(Deserialize, Clone)]
 #[serde(deny_unknown_fields)]
 pub struct TargetConfig {
-  pub requires: Option<HashSet<RequirementSpecifier>>
+  pub requires: Option<HashSet<RequirementSpecifier>>,
+  pub actual_target_name: Option<String>
 }
 
 pub type RawPredefinedTargetMapIn = HashMap<String, TargetConfig>;

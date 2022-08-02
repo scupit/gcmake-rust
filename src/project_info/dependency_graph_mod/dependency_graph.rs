@@ -190,7 +190,8 @@ pub struct TargetNode {
   // NOTE: For predefined components modules, this could be a CMake variable (ex: ${wxWidgets_LIBRARIES}).
   // When writing CMakeLists, make sure to eliminate duplicates before writing, so this variable isn't linked
   // more than once.
-  namespaced_output_target_name: String,
+  namespaced_cmake_target_name: String,
+  namespaced_yaml_target_name: String,
 
   requires_custom_install_if_linked_to_output_lib: bool,
   is_linked_to_output_lib: bool,
@@ -214,6 +215,7 @@ impl TargetNode {
     output_target_name: String,
     internal_receiver_name: String,
     namespaced_output_target_name: String,
+    namespaced_yaml_target_name: String,
     should_install_if_linked_to_output_library: bool,
     parent_graph: Weak<RefCell<DependencyGraph>>,
     contained_item: ContainedItem,
@@ -262,7 +264,9 @@ impl TargetNode {
 
       output_target_name,
       internal_receiver_name,
-      namespaced_output_target_name,
+      namespaced_cmake_target_name: namespaced_output_target_name,
+      namespaced_yaml_target_name,
+
       requires_custom_install_if_linked_to_output_lib: should_install_if_linked_to_output_library,
       is_linked_to_output_lib: false,
       
@@ -320,7 +324,7 @@ impl TargetNode {
     self.the_unique_id
   }
 
-  pub fn get_output_target_name(&self) -> &str {
+  pub fn get_cmake_target_base_name(&self) -> &str {
     &self.output_target_name
   }
 
@@ -328,14 +332,12 @@ impl TargetNode {
     &self.internal_receiver_name
   }
 
-  // TODO: Differentiate between the linking name used in CMakeLists and linking name used in
-  // cmake_data.yaml
-  // pub fn get_namespaced_yaml_linking_name(&self) -> &str {
-  //   &self.namespaced_output_target_name
-  // }
+  pub fn get_yaml_namespaced_target_name(&self) -> &str {
+    &self.namespaced_yaml_target_name
+  }
 
-  pub fn get_namespaced_output_target_name(&self) -> &str {
-    &self.namespaced_output_target_name
+  pub fn get_cmake_namespaced_target_name(&self) -> &str {
+    &self.namespaced_cmake_target_name
   }
 
   pub fn has_links(&self) -> bool {
@@ -413,6 +415,14 @@ impl ProjectWrapper {
   pub fn name(&self) -> &str {
     match self {
       Self::NormalProject(project_info) => project_info.get_full_namespaced_project_name(),
+      Self::GCMakeDependencyRoot(gcmake_dep) => gcmake_dep.get_name(),
+      Self::PredefinedDependency(predef_dep) => predef_dep.get_name()
+    }
+  }
+
+  pub fn name_for_error_messages(&self) -> &str {
+    match self {
+      Self::NormalProject(project_info) => project_info.get_name_for_error_messages(),
       Self::GCMakeDependencyRoot(gcmake_dep) => gcmake_dep.get_name(),
       Self::PredefinedDependency(predef_dep) => predef_dep.get_name()
     }
@@ -540,6 +550,10 @@ impl DependencyGraph {
 
   pub fn project_name(&self) -> &str {
     self.wrapped_project().name()
+  }
+
+  pub fn project_name_for_error_messages(&self) -> &str {
+    self.wrapped_project().name_for_error_messages()
   }
 
   pub fn project_id(&self) -> ProjectId {
@@ -1236,9 +1250,11 @@ impl DependencyGraph {
         // Targets should be created on the fly.
         let mut target_map = self.targets.borrow_mut();
         let linkable_name: String = gcmake_dep.get_linkable_target_name(target_name);
+
         let new_placeholder_target: Rc<RefCell<TargetNode>> = Rc::new(RefCell::new(TargetNode::new(
           target_id_counter,
           target_name,
+          linkable_name.clone(),
           linkable_name.clone(),
           linkable_name.clone(),
           linkable_name,
@@ -1444,6 +1460,7 @@ impl DependencyGraph {
           pre_build_name.clone(),
           project.receiver_lib_name(&pre_build_name),
           project.prefix_with_project_namespace(&pre_build_name),
+          project.prefix_with_project_namespace(&pre_build_name),
           false,
           Rc::downgrade(&graph),
           ContainedItem::PreBuild(pre_build_script),
@@ -1476,6 +1493,7 @@ impl DependencyGraph {
             target_name,
             target_output_name.clone(),
             project.receiver_lib_name(&target_output_name),
+            project.prefix_with_project_namespace(&target_output_name),
             project.prefix_with_project_namespace(&target_output_name),
             false,
             Rc::downgrade(&graph),
@@ -1581,18 +1599,19 @@ impl DependencyGraph {
     mut_graph.toplevel = Rc::downgrade(&graph);
     mut_graph.current_graph_ref = Rc::downgrade(&graph);
 
-    let targets: HashMap<String, Rc<RefCell<TargetNode>>> = predef_dep.target_name_set()
-      .into_iter()
-      .map(|target_name| {
-        let namespaced_target_name: String = predef_dep.namespaced_target(&target_name).unwrap();
+    let targets: HashMap<String, Rc<RefCell<TargetNode>>> = predef_dep.get_target_config_map()
+      .iter()
+      .map(|(target_name, target_config)| {
+        
         (
           target_name.clone(),
           Rc::new(RefCell::new(TargetNode::new(
             target_id_counter,
-            &target_name,
-            namespaced_target_name.clone(),
-            namespaced_target_name.clone(),
-            namespaced_target_name,
+            target_name.clone(),
+            target_config.cmakelists_name.clone(),
+            String::from("RECEIVER LIB NAME NOT USED FOR PREDEFINED LIBRARIES"),
+            predef_dep.get_cmake_namespaced_target_name(target_name).unwrap(),
+            predef_dep.get_yaml_namespaced_target_name(target_name).unwrap(),
             predef_dep.should_install_if_linked_to_output_library(),
             Rc::downgrade(&graph),
             ContainedItem::PredefinedLibrary(target_name.clone()),

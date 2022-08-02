@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
-use crate::project_info::raw_data_in::dependencies::{internal_dep_config::{RawModuleDep, CMakeModuleType, raw_dep_common::RawPredepCommon}, user_given_dep_config::UserGivenPredefinedDependencyConfig};
+use crate::project_info::raw_data_in::dependencies::{internal_dep_config::{RawModuleDep, CMakeModuleType}, user_given_dep_config::UserGivenPredefinedDependencyConfig};
 
 use super::{predep_module_common::PredefinedDepFunctionality, final_target_map_common::{FinalTargetConfigMap, make_final_target_config_map}};
 
@@ -8,7 +8,8 @@ use super::{predep_module_common::PredefinedDepFunctionality, final_target_map_c
 pub struct PredefinedCMakeModuleDep {
   raw_dep: RawModuleDep,
   target_map: FinalTargetConfigMap,
-  namespaced_target_map: HashMap<String, String>
+  cmake_namespaced_target_map: HashMap<String, String>,
+  yaml_namespaced_target_map: HashMap<String, String>
 }
 
 impl PredefinedCMakeModuleDep {
@@ -20,21 +21,21 @@ impl PredefinedCMakeModuleDep {
     &self.raw_dep.module_type
   }
 
-  pub fn namespaced_target(&self, target_name: &str) -> Option<&str> {
-    return self.namespaced_target_map.get(target_name)
-      .map(|found_str| &found_str[..]);
-  }
-
   pub fn found_varname(&self) -> &str {
     &self.raw_dep.found_var
   }
 
   pub fn has_target_named(&self, target_name: &str) -> bool {
-    self.namespaced_target_map.contains_key(target_name)
+    self.cmake_namespaced_target_map.contains_key(target_name)
   }
 
-  pub fn get_linkable_target_name(&self, target_name: &str) -> Option<&str> {
-    self.namespaced_target_map.get(target_name)
+  pub fn get_yaml_linkable_target_name(&self, target_name: &str) -> Option<&str> {
+    self.yaml_namespaced_target_map.get(target_name)
+      .map(|the_string| &the_string[..])
+  }
+
+  pub fn get_cmake_linkable_target_name(&self, target_name: &str) -> Option<&str> {
+    self.cmake_namespaced_target_map.get(target_name)
       .map(|the_string| &the_string[..])
   }
 
@@ -50,19 +51,37 @@ impl PredefinedCMakeModuleDep {
         err_msg
       ))?;
 
-    let mut namespaced_target_map: HashMap<String, String> = HashMap::new();
+    let mut cmake_namespaced_target_map: HashMap<String, String> = HashMap::new();
 
-    for (target_name, _) in &dep.targets {
-      namespaced_target_map.insert(
+    for (target_name, target_config) in &target_map {
+      cmake_namespaced_target_map.insert(
         target_name.to_string(),
-        dep.namespaced_target(target_name).unwrap()
+        format!(
+          "{}{}",
+          &dep.namespace_config.cmakelists_linking,
+          &target_config.cmakelists_name
+        )
+      );
+    }
+
+    let mut yaml_namespaced_target_map: HashMap<String, String> = HashMap::new();
+
+    for (target_name, target_config) in &target_map {
+      yaml_namespaced_target_map.insert(
+        target_name.to_string(),
+        format!(
+          "{}::{}",
+          dep_name,
+          &target_config.cmake_yaml_name
+        )
       );
     }
 
     return Ok(Self {
       raw_dep: dep.clone(),
       target_map,
-      namespaced_target_map
+      cmake_namespaced_target_map,
+      yaml_namespaced_target_map
     });
   }
 }
@@ -73,7 +92,7 @@ impl PredefinedDepFunctionality for PredefinedCMakeModuleDep {
   }
 
   fn target_name_set(&self) -> HashSet<String> {
-    self.namespaced_target_map.keys()
+    self.cmake_namespaced_target_map.keys()
       .map(|k| k.to_string())
       .collect()
   }

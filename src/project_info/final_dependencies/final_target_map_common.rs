@@ -60,7 +60,9 @@ impl Eq for FinalRequirementSpecifier { }
 
 #[derive(Clone)]
 pub struct FinalTargetConfig {
-  pub requirements_set: HashSet<FinalRequirementSpecifier>
+  pub requirements_set: HashSet<FinalRequirementSpecifier>,
+  pub cmakelists_name: String,
+  pub cmake_yaml_name: String
 }
 
 pub type FinalTargetConfigMap = HashMap<String, FinalTargetConfig>;
@@ -104,7 +106,12 @@ pub fn make_final_target_config_map(
     final_map.insert(
       target_name.to_string(),
       FinalTargetConfig {
-        requirements_set
+        requirements_set,
+        cmake_yaml_name: target_name.clone(),
+        cmakelists_name: match &raw_target_config.actual_target_name {
+          Some(name) => name.clone(),
+          None => target_name.clone()
+        }
       }
     );
   }

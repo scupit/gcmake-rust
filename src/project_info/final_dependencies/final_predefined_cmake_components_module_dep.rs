@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{HashSet, HashMap};
 
 use crate::project_info::raw_data_in::dependencies::{internal_dep_config::{RawComponentsModuleDep, ComponentsFindModuleLinks, UsageMode, CMakeModuleType}, user_given_dep_config::{UserGivenPredefinedDependencyConfig}};
 
@@ -8,6 +8,8 @@ use super::{predep_module_common::PredefinedDepFunctionality, final_target_map_c
 pub struct PredefinedCMakeComponentsModuleDep {
   raw_dep: RawComponentsModuleDep,
   lib_link_mode: UsageMode,
+  cmake_namespaced_target_map: HashMap<String, String>,
+  yaml_namespaced_target_map: HashMap<String, String>,
   components: FinalTargetConfigMap
 }
 
@@ -18,10 +20,6 @@ impl PredefinedCMakeComponentsModuleDep {
 
   pub fn web_links(&self) -> &ComponentsFindModuleLinks {
     &self.raw_dep.links
-  }
-
-  pub fn has_component_named(&self, name_searching: &str) -> bool {
-    return self.components.contains_key(name_searching);
   }
 
   pub fn found_varname(&self) -> &str {
@@ -35,26 +33,14 @@ impl PredefinedCMakeComponentsModuleDep {
     }
   }
 
-  pub fn linkable_string(&self, target_name: &str) -> Option<String> {
-    match &self.raw_dep.cmakelists_usage.link_format {
-      UsageMode::Target => {
-        if self.components.contains_key(target_name) {
-          let target_namespace: &str = &self.raw_dep.cmakelists_usage.link_value;
-          Some(format!(
-            "{}{}",
-            target_namespace,
-            target_name
-          ))
-        }
-        else {
-          None
-        }
-      },
-      UsageMode::Variable => Some(format!(
-        "${{{}}}",
-        &self.raw_dep.cmakelists_usage.link_value
-      ))
-    }
+  pub fn get_yaml_linkable_target_name(&self, target_name: &str) -> Option<&str> {
+    return self.yaml_namespaced_target_map.get(target_name)
+      .map(|the_str| &the_str[..]);
+  }
+
+  pub fn get_cmake_linkable_target_name(&self, target_name: &str) -> Option<&str> {
+    return self.cmake_namespaced_target_map.get(target_name)
+      .map(|the_str| &the_str[..]);
   }
 
   pub fn from_components_find_module_dep(
@@ -69,8 +55,48 @@ impl PredefinedCMakeComponentsModuleDep {
         err_msg
       ))?;
 
+    let mut cmake_namespaced_target_map: HashMap<String, String> = HashMap::new();
+
+    for (target_name, target_config) in &components {
+      let the_link_str: String = match &components_dep.cmakelists_usage.link_format {
+        UsageMode::Variable => {
+          format!(
+            "${{{}}}",
+            &components_dep.cmakelists_usage.link_value
+          )
+        },
+        UsageMode::Target => {
+          format!(
+            "{}{}",
+            &components_dep.cmakelists_usage.link_value,
+            &target_config.cmakelists_name
+          )
+        }
+      };
+
+      cmake_namespaced_target_map.insert(
+        target_name.to_string(),
+        the_link_str
+      );
+    }
+
+    let mut yaml_namespaced_target_map: HashMap<String, String> = HashMap::new();
+
+    for (target_name, target_config) in &components {
+      yaml_namespaced_target_map.insert(
+        target_name.to_string(),
+        format!(
+          "{}::{}",
+          dep_name.to_string(),
+          target_config.cmakelists_name
+        )
+      );
+    }
+
     return Ok(Self {
       components,
+      cmake_namespaced_target_map,
+      yaml_namespaced_target_map,
       lib_link_mode: components_dep.cmakelists_usage.link_format.clone(),
       raw_dep: components_dep.clone()
     });

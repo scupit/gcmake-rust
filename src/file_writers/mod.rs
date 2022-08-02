@@ -52,7 +52,7 @@ pub fn write_configurations<'a, FBefore, FAfter>(
           "Link specifier '{}' from target '{}' in project '{}' points to an invalid or nonexistent project.",
           link_spec.get_spec_string(),
           borrowed_target.get_name(),
-          borrow_project(&project).project_name()
+          borrow_project(&project).project_name_for_error_messages()
         ));
       },
       GraphLoadFailureReason::LinkNestedNamespaceInOtherProjectContext { target, project, link_spec } => {
@@ -62,7 +62,7 @@ pub fn write_configurations<'a, FBefore, FAfter>(
           "Link specifier '{}' from target '{}' in project '{}' tries to access nested namespaces in a dependency project, which is forbidden.",
           link_spec.get_spec_string(),
           borrowed_target.get_name(),
-          borrow_project(&project).project_name()
+          borrow_project(&project).project_name_for_error_messages()
         ));
       },
       GraphLoadFailureReason::LinkTargetNotFound { target, target_container_project, looking_in_project, link_spec, name_searching } => {
@@ -71,10 +71,10 @@ pub fn write_configurations<'a, FBefore, FAfter>(
         return wrap_error_msg(format!(
           "Unable to find target '{}' in project '{}'.\n\tUsing link specifier '{}' from target '{}' in project '{}'.",
           name_searching,
-          borrow_project(&looking_in_project).project_name(),
+          borrow_project(&looking_in_project).project_name_for_error_messages(),
           link_spec.get_spec_string(),
           borrowed_target.get_name(),
-          borrow_project(&target_container_project).project_name()
+          borrow_project(&target_container_project).project_name_for_error_messages()
         ));
       },
       GraphLoadFailureReason::DependencyCycle(mut cycle_vec) => {
@@ -89,7 +89,7 @@ pub fn write_configurations<'a, FBefore, FAfter>(
           .iter()
           .map(|cycle| format!(
             "{}::{}",
-            borrow_project(&cycle.project).project_name(),
+            borrow_project(&cycle.project).project_name_for_error_messages(),
             borrow_target(&cycle.target).get_name()
           ))
           .collect::<Vec<String>>()
@@ -104,7 +104,7 @@ pub fn write_configurations<'a, FBefore, FAfter>(
         return wrap_error_msg(format!(
           "Target '{}' in project '{}' tries to link to itself.",
           target_name,
-          borrow_project(&project).project_name()
+          borrow_project(&project).project_name_for_error_messages()
         ));
       },
       GraphLoadFailureReason::AccessNotAllowed {
@@ -120,9 +120,9 @@ pub fn write_configurations<'a, FBefore, FAfter>(
           "Link specifier '{}' from target '{}' in project '{}' points points to a target '{}' which exists in project '{}', but cannot be linked to. The target is either an executable or an internally created target.",
           link_spec.get_spec_string(),
           borrow_target(link_spec_container_target).get_name(),
-          borrow_project(&link_spec_container_project).project_name(),
+          borrow_project(&link_spec_container_project).project_name_for_error_messages(),
           borrow_target(target).get_name(),
-          borrow_project(&target_project).project_name()
+          borrow_project(&target_project).project_name_for_error_messages()
         ));
       },
       GraphLoadFailureReason::WrongUserGivenPredefLinkMode {
@@ -136,10 +136,10 @@ pub fn write_configurations<'a, FBefore, FAfter>(
         return wrap_error_msg(format!(
           "In target '{}' in project '{}':\n A {} link is specified to target '{}' in project '{}', however it should be linked as {}.",
           borrow_target(target).get_name(),
-          borrow_project(&target_project).project_name(),
+          borrow_project(&target_project).project_name_for_error_messages(),
           current_link_mode.to_str(),
           borrow_target(dependency).get_name(),
-          borrow_project(&dependency_project).project_name(),
+          borrow_project(&dependency_project).project_name_for_error_messages(),
           needed_link_mode.to_str()
         ));
       },
@@ -154,11 +154,11 @@ pub fn write_configurations<'a, FBefore, FAfter>(
         return wrap_error_msg(format!(
           "Target '{}' in project '{}' specifies both a {} and {} link to target '{}' in project '{}'. Links to a target should only be specified in one category.",
           link_receiver_name,
-          borrow_project(&link_receiver_project).project_name(),
+          borrow_project(&link_receiver_project).project_name_for_error_messages(),
           current_link_mode.to_str(),
           attempted_link_mode.to_str(),
           link_giver_name,
-          borrow_project(&link_giver_project).project_name()
+          borrow_project(&link_giver_project).project_name_for_error_messages()
         ));
       },
       GraphLoadFailureReason::ComplexTargetRequirementNotSatisfied {
@@ -169,25 +169,28 @@ pub fn write_configurations<'a, FBefore, FAfter>(
         ref failed_requirement
       } => {
         let base_message: String = format!(
-          "Target '{}' in project '{}' failed to satisfy a requirement of its linked dependency target '{}' from project '{}':\n\t",
+          "Target '{}' in project '{}' failed to satisfy a requirement of its linked dependency target '{}':\n\t",
           borrow_target(target).get_name(),
-          borrow_project(target_project).project_name(),
-          borrow_target(dependency).get_name(),
-          borrow_project(dependency_project).project_name(),
+          borrow_project(target_project).project_name_for_error_messages(),
+          borrow_target(dependency).get_yaml_namespaced_target_name()
         );
 
         let requirement_specific_message: String = match failed_requirement {
           OwningComplexTargetRequirement::OneOf(target_list) => {
             let target_list_str: String = target_list
               .iter()
-              .map(|needed_target| borrow_target(needed_target).get_namespaced_output_target_name().to_string())
+              .map(|needed_target|
+                borrow_target(needed_target)
+                  .get_yaml_namespaced_target_name()
+                  .to_string()
+              )
               .collect::<Vec<String>>()
               .join(", ");
 
             format!(
               "The target must link to one of: ({}) from '{}'",
               target_list_str,
-              borrow_project(dependency_project).project_name()
+              borrow_project(dependency_project).project_name_for_error_messages()
             )
           },
           OwningComplexTargetRequirement::ExclusiveFrom(excluded_target) => {
@@ -195,12 +198,9 @@ pub fn write_configurations<'a, FBefore, FAfter>(
               "The target links to both '{}' and '{}' from '{}', but '{}' and '{}' are mutually exclusive. You can link to one or the other, but not both at once.",
               borrow_target(dependency).get_name(),
               borrow_target(excluded_target).get_name(),
-              borrow_project(dependency_project).project_name(),
-              // TODO: For libraries which are linked using a variable instead of per-target,
-              // this will display the variable name. This is currently fine because wxWidgets is the
-              // only lib which links this way, however it could cause problems in the future. 
-              borrow_target(dependency).get_namespaced_output_target_name().to_string(),
-              borrow_target(excluded_target).get_namespaced_output_target_name().to_string()
+              borrow_project(dependency_project).project_name_for_error_messages(),
+              borrow_target(dependency).get_yaml_namespaced_target_name(),
+              borrow_target(excluded_target).get_yaml_namespaced_target_name()
             )
           }
         };

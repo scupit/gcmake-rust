@@ -124,22 +124,33 @@ impl FinalPredefinedDependencyConfig {
     }
   }
 
-  pub fn target_name_set(&self) -> HashSet<String> {
-    return self.unwrap_dep_common().target_name_set();
-  }
+  // pub fn target_name_set(&self) -> HashSet<String> {
+  //   return self.unwrap_dep_common().target_name_set();
+  // }
 
   pub fn get_target_config_map(&self) -> &FinalTargetConfigMap {
     return self.unwrap_dep_common().get_target_config_map();
   }
 
-  pub fn namespaced_target(&self, target_name: &str) -> Option<String> {
+  pub fn get_cmake_namespaced_target_name(&self, target_name: &str) -> Option<String> {
     match self.predefined_dep_info() {
       FinalPredepInfo::Subdirectory(subdir_dep) =>
-        subdir_dep.namespaced_target(target_name).map(String::from),
+        subdir_dep.get_cmake_linkable_target_name(target_name).map(String::from),
       FinalPredepInfo::CMakeModule(module_dep) =>
-        module_dep.namespaced_target(target_name).map(String::from),
+        module_dep.get_cmake_linkable_target_name(target_name).map(String::from),
       FinalPredepInfo::CMakeComponentsModule(components_dep) =>
-        components_dep.linkable_string(target_name)
+        components_dep.get_cmake_linkable_target_name(target_name).map(String::from)
+    }
+  }
+
+  pub fn get_yaml_namespaced_target_name(&self, target_name: &str) -> Option<String> {
+    match self.predefined_dep_info() {
+      FinalPredepInfo::Subdirectory(subdir_dep) =>
+        subdir_dep.get_yaml_linkable_target_name(target_name).map(String::from),
+      FinalPredepInfo::CMakeModule(module_dep) =>
+        module_dep.get_yaml_linkable_target_name(target_name).map(String::from),
+      FinalPredepInfo::CMakeComponentsModule(components_dep) =>
+        components_dep.get_yaml_linkable_target_name(target_name).map(String::from)
     }
   }
 
