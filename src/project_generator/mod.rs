@@ -152,8 +152,8 @@ pub fn create_project_at(
 
     println!("Generated {}", main_file_name(project_name, &lang_selection, &output_type_selection));
     if let ProjectTypeCreating::RootProject = &project_type_creating {
-      for default_file in [ ".clang-format", ".gitignore" ] {
-        println!("Checking for default {}...", default_file);
+      for default_file in [ ".clang-format", ".gitignore", ".clang-tidy" ] {
+        println!("\nChecking for default {}...", default_file);
 
         // Copy file from the gcmake config root dir, if the file exists.
         let mut full_default_file_path: PathBuf = gcmake_config_root_dir();
@@ -163,7 +163,7 @@ pub fn create_project_at(
           println!("{} is a symlink. Resolving...", full_default_file_path.to_str().unwrap());
           full_default_file_path = fs::read_link(&full_default_file_path)?;
           println!(
-            "The {} symlink points to '{}'. Using that path instead.",
+            "The {} symlink points to '{}'. Using that path instead.\n",
             default_file,
             full_default_file_path.to_str().unwrap()
           );
