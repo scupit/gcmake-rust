@@ -1,4 +1,6 @@
-function( configure_installation )
+function( configure_installation
+  project_component_name_var
+)
   set( targets_installing "${MY_INSTALLABLE_TARGETS}" )
   set( bin_files_installing "${MY_NEEDED_BIN_FILES}" )
 
@@ -13,6 +15,11 @@ function( configure_installation )
   list( LENGTH bin_files_installing has_files_to_install )
   list( LENGTH additional_installs has_additional_installs )
 
+  # NOTE: Don't make this all CAPS. It doesn't play nice when creating a multi-component NSIS
+  # installer. Either that or the default "Unspecified" component doesn't play nice.
+  set( project_component_name ProjectOutputs )
+  set( ${project_component_name_var} ${project_component_name} PARENT_SCOPE )
+
   if( has_targets_to_install )
     install( TARGETS ${targets_installing}
       EXPORT ${PROJECT_NAME}Targets
@@ -23,6 +30,7 @@ function( configure_installation )
       ARCHIVE
         DESTINATION lib
         # DESTINATION lib/static
+      COMPONENT ${project_component_name}
       FILE_SET HEADERS
         DESTINATION "include/${PROJECT_INCLUDE_PREFIX}"
     )
@@ -53,12 +61,14 @@ function( configure_installation )
 
     install( DIRECTORY "${MY_RUNTIME_OUTPUT_DIR}/resources"
       DESTINATION bin
+      COMPONENT ${project_component_name}
     )
   
     install( EXPORT ${PROJECT_NAME}Targets
       FILE ${PROJECT_NAME}Targets.cmake
       NAMESPACE "${PROJECT_NAME}::"
       DESTINATION "lib/cmake/${PROJECT_NAME}"
+      COMPONENT ${project_component_name}
     )
 
     include( CMakePackageConfigHelpers )
@@ -79,6 +89,7 @@ function( configure_installation )
       "${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}Config.cmake"
       "${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}ConfigVersion.cmake"
       DESTINATION "lib/cmake/${PROJECT_NAME}"
+      COMPONENT ${project_component_name}
     )
 
     export( EXPORT ${PROJECT_NAME}Targets

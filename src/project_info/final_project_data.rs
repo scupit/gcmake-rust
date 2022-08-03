@@ -1,10 +1,8 @@
 use std::{collections::{HashMap, HashSet}, path::{Path, PathBuf}, io, rc::Rc, fs::{self}};
 
-use regex::Regex;
-
 use crate::project_info::path_manipulation::cleaned_pathbuf;
 
-use super::{path_manipulation::{cleaned_path_str, relative_to_project_root, absolute_path}, final_dependencies::{FinalGCMakeDependency, FinalPredefinedDependencyConfig}, raw_data_in::{RawProject, dependencies::internal_dep_config::AllRawPredefinedDependencies, BuildConfigMap, BuildType, LanguageConfigMap, OutputItemType, PreBuildConfigIn, SpecificCompilerSpecifier, BuildConfigCompilerSpecifier, TargetBuildConfigMap, TargetSpecificBuildType, LinkSection, RawTestFramework}, final_project_configurables::{FinalProjectType}, CompiledOutputItem, helpers::{parse_subproject_data, parse_root_project_data, populate_files, find_prebuild_script, PrebuildScriptFile, validate_raw_project_outputs, ProjectOutputType, RetrievedCodeFileType, retrieve_file_type, parse_test_project_data}, PreBuildScript, OutputItemLinks, FinalTestFramework, base_include_prefix_for_test, gcmake_constants::{SRC_DIR, INCLUDE_DIR, TEMPLATE_IMPL_DIR, TESTS_DIR, SUBPROJECTS_DIR}};
+use super::{path_manipulation::{cleaned_path_str, relative_to_project_root, absolute_path}, final_dependencies::{FinalGCMakeDependency, FinalPredefinedDependencyConfig}, raw_data_in::{RawProject, dependencies::internal_dep_config::AllRawPredefinedDependencies, BuildConfigMap, BuildType, LanguageConfigMap, OutputItemType, PreBuildConfigIn, SpecificCompilerSpecifier, BuildConfigCompilerSpecifier, TargetBuildConfigMap, TargetSpecificBuildType, LinkSection, RawTestFramework, RawInstallerConfig}, final_project_configurables::{FinalProjectType}, CompiledOutputItem, helpers::{parse_subproject_data, parse_root_project_data, populate_files, find_prebuild_script, PrebuildScriptFile, validate_raw_project_outputs, ProjectOutputType, RetrievedCodeFileType, retrieve_file_type, parse_test_project_data}, PreBuildScript, OutputItemLinks, FinalTestFramework, base_include_prefix_for_test, gcmake_constants::{SRC_DIR, INCLUDE_DIR, TEMPLATE_IMPL_DIR, TESTS_DIR, SUBPROJECTS_DIR}, FinalInstallerConfig};
 
 const SUBPROJECT_JOIN_STR: &'static str = "_S_";
 const TEST_PROJECT_JOIN_STR: &'static str = "_TP_";
@@ -181,6 +179,7 @@ pub struct FinalProjectData {
   absolute_project_root: PathBuf,
   pub version: ThreePartVersion,
   // project: RawProject,
+  installer_config: FinalInstallerConfig,
   supported_compilers: Rc<HashSet<SpecificCompilerSpecifier>>,
   project_base_name: String,
   full_namespaced_project_name: String,
@@ -653,6 +652,19 @@ impl FinalProjectData {
       )));
     }
 
+    let installer_config: FinalInstallerConfig = match &raw_project.installer_config {
+      None => FinalInstallerConfig {
+        title: raw_project.name.clone(),
+        description: raw_project.description.clone(),
+        name_prefix: raw_project.name.clone(),
+      },
+      Some(RawInstallerConfig { title, description, name_prefix }) => FinalInstallerConfig {
+        title: title.clone().unwrap_or(raw_project.name.clone()),
+        description: description.clone().unwrap_or(raw_project.description.clone()),
+        name_prefix: name_prefix.clone().unwrap_or(raw_project.name.clone())
+      }
+    };
+
     let project_name_for_error_messages: String = full_namespaced_project_name
       .split(SUBPROJECT_JOIN_STR)
       .collect::<Vec<&str>>()
@@ -667,6 +679,7 @@ impl FinalProjectData {
       full_namespaced_project_name,
       description: raw_project.description.to_string(),
       version: maybe_version.unwrap(),
+      installer_config,
       vendor: project_vendor,
       full_include_prefix,
       base_include_prefix: raw_project.get_include_prefix().to_string(),
@@ -1128,6 +1141,18 @@ impl FinalProjectData {
 
   pub fn get_description(&self) -> &str {
     &self.description
+  }
+
+  pub fn get_installer_title(&self) -> &str {
+    &self.installer_config.title
+  }
+
+  pub fn get_installer_description(&self) -> &str {
+    &self.installer_config.description
+  }
+
+  pub fn get_installer_name_prefix(&self) -> &str {
+    &self.installer_config.name_prefix
   }
 
   pub fn get_vendor(&self) -> &str {

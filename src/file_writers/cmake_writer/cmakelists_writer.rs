@@ -472,6 +472,14 @@ impl<'a> CMakeListsWriter<'a> {
 
     self.write_newline()?;
     writeln!(&self.cmakelists_file, "get_property( isMultiConfigGenerator GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)")?;
+    
+    // Change the default install COMPONENT to play nice with NSIS installers.
+    self.set_basic_var(
+      "",
+      "CMAKE_INSTALL_DEFAULT_COMPONENT_NAME",
+      "Dependencies"  // Make sure this isn't all caps. All CAPS names were causing issues with
+                      // multi-component NSIS installers.
+    )?;
 
     self.set_basic_var(
       "",
@@ -1936,12 +1944,16 @@ impl<'a> CMakeListsWriter<'a> {
 
     match &self.project_data.get_project_type() {
       FinalProjectType::Root => {
-        writeln!(&self.cmakelists_file, "if( \"${{CMAKE_SOURCE_DIR}}\" STREQUAL \"${{CMAKE_CURRENT_SOURCE_DIR}}\" )")?;
-        writeln!(&self.cmakelists_file, "\tconfigure_installation()")?;
-        writeln!(&self.cmakelists_file, "else()")?;
-        writeln!(&self.cmakelists_file, "\traise_target_list()")?;
-        writeln!(&self.cmakelists_file, "\traise_needed_bin_files_list()")?;
-        writeln!(&self.cmakelists_file, "\traise_install_list()")?;
+        // writeln!(&self.cmakelists_file, "if( \"${{CMAKE_SOURCE_DIR}}\" STREQUAL \"${{CMAKE_CURRENT_SOURCE_DIR}}\" )")?;
+        // writeln!(&self.cmakelists_file, "\tconfigure_installation( LOCAL_PROJECT_COMPONENT_NAME )")?;
+        // writeln!(&self.cmakelists_file, "else()")?;
+        // writeln!(&self.cmakelists_file, "\traise_target_list()")?;
+        // writeln!(&self.cmakelists_file, "\traise_needed_bin_files_list()")?;
+        // writeln!(&self.cmakelists_file, "\traise_install_list()")?;
+        // writeln!(&self.cmakelists_file, "endif()")?;
+
+        writeln!(&self.cmakelists_file, "if( \"${{CMAKE_CURRENT_SOURCE_DIR}}\" STREQUAL \"${{TOPLEVEL_PROJECT_DIR}}\" )")?;
+        writeln!(&self.cmakelists_file, "\tconfigure_installation( LOCAL_PROJECT_COMPONENT_NAME )")?;
         writeln!(&self.cmakelists_file, "endif()")?;
       },
       FinalProjectType::Subproject { } => {
@@ -1964,8 +1976,11 @@ impl<'a> CMakeListsWriter<'a> {
     )?;
 
     writeln!(&self.cmakelists_file,
-      "\tgcmake_configure_cpack( \"{}\" )",
-      self.project_data.get_vendor()
+      "\tgcmake_configure_cpack(\n\t\tVENDOR \"{}\"\n\t\tPROJECT_COMPONENT ${{LOCAL_PROJECT_COMPONENT_NAME}}\n\t\tINSTALLER_TITLE \"{}\"\n\t\tINSTALLER_DESCRIPTION \"{}\"\n\t\tINSTALLER_EXE_PREFIX \"{}\"\n\t)",
+      self.project_data.get_vendor(),
+      self.project_data.get_installer_title(),
+      self.project_data.get_installer_description(),
+      self.project_data.get_installer_name_prefix()
     )?;
 
     writeln!(&self.cmakelists_file, "endif()")?;

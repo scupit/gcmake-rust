@@ -45,6 +45,14 @@ impl RawTestFramework {
 
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(deny_unknown_fields)]
+pub struct RawInstallerConfig {
+  pub title: Option<String>,
+  pub description: Option<String>,
+  pub name_prefix: Option<String>
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(deny_unknown_fields)]
 pub struct RawProject {
   pub name: String,
   // If possible, should be the same as the project name
@@ -52,6 +60,7 @@ pub struct RawProject {
   pub description: String,
   pub vendor: String,
   pub version: String,
+  pub installer_config: Option<RawInstallerConfig>,
   pub default_build_type: BuildType,
   pub languages: LanguageConfigMap,
   pub prebuild_config: Option<PreBuildConfigIn>,

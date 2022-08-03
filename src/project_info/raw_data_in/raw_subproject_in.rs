@@ -37,6 +37,7 @@ impl Into<RawProject> for RawSubproject {
       include_prefix: self.include_prefix,
       description: self.description,
       version: self.version,
+      installer_config: None,
       // NOTE: This language config is only a placeholder. Subprojects will inherit
       // language info from their parent project.
       languages: LanguageConfigMap {

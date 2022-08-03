@@ -60,6 +60,7 @@ pub fn get_default_project_config(
     description: String::from(project_description),
     vendor: String::from(project_vendor),
     version: String::from("0.0.1"),
+    installer_config: None,
     supported_compilers: HashSet::from_iter([
       SpecificCompilerSpecifier::GCC,
       SpecificCompilerSpecifier::Clang,

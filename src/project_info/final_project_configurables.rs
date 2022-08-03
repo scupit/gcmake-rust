@@ -53,6 +53,12 @@ pub enum FinalProjectType {
   }
 }
 
+pub struct FinalInstallerConfig {
+  pub title: String,
+  pub description: String,
+  pub name_prefix: String
+}
+
 pub enum PreBuildScript {
   Exe(CompiledOutputItem),
   Python(String)
