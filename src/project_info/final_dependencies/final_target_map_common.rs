@@ -2,8 +2,9 @@ use std::collections::{HashMap, HashSet};
 use std::hash::Hash;
 use std::iter::FromIterator;
 
+use crate::project_info::parsers::platform_spec_parser::{SystemSpecCombinedInfo, parse_leading_system_spec, SystemSpecParseSuccessData};
 use crate::project_info::raw_data_in::dependencies::internal_dep_config::raw_dep_common::RawPredepCommon;
-use crate::project_info::raw_data_in::dependencies::internal_dep_config::{RawPredefinedTargetMapIn, RawMutualExclusionSet};
+use crate::project_info::raw_data_in::dependencies::internal_dep_config::{RawPredefinedTargetMapIn, RawTargetConfig};
 
 #[derive(Clone)]
 pub enum FinalRequirementSpecifier {
@@ -61,21 +62,38 @@ impl Eq for FinalRequirementSpecifier { }
 #[derive(Clone)]
 pub struct FinalTargetConfig {
   pub requirements_set: HashSet<FinalRequirementSpecifier>,
+  pub system_spec_info: SystemSpecCombinedInfo,
   pub cmakelists_name: String,
   pub cmake_yaml_name: String
 }
 
 pub type FinalTargetConfigMap = HashMap<String, FinalTargetConfig>;
 
+type NameParsedTargetMapIn<'a> = HashMap<String, (SystemSpecParseSuccessData<'a>, &'a RawTargetConfig)>;
+
+fn name_parsed_target_map(raw_target_map: &RawPredefinedTargetMapIn) -> Result<NameParsedTargetMapIn, String> {
+  let mut resulting_map = NameParsedTargetMapIn::new();
+  
+  for (target_name_with_system_spec, raw_target_config) in raw_target_map {
+    let system_spec_parse_data: SystemSpecParseSuccessData = parse_leading_system_spec(target_name_with_system_spec)?;
+
+    resulting_map.insert(
+      system_spec_parse_data.1.trim().to_string(),
+      (system_spec_parse_data, raw_target_config)
+    );
+  }
+
+  return Ok(resulting_map);
+}
+
 pub fn make_final_target_config_map(
   dep_name: &str,
   dep_info: &dyn RawPredepCommon
-  // mutual_exclusion_set: &Option<RawMutualExclusionSet>
 ) -> Result<FinalTargetConfigMap, String> {
   let mut final_map = FinalTargetConfigMap::new();
-  let raw_target_config_map: &RawPredefinedTargetMapIn = dep_info.raw_target_map_in();
+  let raw_target_config_map_with_parsed_names: NameParsedTargetMapIn = name_parsed_target_map(dep_info.raw_target_map_in())?;
 
-  for (target_name, raw_target_config) in raw_target_config_map {
+  for (target_name, ((maybe_system_spec, _), raw_target_config)) in &raw_target_config_map_with_parsed_names {
     let mut requirements_set: HashSet<FinalRequirementSpecifier> = HashSet::new();
 
     if let Some(interdependent_requirement_specifier) = &raw_target_config.requires {
@@ -84,7 +102,7 @@ pub fn make_final_target_config_map(
 
         let maybe_err_msg: Option<String> = verify_requirement_spec(
           &given_lib_names,
-          raw_target_config_map,
+          &raw_target_config_map_with_parsed_names,
           full_specifier,
           target_name,
           dep_name
@@ -107,10 +125,11 @@ pub fn make_final_target_config_map(
       target_name.to_string(),
       FinalTargetConfig {
         requirements_set,
-        cmake_yaml_name: target_name.clone(),
+        cmake_yaml_name: target_name.to_string(),
+        system_spec_info: maybe_system_spec.clone().unwrap_or_default(),
         cmakelists_name: match &raw_target_config.actual_target_name {
           Some(name) => name.clone(),
-          None => target_name.clone()
+          None => target_name.to_string()
         }
       }
     );
@@ -122,7 +141,7 @@ pub fn make_final_target_config_map(
 
       let maybe_err_msg: Option<String> = verify_exclusion_spec(
         &exclusion_group,
-        raw_target_config_map,
+        &raw_target_config_map_with_parsed_names,
         exclusion_spec,
         dep_name
       );
@@ -150,7 +169,7 @@ pub fn make_final_target_config_map(
 
 fn verify_requirement_spec(
   given_lib_names: &HashSet<String>,
-  raw_target_config_map: &RawPredefinedTargetMapIn,
+  raw_target_config_map: &NameParsedTargetMapIn,
   full_specifier: &str,
   target_name: &str,
   dep_name: &str
@@ -182,7 +201,7 @@ fn verify_requirement_spec(
 
 fn verify_exclusion_spec(
   given_lib_names: &HashSet<String>,
-  raw_target_config_map: &RawPredefinedTargetMapIn,
+  raw_target_config_map: &NameParsedTargetMapIn,
   full_exclusion_specifier: &str,
   dep_name: &str
 ) -> Option<String> {

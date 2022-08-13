@@ -11,11 +11,11 @@ type RequirementSpecifier = String;
 
 #[derive(Deserialize, Clone)]
 #[serde(deny_unknown_fields)]
-pub struct TargetConfig {
+pub struct RawTargetConfig {
   pub requires: Option<HashSet<RequirementSpecifier>>,
   pub actual_target_name: Option<String>
 }
 
-pub type RawPredefinedTargetMapIn = HashMap<String, TargetConfig>;
+pub type RawPredefinedTargetMapIn = HashMap<String, RawTargetConfig>;
 
 pub type RawMutualExclusionSet = HashSet<String>;

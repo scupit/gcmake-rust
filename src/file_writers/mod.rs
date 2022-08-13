@@ -1,7 +1,7 @@
 mod cmake_writer;
 
 use std::{io::{self, ErrorKind}, rc::Rc, cell::{RefCell, Ref}};
-use crate::project_info::{final_project_data::{UseableFinalProjectDataGroup}, dependency_graph_mod::dependency_graph::{DependencyGraphInfoWrapper, DependencyGraph, GraphLoadFailureReason, TargetNode, OwningComplexTargetRequirement}};
+use crate::project_info::{final_project_data::{UseableFinalProjectDataGroup}, dependency_graph_mod::dependency_graph::{DependencyGraphInfoWrapper, DependencyGraph, GraphLoadFailureReason, TargetNode, OwningComplexTargetRequirement}, SystemSpecCombinedInfo};
 
 pub struct ProjectWriteConfiguration {
   name: String,
@@ -111,8 +111,8 @@ pub fn write_configurations<'a, FBefore, FAfter>(
         link_spec,
         ref link_spec_container_target,
         link_spec_container_project,
-        target_project,
-        ref target,
+        dependency_project: target_project,
+        dependency: ref target,
         given_access_mode: _,
         needed_access_mode: _
       } => {
@@ -206,6 +206,79 @@ pub fn write_configurations<'a, FBefore, FAfter>(
         };
 
         return wrap_error_msg(format!("{}{}", base_message, requirement_specific_message));
+      },
+      GraphLoadFailureReason::DuplicateLinkTarget {
+        ref link_spec_container_target,
+        link_spec_container_project: _,
+        ref dependency_project,
+        ref dependency
+      } => {
+        return wrap_error_msg(format!(
+          "Target '{}' from project '{}' specifies multiple links to '{}'. Please remove any duplicate links.",
+          borrow_target(link_spec_container_target).get_name(),
+          borrow_project(dependency_project).project_name_for_error_messages(),
+          borrow_target(dependency).get_yaml_namespaced_target_name(),
+        ));
+      },
+      GraphLoadFailureReason::LinkSystemSubsetMismatch {
+        ref link_spec,
+        link_system_spec_info: link_target_spec_info,
+        ref link_spec_container_target,
+        ref link_spec_container_project,
+        dependency_project: _,
+        ref dependency,
+        ref transitively_required_by
+      } => {
+        let borrowed_dependency = borrow_target(dependency);
+
+
+        let transitive_target_str: String = match transitively_required_by {
+          None => String::from(""),
+          Some(middle_dep_node) => {
+            format!(
+              " (as a transitive dependency required by {})",
+              borrow_target(middle_dep_node).get_yaml_namespaced_target_name()
+            )
+          }
+        };
+
+        let link_spec_str: String = match link_spec {
+          None => String::from(""),
+          Some(used_link_spec) => {
+            format!(
+              " using link spec '{}'",
+              used_link_spec.get_spec_string()
+            )
+          }
+        };
+
+        return wrap_error_msg(format!(
+          "Target '{}' in project '{}' links to dependency '{}' on {}{}{}, but '{}' is only supported on systems (({})).",
+          borrow_target(link_spec_container_target).get_name(),
+          borrow_project(link_spec_container_project).project_name_for_error_messages(),
+          borrowed_dependency.get_yaml_namespaced_target_name(),
+          systems_string(&link_target_spec_info),
+          link_spec_str,
+          transitive_target_str,
+          borrowed_dependency.get_yaml_namespaced_target_name(),
+          borrowed_dependency.get_system_spec_info().explicit_name_list().join(", ")
+        ));
+      },
+      GraphLoadFailureReason::LinkSystemRequirementImpossible {
+        ref target,
+        ref target_container_project,
+        ref link_system_spec_info,
+        ref dependency
+      } => {
+        return wrap_error_msg(format!(
+          "Target '{}' on {} in project '{}' links on {} to dependency '{}', which is available on {}. This association is impossible.",
+          borrow_target(target).get_name(),
+          systems_string(borrow_target(target).get_system_spec_info()),
+          borrow_project(target_container_project).project_name_for_error_messages(),
+          systems_string(link_system_spec_info),
+          borrow_target(dependency).get_yaml_namespaced_target_name(),
+          systems_string(borrow_target(dependency).get_system_spec_info())
+        ));
       }
     }
   }
@@ -218,4 +291,16 @@ fn wrap_error_msg(msg: impl AsRef<str>) -> io::Result<()> {
     ErrorKind::Other,
     format!("Error: {}", msg.as_ref().to_string())
   ));
+}
+
+fn systems_string(system_spec_info: &SystemSpecCombinedInfo) -> String {
+  return if system_spec_info.includes_all() {
+    String::from("all systems")
+  }
+  else {
+    format!(
+      "systems (({}))",
+      system_spec_info.explicit_name_list().join(", "),
+    )
+  }
 }

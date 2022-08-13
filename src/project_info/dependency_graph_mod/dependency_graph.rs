@@ -1,6 +1,6 @@
-use std::{cell::RefCell, rc::{Rc, Weak}, hash::{Hash, Hasher}, collections::{HashMap, HashSet}};
+use std::{cell::RefCell, rc::{Rc, Weak}, hash::{Hash, Hasher}, collections::{HashMap, HashSet}, alloc::System, borrow::Borrow};
 
-use crate::project_info::{LinkMode, link_spec_parser::LinkAccessMode, CompiledOutputItem, PreBuildScript, OutputItemLinks, final_project_data::FinalProjectData, final_dependencies::{FinalGCMakeDependency, FinalPredefinedDependencyConfig, GCMakeDependencyStatus, FinalRequirementSpecifier}, LinkSpecifier, FinalProjectType};
+use crate::project_info::{LinkMode, CompiledOutputItem, PreBuildScript, OutputItemLinks, final_project_data::FinalProjectData, final_dependencies::{FinalGCMakeDependency, FinalPredefinedDependencyConfig, GCMakeDependencyStatus, FinalRequirementSpecifier}, LinkSpecifier, FinalProjectType, parsers::{link_spec_parser::{LinkAccessMode, LinkSpecTargetList, LinkSpecifierTarget}, platform_spec_parser::SystemSpecCombinedInfo}};
 
 use super::hash_wrapper::RcRefcHashWrapper;
 
@@ -35,6 +35,27 @@ impl CycleNode {
 }
 
 pub enum GraphLoadFailureReason {
+  DuplicateLinkTarget {
+    link_spec_container_target: Rc<RefCell<TargetNode>>,
+    link_spec_container_project: Rc<RefCell<DependencyGraph>>,
+    dependency_project: Rc<RefCell<DependencyGraph>>,
+    dependency: Rc<RefCell<TargetNode>>,
+  },
+  LinkSystemRequirementImpossible {
+    target: Rc<RefCell<TargetNode>>,
+    target_container_project: Rc<RefCell<DependencyGraph>>,
+    link_system_spec_info: SystemSpecCombinedInfo,
+    dependency: Rc<RefCell<TargetNode>>
+  },
+  LinkSystemSubsetMismatch {
+    link_spec: Option<LinkSpecifier>,
+    link_system_spec_info: SystemSpecCombinedInfo,
+    link_spec_container_target: Rc<RefCell<TargetNode>>,
+    link_spec_container_project: Rc<RefCell<DependencyGraph>>,
+    dependency_project: Rc<RefCell<DependencyGraph>>,
+    dependency: Rc<RefCell<TargetNode>>,
+    transitively_required_by: Option<Rc<RefCell<TargetNode>>>
+  },
   LinkPointsToInvalidOrNonexistentProject {
     target: Rc<RefCell<TargetNode>>,
     project: Rc<RefCell<DependencyGraph>>,
@@ -77,8 +98,8 @@ pub enum GraphLoadFailureReason {
     link_spec: LinkSpecifier,
     link_spec_container_target: Rc<RefCell<TargetNode>>,
     link_spec_container_project: Rc<RefCell<DependencyGraph>>,
-    target_project: Rc<RefCell<DependencyGraph>>,
-    target: Rc<RefCell<TargetNode>>,
+    dependency_project: Rc<RefCell<DependencyGraph>>,
+    dependency: Rc<RefCell<TargetNode>>,
     given_access_mode: LinkAccessMode,
     needed_access_mode: LinkAccessMode
   },
@@ -91,11 +112,9 @@ pub enum GraphLoadFailureReason {
   }
 }
 
-// TODO: When writing these, I need to somehow specify whether the target needs
-// to be linked using the individual targets themselves, or through a variable (like wxWidgets).
-// This is determined by the dependency project the linked target is a member of.
-struct Link {
+pub struct Link {
   target_name: String,
+  system_spec_info: SystemSpecCombinedInfo,
   link_mode: LinkMode,
   target: Weak<RefCell<TargetNode>>
 }
@@ -103,14 +122,18 @@ struct Link {
 impl Link {
   pub fn new(
     target_name: String,
+    system_spec_info: SystemSpecCombinedInfo,
     target: Weak<RefCell<TargetNode>>,
     link_mode: LinkMode
   ) -> Self {
-    
-    Weak::upgrade(&target).unwrap().as_ref().borrow_mut().linked_to_count += 1;
+
+    unsafe {
+      (*Weak::upgrade(&target).unwrap().as_ptr()).linked_to_count += 1;
+    }
 
     Self {
       target_name,
+      system_spec_info,
       target,
       link_mode
     }
@@ -118,6 +141,10 @@ impl Link {
 
   fn target_id(&self) -> TargetId {
     Weak::upgrade(&self.target).unwrap().as_ref().borrow().unique_target_id()
+  }
+
+  pub fn get_system_spec_info(&self) -> &SystemSpecCombinedInfo {
+    &self.system_spec_info
   }
 }
 
@@ -193,6 +220,8 @@ pub struct TargetNode {
   namespaced_cmake_target_name: String,
   namespaced_yaml_target_name: String,
 
+  system_specifier_info: SystemSpecCombinedInfo,
+
   requires_custom_install_if_linked_to_output_lib: bool,
   is_linked_to_output_lib: bool,
 
@@ -212,6 +241,7 @@ impl TargetNode {
   fn new(
     id_var: &mut TargetId,
     locator_name: impl AsRef<str>,
+    system_specifier_info: SystemSpecCombinedInfo,
     output_target_name: String,
     internal_receiver_name: String,
     namespaced_output_target_name: String,
@@ -261,6 +291,7 @@ impl TargetNode {
       the_unique_id: unique_id,
       node_type,
       locator_name: locator_name.as_ref().to_string(),
+      system_specifier_info,
 
       output_target_name,
       internal_receiver_name,
@@ -340,6 +371,10 @@ impl TargetNode {
     &self.namespaced_cmake_target_name
   }
 
+  pub fn get_system_spec_info(&self) -> &SystemSpecCombinedInfo {
+    &self.system_specifier_info
+  }
+
   pub fn has_links(&self) -> bool {
     let num_regular_links: usize = self.depends_on.iter()
       .filter(|(_, link)| Weak::upgrade(&link.target).unwrap().as_ref().borrow().is_regular_node())
@@ -347,6 +382,10 @@ impl TargetNode {
       .len();
 
     return num_regular_links > 0;
+  }
+
+  pub fn get_link_by_id(&self, target_id: TargetId) -> Option<&Link> {
+    return self.depends_on.get(&target_id)
   }
 
   pub fn container_project_id(&self) -> ProjectId {
@@ -528,6 +567,8 @@ impl DependencyGraph {
     full_graph.as_ref().borrow().make_auto_inner_project_link_associations()?;
     full_graph.as_ref().borrow().ensure_proper_predefined_dep_links()?;
 
+    full_graph.as_ref().borrow().ensure_valid_system_spec_links()?;
+
     let all_used_targets: HashSet<RcRefcHashWrapper<TargetNode>> = match full_graph.as_ref().borrow().find_cycle() {
       CycleCheckResult::AllUsedTargets(all_used) => all_used,
       CycleCheckResult::Cycle(cycle_vec) => {
@@ -669,6 +710,84 @@ impl DependencyGraph {
     return None;
   }
 
+  // TODO: Refactor all these as_ref()s and borrow()s a bit.
+  fn check_target_system_spec_links_are_valid(target: &Rc<RefCell<TargetNode>>) -> Result<(), GraphLoadFailureReason> {
+    for (_, link) in &target.as_ref().borrow().depends_on {
+      let dependency: Rc<RefCell<TargetNode>> = Weak::upgrade(&link.target).unwrap();
+
+      // println!(
+      //   "{}: {:?}\n\tLinked using: {:?}\n\tto {}: {:?}",
+      //   target.as_ref().borrow().get_yaml_namespaced_target_name(),
+      //   target.as_ref().borrow().system_specifier_info.explicit_name_list(),
+      //   link.system_spec_info.explicit_name_list(),
+      //   dependency.as_ref().borrow().get_yaml_namespaced_target_name(),
+      //   dependency.as_ref().borrow().system_specifier_info.explicit_name_list()
+      // );
+
+      let target_systems: SystemSpecCombinedInfo = target.as_ref().borrow().system_specifier_info.clone();
+      let link_systems: SystemSpecCombinedInfo = link.system_spec_info.clone();
+      let dependency_systems: SystemSpecCombinedInfo = dependency.as_ref().borrow().system_specifier_info.clone();
+
+      if !link_systems.is_subset_of(&dependency_systems) {
+        return Err(GraphLoadFailureReason::LinkSystemSubsetMismatch {
+          link_spec: None,
+          link_spec_container_target: Rc::clone(target),
+          link_spec_container_project: Rc::clone(target).as_ref().borrow().container_project(),
+          dependency: Rc::clone(&dependency),
+          dependency_project: dependency.as_ref().borrow().container_project(),
+          link_system_spec_info: link.system_spec_info.clone(),
+          transitively_required_by: None
+        })
+      }
+      else if !link_systems.is_subset_of(&target_systems) {
+        return Err(GraphLoadFailureReason::LinkSystemRequirementImpossible {
+          target: Rc::clone(target),
+          target_container_project: target.as_ref().borrow().container_project(),
+          link_system_spec_info: link.system_spec_info.clone(),
+          dependency
+        });
+      }
+      else if !(link_systems.intersection(&dependency_systems)).is_subset_of(&target_systems) {
+        return Err(GraphLoadFailureReason::LinkSystemRequirementImpossible {
+          target: Rc::clone(target),
+          target_container_project: target.as_ref().borrow().container_project(),
+          link_system_spec_info: link.system_spec_info.clone(),
+          dependency
+        });
+      }
+    }
+
+    Ok(())
+  }
+
+  fn ensure_valid_system_spec_links(&self) -> Result<(), GraphLoadFailureReason> {
+    for (_, predef_dep_graph) in &self.predefined_deps {
+      predef_dep_graph.as_ref().borrow().ensure_valid_system_spec_links()?;
+    }
+
+    if let Some(pre_build_target) = &self.pre_build_wrapper {
+      Self::check_target_system_spec_links_are_valid(pre_build_target)?;
+    }
+
+    for (_, target) in self.targets.borrow().iter() {
+      Self::check_target_system_spec_links_are_valid(target)?;
+    }
+
+    for (_, test_project) in &self.test_projects {
+      test_project.as_ref().borrow().ensure_valid_system_spec_links()?;
+    }
+
+    for (_, subproject_graph) in &self.subprojects {
+      subproject_graph.as_ref().borrow().ensure_valid_system_spec_links()?;
+    }
+
+    for (_, gcmake_dep_graph) in &self.gcmake_deps {
+      gcmake_dep_graph.as_ref().borrow().ensure_valid_system_spec_links()?;
+    }
+
+    Ok(())
+  }
+
   /*
     After making associations, ensure correct predefined dependency inclusion for all
     targets (tests exes, project outputs, and pre-build script) for all non-predefined-dependency projects.
@@ -754,6 +873,8 @@ impl DependencyGraph {
                 existing_link_to_add.link_mode.clone(),
                 link.link_mode.clone()
               );
+
+              existing_link_to_add.system_spec_info = existing_link_to_add.system_spec_info.union(&link.system_spec_info);
             }
             else if let Some(existing_link) = project_output_target.depends_on.get(&target_checking_id) {
               // The link already exists and was added by the user. Return an error if the existing link mode
@@ -776,6 +897,8 @@ impl DependencyGraph {
                 target_checking_id,
                 Link::new(
                   predef_target_checking.locator_name.clone(),
+                  // predef_target_checking.system_specifier_info.clone(),
+                  predef_target_checking.system_specifier_info.intersection(link_target.get_system_spec_info()),
                   Rc::downgrade(&target_checking_rc),
                   link.link_mode.clone()
                 )
@@ -809,21 +932,21 @@ impl DependencyGraph {
         for complex_requirement in &link_target.as_ref().borrow().complex_requirements {
           match complex_requirement {
             NonOwningComplexTargetRequirement::OneOf(target_list) => {
-              let has_one_of_targets: bool = target_list
+              let has_requirement_target: bool = target_list
                 .iter()
-                .any(|maybe_needed_target|{
+                .any(|maybe_needed_target| {
                   let id_searching: TargetId = Weak::upgrade(maybe_needed_target).unwrap().as_ref().borrow().unique_target_id();
                   project_output_target.depends_on.contains_key(&id_searching)
                 });
 
-              if !has_one_of_targets {
+              if !has_requirement_target {
                 return Err(GraphLoadFailureReason::ComplexTargetRequirementNotSatisfied {
                   target: Rc::clone(project_output_target_rc),
                   target_project: project_output_target.container_project(),
                   dependency_project: link_target.as_ref().borrow().container_project(),
                   dependency: Rc::clone(&link_target),
                   failed_requirement: OwningComplexTargetRequirement::new_from(complex_requirement)
-                })
+                });
               }
             },
             NonOwningComplexTargetRequirement::ExclusiveFrom(exclusion_target_weak) => {
@@ -882,6 +1005,7 @@ impl DependencyGraph {
 
         project_output_target.insert_link(Link::new(
           pre_build_name,
+          SystemSpecCombinedInfo::default_include_all(),
           Rc::downgrade(pre_build_target),
           LinkMode::Private
         ));
@@ -897,8 +1021,13 @@ impl DependencyGraph {
         let test_target: &mut TargetNode = &mut test_target_rc.as_ref().borrow_mut();
 
         for (project_output_name, project_output_rc) in self.targets.borrow().iter() {
+          let spec_info_clone: SystemSpecCombinedInfo = {
+            project_output_rc.as_ref().borrow().system_specifier_info.clone()
+          };
+
           test_target.insert_link(Link::new(
             project_output_name.to_string(),
+            spec_info_clone,
             Rc::downgrade(project_output_rc),
             LinkMode::Private
           ));
@@ -1102,7 +1231,16 @@ impl DependencyGraph {
       for link in resolved_links {
         // Prioritize the first specified instance of a link target. When the link specifier contains
         // duplicate target names, the index of the first specified instance of that target is used.
-        if !link_set.contains(&link) {
+        
+        if link_set.contains(&link) {
+          return Err(GraphLoadFailureReason::DuplicateLinkTarget {
+            dependency: Weak::upgrade(&link.target).unwrap(),
+            dependency_project: Weak::upgrade(&link.target).unwrap().as_ref().borrow().container_project(),
+            link_spec_container_project: mut_target_node.container_project(),
+            link_spec_container_target: Rc::clone(target_container)
+          })
+        }
+        else {
           link_set.insert(link);
         }
       }
@@ -1118,7 +1256,7 @@ impl DependencyGraph {
     mut_target_node: &mut TargetNode,
     target_id_counter: &mut i32,
     namespace_stack: &mut Vec<String>,
-    target_list: &Vec<String>,
+    target_list: &LinkSpecTargetList,
     link_mode: &LinkMode,
     access_mode: &LinkAccessMode,
     is_outside_original_project_context: bool
@@ -1126,13 +1264,13 @@ impl DependencyGraph {
     if namespace_stack.is_empty() {
       let mut accumulated_link_set: HashSet<Link> = HashSet::new();
 
-      for target_name in target_list {
+      for link_target_spec in target_list {
         let resolved_link: Link = self.resolve_target_into_link(
           whole_link_spec,
           link_spec_container_target,
           mut_target_node,
           target_id_counter,
-          target_name,
+          link_target_spec,
           link_mode,
           access_mode
         )?;
@@ -1241,7 +1379,7 @@ impl DependencyGraph {
     link_spec_container_target: &Rc<RefCell<TargetNode>>,
     mut_target_node: &mut TargetNode,
     target_id_counter: &mut i32,
-    target_name: &str,
+    link_target_spec: &LinkSpecifierTarget,
     link_mode: &LinkMode,
     using_access_mode: &LinkAccessMode
   ) -> Result<Link, GraphLoadFailureReason> {
@@ -1249,29 +1387,32 @@ impl DependencyGraph {
       if let GCMakeDependencyStatus::NotDownloaded(_) = gcmake_dep.project_status() {
         // Targets should be created on the fly.
         let mut target_map = self.targets.borrow_mut();
-        let linkable_name: String = gcmake_dep.get_linkable_target_name(target_name);
+        let linkable_name: String = gcmake_dep.get_linkable_target_name(link_target_spec.get_name());
 
         let new_placeholder_target: Rc<RefCell<TargetNode>> = Rc::new(RefCell::new(TargetNode::new(
           target_id_counter,
-          target_name,
+          link_target_spec.get_name(),
+          // Placeholder targets are assumed to work on all platforms and systems
+          SystemSpecCombinedInfo::default_include_all(),
           linkable_name.clone(),
           linkable_name.clone(),
           linkable_name.clone(),
           linkable_name,
           false,
           Weak::clone(&self.current_graph_ref),
-          ContainedItem::PredefinedLibrary(target_name.to_string()),
+          ContainedItem::PredefinedLibrary(link_target_spec.get_name().to_string()),
           LinkAccessMode::UserFacing,
           true
         )));
 
         let the_link = Ok(Link::new(
-          target_name.to_string(),
+          link_target_spec.get_name().to_string(),
+          link_target_spec.get_system_spec_info().clone(),
           Rc::downgrade(&new_placeholder_target),
           link_mode.clone()
         ));
 
-        target_map.insert(target_name.to_string(), new_placeholder_target);
+        target_map.insert(link_target_spec.get_name().to_string(), new_placeholder_target);
         return the_link;
       }
     }
@@ -1281,7 +1422,7 @@ impl DependencyGraph {
       link_spec_container_target,
       mut_target_node,
       target_id_counter,
-      target_name,
+      link_target_spec,
       link_mode,
       using_access_mode
     )?;
@@ -1293,7 +1434,7 @@ impl DependencyGraph {
         link_spec: whole_link_spec.clone(),
         looking_in_project: Weak::upgrade(&self.current_graph_ref).unwrap(),
         target_container_project: mut_target_node.container_project(),
-        name_searching: target_name.to_string()
+        name_searching: link_target_spec.get_name().to_string()
       })
     }
   }
@@ -1304,28 +1445,40 @@ impl DependencyGraph {
     link_spec_container_target: &Rc<RefCell<TargetNode>>,
     mut_target_node: &mut TargetNode,
     target_id_counter: &mut i32,
-    target_name: &str,
+    link_target_spec: &LinkSpecifierTarget,
     link_mode: &LinkMode,
     using_access_mode: &LinkAccessMode
   ) -> Result<Option<Link>, GraphLoadFailureReason> {
-    if let Some(found_target) = self.targets.borrow().get(target_name) {
-      if using_access_mode.satisfies(&found_target.as_ref().borrow().visibility) {
-        return Ok(Some(Link::new(
-          target_name.to_string(),
-          Rc::downgrade(found_target),
-          link_mode.clone()
-        )))
-      }
-      else {
+    if let Some(found_target) = self.targets.borrow().get(link_target_spec.get_name()) {
+      if !using_access_mode.satisfies(&found_target.as_ref().borrow().visibility) {
         return Err(GraphLoadFailureReason::AccessNotAllowed {
-          target: Rc::clone(found_target),
-          target_project: found_target.as_ref().borrow().container_project(),
+          dependency: Rc::clone(found_target),
+          dependency_project: found_target.as_ref().borrow().container_project(),
           link_spec: whole_link_spec.clone(),
           link_spec_container_project: mut_target_node.container_project(),
           link_spec_container_target: Rc::clone(link_spec_container_target),
           given_access_mode: using_access_mode.clone(),
           needed_access_mode: found_target.as_ref().borrow().visibility.clone()
         });
+      }
+      else if !link_target_spec.get_system_spec_info().is_subset_of(&found_target.as_ref().borrow().system_specifier_info) {
+        return Err(GraphLoadFailureReason::LinkSystemSubsetMismatch {
+          dependency: Rc::clone(found_target),
+          dependency_project: found_target.as_ref().borrow().container_project(),
+          link_spec: Some(whole_link_spec.clone()),
+          link_system_spec_info: link_target_spec.clone().get_system_spec_info().clone(),
+          link_spec_container_project: mut_target_node.container_project(),
+          link_spec_container_target: Rc::clone(link_spec_container_target),
+          transitively_required_by: None
+        })
+      }
+      else {
+        return Ok(Some(Link::new(
+          link_target_spec.get_name().to_string(),
+          link_target_spec.get_system_spec_info().clone(),
+          Rc::downgrade(found_target),
+          link_mode.clone()
+        )))
       }
     }
 
@@ -1335,7 +1488,7 @@ impl DependencyGraph {
         link_spec_container_target,
         mut_target_node,
         target_id_counter,
-        target_name,
+        link_target_spec,
         link_mode,
         using_access_mode
       )?;
@@ -1457,6 +1610,7 @@ impl DependencyGraph {
         Rc::new(RefCell::new(TargetNode::new(
           target_id_counter,
           &pre_build_name,
+          SystemSpecCombinedInfo::default_include_all(),
           pre_build_name.clone(),
           project.receiver_lib_name(&pre_build_name),
           project.prefix_with_project_namespace(&pre_build_name),
@@ -1491,6 +1645,7 @@ impl DependencyGraph {
           Rc::new(RefCell::new(TargetNode::new(
             target_id_counter,
             target_name,
+            SystemSpecCombinedInfo::default_include_all(),
             target_output_name.clone(),
             project.receiver_lib_name(&target_output_name),
             project.prefix_with_project_namespace(&target_output_name),
@@ -1608,6 +1763,7 @@ impl DependencyGraph {
           Rc::new(RefCell::new(TargetNode::new(
             target_id_counter,
             target_name.clone(),
+            target_config.system_spec_info.clone(),
             target_config.cmakelists_name.clone(),
             String::from("RECEIVER LIB NAME NOT USED FOR PREDEFINED LIBRARIES"),
             predef_dep.get_cmake_namespaced_target_name(target_name).unwrap(),
@@ -1638,9 +1794,12 @@ impl DependencyGraph {
               "Required interdependent target names should always have a match in a predefined dependency project, since those are checked when the project itself is loaded."
             );
 
+            let requirement_target: &Rc<RefCell<TargetNode>> = targets.get(requirement_name).unwrap();
+
             single_target.insert_link(Link::new(
               requirement_name.to_string(),
-              Rc::downgrade(targets.get(requirement_name).unwrap()),
+              single_target.system_specifier_info.clone(),
+              Rc::downgrade(requirement_target),
               // Not sure if this will make a difference yet, since we probably won't be checking links
               // to predefined dependencies anyways.
               LinkMode::Public

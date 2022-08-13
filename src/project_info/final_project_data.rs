@@ -750,10 +750,6 @@ impl FinalProjectData {
     }
   }
 
-  pub fn mark_just_created(&mut self, was_just_created: bool) {
-    self.was_just_created = was_just_created;
-  }
-
   // Visit the toplevel root project and all its subprojects.
   fn find_with_root(
     absolute_root: &PathBuf,
@@ -782,13 +778,13 @@ impl FinalProjectData {
     let LanguageConfigMap { c, cpp } = self.get_language_info();
 
     match c.standard {
-      99 | 11 | 17 => (),
-      standard => return Err(format!("C Language standard must be one of [99, 11, 17], but {} was given", standard))
+      99 | 11 | 17 | 23 => (),
+      standard => return Err(format!("C Language standard must be one of [99, 11, 17, 23], but {} was given", standard))
     }
 
     match cpp.standard {
-      11 | 14 | 17 | 20 => (),
-      standard => return Err(format!("C++ Language standard must be one of [11, 14, 17, 20], but {} was given", standard))
+      11 | 14 | 17 | 20 | 23 => (),
+      standard => return Err(format!("C++ Language standard must be one of [11, 14, 17, 20, 23], but {} was given", standard))
     }
 
     Ok(())

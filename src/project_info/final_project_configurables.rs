@@ -1,6 +1,6 @@
 use std::{rc::Rc};
 
-use super::{raw_data_in::{OutputItemType, RawCompiledItem, TargetBuildConfigMap, LinkSection}, final_dependencies::FinalPredefinedDependencyConfig, LinkSpecifier, link_spec_parser::LinkAccessMode};
+use super::{raw_data_in::{OutputItemType, RawCompiledItem, TargetBuildConfigMap, LinkSection}, final_dependencies::FinalPredefinedDependencyConfig, LinkSpecifier, parsers::link_spec_parser::LinkAccessMode};
 
 #[derive(Clone)]
 pub enum FinalTestFramework {
@@ -246,3 +246,10 @@ fn parse_all_links_into(
   }
   Ok(())
 }
+
+// TODO: Parse system specific specifiers from flags and defines.
+// pub type FinalBuildConfigMap = HashMap<BuildType, BuildTypeOptionMap>;
+
+// pub struct FinalBuildConfig {
+
+// }

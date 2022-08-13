@@ -1,6 +1,10 @@
 // TODO: Write tests. This is an easy module to unit test.
 use regex::Regex;
 
+use super::platform_spec_parser::{SystemSpecCombinedInfo, parse_leading_system_spec};
+
+use std::hash::{Hash, Hasher};
+
 const NAMESPACE_SEPARATOR: &'static str = "::";
 
 lazy_static! {
@@ -27,13 +31,53 @@ impl LinkAccessMode {
   }
 }
 
-// A successful parse means that all namespaces and target strings are properly formatted
-// and that the LinkSpecifier contains at least one namespace and at least one target name.
+#[derive(Clone)]
+pub struct LinkSpecifierTarget {
+  name: String,
+  system_spec_info: SystemSpecCombinedInfo
+}
+
+impl LinkSpecifierTarget {
+  pub fn get_name(&self) -> &str {
+    &self.name
+  }
+
+  pub fn get_system_spec_info(&self) -> &SystemSpecCombinedInfo {
+    &self.system_spec_info
+  }
+}
+
+impl Hash for LinkSpecifierTarget {
+  fn hash<H: Hasher>(&self, state: &mut H) {
+    self.name.hash(state);
+  }
+}
+
+pub type LinkSpecTargetList = Vec<LinkSpecifierTarget>;
+
+/*
+  A successful parse means that all namespaces and target strings are properly formatted
+  and that the LinkSpecifier contains at least one namespace and at least one target name.
+
+  System specifiers can be placed before both the whole link specifier, and before
+  each individual specifier in a list.
+
+  - ((windows)) SFML::main
+  - SFML::{ ((windows)) main }
+
+  However, this can cause conflicting specifier issues in these situations:
+
+  - ((omit windows and mingw)) wxWidgets::{ core, ((mingw)) base }
+
+  - ((omit mingw)) wxWidgets::base
+  - ((mingw)) wxWidgets::base
+*/
 #[derive(Clone)]
 pub struct LinkSpecifier {
   original_specifier_string: String,
   namespace_stack: Vec<String>,
-  target_list: Vec<String>,
+  // target_list: Vec<String>,
+  target_list: LinkSpecTargetList,
   access_mode: LinkAccessMode
 }
 
@@ -46,7 +90,7 @@ impl LinkSpecifier {
     &self.access_mode
   }
 
-  pub fn get_target_list(&self) -> &Vec<String> {
+  pub fn get_target_list(&self) -> &LinkSpecTargetList {
     &self.target_list
   }
 
@@ -58,20 +102,26 @@ impl LinkSpecifier {
     link_spec: impl AsRef<str>,
     access_mode: LinkAccessMode
   ) -> Result<Self, String> {
-    let specifier_string: String = link_spec.as_ref().to_string();
+    let full_specifier_string: String = link_spec.as_ref().to_string();
+
+    let (
+      maybe_system_spec,
+      specifiers_only_str
+    ) = parse_leading_system_spec(&full_specifier_string)?;
+
     let (
       open_brace_indices,
       close_brace_indices
-    ) = brace_indices(&specifier_string);
+    ) = brace_indices(&specifiers_only_str);
 
     if open_brace_indices.len() > 1 {
-      return Self::parsing_error(&specifier_string, "Too many opening braces. There should be 1 or 0 opening braces.");
+      return Self::parsing_error(&full_specifier_string, "Too many opening braces. There should be 1 or 0 opening braces.");
     }
     else if close_brace_indices.len() > 1 {
-      return Self::parsing_error(&specifier_string, "Too many closing braces. There should be 1 or 0 closing braces.");
+      return Self::parsing_error(&full_specifier_string, "Too many closing braces. There should be 1 or 0 closing braces.");
     }
     else if open_brace_indices.len() != close_brace_indices.len() {
-      return Self::parsing_error(&specifier_string, "Unequal number of opening and closing braces.");
+      return Self::parsing_error(&full_specifier_string, "Unequal number of opening and closing braces.");
     }
 
     if open_brace_indices.len() == 1 {
@@ -83,28 +133,33 @@ impl LinkSpecifier {
       let close_brace_index: usize = close_brace_indices[0];
 
       if open_brace_index > close_brace_index {
-        return Self::parsing_error(&specifier_string, "Opening brace must be before the closing brace.");
+        return Self::parsing_error(&full_specifier_string, "Opening brace must be before the closing brace.");
       }
-      else if close_brace_index != specifier_string.trim_end().len() - 1 {
-        return Self::parsing_error(&specifier_string, "Closing brace must be the last non-whitespace character in a link specifier string.");
+      else if close_brace_index != specifiers_only_str.trim_end().len() - 1 {
+        return Self::parsing_error(&full_specifier_string, "Closing brace must be the last non-whitespace character in a link specifier string.");
       }
 
-      let target_list: Vec<String> = match Self::parse_target_list(&specifier_string[open_brace_index + 1..close_brace_index]) {
+      let target_list_parse_result = Self::parse_target_list(
+        &specifiers_only_str[open_brace_index + 1..close_brace_index],
+        &maybe_system_spec
+      );
+
+      let target_list: LinkSpecTargetList = match target_list_parse_result {
         Ok(the_list) => the_list,
-        Err(err) => return Self::parsing_error(&specifier_string, err.to_string())
+        Err(err) => return Self::parsing_error(&full_specifier_string, err.to_string())
       };
 
       if target_list.is_empty() {
-        return Self::parsing_error(&specifier_string, "At least one target must be provided.");
+        return Self::parsing_error(&full_specifier_string, "At least one target must be provided.");
       }
 
-      let namespace_stack: Vec<String> = match Self::parse_namespace_list(&specifier_string[..open_brace_index], true) {
+      let namespace_stack: Vec<String> = match Self::parse_namespace_list(&specifiers_only_str[..open_brace_index], true) {
         Ok(the_stack) => the_stack,
-        Err(err) => return Self::parsing_error(&specifier_string, err.to_string())
+        Err(err) => return Self::parsing_error(&full_specifier_string, err.to_string())
       };
 
       return Ok(Self {
-        original_specifier_string: specifier_string,
+        original_specifier_string: full_specifier_string,
         namespace_stack,
         target_list,
         access_mode
@@ -116,9 +171,9 @@ impl LinkSpecifier {
         "There are no opening or closing braces"
       );
       
-      let mut namespace_stack: Vec<String> = match Self::parse_namespace_list(&specifier_string, false) {
+      let mut namespace_stack: Vec<String> = match Self::parse_namespace_list(&specifiers_only_str, false) {
         Ok(the_stack) => the_stack,
-        Err(err) => return Self::parsing_error(&specifier_string, err.to_string())
+        Err(err) => return Self::parsing_error(&full_specifier_string, err.to_string())
       };
 
       assert!(
@@ -128,7 +183,7 @@ impl LinkSpecifier {
 
       if namespace_stack.len() == 1 {
         return Self::parsing_error(
-          &specifier_string,
+          &full_specifier_string,
           format!(
             "Only the target name \"{}\" was given, but it's missing a namespace. Try namespacing the target name. Ex: \"some_project_name::{}\"",
             namespace_stack[0],
@@ -137,34 +192,57 @@ impl LinkSpecifier {
         )
       }
       
-      let target_list: Vec<String> = vec![namespace_stack.last().unwrap().to_string()];
+      let target_list: LinkSpecTargetList = vec![LinkSpecifierTarget {
+        name: namespace_stack.last().unwrap().to_string(),
+        system_spec_info: maybe_system_spec.unwrap_or_default()
+      }];
+
       namespace_stack.pop();
 
       return Ok(Self {
-        original_specifier_string: specifier_string,
+        original_specifier_string: full_specifier_string,
         namespace_stack,
         target_list,
         access_mode
       })
-      
     }
   }
 
-  fn parse_target_list(target_list_str: &str) -> Result<Vec<String>, String> {
-    let mut verified_target_names: Vec<String> = Vec::new();
+  fn parse_target_list(
+    target_list_str: &str,
+    full_link_set_system_spec: &Option<SystemSpecCombinedInfo>
+  ) -> Result<LinkSpecTargetList, String> {
+    let mut verified_targets: LinkSpecTargetList = Vec::new();
 
-    for untrimmed_target_name in TARGET_LIST_SEPARATOR_REGEX.split(target_list_str) {
+    for full_target_spec in TARGET_LIST_SEPARATOR_REGEX.split(target_list_str) {
+      let (
+        maybe_target_specific_system_spec,
+        untrimmed_target_name
+      ) = parse_leading_system_spec(full_target_spec)?;
+
       let target_name: &str = untrimmed_target_name.trim();
 
       if VALID_SINGLE_ITEM_SPEC_REGEX.is_match(target_name) {
-        verified_target_names.push(target_name.to_string());
+
+        if full_link_set_system_spec.is_some() && maybe_target_specific_system_spec.is_some() {
+          return Err(format!(
+            "When a link set is prefixed with a system specifier, targets in the link set cannot be individually prefixed with system specifiers. However, the target '{}' is prefixed with a system specifier.\n\tSee here -> '{}'",
+            target_name,
+            full_target_spec
+          ));
+        }
+
+        verified_targets.push(LinkSpecifierTarget {
+          name: target_name.to_string(),
+          system_spec_info: maybe_target_specific_system_spec.unwrap_or(full_link_set_system_spec.clone().unwrap_or_default())
+        });
       }
       else {
         return Err(format!("Invalid target specifier \"{}\".", target_name));
       }
     }
 
-    return Ok(verified_target_names);
+    return Ok(verified_targets);
   }
 
   // namespace_list_str must include the final separator (::) when 
@@ -212,7 +290,7 @@ impl LinkSpecifier {
     error_msg: impl AsRef<str>
   ) -> Result<Self, String> {
     return Err(format!(
-      "Error when parsing link specifier \"{}\": {}",
+      "Error when parsing link specifier \"{}\":\n\t{}",
       spec_str,
       error_msg.as_ref()
     ));

@@ -1,6 +1,6 @@
 use std::{collections::{HashMap, HashSet}, fs::File, io::{self, Write, ErrorKind}, path::{PathBuf, Path}, rc::Rc, cell::{RefCell, Ref}};
 
-use crate::{project_info::{final_project_data::{FinalProjectData}, path_manipulation::{cleaned_path_str, relative_to_project_root}, final_dependencies::{GitRevisionSpecifier, PredefinedCMakeComponentsModuleDep, PredefinedSubdirDep, PredefinedCMakeModuleDep, FinalPredepInfo, GCMakeDependencyStatus, FinalPredefinedDependencyConfig}, raw_data_in::{BuildType, BuildConfig, BuildConfigCompilerSpecifier, SpecificCompilerSpecifier, OutputItemType, LanguageConfigMap, TargetSpecificBuildType, dependencies::internal_dep_config::{CMakeModuleType}}, FinalProjectType, CompiledOutputItem, PreBuildScript, LinkMode, FinalTestFramework, dependency_graph_mod::dependency_graph::{DependencyGraph, OrderedTargetInfo, ProjectWrapper, TargetNode, SimpleNodeOutputType}}};
+use crate::{project_info::{final_project_data::{FinalProjectData}, path_manipulation::{cleaned_path_str, relative_to_project_root}, final_dependencies::{GitRevisionSpecifier, PredefinedCMakeComponentsModuleDep, PredefinedSubdirDep, PredefinedCMakeModuleDep, FinalPredepInfo, GCMakeDependencyStatus, FinalPredefinedDependencyConfig}, raw_data_in::{BuildType, BuildConfig, BuildConfigCompilerSpecifier, SpecificCompilerSpecifier, OutputItemType, LanguageConfigMap, TargetSpecificBuildType, dependencies::internal_dep_config::{CMakeModuleType}}, FinalProjectType, CompiledOutputItem, PreBuildScript, LinkMode, FinalTestFramework, dependency_graph_mod::dependency_graph::{DependencyGraph, OrderedTargetInfo, ProjectWrapper, TargetNode, SimpleNodeOutputType, Link}, SystemSpecCombinedInfo, SingleSystemSpec, SystemSpecMode}};
 
 use super::cmake_utils_writer::{CMakeUtilFile, CMakeUtilWriter};
 
@@ -72,6 +72,69 @@ fn defines_generator_string(build_type: &BuildType, build_config: &BuildConfig) 
         defines_list
       )
     })
+}
+
+fn wrap_link_with_system_spec(
+  linkable_target_name: &str,
+  all_system_spec: &SystemSpecCombinedInfo
+) -> String {
+
+  assert!(
+    !all_system_spec.omits_all(),
+    "When being written, a system specifier should include at least one system."
+  );
+
+  if all_system_spec.includes_all() {
+    return linkable_target_name.to_string();
+  }
+
+  let should_invert_generator_expression: bool;
+  let used_specs: HashSet<SingleSystemSpec>;
+
+  // TODO: Abstract this out into another function once flags and defines can be made system-specific.
+  match all_system_spec.get_mode() {
+    SystemSpecMode::Omit => {
+      should_invert_generator_expression = true;
+      used_specs = all_system_spec.omitted_specs().unwrap();
+    },
+    SystemSpecMode::Include => {
+      should_invert_generator_expression = false;
+      used_specs = all_system_spec.included_specs().unwrap();
+    }
+  }
+
+  let comma_separated_bool_vars: String = used_specs.iter()
+    .map(|single_spec| match single_spec {
+      SingleSystemSpec::Android => "TARGET_SYSTEM_IS_ANDROID",
+      SingleSystemSpec::Linux => "TARGET_SYSTEM_IS_UNIX",
+      SingleSystemSpec::MacOS => "TARGET_SYSTEM_IS_MACOS",
+      SingleSystemSpec::MinGW => "USING_MINGW",
+      SingleSystemSpec::Windows => "TARGET_SYSTEM_IS_WINDOWS",
+      SingleSystemSpec::Unix => "TARGET_SYSTEM_IS_UNIX"
+    })
+    .map(|var_name_to_wrap| format!("${{{}}}", var_name_to_wrap))
+    .collect::<Vec<String>>()
+    .join(",");
+
+  let generator_expression: String = format!(
+    "$<OR:{}>",
+    comma_separated_bool_vars
+  );
+
+  return if should_invert_generator_expression {
+    format!(
+      "$<$<NOT:{}>:{}>",
+      generator_expression,
+      linkable_target_name
+    )
+  }
+  else {
+    format!(
+      "$<{}:{}>",
+      generator_expression,
+      linkable_target_name
+    )
+  }
 }
 
 enum DefinesStringFormat {
@@ -1524,8 +1587,9 @@ impl<'a> CMakeListsWriter<'a> {
     output_data: &CompiledOutputItem,
     output_target_node: &Rc<RefCell<TargetNode>>
   ) -> io::Result<()> {
+    let borrowed_output_target_node = output_target_node.as_ref().borrow();
 
-    if output_target_node.as_ref().borrow().has_links() {
+    if borrowed_output_target_node.has_links() {
       // The dependency graph already ensures there are no duplicate links. However, some libraries
       // in CMake are linked using a variable instead of targets (ex: ${wxWidgets_LIBRARIES}). That
       // variable is considered the "namespaced output target" for each target in the predefined
@@ -1563,8 +1627,8 @@ impl<'a> CMakeListsWriter<'a> {
         )?;
 
         // For compilers where link order matters, libraries must be listed before the libraries they depend on.
-        for node in dep_node_list.iter().rev() {
-          let borrowed_node: &TargetNode = &node.as_ref().borrow();
+        for dependency_node in dep_node_list.iter().rev() {
+          let borrowed_node: &TargetNode = &dependency_node.as_ref().borrow();
           
           let linkable_target_name: &str = match borrowed_node.simple_output_type() {
             SimpleNodeOutputType::Executable => borrowed_node.get_internal_receiver_name(),
@@ -1572,9 +1636,16 @@ impl<'a> CMakeListsWriter<'a> {
           };
 
           if !already_written.contains(linkable_target_name) {
+            let matching_link: &Link = borrowed_output_target_node
+              .get_link_by_id(borrowed_node.unique_target_id())
+              .unwrap();
+
             writeln!(&self.cmakelists_file,
               "\t\t{}",
-              linkable_target_name
+              wrap_link_with_system_spec(
+                linkable_target_name,
+                matching_link.get_system_spec_info()
+              )
             )?;
 
             already_written.insert(String::from(linkable_target_name));
