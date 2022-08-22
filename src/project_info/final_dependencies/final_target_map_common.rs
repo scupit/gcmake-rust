@@ -2,7 +2,8 @@ use std::collections::{HashMap, HashSet};
 use std::hash::Hash;
 use std::iter::FromIterator;
 
-use crate::project_info::parsers::platform_spec_parser::{SystemSpecCombinedInfo, parse_leading_system_spec, SystemSpecParseSuccessData};
+use crate::project_info::parsers::general_parser::ParseSuccess;
+use crate::project_info::parsers::system_spec::platform_spec_parser::{SystemSpecifierWrapper, parse_leading_system_spec};
 use crate::project_info::raw_data_in::dependencies::internal_dep_config::raw_dep_common::RawPredepCommon;
 use crate::project_info::raw_data_in::dependencies::internal_dep_config::{RawPredefinedTargetMapIn, RawTargetConfig};
 
@@ -62,24 +63,37 @@ impl Eq for FinalRequirementSpecifier { }
 #[derive(Clone)]
 pub struct FinalTargetConfig {
   pub requirements_set: HashSet<FinalRequirementSpecifier>,
-  pub system_spec_info: SystemSpecCombinedInfo,
+  pub system_spec_info: SystemSpecifierWrapper,
   pub cmakelists_name: String,
   pub cmake_yaml_name: String
 }
 
 pub type FinalTargetConfigMap = HashMap<String, FinalTargetConfig>;
 
-type NameParsedTargetMapIn<'a> = HashMap<String, (SystemSpecParseSuccessData<'a>, &'a RawTargetConfig)>;
+type NameParsedTargetMapIn<'a> = HashMap<String, (Option<SystemSpecifierWrapper>, &'a RawTargetConfig)>;
 
 fn name_parsed_target_map(raw_target_map: &RawPredefinedTargetMapIn) -> Result<NameParsedTargetMapIn, String> {
   let mut resulting_map = NameParsedTargetMapIn::new();
   
   for (target_name_with_system_spec, raw_target_config) in raw_target_map {
-    let system_spec_parse_data: SystemSpecParseSuccessData = parse_leading_system_spec(target_name_with_system_spec)?;
+
+    let maybe_system_spec: Option<SystemSpecifierWrapper>;
+    let target_name_only: &str;
+
+    match parse_leading_system_spec(target_name_with_system_spec)? {
+      Some(ParseSuccess { value, rest }) => {
+        maybe_system_spec = Some(value);
+        target_name_only = rest;
+      },
+      None => {
+        maybe_system_spec = None;
+        target_name_only = target_name_with_system_spec;
+      }
+    }
 
     resulting_map.insert(
-      system_spec_parse_data.1.trim().to_string(),
-      (system_spec_parse_data, raw_target_config)
+      target_name_only.to_string(),
+      (maybe_system_spec, raw_target_config)
     );
   }
 
@@ -93,7 +107,7 @@ pub fn make_final_target_config_map(
   let mut final_map = FinalTargetConfigMap::new();
   let raw_target_config_map_with_parsed_names: NameParsedTargetMapIn = name_parsed_target_map(dep_info.raw_target_map_in())?;
 
-  for (target_name, ((maybe_system_spec, _), raw_target_config)) in &raw_target_config_map_with_parsed_names {
+  for (target_name, (maybe_system_spec, raw_target_config)) in &raw_target_config_map_with_parsed_names {
     let mut requirements_set: HashSet<FinalRequirementSpecifier> = HashSet::new();
 
     if let Some(interdependent_requirement_specifier) = &raw_target_config.requires {

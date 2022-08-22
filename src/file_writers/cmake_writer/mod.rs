@@ -1,5 +1,6 @@
 mod cmake_utils_writer;
 mod cmakelists_writer;
+mod cmake_writer_helpers;
 mod ordered_utils;
 
 use std::{io};

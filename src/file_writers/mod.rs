@@ -1,7 +1,7 @@
 mod cmake_writer;
 
 use std::{io::{self, ErrorKind}, rc::Rc, cell::{RefCell, Ref}};
-use crate::project_info::{final_project_data::{UseableFinalProjectDataGroup}, dependency_graph_mod::dependency_graph::{DependencyGraphInfoWrapper, DependencyGraph, GraphLoadFailureReason, TargetNode, OwningComplexTargetRequirement}, SystemSpecCombinedInfo};
+use crate::project_info::{final_project_data::{UseableFinalProjectDataGroup}, dependency_graph_mod::dependency_graph::{DependencyGraphInfoWrapper, DependencyGraph, GraphLoadFailureReason, TargetNode, OwningComplexTargetRequirement}, SystemSpecifierWrapper};
 
 pub struct ProjectWriteConfiguration {
   name: String,
@@ -253,7 +253,7 @@ pub fn write_configurations<'a, FBefore, FAfter>(
         };
 
         return wrap_error_msg(format!(
-          "Target '{}' in project '{}' links to dependency '{}' on {}{}{}, but '{}' is only supported on systems (({})).",
+          "Target '{}' in project '{}' links to dependency '{}' on {}{}{}, but '{}' is only supported on {}.",
           borrow_target(link_spec_container_target).get_name(),
           borrow_project(link_spec_container_project).project_name_for_error_messages(),
           borrowed_dependency.get_yaml_namespaced_target_name(),
@@ -261,7 +261,7 @@ pub fn write_configurations<'a, FBefore, FAfter>(
           link_spec_str,
           transitive_target_str,
           borrowed_dependency.get_yaml_namespaced_target_name(),
-          borrowed_dependency.get_system_spec_info().explicit_name_list().join(", ")
+          systems_string(borrowed_dependency.get_system_spec_info())
         ));
       },
       GraphLoadFailureReason::LinkSystemRequirementImpossible {
@@ -293,14 +293,14 @@ fn wrap_error_msg(msg: impl AsRef<str>) -> io::Result<()> {
   ));
 }
 
-fn systems_string(system_spec_info: &SystemSpecCombinedInfo) -> String {
+fn systems_string(system_spec_info: &SystemSpecifierWrapper) -> String {
   return if system_spec_info.includes_all() {
     String::from("all systems")
   }
   else {
     format!(
-      "systems (({}))",
-      system_spec_info.explicit_name_list().join(", "),
+      "a subset of {}",
+      system_spec_info.unwrap_specific_ref().to_string()
     )
   }
 }

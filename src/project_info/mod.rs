@@ -11,7 +11,8 @@ mod parsers;
 pub use final_project_configurables::*;
 pub use helpers::ProjectOutputType;
 pub use parsers::link_spec_parser::LinkSpecifier;
-pub use parsers::platform_spec_parser::{ SystemSpecCombinedInfo, SingleSystemSpec, SystemSpecMode, SpecSetWrapper };
+pub use parsers::system_spec::platform_spec_parser::{ SystemSpecifierWrapper };
+pub use parsers::system_spec::*;
 
 pub fn base_include_prefix_for_test(include_prefix: &str) -> String {
   return format!("TEST/{}", include_prefix);

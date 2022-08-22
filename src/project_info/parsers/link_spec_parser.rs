@@ -1,7 +1,7 @@
 // TODO: Write tests. This is an easy module to unit test.
 use regex::Regex;
 
-use super::platform_spec_parser::{SystemSpecCombinedInfo, parse_leading_system_spec};
+use super::{system_spec::platform_spec_parser::{SystemSpecifierWrapper, parse_leading_system_spec}, general_parser::ParseSuccess};
 
 use std::hash::{Hash, Hasher};
 
@@ -34,7 +34,7 @@ impl LinkAccessMode {
 #[derive(Clone)]
 pub struct LinkSpecifierTarget {
   name: String,
-  system_spec_info: SystemSpecCombinedInfo
+  system_spec_info: SystemSpecifierWrapper
 }
 
 impl LinkSpecifierTarget {
@@ -42,7 +42,7 @@ impl LinkSpecifierTarget {
     &self.name
   }
 
-  pub fn get_system_spec_info(&self) -> &SystemSpecCombinedInfo {
+  pub fn get_system_spec_info(&self) -> &SystemSpecifierWrapper {
     &self.system_spec_info
   }
 }
@@ -104,10 +104,19 @@ impl LinkSpecifier {
   ) -> Result<Self, String> {
     let full_specifier_string: String = link_spec.as_ref().to_string();
 
-    let (
-      maybe_system_spec,
-      specifiers_only_str
-    ) = parse_leading_system_spec(&full_specifier_string)?;
+    let maybe_system_spec: Option<SystemSpecifierWrapper>;
+    let specifiers_only_str: &str;
+
+    match parse_leading_system_spec(&full_specifier_string)? {
+      Some(ParseSuccess { value, rest }) => {
+        maybe_system_spec = Some(value);
+        specifiers_only_str= rest;
+      },
+      None => {
+        maybe_system_spec = None;
+        specifiers_only_str= &full_specifier_string;
+      }
+    }
 
     let (
       open_brace_indices,
@@ -210,21 +219,30 @@ impl LinkSpecifier {
 
   fn parse_target_list(
     target_list_str: &str,
-    full_link_set_system_spec: &Option<SystemSpecCombinedInfo>
+    full_link_set_system_spec: &Option<SystemSpecifierWrapper>
   ) -> Result<LinkSpecTargetList, String> {
     let mut verified_targets: LinkSpecTargetList = Vec::new();
 
     for full_target_spec in TARGET_LIST_SEPARATOR_REGEX.split(target_list_str) {
-      let (
-        maybe_target_specific_system_spec,
-        untrimmed_target_name
-      ) = parse_leading_system_spec(full_target_spec)?;
+      let target_specific_system_spec: Option<SystemSpecifierWrapper>;
+      let untrimmed_target_name: &str;
+
+      match parse_leading_system_spec(full_target_spec)? {
+        Some(ParseSuccess { value, rest }) => {
+          target_specific_system_spec = Some(value);
+          untrimmed_target_name = rest;
+        },
+        None => {
+          target_specific_system_spec = None;
+          untrimmed_target_name = full_target_spec;
+        }
+      }
 
       let target_name: &str = untrimmed_target_name.trim();
 
       if VALID_SINGLE_ITEM_SPEC_REGEX.is_match(target_name) {
 
-        if full_link_set_system_spec.is_some() && maybe_target_specific_system_spec.is_some() {
+        if full_link_set_system_spec.is_some() && !target_specific_system_spec.is_some() {
           return Err(format!(
             "When a link set is prefixed with a system specifier, targets in the link set cannot be individually prefixed with system specifiers. However, the target '{}' is prefixed with a system specifier.\n\tSee here -> '{}'",
             target_name,
@@ -234,7 +252,10 @@ impl LinkSpecifier {
 
         verified_targets.push(LinkSpecifierTarget {
           name: target_name.to_string(),
-          system_spec_info: maybe_target_specific_system_spec.unwrap_or(full_link_set_system_spec.clone().unwrap_or_default())
+          system_spec_info: target_specific_system_spec.unwrap_or(
+            full_link_set_system_spec.clone()
+              .unwrap_or_default()
+          )
         });
       }
       else {

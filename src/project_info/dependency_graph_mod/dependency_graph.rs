@@ -1,6 +1,6 @@
-use std::{cell::RefCell, rc::{Rc, Weak}, hash::{Hash, Hasher}, collections::{HashMap, HashSet}, alloc::System, borrow::Borrow};
+use std::{cell::RefCell, rc::{Rc, Weak}, hash::{Hash, Hasher}, collections::{HashMap, HashSet}};
 
-use crate::project_info::{LinkMode, CompiledOutputItem, PreBuildScript, OutputItemLinks, final_project_data::FinalProjectData, final_dependencies::{FinalGCMakeDependency, FinalPredefinedDependencyConfig, GCMakeDependencyStatus, FinalRequirementSpecifier}, LinkSpecifier, FinalProjectType, parsers::{link_spec_parser::{LinkAccessMode, LinkSpecTargetList, LinkSpecifierTarget}, platform_spec_parser::SystemSpecCombinedInfo}};
+use crate::project_info::{LinkMode, CompiledOutputItem, PreBuildScript, OutputItemLinks, final_project_data::FinalProjectData, final_dependencies::{FinalGCMakeDependency, FinalPredefinedDependencyConfig, GCMakeDependencyStatus, FinalRequirementSpecifier}, LinkSpecifier, FinalProjectType, parsers::{link_spec_parser::{LinkAccessMode, LinkSpecTargetList, LinkSpecifierTarget}, system_spec::platform_spec_parser::SystemSpecifierWrapper}};
 
 use super::hash_wrapper::RcRefcHashWrapper;
 
@@ -44,12 +44,12 @@ pub enum GraphLoadFailureReason {
   LinkSystemRequirementImpossible {
     target: Rc<RefCell<TargetNode>>,
     target_container_project: Rc<RefCell<DependencyGraph>>,
-    link_system_spec_info: SystemSpecCombinedInfo,
+    link_system_spec_info: SystemSpecifierWrapper,
     dependency: Rc<RefCell<TargetNode>>
   },
   LinkSystemSubsetMismatch {
     link_spec: Option<LinkSpecifier>,
-    link_system_spec_info: SystemSpecCombinedInfo,
+    link_system_spec_info: SystemSpecifierWrapper,
     link_spec_container_target: Rc<RefCell<TargetNode>>,
     link_spec_container_project: Rc<RefCell<DependencyGraph>>,
     dependency_project: Rc<RefCell<DependencyGraph>>,
@@ -114,7 +114,7 @@ pub enum GraphLoadFailureReason {
 
 pub struct Link {
   target_name: String,
-  system_spec_info: SystemSpecCombinedInfo,
+  system_spec_info: SystemSpecifierWrapper,
   link_mode: LinkMode,
   target: Weak<RefCell<TargetNode>>
 }
@@ -122,7 +122,7 @@ pub struct Link {
 impl Link {
   pub fn new(
     target_name: String,
-    system_spec_info: SystemSpecCombinedInfo,
+    system_spec_info: SystemSpecifierWrapper,
     target: Weak<RefCell<TargetNode>>,
     link_mode: LinkMode
   ) -> Self {
@@ -143,7 +143,7 @@ impl Link {
     Weak::upgrade(&self.target).unwrap().as_ref().borrow().unique_target_id()
   }
 
-  pub fn get_system_spec_info(&self) -> &SystemSpecCombinedInfo {
+  pub fn get_system_spec_info(&self) -> &SystemSpecifierWrapper {
     &self.system_spec_info
   }
 }
@@ -220,7 +220,7 @@ pub struct TargetNode {
   namespaced_cmake_target_name: String,
   namespaced_yaml_target_name: String,
 
-  system_specifier_info: SystemSpecCombinedInfo,
+  system_specifier_info: SystemSpecifierWrapper,
 
   requires_custom_install_if_linked_to_output_lib: bool,
   is_linked_to_output_lib: bool,
@@ -241,7 +241,7 @@ impl TargetNode {
   fn new(
     id_var: &mut TargetId,
     locator_name: impl AsRef<str>,
-    system_specifier_info: SystemSpecCombinedInfo,
+    system_specifier_info: SystemSpecifierWrapper,
     output_target_name: String,
     internal_receiver_name: String,
     namespaced_output_target_name: String,
@@ -371,7 +371,7 @@ impl TargetNode {
     &self.namespaced_cmake_target_name
   }
 
-  pub fn get_system_spec_info(&self) -> &SystemSpecCombinedInfo {
+  pub fn get_system_spec_info(&self) -> &SystemSpecifierWrapper {
     &self.system_specifier_info
   }
 
@@ -724,37 +724,58 @@ impl DependencyGraph {
       //   dependency.as_ref().borrow().system_specifier_info.explicit_name_list()
       // );
 
-      let target_systems: SystemSpecCombinedInfo = target.as_ref().borrow().system_specifier_info.clone();
-      let link_systems: SystemSpecCombinedInfo = link.system_spec_info.clone();
-      let dependency_systems: SystemSpecCombinedInfo = dependency.as_ref().borrow().system_specifier_info.clone();
+      let target_systems: SystemSpecifierWrapper = target.as_ref().borrow().system_specifier_info.clone();
+      let link_systems: SystemSpecifierWrapper = link.system_spec_info.clone();
+      let dependency_systems: SystemSpecifierWrapper = dependency.as_ref().borrow().system_specifier_info.clone();
 
-      if !link_systems.is_subset_of(&dependency_systems) {
-        return Err(GraphLoadFailureReason::LinkSystemSubsetMismatch {
-          link_spec: None,
-          link_spec_container_target: Rc::clone(target),
-          link_spec_container_project: Rc::clone(target).as_ref().borrow().container_project(),
-          dependency: Rc::clone(&dependency),
-          dependency_project: dependency.as_ref().borrow().container_project(),
-          link_system_spec_info: link.system_spec_info.clone(),
-          transitively_required_by: None
-        })
+      if let SystemSpecifierWrapper::Specific(dependency_spec_tree) = dependency_systems {
+        let current_platform_spec_str: String = match link_systems {
+          SystemSpecifierWrapper::All => String::from(""),
+          SystemSpecifierWrapper::Specific(current_platform_spec_tree) =>
+            format!("Current: {}", current_platform_spec_tree.to_string())
+        };
+
+        println!("Warning: Platform-specific subset checks have not been implemented yet.");
+        println!(
+          "-- target '{}' in project '{}' links to '{}', which has a platform specifier '{}'. Please make sure the link to {} is prefixed with a platform specifier that is a subset of {}. {}",
+          target.as_ref().borrow().get_name(),
+          target.as_ref().borrow().container_project().as_ref().borrow().project_name_for_error_messages(),
+          dependency.as_ref().borrow().get_yaml_namespaced_target_name(),
+          dependency_spec_tree.to_string(),
+          dependency.as_ref().borrow().get_yaml_namespaced_target_name(),
+          dependency_spec_tree.to_string(),
+          current_platform_spec_str
+        );
       }
-      else if !link_systems.is_subset_of(&target_systems) {
-        return Err(GraphLoadFailureReason::LinkSystemRequirementImpossible {
-          target: Rc::clone(target),
-          target_container_project: target.as_ref().borrow().container_project(),
-          link_system_spec_info: link.system_spec_info.clone(),
-          dependency
-        });
-      }
-      else if !(link_systems.intersection(&dependency_systems)).is_subset_of(&target_systems) {
-        return Err(GraphLoadFailureReason::LinkSystemRequirementImpossible {
-          target: Rc::clone(target),
-          target_container_project: target.as_ref().borrow().container_project(),
-          link_system_spec_info: link.system_spec_info.clone(),
-          dependency
-        });
-      }
+
+      // TODO: Re-enable these once I figure out the checking system.
+      // if !link_systems.is_subset_of(&dependency_systems) {
+      //   return Err(GraphLoadFailureReason::LinkSystemSubsetMismatch {
+      //     link_spec: None,
+      //     link_spec_container_target: Rc::clone(target),
+      //     link_spec_container_project: Rc::clone(target).as_ref().borrow().container_project(),
+      //     dependency: Rc::clone(&dependency),
+      //     dependency_project: dependency.as_ref().borrow().container_project(),
+      //     link_system_spec_info: link.system_spec_info.clone(),
+      //     transitively_required_by: None
+      //   })
+      // }
+      // else if !link_systems.is_subset_of(&target_systems) {
+      //   return Err(GraphLoadFailureReason::LinkSystemRequirementImpossible {
+      //     target: Rc::clone(target),
+      //     target_container_project: target.as_ref().borrow().container_project(),
+      //     link_system_spec_info: link.system_spec_info.clone(),
+      //     dependency
+      //   });
+      // }
+      // else if !(link_systems.intersection(&dependency_systems)).is_subset_of(&target_systems) {
+      //   return Err(GraphLoadFailureReason::LinkSystemRequirementImpossible {
+      //     target: Rc::clone(target),
+      //     target_container_project: target.as_ref().borrow().container_project(),
+      //     link_system_spec_info: link.system_spec_info.clone(),
+      //     dependency
+      //   });
+      // }
     }
 
     Ok(())
@@ -1005,7 +1026,7 @@ impl DependencyGraph {
 
         project_output_target.insert_link(Link::new(
           pre_build_name,
-          SystemSpecCombinedInfo::default_include_all(),
+          SystemSpecifierWrapper::default_include_all(),
           Rc::downgrade(pre_build_target),
           LinkMode::Private
         ));
@@ -1021,7 +1042,7 @@ impl DependencyGraph {
         let test_target: &mut TargetNode = &mut test_target_rc.as_ref().borrow_mut();
 
         for (project_output_name, project_output_rc) in self.targets.borrow().iter() {
-          let spec_info_clone: SystemSpecCombinedInfo = {
+          let spec_info_clone: SystemSpecifierWrapper = {
             project_output_rc.as_ref().borrow().system_specifier_info.clone()
           };
 
@@ -1393,7 +1414,7 @@ impl DependencyGraph {
           target_id_counter,
           link_target_spec.get_name(),
           // Placeholder targets are assumed to work on all platforms and systems
-          SystemSpecCombinedInfo::default_include_all(),
+          SystemSpecifierWrapper::default_include_all(),
           linkable_name.clone(),
           linkable_name.clone(),
           linkable_name.clone(),
@@ -1461,17 +1482,18 @@ impl DependencyGraph {
           needed_access_mode: found_target.as_ref().borrow().visibility.clone()
         });
       }
-      else if !link_target_spec.get_system_spec_info().is_subset_of(&found_target.as_ref().borrow().system_specifier_info) {
-        return Err(GraphLoadFailureReason::LinkSystemSubsetMismatch {
-          dependency: Rc::clone(found_target),
-          dependency_project: found_target.as_ref().borrow().container_project(),
-          link_spec: Some(whole_link_spec.clone()),
-          link_system_spec_info: link_target_spec.clone().get_system_spec_info().clone(),
-          link_spec_container_project: mut_target_node.container_project(),
-          link_spec_container_target: Rc::clone(link_spec_container_target),
-          transitively_required_by: None
-        })
-      }
+      // TODO: Re-enable once system spec expression subset checks have been implemented.
+      // else if !link_target_spec.get_system_spec_info().is_subset_of(&found_target.as_ref().borrow().system_specifier_info) {
+      //   return Err(GraphLoadFailureReason::LinkSystemSubsetMismatch {
+      //     dependency: Rc::clone(found_target),
+      //     dependency_project: found_target.as_ref().borrow().container_project(),
+      //     link_spec: Some(whole_link_spec.clone()),
+      //     link_system_spec_info: link_target_spec.clone().get_system_spec_info().clone(),
+      //     link_spec_container_project: mut_target_node.container_project(),
+      //     link_spec_container_target: Rc::clone(link_spec_container_target),
+      //     transitively_required_by: None
+      //   })
+      // }
       else {
         return Ok(Some(Link::new(
           link_target_spec.get_name().to_string(),
@@ -1610,7 +1632,7 @@ impl DependencyGraph {
         Rc::new(RefCell::new(TargetNode::new(
           target_id_counter,
           &pre_build_name,
-          SystemSpecCombinedInfo::default_include_all(),
+          SystemSpecifierWrapper::default_include_all(),
           pre_build_name.clone(),
           project.receiver_lib_name(&pre_build_name),
           project.prefix_with_project_namespace(&pre_build_name),
@@ -1645,7 +1667,7 @@ impl DependencyGraph {
           Rc::new(RefCell::new(TargetNode::new(
             target_id_counter,
             target_name,
-            SystemSpecCombinedInfo::default_include_all(),
+            SystemSpecifierWrapper::default_include_all(),
             target_output_name.clone(),
             project.receiver_lib_name(&target_output_name),
             project.prefix_with_project_namespace(&target_output_name),

@@ -4,11 +4,11 @@ fn main() {
   let ordered_cmake_util_names: Vec<&str> = vec![
     "gcmake-variables",
     "gcmake-dir-config",
-    "toggle-lib-util",
-    "pre-build-configuration-utils",
-    "resource-copy-util",
-    "general-utils",
-    "installation-utils",
+    "gcmake-toggle-lib-util",
+    "gcmake-pre-build-configuration-utils",
+    "gcmake-resource-copy-util",
+    "gcmake-general-utils",
+    "gcmake-installation-utils",
     "gcmake-cpack-utils"
   ];
 
