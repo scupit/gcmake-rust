@@ -1,6 +1,6 @@
 use std::{collections::{HashMap, HashSet}, fs::File, io::{self, Write, ErrorKind}, path::{PathBuf, Path}, rc::Rc, cell::{RefCell, Ref}};
 
-use crate::{project_info::{final_project_data::{FinalProjectData}, path_manipulation::{cleaned_path_str, relative_to_project_root}, final_dependencies::{GitRevisionSpecifier, PredefinedCMakeComponentsModuleDep, PredefinedSubdirDep, PredefinedCMakeModuleDep, FinalPredepInfo, GCMakeDependencyStatus, FinalPredefinedDependencyConfig}, raw_data_in::{BuildType, BuildConfig, BuildConfigCompilerSpecifier, SpecificCompilerSpecifier, OutputItemType, LanguageConfigMap, TargetSpecificBuildType, dependencies::internal_dep_config::{CMakeModuleType}}, FinalProjectType, CompiledOutputItem, PreBuildScript, LinkMode, FinalTestFramework, dependency_graph_mod::dependency_graph::{DependencyGraph, OrderedTargetInfo, ProjectWrapper, TargetNode, SimpleNodeOutputType, Link}, SystemSpecifierWrapper, SingleSystemSpec}, file_writers::cmake_writer::cmake_writer_helpers::system_constraint_expression};
+use crate::{project_info::{final_project_data::{FinalProjectData}, path_manipulation::{cleaned_path_str, relative_to_project_root}, final_dependencies::{GitRevisionSpecifier, PredefinedCMakeComponentsModuleDep, PredefinedSubdirDep, PredefinedCMakeModuleDep, FinalPredepInfo, GCMakeDependencyStatus, FinalPredefinedDependencyConfig}, raw_data_in::{BuildType, RawBuildConfig, BuildConfigCompilerSpecifier, SpecificCompilerSpecifier, OutputItemType, LanguageConfigMap, TargetSpecificBuildType, dependencies::internal_dep_config::{CMakeModuleType}}, FinalProjectType, CompiledOutputItem, PreBuildScript, LinkMode, FinalTestFramework, dependency_graph_mod::dependency_graph::{DependencyGraph, OrderedTargetInfo, ProjectWrapper, TargetNode, SimpleNodeOutputType, Link}, SystemSpecifierWrapper, SingleSystemSpec, CompilerDefine, FinalBuildConfig, CompilerFlag, LinkerFlag}, file_writers::cmake_writer::cmake_writer_helpers::system_constraint_expression};
 
 use super::cmake_utils_writer::{CMakeUtilFile, CMakeUtilWriter};
 
@@ -62,69 +62,52 @@ fn compiler_matcher_string(compiler_specifier: &SpecificCompilerSpecifier) -> &s
   }
 }
 
-fn defines_generator_string(build_type: &BuildType, build_config: &BuildConfig) -> Option<String> {
-  return build_config.defines.as_ref()
-    .map(|defines| {
-      let defines_list = flattened_defines_list_string(defines, DefinesStringFormat::NoQuote);
-      format!(
-        "\"$<$<CONFIG:{}>:{}>\"",
-        build_type.name_string(),
-        defines_list
-      )
-    })
+fn quote_escaped_string(some_str: &str) -> String {
+  some_str.replace('"', "\\\"")
 }
 
-enum DefinesStringFormat {
-  Quoted,
-  NoQuote
-}
-
-fn flattened_defines_list_string(
-  defines: &HashSet<String>,
-  defines_format: DefinesStringFormat
-) -> String {
+fn flattened_defines_list_string(spacer: &str, defines: &Vec<CompilerDefine>) -> String {
   defines.iter()
-    .map(|def| {
-      let escaped: String = def.replace('"', "\\\"");
+    .map(|CompilerDefine { system_spec, def_string }| {
+      let escaped: String = system_constraint_expression(
+        system_spec,
+        &quote_escaped_string(def_string.trim())
+      );
 
-      if let DefinesStringFormat::Quoted = defines_format
-        { format!("\"{}\"", escaped) }
-        else { escaped }
+      format!("\"{}\"", escaped)
     })
     .collect::<Vec<String>>()
-    .join(";")
+    .join(&format!("\n{}", spacer))
 }
 
-fn flattened_compiler_flags_string(compiler_flags: &HashSet<String>) -> String {
+fn flattened_compiler_flags_string(spacer: &str, compiler_flags: &Vec<CompilerFlag>) -> String {
   let flattened_string: String = compiler_flags.iter()
-    .map(|flag| &flag[..])
-    .collect::<Vec<&str>>()
-    .join(" ");
+    .map(|CompilerFlag { system_spec, flag_string }| {
+      let escaped: String = system_constraint_expression(
+        system_spec,
+        &quote_escaped_string(flag_string.trim())
+      );
+
+      format!("\"{}\"", escaped)
+    })
+    .collect::<Vec<String>>()
+    .join(&format!("\n{}", spacer));
 
   return format!(" {} ", flattened_string)
 }
 
-fn flattened_maybe_compiler_flags_string(maybe_flags: &Option<HashSet<String>>) -> String {
-  return match maybe_flags {
-    Some(compiler_flags) => flattened_compiler_flags_string(compiler_flags),
-    None => String::from(" ")
-  }
-}
-
-fn flattened_linker_flags_string(linker_flags: &HashSet<String>) -> String {
+fn flattened_linker_flags_string(linker_flags: &Vec<LinkerFlag>) -> String {
   let comma_separated_flags: String = linker_flags.iter()
-    .map(|flag| flag.trim())
-    .collect::<Vec<&str>>()
+    .map(|LinkerFlag { system_spec, flag_string }|
+      system_constraint_expression(
+        system_spec,
+        &quote_escaped_string(flag_string.trim())
+      )
+    )
+    .collect::<Vec<String>>()
     .join(",");
 
   format!("\"LINKER:{}\"", comma_separated_flags)
-}
-
-fn flattened_maybe_linker_flags_string(maybe_flags: &Option<HashSet<String>>) -> String {
-  return match maybe_flags {
-    Some(linker_flags) => flattened_linker_flags_string(linker_flags),
-    None => String::from(" ")
-  }
 }
 
 struct CMakeListsWriter<'a> {
@@ -502,7 +485,7 @@ impl<'a> CMakeListsWriter<'a> {
 
     let config_names: Vec<&'static str> = self.project_data.get_build_configs()
       .iter()
-      .map(|(build_type, _)| build_type.name_string())
+      .map(|(build_type, _)| build_type.name_str())
       .collect();
 
     writeln!(&self.cmakelists_file,
@@ -516,7 +499,7 @@ impl<'a> CMakeListsWriter<'a> {
 
     writeln!(&self.cmakelists_file,
       "\n\tif( \"${{CMAKE_BUILD_TYPE}}\" STREQUAL \"\")\n\t\tset( CMAKE_BUILD_TYPE \"{}\" CACHE STRING \"Project Build configuration\" FORCE )\n\tendif()",
-      self.project_data.get_default_build_config().name_string()
+      self.project_data.get_default_build_config().name_str()
     )?;
     self.write_newline()?;
 
@@ -674,18 +657,18 @@ impl<'a> CMakeListsWriter<'a> {
   fn write_def_list(
     &self,
     spacer: &'static str,
-    items: &HashSet<String>
+    items: &Vec<String>
   ) -> io::Result<()> {
     writeln!(&self.cmakelists_file,
       "{}add_compile_definitions(",
       spacer
     )?;
  
-    for def in items {
+    for fully_processed_def_string in items {
       writeln!(&self.cmakelists_file,
         "{}\t{}",
         spacer,
-        def
+        fully_processed_def_string
       )?;
     }
 
@@ -704,27 +687,22 @@ impl<'a> CMakeListsWriter<'a> {
   }
 
   fn write_global_config_specific_defines(&self) -> io::Result<()> {
-    let mut compiler_all_config_map: HashMap<&BuildType, &BuildConfig> = HashMap::new();
-
     for (build_type, build_config) in self.project_data.get_build_configs() {
       if let Some(all_compilers_config) = build_config.get(&BuildConfigCompilerSpecifier::AllCompilers) {
-        compiler_all_config_map.insert(build_type, all_compilers_config);
+        if all_compilers_config.has_compiler_defines() {
+          writeln!(&self.cmakelists_file,
+            "\nlist( APPEND {}_LOCAL_DEFINES\n\t{}\n)",
+            build_type.name_str().to_uppercase(),
+            flattened_defines_list_string("\t", &all_compilers_config.defines)
+          )?;
+        }
       }
     }
-
-    let defines_list: HashSet<String> = compiler_all_config_map.iter()
-      .map(|(build_type, build_config)| defines_generator_string(build_type, build_config))
-      .filter(|def| def.is_some())
-      .map(|def| def.unwrap())
-      .collect();
-
-    self.write_def_list("", &defines_list)?;
 
     Ok(())
   }
 
   fn write_predefined_dependencies(&self) -> io::Result<()> {
-
     for (dep_name, predep_graph) in self.dep_graph_ref().get_predefined_dependencies() {
       let dep_info: Rc<FinalPredefinedDependencyConfig> = predep_graph.as_ref().borrow().wrapped_project().clone().unwrap_predef_dep();
 
@@ -972,6 +950,31 @@ impl<'a> CMakeListsWriter<'a> {
     Ok(())
   }
 
+  fn write_build_config_section(&self) -> io::Result<()> {
+    self.write_newline()?;
+
+    writeln!(&self.cmakelists_file,
+      "initialize_build_config_vars()"
+    )?;
+    
+    if self.project_data.has_global_defines() {
+      writeln!(&self.cmakelists_file,
+        "set( ALL_CONFIGS_LOCAL_DEFINES\n\t{}\n)",
+        flattened_defines_list_string("\t", self.project_data.get_global_defines())
+      )?;
+
+      writeln!(&self.cmakelists_file,
+        "propagate_all_configs_local_defines()"
+      )?;
+    }
+
+    self.write_global_config_specific_defines()?;
+    self.write_newline()?;
+    self.write_build_configs()?;
+    
+    Ok(())
+  }
+
   fn write_build_configs(&self) -> io::Result<()> {
     /*
       Compiler
@@ -980,7 +983,7 @@ impl<'a> CMakeListsWriter<'a> {
           - defines
     */
 
-    let mut simplified_map: HashMap<SpecificCompilerSpecifier, HashMap<&BuildType, &BuildConfig>> = HashMap::new();
+    let mut simplified_map: HashMap<SpecificCompilerSpecifier, HashMap<&BuildType, &FinalBuildConfig>> = HashMap::new();
 
     for (build_type, build_config) in self.project_data.get_build_configs() {
       for (build_config_compiler, specific_config) in build_config {
@@ -1015,30 +1018,33 @@ impl<'a> CMakeListsWriter<'a> {
         )?;
 
         for (config_name, build_config) in config_map {
-          let uppercase_config_name: String = config_name.name_string().to_uppercase();
+          let uppercase_config_name: String = config_name.name_str().to_uppercase();
 
           // Write compiler flags per compiler for each config.
-          self.set_basic_var("\t",
-            &format!("{}_LOCAL_COMPILER_FLAGS", uppercase_config_name),
-            &flattened_maybe_compiler_flags_string(&build_config.compiler_flags)
-          )?;
+          if build_config.has_compiler_flags() {
+            writeln!(&self.cmakelists_file,
+              "\tset( {}_LOCAL_COMPILER_FLAGS\n\t\t{}\n\t)",
+              uppercase_config_name,
+              &flattened_compiler_flags_string("\t\t", &build_config.compiler_flags)
+            )?;
+          }
 
           // Write linker flags per "compiler" for each config
-          self.set_basic_var("\t",
-            &format!("{}_LOCAL_LINKER_FLAGS", uppercase_config_name),
-            &flattened_maybe_linker_flags_string(&build_config.linker_flags)
-          )?;
-        }
+          if build_config.has_linker_flags() {
+            writeln!(&self.cmakelists_file,
+              "\tset( {}_LOCAL_LINKER_FLAGS\n\t\t{}\n\t)",
+              uppercase_config_name,
+              &flattened_linker_flags_string(&build_config.linker_flags)
+            )?;
+          }
 
-        if let FinalProjectType::Root = self.project_data.get_project_type() {
-          let definitions_generator_string: HashSet<String> = config_map
-            .iter()
-            .map(|(build_type, build_config)| defines_generator_string(build_type, build_config) )
-            .filter(|def| def.is_some())
-            .map(|def| def.unwrap())
-            .collect();
-
-          self.write_def_list("\t", &definitions_generator_string)?;
+          if build_config.has_compiler_defines() {
+            writeln!(&self.cmakelists_file,
+              "\tlist( APPEND {}_LOCAL_DEFINES ${{ALL_CONFIGS_LOCAL_DEFINES}}\n\t\t{}\n\t)",
+              uppercase_config_name,
+              &flattened_defines_list_string("\t\t", &build_config.defines)
+            )?;
+          }
         }
 
         has_written_a_config = true;
@@ -1049,20 +1055,6 @@ impl<'a> CMakeListsWriter<'a> {
     if has_written_a_config {
       writeln!(&self.cmakelists_file, "endif()")?;
     }
-    Ok(())
-  }
-
-  fn write_build_config_section(&self) -> io::Result<()> {
-    self.write_newline()?;
-    
-    if let Some(def_list) = self.project_data.get_global_defines() {
-      self.write_def_list("", def_list)?;
-    }
-
-    self.write_global_config_specific_defines()?;
-    self.write_newline()?;
-    self.write_build_configs()?;
-    
     Ok(())
   }
 
@@ -1214,43 +1206,44 @@ impl<'a> CMakeListsWriter<'a> {
     Ok(())
   }
 
+  // Append to defines, linker flags, and compiler flags on a per-target basis.
   fn append_to_target_build_config_options(
     &self,
     spacer: &str,
     output_name: &str,
     build_type: &BuildType,
-    build_config: &BuildConfig
+    build_config: &FinalBuildConfig
   ) -> io::Result<()> {
-    let build_type_name_upper: String = build_type.name_string().to_uppercase();
+    let build_type_name_upper: String = build_type.name_str().to_uppercase();
 
-    // Append to defines, linker flags, and compiler flags.
-    if let Some(compiler_flags) = &build_config.compiler_flags {
+    if build_config.has_compiler_flags() {
       writeln!(&self.cmakelists_file,
         "{}list( APPEND {}_{}_OWN_COMPILER_FLAGS {} )",
         spacer,
         output_name,
         &build_type_name_upper,
-        flattened_compiler_flags_string(compiler_flags)
+        flattened_compiler_flags_string("\t", &build_config.compiler_flags)
       )?;
     }
 
-    if let Some(linker_flags) = &build_config.linker_flags {
+    if build_config.has_linker_flags() {
       writeln!(&self.cmakelists_file,
         "{}list( APPEND {}_{}_OWN_LINKER_FLAGS {} )",
         spacer,
         output_name,
         &build_type_name_upper,
-        flattened_linker_flags_string(linker_flags)
+        flattened_linker_flags_string(&build_config.linker_flags)
       )?;
     }
 
-    if let Some(defines) = &build_config.defines {
+    if build_config.has_compiler_defines() {
       writeln!(&self.cmakelists_file,
-        "{}list( APPEND {}_{}_OWN_DEFINES {} )",
+        "{}list( APPEND {}_{}_OWN_DEFINES\n{}\t{}\n)",
         spacer,
         output_name,
         &build_type_name_upper,
-        flattened_defines_list_string(defines, DefinesStringFormat::Quoted)
+        spacer,
+        flattened_defines_list_string(&format!("{}\t", spacer), &build_config.defines)
       )?;
     }
 
@@ -1266,7 +1259,7 @@ impl<'a> CMakeListsWriter<'a> {
     // to all the subprojects.
     // Need to set these here for all allowed configs.
     for (build_type, _) in self.project_data.get_build_configs() {
-      let build_type_name_upper: String = build_type.name_string().to_uppercase();
+      let build_type_name_upper: String = build_type.name_str().to_uppercase();
 
       self.set_basic_var(
         "",
@@ -1278,6 +1271,12 @@ impl<'a> CMakeListsWriter<'a> {
         "",
         &format!("{}_{}_OWN_COMPILER_FLAGS", variable_base_name, &build_type_name_upper),
         &format!("\"${{{}_LOCAL_COMPILER_FLAGS}}\"", &build_type_name_upper)
+      )?;
+
+      self.set_basic_var(
+        "",
+        &format!("{}_{}_OWN_DEFINES", variable_base_name, &build_type_name_upper),
+        &format!("\"${{{}_LOCAL_DEFINES}}\"", &build_type_name_upper)
       )?;
     }
 
@@ -1298,8 +1297,8 @@ impl<'a> CMakeListsWriter<'a> {
           }
         }
 
-        let mut any_compiler_config: HashMap<BuildType, &BuildConfig> = HashMap::new();
-        let mut by_compiler: HashMap<SpecificCompilerSpecifier, HashMap<TargetSpecificBuildType, &BuildConfig>> = HashMap::new();
+        let mut any_compiler_config: HashMap<BuildType, &FinalBuildConfig> = HashMap::new();
+        let mut by_compiler: HashMap<SpecificCompilerSpecifier, HashMap<TargetSpecificBuildType, &FinalBuildConfig>> = HashMap::new();
 
         for (build_type, config_by_compiler) in build_config_map {
           for (compiler_or_all, build_config) in config_by_compiler {
@@ -1407,7 +1406,11 @@ impl<'a> CMakeListsWriter<'a> {
       OutputItemType::HeaderOnlyLib => "INTERFACE",
       // For executables, defines are set on the receiver lib.
       OutputItemType::Executable => "INTERFACE",
-      _ => "PRIVATE"
+      // I'm not sure if compiled library defines should be public or private, but for now I'm
+      // making them public because global defines might be referenced in header files. 
+      // TODO: 
+      // _compiled_lib_type => "PRIVATE"
+      _compiled_lib_type => "PUBLIC"
     };
 
     // Compiler defines
@@ -1420,9 +1423,9 @@ impl<'a> CMakeListsWriter<'a> {
     for (config, _) in self.project_data.get_build_configs() {
       writeln!(&self.cmakelists_file,
         "\t\t\"$<$<CONFIG:{}>:${{{}_{}_OWN_DEFINES}}>\"",
-        config.name_string(),
+        config.name_str(),
         variable_base_name,
-        config.name_string().to_uppercase()
+        config.name_str().to_uppercase()
       )?;
     }
 
@@ -1455,9 +1458,9 @@ impl<'a> CMakeListsWriter<'a> {
     for (config, _) in self.project_data.get_build_configs() {
       writeln!(&self.cmakelists_file,
         "\t\t\"$<$<CONFIG:{}>:${{{}_{}_OWN_LINKER_FLAGS}}>\"",
-        config.name_string(),
+        config.name_str(),
         variable_base_name,
-        config.name_string().to_uppercase()
+        config.name_str().to_uppercase()
       )?;
     }
 
@@ -1490,9 +1493,9 @@ impl<'a> CMakeListsWriter<'a> {
     for (config, _) in self.project_data.get_build_configs() {
       writeln!(&self.cmakelists_file,
         "\t\t\"$<$<CONFIG:{}>:${{{}_{}_OWN_COMPILER_FLAGS}}>\"",
-        config.name_string(),
+        config.name_str(),
         variable_base_name,
-        config.name_string().to_uppercase()
+        config.name_str().to_uppercase()
       )?;
     }
 

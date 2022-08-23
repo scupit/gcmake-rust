@@ -1,6 +1,6 @@
 use std::{collections::{HashMap, HashSet}, iter::FromIterator};
 
-use crate::{project_info::{raw_data_in::{RawProject, RawSubproject, SpecificCompilerSpecifier, RawCompiledItem, OutputItemType, BuildType, BuildConfigCompilerSpecifier, BuildConfig, SingleLanguageConfig, LanguageConfigMap, RawTestProject}}, program_actions::ProjectTypeCreating};
+use crate::{project_info::{raw_data_in::{RawProject, RawSubproject, SpecificCompilerSpecifier, RawCompiledItem, OutputItemType, BuildType, BuildConfigCompilerSpecifier, RawBuildConfig, SingleLanguageConfig, LanguageConfigMap, RawTestProject}}, program_actions::ProjectTypeCreating};
 
 use self::configuration::{MainFileLanguage, OutputLibType, CreationProjectOutputType};
 
@@ -96,83 +96,83 @@ pub fn get_default_project_config(
     gcmake_dependencies: None,
     build_configs: HashMap::from_iter([
       (BuildType::Debug, HashMap::from_iter([
-        (BuildConfigCompilerSpecifier::GCC, BuildConfig {
+        (BuildConfigCompilerSpecifier::GCC, RawBuildConfig {
           compiler_flags: Some(create_string_set([ "-Og", "-g", "-Wall", "-Wextra", "-Wconversion", "-Wuninitialized", "-pedantic", "-pedantic-errors"])),
           linker_flags: None,
           defines: None
         }),
-        (BuildConfigCompilerSpecifier::Clang, BuildConfig {
+        (BuildConfigCompilerSpecifier::Clang, RawBuildConfig {
           compiler_flags: Some(create_string_set([ "-Og", "-g", "-Wall", "-Wextra", "-Wconversion", "-Wuninitialized", "-pedantic", "-pedantic-errors"])),
           linker_flags: None,
           defines: None
         }),
-        (BuildConfigCompilerSpecifier::MSVC, BuildConfig {
+        (BuildConfigCompilerSpecifier::MSVC, RawBuildConfig {
           compiler_flags: Some(create_string_set([ "/Od", "/W4", "/DEBUG" ])),
           linker_flags: None,
           defines: None
         })
       ])),
       (BuildType::Release, HashMap::from_iter([
-        (BuildConfigCompilerSpecifier::AllCompilers, BuildConfig {
+        (BuildConfigCompilerSpecifier::AllCompilers, RawBuildConfig {
           compiler_flags: None,
           linker_flags: None,
           defines: Some(create_string_set(["NDEBUG"]))
         }),
-        (BuildConfigCompilerSpecifier::GCC, BuildConfig {
+        (BuildConfigCompilerSpecifier::GCC, RawBuildConfig {
           compiler_flags: Some(create_string_set([ "-O3", "-flto" ])),
           linker_flags: Some(create_string_set([ "-s" ])),
           defines: None
         }),
-        (BuildConfigCompilerSpecifier::Clang, BuildConfig {
+        (BuildConfigCompilerSpecifier::Clang, RawBuildConfig {
           compiler_flags: Some(create_string_set([ "-O3", "-flto" ])),
           linker_flags: Some(create_string_set([ "-s" ])),
           defines: None
         }),
-        (BuildConfigCompilerSpecifier::MSVC, BuildConfig {
+        (BuildConfigCompilerSpecifier::MSVC, RawBuildConfig {
           compiler_flags: Some(create_string_set([ "/O2", "/GL" ])),
           linker_flags: None,
           defines: None
         })
       ])),
       (BuildType::MinSizeRel, HashMap::from_iter([
-        (BuildConfigCompilerSpecifier::AllCompilers, BuildConfig {
+        (BuildConfigCompilerSpecifier::AllCompilers, RawBuildConfig {
           compiler_flags: None,
           linker_flags: None,
           defines: Some(create_string_set(["NDEBUG"]))
         }),
-        (BuildConfigCompilerSpecifier::GCC, BuildConfig {
+        (BuildConfigCompilerSpecifier::GCC, RawBuildConfig {
           compiler_flags: Some(create_string_set([ "-Os", "-flto" ])),
           linker_flags: Some(create_string_set([ "-s" ])),
           defines: None
         }),
-        (BuildConfigCompilerSpecifier::Clang, BuildConfig {
+        (BuildConfigCompilerSpecifier::Clang, RawBuildConfig {
           compiler_flags: Some(create_string_set([ "-Os", "-flto" ])),
           linker_flags: Some(create_string_set([ "-s" ])),
           defines: None
         }),
-        (BuildConfigCompilerSpecifier::MSVC, BuildConfig {
+        (BuildConfigCompilerSpecifier::MSVC, RawBuildConfig {
           compiler_flags: Some(create_string_set([ "/O1", "/GL" ])),
           linker_flags: None,
           defines: None
         })
       ])),
       (BuildType::RelWithDebInfo, HashMap::from_iter([
-        (BuildConfigCompilerSpecifier::AllCompilers, BuildConfig {
+        (BuildConfigCompilerSpecifier::AllCompilers, RawBuildConfig {
           compiler_flags: None,
           linker_flags: None,
           defines: Some(create_string_set(["NDEBUG"]))
         }),
-        (BuildConfigCompilerSpecifier::GCC, BuildConfig {
+        (BuildConfigCompilerSpecifier::GCC, RawBuildConfig {
           compiler_flags: Some(create_string_set([ "-O2", "-g" ])),
           linker_flags: None,
           defines: None
         }),
-        (BuildConfigCompilerSpecifier::Clang, BuildConfig {
+        (BuildConfigCompilerSpecifier::Clang, RawBuildConfig {
           compiler_flags: Some(create_string_set([ "-O2", "-g" ])),
           linker_flags: None,
           defines: None
         }),
-        (BuildConfigCompilerSpecifier::MSVC, BuildConfig {
+        (BuildConfigCompilerSpecifier::MSVC, RawBuildConfig {
           compiler_flags: Some(create_string_set([ "/O2", "/DEBUG" ])),
           linker_flags: None,
           defines: None
@@ -258,9 +258,9 @@ pub fn main_file_name(
   return format!("{}.{}{}", file_name, extension_prefix, extension_suffix);
 }
 
-fn create_string_set<const AMOUNT: usize>(arr: [&str; AMOUNT]) -> HashSet<String> {
+fn create_string_set<'a>(arr: impl IntoIterator<Item=&'a str>) -> Vec<String> {
   return arr
-    .iter()
-    .map(|&borrowed_str| String::from(borrowed_str))
+    .into_iter()
+    .map(|borrowed_str| String::from(borrowed_str))
     .collect()
 }

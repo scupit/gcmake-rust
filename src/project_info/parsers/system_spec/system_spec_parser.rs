@@ -585,6 +585,28 @@ fn test_parser() {
         Box::new(SystemSpecExpressionTree::Value(SingleSystemSpec::Windows))
       ))
     },
+    ParserTestGroup {
+      raw_expr: "((not mingw and not windows))",
+      expected_tree: Some(SystemSpecExpressionTree::And(
+        Box::new(SystemSpecExpressionTree::Not(
+          Box::new(SystemSpecExpressionTree::Value(SingleSystemSpec::MinGW))
+        )),
+        Box::new(SystemSpecExpressionTree::Not(
+          Box::new(SystemSpecExpressionTree::Value(SingleSystemSpec::Windows))
+        )),
+      ))
+    },
+    ParserTestGroup {
+      raw_expr: "((not mingw or not windows))",
+      expected_tree: Some(SystemSpecExpressionTree::Or(
+        Box::new(SystemSpecExpressionTree::Not(
+          Box::new(SystemSpecExpressionTree::Value(SingleSystemSpec::MinGW))
+        )),
+        Box::new(SystemSpecExpressionTree::Not(
+          Box::new(SystemSpecExpressionTree::Value(SingleSystemSpec::Windows))
+        )),
+      ))
+    },
   ];
 
   let invalid_expressions = [

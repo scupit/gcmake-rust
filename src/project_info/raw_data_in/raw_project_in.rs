@@ -1,9 +1,10 @@
 use std::collections::{HashMap, HashSet};
+use enum_iterator::Sequence;
 use serde::{Serialize, Deserialize};
 
 use super::{dependencies::user_given_dep_config::{UserGivenPredefinedDependencyConfig}, project_common_types::{PredefinedDepMap, GCMakeDepMap}};
 
-pub type BuildTypeOptionMap = HashMap<BuildConfigCompilerSpecifier, BuildConfig>;
+pub type BuildTypeOptionMap = HashMap<BuildConfigCompilerSpecifier, RawBuildConfig>;
 pub type BuildConfigMap = HashMap<BuildType, BuildTypeOptionMap>;
 pub type TargetBuildConfigMap = HashMap<TargetSpecificBuildType, BuildTypeOptionMap>;
 
@@ -67,7 +68,7 @@ pub struct RawProject {
   pub supported_compilers: HashSet<SpecificCompilerSpecifier>,
   pub test_framework: Option<RawTestFramework>,
   pub output: HashMap<String, RawCompiledItem>,
-  pub global_defines: Option<HashSet<String>>,
+  pub global_defines: Option<Vec<String>>,
   pub predefined_dependencies: Option<PredefinedDepMap>,
   pub gcmake_dependencies: Option<GCMakeDepMap>,
   pub build_configs: BuildConfigMap
@@ -110,7 +111,7 @@ impl RawProject {
     &self.languages
   }
 
-  pub fn get_global_defines(&self) -> &Option<HashSet<String>> {
+  pub fn get_global_defines(&self) -> &Option<Vec<String>> {
     &self.global_defines
   }
 }
@@ -135,7 +136,7 @@ pub struct SingleLanguageConfig {
   pub standard: i8
 }
 
-#[derive(Serialize, Deserialize, Debug, Eq, PartialEq, Hash, Clone, PartialOrd, Ord)]
+#[derive(Serialize, Deserialize, Debug, Eq, PartialEq, Hash, Clone, PartialOrd, Ord, Sequence)]
 #[serde(deny_unknown_fields)]
 pub enum BuildType {
   Debug,
@@ -145,7 +146,7 @@ pub enum BuildType {
 }
 
 impl BuildType {
-  pub fn name_string(&self) -> &'static str {
+  pub fn name_str(&self) -> &'static str {
     match self {
       Self::Debug => "Debug",
       Self::Release => "Release",
@@ -178,10 +179,10 @@ impl BuildConfigCompilerSpecifier {
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(deny_unknown_fields)]
-pub struct BuildConfig {
-  pub compiler_flags: Option<HashSet<String>>,
-  pub linker_flags: Option<HashSet<String>>,
-  pub defines: Option<HashSet<String>>
+pub struct RawBuildConfig {
+  pub compiler_flags: Option<Vec<String>>,
+  pub linker_flags: Option<Vec<String>>,
+  pub defines: Option<Vec<String>>
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq)]
@@ -247,7 +248,7 @@ impl TargetSpecificBuildType {
   pub fn name_string(&self) -> &str {
     return match self {
       Self::AllConfigs => "All",
-      other => other.to_general_build_type().unwrap().name_string()
+      other => other.to_general_build_type().unwrap().name_str()
     }
   }
 }

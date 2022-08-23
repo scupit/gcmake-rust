@@ -1,6 +1,6 @@
-use std::{rc::Rc};
+use std::{rc::Rc, collections::HashMap};
 
-use super::{raw_data_in::{OutputItemType, RawCompiledItem, TargetBuildConfigMap, LinkSection}, final_dependencies::FinalPredefinedDependencyConfig, LinkSpecifier, parsers::link_spec_parser::LinkAccessMode};
+use super::{raw_data_in::{OutputItemType, RawCompiledItem, TargetBuildConfigMap, LinkSection, BuildConfigCompilerSpecifier, BuildType, TargetSpecificBuildType, RawBuildConfig, BuildTypeOptionMap, BuildConfigMap}, final_dependencies::FinalPredefinedDependencyConfig, LinkSpecifier, parsers::{link_spec_parser::LinkAccessMode, general_parser::ParseSuccess}, SystemSpecifierWrapper, platform_spec_parser::parse_leading_system_spec};
 
 #[derive(Clone)]
 pub enum FinalTestFramework {
@@ -110,7 +110,7 @@ pub struct CompiledOutputItem {
   pub output_type: OutputItemType,
   pub entry_file: String,
   pub links: OutputItemLinks,
-  pub build_config: Option<TargetBuildConfigMap>,
+  pub build_config: Option<FinalTargetBuildConfigMap>,
   pub requires_custom_main: bool
 }
 
@@ -184,7 +184,8 @@ impl CompiledOutputItem {
       output_type: raw_output_item.output_type,
       entry_file: String::from(&raw_output_item.entry_file),
       links: OutputItemLinks::new_empty(),
-      build_config: raw_output_item.build_config.clone(),
+      // build_config: raw_output_item.build_config.clone(),
+      build_config: make_final_target_build_config(raw_output_item.build_config.as_ref())?,
       requires_custom_main: raw_output_item.requires_custom_main.unwrap_or(false)
     };
 
@@ -203,7 +204,7 @@ impl CompiledOutputItem {
     &self.links
   }
 
-  pub fn get_build_config_map(&self) -> &Option<TargetBuildConfigMap> {
+  pub fn get_build_config_map(&self) -> &Option<FinalTargetBuildConfigMap> {
     &self.build_config
   }
 
@@ -247,9 +248,154 @@ fn parse_all_links_into(
   Ok(())
 }
 
-// TODO: Parse system specific specifiers from flags and defines.
-// pub type FinalBuildConfigMap = HashMap<BuildType, BuildTypeOptionMap>;
+pub struct CompilerDefine {
+  pub system_spec: SystemSpecifierWrapper,
+  pub def_string: String
+}
 
-// pub struct FinalBuildConfig {
+impl CompilerDefine {
+  pub fn new(define_string: &str) -> Result<Self, String> {
+    return match parse_leading_system_spec(define_string)? {
+      Some(ParseSuccess { value, rest }) => {
+        Ok(Self {
+          system_spec: value,
+          def_string: rest.to_string()
+        })
+      },
+      None => {
+        Ok(Self {
+          system_spec: SystemSpecifierWrapper::default_include_all(),
+          def_string: define_string.to_string()
+        })
+      }
+    }
+  }
 
-// }
+  pub fn make_list_from_maybe(maybe_def_list: Option<&Vec<String>>) -> Result<Vec<Self>, String> {
+    return match maybe_def_list {
+      Some(def_list) => Self::make_list(def_list),
+      None => Ok(Vec::new())
+    }
+  }
+
+  pub fn make_list(def_list: &Vec<String>) -> Result<Vec<Self>, String> {
+    def_list.iter()
+      .map(|single_def| Self::new(single_def))
+      .collect()
+  }
+}
+
+pub struct CompilerFlag {
+  pub system_spec: SystemSpecifierWrapper,
+  pub flag_string: String
+}
+
+impl CompilerFlag {
+  pub fn new(flag_str: &str) -> Result<Self, String> {
+    return match parse_leading_system_spec(flag_str)? {
+      Some(ParseSuccess { value, rest }) => {
+        Ok(Self {
+          system_spec: value,
+          flag_string: rest.to_string()
+        })
+      },
+      None => {
+        Ok(Self {
+          system_spec: SystemSpecifierWrapper::default_include_all(),
+          flag_string: flag_str.to_string()
+        })
+      }
+    }
+  }
+
+  pub fn make_list_from_maybe(maybe_flag_list: Option<&Vec<String>>) -> Result<Vec<Self>, String> {
+    return match maybe_flag_list {
+      Some(flag_list) => Self::make_list(flag_list),
+      None => Ok(Vec::new())
+    }
+  }
+
+  pub fn make_list(flag_list: &Vec<String>) -> Result<Vec<Self>, String> {
+    flag_list.iter()
+      .map(|single_flag| Self::new(single_flag))
+      .collect()
+  }
+}
+
+pub type LinkerFlag = CompilerFlag;
+
+pub struct FinalBuildConfig {
+  pub compiler_flags: Vec<CompilerFlag>,
+  pub linker_flags: Vec<LinkerFlag>,
+  pub defines: Vec<CompilerDefine>
+}
+
+impl FinalBuildConfig {
+  pub fn make_from(raw_build_config: &RawBuildConfig) -> Result<Self, String> {
+    Ok(Self {
+      compiler_flags: CompilerFlag::make_list_from_maybe(raw_build_config.compiler_flags.as_ref())?,
+      linker_flags: LinkerFlag::make_list_from_maybe(raw_build_config.linker_flags.as_ref())?,
+      defines: CompilerDefine::make_list_from_maybe(raw_build_config.defines.as_ref())?
+    })
+  }
+
+  pub fn has_compiler_flags(&self) -> bool {
+    !self.compiler_flags.is_empty()
+  }
+
+  pub fn has_linker_flags(&self) -> bool {
+    !self.linker_flags.is_empty()
+  }
+
+  pub fn has_compiler_defines(&self) -> bool {
+    !self.defines.is_empty()
+  }
+}
+
+pub type FinalBuildTypeOptionMap = HashMap<BuildConfigCompilerSpecifier, FinalBuildConfig>;
+pub type FinalBuildConfigMap = HashMap<BuildType, FinalBuildTypeOptionMap>;
+pub type FinalTargetBuildConfigMap = HashMap<TargetSpecificBuildType, FinalBuildTypeOptionMap>;
+
+pub fn make_final_build_config_map(raw_build_config_map: &BuildConfigMap) -> Result<FinalBuildConfigMap, String> {
+  let mut resulting_map: FinalBuildConfigMap = FinalBuildConfigMap::new();
+
+  for (build_type, raw_build_config_by_compiler) in raw_build_config_map {
+    resulting_map.insert(
+      build_type.clone(),
+      make_final_by_compiler_config_map(raw_build_config_by_compiler)?
+    );
+  }
+
+  return Ok(resulting_map);
+}
+
+pub fn make_final_by_compiler_config_map(raw_by_compiler_map: &BuildTypeOptionMap) -> Result<FinalBuildTypeOptionMap, String> {
+  let mut resulting_map: FinalBuildTypeOptionMap = FinalBuildTypeOptionMap::new();
+
+  for (compiler_spec, raw_build_config) in raw_by_compiler_map {
+    resulting_map.insert(
+      compiler_spec.clone(),
+      FinalBuildConfig::make_from(raw_build_config)?
+    );
+  }
+
+  return Ok(resulting_map);
+}
+
+pub fn make_final_target_build_config(raw_build_config: Option<&TargetBuildConfigMap>) -> Result<Option<FinalTargetBuildConfigMap>, String> {
+  return match raw_build_config {
+    None => Ok(None),
+    Some(config_map) => {
+      let mut resulting_map: FinalTargetBuildConfigMap = FinalTargetBuildConfigMap::new();
+
+      for (target_build_type, by_compiler_config) in config_map {
+        resulting_map.insert(
+          target_build_type.clone(),
+          make_final_by_compiler_config_map(by_compiler_config)?
+        );
+      }
+
+      Ok(Some(resulting_map))
+    }
+  }
+}

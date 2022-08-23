@@ -2,7 +2,7 @@ use std::{collections::{HashMap, HashSet}, path::{Path, PathBuf}, io, rc::Rc, fs
 
 use crate::project_info::path_manipulation::cleaned_pathbuf;
 
-use super::{path_manipulation::{cleaned_path_str, relative_to_project_root, absolute_path}, final_dependencies::{FinalGCMakeDependency, FinalPredefinedDependencyConfig}, raw_data_in::{RawProject, dependencies::internal_dep_config::AllRawPredefinedDependencies, BuildConfigMap, BuildType, LanguageConfigMap, OutputItemType, PreBuildConfigIn, SpecificCompilerSpecifier, BuildConfigCompilerSpecifier, TargetBuildConfigMap, TargetSpecificBuildType, LinkSection, RawTestFramework, RawInstallerConfig}, final_project_configurables::{FinalProjectType}, CompiledOutputItem, helpers::{parse_subproject_data, parse_root_project_data, populate_files, find_prebuild_script, PrebuildScriptFile, validate_raw_project_outputs, ProjectOutputType, RetrievedCodeFileType, retrieve_file_type, parse_test_project_data}, PreBuildScript, OutputItemLinks, FinalTestFramework, base_include_prefix_for_test, gcmake_constants::{SRC_DIR, INCLUDE_DIR, TEMPLATE_IMPL_DIR, TESTS_DIR, SUBPROJECTS_DIR}, FinalInstallerConfig};
+use super::{path_manipulation::{cleaned_path_str, relative_to_project_root, absolute_path}, final_dependencies::{FinalGCMakeDependency, FinalPredefinedDependencyConfig}, raw_data_in::{RawProject, dependencies::internal_dep_config::AllRawPredefinedDependencies, BuildConfigMap, BuildType, LanguageConfigMap, OutputItemType, PreBuildConfigIn, SpecificCompilerSpecifier, BuildConfigCompilerSpecifier, TargetBuildConfigMap, TargetSpecificBuildType, LinkSection, RawTestFramework, RawInstallerConfig}, final_project_configurables::{FinalProjectType}, CompiledOutputItem, helpers::{parse_subproject_data, parse_root_project_data, populate_files, find_prebuild_script, PrebuildScriptFile, validate_raw_project_outputs, ProjectOutputType, RetrievedCodeFileType, retrieve_file_type, parse_test_project_data}, PreBuildScript, OutputItemLinks, FinalTestFramework, base_include_prefix_for_test, gcmake_constants::{SRC_DIR, INCLUDE_DIR, TEMPLATE_IMPL_DIR, TESTS_DIR, SUBPROJECTS_DIR}, FinalInstallerConfig, CompilerDefine, FinalBuildConfigMap, make_final_target_build_config, make_final_build_config_map, FinalTargetBuildConfigMap};
 
 const SUBPROJECT_JOIN_STR: &'static str = "_S_";
 const TEST_PROJECT_JOIN_STR: &'static str = "_TP_";
@@ -65,7 +65,7 @@ fn resolve_prebuild_script(project_root: &str, pre_build_config: &PreBuildConfig
             )?,
             None => OutputItemLinks::new_empty()
           },
-          build_config: pre_build_config.build_config.clone(),
+          build_config: make_final_target_build_config(pre_build_config.build_config.as_ref())?,
           requires_custom_main: false
         })
       },
@@ -162,7 +162,7 @@ struct NeededParseInfoFromParent {
   test_framework: Option<FinalTestFramework>,
   include_prefix: String,
   target_namespace_prefix: String,
-  build_config_map: Rc<BuildConfigMap>,
+  build_config_map: Rc<FinalBuildConfigMap>,
   language_config_map: Rc<LanguageConfigMap>,
   supported_compilers: Rc<HashSet<SpecificCompilerSpecifier>>
 }
@@ -186,10 +186,10 @@ pub struct FinalProjectData {
   project_name_for_error_messages: String,
   description: String,
   vendor: String,
-  build_config_map: Rc<BuildConfigMap>,
+  build_config_map: Rc<FinalBuildConfigMap>,
   default_build_config: BuildType,
   language_config_map: Rc<LanguageConfigMap>,
-  global_defines: Option<HashSet<String>>,
+  global_defines: Vec<CompilerDefine>,
   base_include_prefix: String,
   full_include_prefix: String,
   src_dir: String,
@@ -282,14 +282,17 @@ impl FinalProjectData {
     let final_test_framework: Option<FinalTestFramework>;
 
     let language_config: Rc<LanguageConfigMap>;
-    let build_config: Rc<BuildConfigMap>;
+    let build_config: Rc<FinalBuildConfigMap>;
     let supported_compiler_set: Rc<HashSet<SpecificCompilerSpecifier>>;
 
     match &parent_project_info {
       None => {
         raw_project = parse_root_project_data(&unclean_project_root)?;
         language_config = Rc::new(raw_project.languages.clone());
-        build_config = Rc::new(raw_project.build_configs.clone());
+        build_config = Rc::new(
+          make_final_build_config_map(&raw_project.build_configs)
+            .map_err(ProjectLoadFailureReason::Other)?
+        );
         supported_compiler_set = Rc::new(raw_project.supported_compilers.clone());
         full_namespaced_project_name = raw_project.name.clone();
         project_type = FinalProjectType::Root;
@@ -673,6 +676,14 @@ impl FinalProjectData {
       .collect::<Vec<&str>>()
       .join(" -> ");
 
+    let global_defines: Vec<CompilerDefine> = raw_project.global_defines
+      .as_ref()
+      .map_or(
+        Ok(Vec::new()),
+        |defines_set| CompilerDefine::make_list(&defines_set)
+      )
+      .map_err(ProjectLoadFailureReason::Other)?;
+
     let mut finalized_project_data = FinalProjectData {
       project_base_name: raw_project.name.clone(),
       project_name_for_error_messages,
@@ -683,7 +694,7 @@ impl FinalProjectData {
       vendor: project_vendor,
       full_include_prefix,
       base_include_prefix: raw_project.get_include_prefix().to_string(),
-      global_defines: raw_project.global_defines,
+      global_defines: global_defines,
       build_config_map: build_config,
       default_build_config: raw_project.default_build_type,
       language_config_map: language_config,
@@ -799,7 +810,7 @@ impl FinalProjectData {
 
             return Err(format!(
               "Config Issue: '{}' build config defines a section for {}, but {} is not in the supported_compilers list. To fix, either remove the {} section or add {} to the supported_compilers list for this project.",
-              build_type.name_string(),
+              build_type.name_str(),
               compiler_name,
               compiler_name,
               compiler_name,
@@ -968,7 +979,7 @@ impl FinalProjectData {
   fn validate_output_specific_build_config(
     &self,
     output_name: &str,
-    maybe_build_config_map: &Option<TargetBuildConfigMap>,
+    maybe_build_config_map: &Option<FinalTargetBuildConfigMap>,
     is_prebuild_script: bool
   ) -> Result<(), String> {
     if maybe_build_config_map.is_none() {
@@ -1167,7 +1178,7 @@ impl FinalProjectData {
     &self.template_impls_dir
   }
 
-  pub fn get_build_configs(&self) -> &BuildConfigMap {
+  pub fn get_build_configs(&self) -> &FinalBuildConfigMap {
     &self.build_config_map
   }
 
@@ -1179,7 +1190,11 @@ impl FinalProjectData {
     &self.language_config_map
   }
 
-  pub fn get_global_defines(&self) -> &Option<HashSet<String>> {
+  pub fn has_global_defines(&self) -> bool {
+    !self.global_defines.is_empty()
+  }
+
+  pub fn get_global_defines(&self) -> &Vec<CompilerDefine> {
     &self.global_defines
   }
   
