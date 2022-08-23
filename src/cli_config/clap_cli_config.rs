@@ -110,6 +110,7 @@ pub enum FileCreationLang {
   Cpp
 }
 
+// TODO: Change this so that multiple file sets can be created with one command.
 #[derive(Args)]
 #[clap(setting = AppSettings::ColoredHelp)]
 pub struct CreateFilesCommand {
@@ -130,7 +131,8 @@ pub struct CreateFilesCommand {
   #[clap(required = false, default_value = "hs")]
   pub file_types: String,
 
-  #[clap(short = 'p')]
+  /// Use '#pragma once' instead of include guards.
+  #[clap(short = 'p', long = "use-pragma")]
   pub use_pragma_guards: bool
 }
 
