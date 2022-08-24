@@ -1,0 +1,121 @@
+---
+Language: Cpp
+Standard: c++20
+ColumnLimit: 120
+IndentWidth: 2
+
+AlignArrayOfStructures: Left
+AlignConsecutiveAssignments: Consecutive
+AlignConsecutiveDeclarations: Consecutive
+AlignConsecutiveMacros: Consecutive
+
+AlignEscapedNewlines: Left
+AlignOperands: Align
+AlignTrailingComments: true
+
+AllowShortBlocksOnASingleLine: Empty
+AllowShortCaseLabelsOnASingleLine: true
+# AllowShortEnumsOnASingleLine: true
+AllowShortEnumsOnASingleLine: false
+AllowShortFunctionsOnASingleLine: Inline
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortLambdasOnASingleLine: Inline
+
+AlwaysBreakTemplateDeclarations: Yes
+
+BinPackArguments: false
+BinPackParameters: false
+BitFieldColonSpacing: Both
+
+# BreakBeforeBraces: Attach
+BreakBeforeBraces: Custom
+
+BraceWrapping:
+  AfterCaseLabel: false
+  AfterClass: true
+  AfterStruct: true
+  AfterControlStatement: MultiLine
+  AfterEnum: false
+  # AfterFunction: false
+  AfterFunction: true
+  AfterNamespace: false
+  AfterUnion: false
+  AfterExternBlock: false
+  BeforeCatch: true
+  BeforeElse: true
+  BeforeLambdaBody: false
+  BeforeWhile: true
+  # IndentBraces: false
+  SplitEmptyFunction: false
+  SplitEmptyRecord: false
+  SplitEmptyNamespace: false
+
+BreakBeforeBinaryOperators: NonAssignment
+# BreakBeforeConceptDeclarations: Always
+BreakBeforeConceptDeclarations: true
+BreakBeforeTernaryOperators: true
+BreakConstructorInitializers: BeforeColon
+BreakInheritanceList: AfterComma
+BreakStringLiterals: false
+
+CompactNamespaces: false
+PackConstructorInitializers: Never
+ConstructorInitializerIndentWidth: 2
+
+# DerivePointerAlignment: true
+EmptyLineAfterAccessModifier: Never
+EmptyLineBeforeAccessModifier: LogicalBlock
+FixNamespaceComments: true
+IncludeBlocks: Preserve
+
+IndentAccessModifiers: true
+IndentCaseBlocks: false
+IndentCaseLabels: true
+IndentExternBlock: Indent
+# IndentGotoLabels: true
+IndentPPDirectives: BeforeHash
+
+# This was renamed from IndentRequires to IndentRequiresClause
+# in clang-format 15. At time of writing, 14 is the latest version.
+# IndentRequiresClause: true
+IndentRequires: true
+
+KeepEmptyLinesAtTheStartOfBlocks: false
+LambdaBodyIndentation: Signature
+NamespaceIndentation: All
+
+PointerAlignment: Left
+ReferenceAlignment: Left
+
+# clang-format 15. Not sure which setting to use yet.
+# RequiresClausePosition: OwnLine
+# RequiresClausePosition: WithPreceding
+
+# SeparateDefinitionBlocks: Leave
+SeparateDefinitionBlocks: Always
+
+SortIncludes: CaseSensitive
+SortUsingDeclarations: true
+
+SpaceAfterCStyleCast: true
+SpaceAfterLogicalNot: false
+SpaceBeforeAssignmentOperators: true
+SpaceBeforeCaseColon: false
+SpaceBeforeCpp11BracedList: false
+SpaceBeforeCtorInitializerColon: true
+SpaceBeforeInheritanceColon: true
+SpaceBeforeParens: ControlStatements
+SpaceBeforeRangeBasedForLoopColon: true
+SpaceBeforeSquareBrackets: false
+SpaceInEmptyBlock: true
+SpaceInEmptyParentheses: false
+SpacesBeforeTrailingComments: 2
+SpacesInAngles: Never
+SpacesInCStyleCastParentheses: false
+SpacesInConditionalStatement: false
+SpacesInContainerLiterals: false
+SpacesInLineCommentPrefix:
+  Minimum: 1
+  Maximum: 1
+SpacesInParentheses: false
+SpacesInSquareBrackets: false

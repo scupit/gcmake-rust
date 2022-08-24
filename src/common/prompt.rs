@@ -1,7 +1,7 @@
 use std::{io::{self, stdin, Write}, convert::TryInto};
 
-use super::configuration::{MainFileLanguage, CreationProjectOutputType, OutputLibType};
-
+// TODO: Rewrite this module to be more robust. This module works, but it could definitely
+// be easier to use.
 #[derive(Debug)]
 pub enum PromptResult {
   Yes,
@@ -20,7 +20,7 @@ impl PromptResult {
     }
   }
 
-  fn unwrap_custom(self) -> String {
+  pub fn unwrap_custom(self) -> String {
     if let Self::Custom(value) = self {
       return value;
     }
@@ -28,21 +28,21 @@ impl PromptResult {
     panic!("Cannot unwrap a PrompResult which is not a Custom value.");
   }
 
-  fn is_yes_or_no(&self) -> bool {
+  pub fn is_yes_or_no(&self) -> bool {
     return match *self {
       Self::Yes | Self::No => true,
       _ => false
     }
   }
 
-  fn is_custom(&self) -> bool {
+  pub fn is_custom(&self) -> bool {
     return if let Self::Custom(_) = &self {
       true
     }
     else { false }
   }
 
-  fn from_str(string: &str) -> PromptResult {
+  pub fn from_str(string: &str) -> PromptResult {
     match string.trim() {
       "" => PromptResult::Empty,
       "y" => PromptResult::Yes,
@@ -63,7 +63,7 @@ pub fn prompt_once(prompt: &str) -> io::Result<PromptResult> {
   return Ok(PromptResult::from_str(buffer.trim()))
 }
 
-fn prompt_until<T>(prompt: &str, predicate: T) -> io::Result<PromptResult>
+pub fn prompt_until<T>(prompt: &str, predicate: T) -> io::Result<PromptResult>
   where T: Fn(&PromptResult) -> bool
 {
   let mut buffer = String::new();
@@ -87,8 +87,13 @@ fn prompt_until<T>(prompt: &str, predicate: T) -> io::Result<PromptResult>
   return Ok(result)
 }
 
-pub fn prompt_until_boolean(prompt: &str) -> io::Result<PromptResult> {
+pub fn prompt_until_boolean(prompt: &str) -> io::Result<bool> {
   prompt_until(prompt, |result| result.is_yes_or_no())
+    .map(|prompt_result_enum| match prompt_result_enum {
+      PromptResult::Yes => true,
+      PromptResult::No => false,
+      _ => unreachable!()
+    })
 }
 
 pub fn prompt_until_value(prompt: &str) -> io::Result<PromptResult> {
@@ -97,7 +102,7 @@ pub fn prompt_until_value(prompt: &str) -> io::Result<PromptResult> {
 
 type PromptChoice<'a, T> = (&'a str, Box<dyn Fn() -> T>);
 
-fn prompt_with_choices<T>(
+pub fn prompt_with_choices<T>(
   prompt_title: &str,
   choices: &[PromptChoice<T>]
 ) -> io::Result<T> {
@@ -127,74 +132,4 @@ fn prompt_with_choices<T>(
   let (_, value_resolver) = &choices[result_index];
 
   return Ok(value_resolver());
-}
-
-pub fn prompt_for_vendor() -> io::Result<String> {
-  return prompt_until_value("Vendor name (your name or organization): ")
-    .map(|the_result| the_result.unwrap_custom());
-}
-
-pub fn prompt_for_language() -> io::Result<MainFileLanguage> {
-  return prompt_with_choices(
-    "Choose Language",
-    &[
-      ("C", Box::new(|| MainFileLanguage::C)),
-      ("C++", Box::new(|| MainFileLanguage::Cpp))
-    ]
-  );
-}
-
-pub fn prompt_for_project_output_type() -> io::Result<CreationProjectOutputType> {
-  return prompt_with_choices(
-    "Choose Project Type",
-    &[
-      ("Executable", Box::new(|| CreationProjectOutputType::Executable)),
-      ("Library", Box::new(|| {
-        let mut lib_output_type: Option<OutputLibType> = None;
-
-        loop {
-          if let Ok(lib_type) = prompt_for_lib_output_type() {
-            lib_output_type = Some(lib_type);
-          }
-
-          if let Some(lib_type) = lib_output_type {
-            break CreationProjectOutputType::Library(lib_type)
-          }
-        }
-      })),
-    ]
-  );
-}
-
-fn prompt_for_lib_output_type() -> io::Result<OutputLibType> {
-  return prompt_with_choices(
-    "Choose library type",
-    &[
-      ("Compiled (either static or shared)", Box::new(|| OutputLibType::ToggleStaticOrShared)),
-      ("Static", Box::new(|| OutputLibType::Static)),
-      ("Shared", Box::new(|| OutputLibType::Shared)),
-      ("Header-Only", Box::new(|| OutputLibType::HeaderOnly))
-    ]
-  );
-}
-
-pub fn prompt_for_description() -> io::Result<String> {
-  Ok(prompt_until_value("Description: ")?.unwrap_custom())
-}
-
-pub fn prompt_for_needs_custom_main() -> io::Result<bool> {
-  let final_answer = prompt_until(
-    "Does this test need to provide its own main? (y or n) [n]: ",
-    |answer| match answer {
-      PromptResult::Custom(_) => false,
-      _ => true
-    }
-  )?;
-  
-  return match final_answer {
-    PromptResult::Custom(_) => unreachable!("Input is constrained to be anything but a 'custom' value."),
-    PromptResult::Yes => Ok(true),
-    PromptResult::No => Ok(false),
-    PromptResult::Empty => Ok(false)
-  }
 }

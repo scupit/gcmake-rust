@@ -1,16 +1,14 @@
 mod c_file_generation;
 mod cpp_file_generation;
 mod default_project_config;
-mod prompt;
+mod project_generator_prompts;
 
 pub use default_project_config::{*, configuration::*};
 use serde::Serialize;
 
 use std::{fs::{File, remove_dir_all, create_dir_all, self}, io::{self, ErrorKind}, path::{Path, PathBuf}};
 
-use crate::{project_generator::{c_file_generation::generate_c_main, cpp_file_generation::generate_cpp_main, prompt::{prompt_once, prompt_for_project_output_type, prompt_for_language, prompt_for_description, prompt_for_vendor, prompt_for_needs_custom_main}}, program_actions::{ProjectTypeCreating, gcmake_config_root_dir}, project_info::{base_include_prefix_for_test, gcmake_constants::{TEMPLATE_IMPL_DIR, INCLUDE_DIR, SRC_DIR, ASSETS_DIR, SUBPROJECTS_DIR, TESTS_DIR}}};
-
-use self::{prompt::{prompt_until_boolean, PromptResult}};
+use crate::{program_actions::{ProjectTypeCreating, gcmake_config_root_dir}, common::prompt::{prompt_until_boolean, PromptResult, prompt_once}, project_info::{base_include_prefix_for_test, gcmake_constants::{SRC_DIR, INCLUDE_DIR, TEMPLATE_IMPL_DIR, ASSETS_DIR, SUBPROJECTS_DIR, TESTS_DIR}}, project_generator::{project_generator_prompts::{prompt_for_project_output_type, prompt_for_language, prompt_for_vendor, prompt_for_description, prompt_for_needs_custom_main}, c_file_generation::generate_c_main, cpp_file_generation::generate_cpp_main}};
 
 pub struct GeneralNewProjectInfo {
   pub project: CreatedProject,
@@ -41,13 +39,12 @@ pub fn create_project_at(
   if project_root.is_dir() {
     let prompt = format!("Directory {} already exists. Overwrite it? (y or n): ", new_project_root);
 
-    match prompt_until_boolean(&prompt)? {
-      PromptResult::No => should_create_project = false,
-      PromptResult::Yes => {
-        remove_dir_all(project_root)?;
-        println!("Directory removed. Generating new project...");
-      },
-      _ => ()
+    if prompt_until_boolean(&prompt)? {
+      remove_dir_all(project_root)?;
+      println!("Directory removed. Generating new project...");
+    }
+    else {
+      should_create_project = false;
     }
   }
 

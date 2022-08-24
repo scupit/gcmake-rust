@@ -1,6 +1,7 @@
 #[macro_use]
 extern crate lazy_static;
 
+mod common;
 mod project_info;
 mod logger;
 mod file_writers;
@@ -8,18 +9,15 @@ mod cli_config;
 mod project_generator;
 mod program_actions;
 
-use std::io;
-
 use clap::Parser;
 
-use cli_config::{CLIProjectGenerationInfo, clap_cli_config::UpdateDependencyConfigsCommand, CLIProjectTypeGenerating};
+use cli_config::{CLIProjectGenerationInfo};
 use logger::exit_error_log;
 
 use program_actions::*;
-use project_generator::{GeneralNewProjectInfo, DefaultProjectInfo};
-use project_info::final_project_data::{UseableFinalProjectDataGroup};
+use project_generator::{DefaultProjectInfo};
 
-use crate::{project_info::{raw_data_in::dependencies::{all_raw_supported_dependency_configs, internal_dep_config::AllRawPredefinedDependencies}, final_project_data::ProjectLoadFailureReason}, file_writers::write_configurations, project_generator::configuration::{MainFileLanguage, CreationProjectOutputType}, cli_config::clap_cli_config::{Opts, SubCommandStruct, DepConfigSubCommand, CreateFilesCommand, FileCreationLang}};
+use crate::{project_info::{raw_data_in::dependencies::{all_raw_supported_dependency_configs, internal_dep_config::AllRawPredefinedDependencies}}, project_generator::configuration::{MainFileLanguage, CreationProjectOutputType}, cli_config::clap_cli_config::{Opts, SubCommandStruct, DepConfigSubCommand, CreateFilesCommand, FileCreationLang}};
 
 // fn print_project_info(project_data_group: UseableFinalProjectDataGroup) {
 //   println!("PROJECT INFORMATION\n----------------------------------------");
@@ -108,6 +106,20 @@ fn main() {
         &dep_config,
         None
       ),
+      SubCommandStruct::UseFile(command) => {
+        should_generate_cmakelists = false;
+
+        let file_copy_result = copy_default_file(
+          &command,
+          &given_root_dir,
+          &dep_config,
+          None
+        );
+
+        if let Err(err) = file_copy_result {
+          exit_error_log(err.to_string());
+        }
+      }
       SubCommandStruct::DepConfig(_) => {
         unreachable!();
       }
@@ -123,134 +135,4 @@ fn main() {
   }
 
   println!("");
-}
-
-fn do_generate_project_configs(
-  given_root_dir: &str,
-  dep_config: &AllRawPredefinedDependencies,
-  just_created_project_at: Option<String>
-) {
-  match parse_project_info(&given_root_dir, &dep_config, just_created_project_at) {
-    Ok(project_data_group) => {
-      // print_project_info(project_data_group);
-      let config_write_result: io::Result<()> = write_configurations(
-        &project_data_group,
-        |config_name| println!("\nBeginning {} configuration step...", config_name),
-        |(config_name, config_result)| match config_result {
-          Ok(_) => println!("{} configuration written successfully!", config_name),
-          Err(err) => {
-            println!("Writing {} configuration failed with error:", config_name);
-            println!("{:?}", err)
-          }
-        }
-      ); 
-      
-      if let Err(err) = config_write_result {
-        exit_error_log(err.to_string());
-      }
-    },
-    Err(failure_reason) => exit_error_log(&failure_reason.extract_message())
-  }
-}
-
-fn do_new_files_subcommand(
-  command: CreateFilesCommand,
-  given_root_dir: &str,
-  dep_config: &AllRawPredefinedDependencies,
-  just_created_project_at: Option<String>
-) {
-  match parse_project_info(&given_root_dir, &dep_config, just_created_project_at) {
-    Ok(project_data_group) => {
-      // print_project_info(project_data_group);
-      if let None = project_data_group.operating_on {
-        exit_error_log("Tried to create files while not operating on a project. Make sure you are inside a project directory containing a cmake_data.yaml file.")
-      }
-
-      match handle_create_files(&project_data_group.operating_on.unwrap(), &command) {
-        Ok(_) => println!("Files written successfully!"),
-        Err(error_message) => exit_error_log(&error_message)
-      }
-    },
-    Err(failure_reason) => exit_error_log(&failure_reason.extract_message())
-  }
-}
-
-fn do_new_project_subcommand(
-  command: CLIProjectGenerationInfo,
-  dep_config: &AllRawPredefinedDependencies,
-  given_root_dir: &str,
-  should_generate_cmakelists: &mut bool
-) -> Option<GeneralNewProjectInfo> {
-  let requires_project_operating_on: bool = match &command.project_type {
-    CLIProjectTypeGenerating::RootProject => false,
-    _ => true
-  };
-
-  match get_parent_project_for_new_project(&given_root_dir.clone(), dep_config, requires_project_operating_on) {
-    Ok(maybe_project_info) => {
-      let maybe_general_new_project_info = handle_create_project(
-        command,
-        &maybe_project_info.map(|it| it.operating_on).flatten(),
-        given_root_dir,
-        should_generate_cmakelists
-      );
-
-      return maybe_general_new_project_info;
-    },
-    Err(error_message) => exit_error_log(&error_message)
-  }
-}
-
-fn do_dependency_config_update_subcommand(command: UpdateDependencyConfigsCommand) {
-  match update_dependency_config_repo(&command.branch) {
-    Ok(status) => match status {
-      DepConfigUpdateResult::SubprocessError(git_subprocess_err_msg) => {
-        exit_error_log(git_subprocess_err_msg);
-      },
-      DepConfigUpdateResult::NewlyDownloaded { branch, local_repo_location } => {
-        println!(
-          "Dependency config repo successfully downloaded to {}.",
-          local_repo_location.to_str().unwrap()
-        );
-        println!("Checked out '{}' branch.", branch);
-      },
-      DepConfigUpdateResult::UpdatedBranch { branch: maybe_branch, .. } => {
-        match maybe_branch {
-          Some(checked_out_branch) => {
-            println!(
-              "Successfully checked out and updated dependency config repo '{}' branch.",
-              checked_out_branch
-            );
-          },
-          None => {
-            println!("Successfully updated dependency config repo");
-          }
-        }
-      }
-    },
-    Err(err) => exit_error_log(err.to_string())
-  }
-}
-
-fn get_parent_project_for_new_project(
-  current_root: &str,
-  dep_config: &AllRawPredefinedDependencies,
-  requires_all_yaml_files_present: bool
-) -> Result<Option<UseableFinalProjectDataGroup>, String> {
-  match parse_project_info(
-    current_root,
-    dep_config,
-    None
-  ) {
-    Ok(project_data_group) => Ok(Some(project_data_group)),
-    Err(failure_reason) => match failure_reason {
-      ProjectLoadFailureReason::MissingYaml(error_message) => {
-        if requires_all_yaml_files_present
-          { Err(error_message) }
-          else { Ok(None) }
-      },
-      ProjectLoadFailureReason::Other(error_message) => Err(error_message),
-      ProjectLoadFailureReason::MissingRequiredTestFramework(error_message) => Err(error_message)
-    }
-  }
 }

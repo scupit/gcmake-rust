@@ -24,17 +24,21 @@ pub struct Opts {
 
 #[derive(Subcommand)]
 pub enum SubCommandStruct {
-  /// Generate a new project or subproject
+  /// Subcommand for generating new root projects, subprojects, and tests.
   #[clap(subcommand)]
   New(NewProjectSubcommand),
 
+  // TODO: Change this so that multiple file sets can be created with one command.
   /// Generate code files in-tree.
   #[clap()]
   GenFile(CreateFilesCommand),
 
   /// Subcommand for working with the 'external dependency configuration repository'.
   #[clap(subcommand)]
-  DepConfig(DepConfigSubCommand)
+  DepConfig(DepConfigSubCommand),
+
+  /// Copy a default file from ~/.gcmake into the project root.
+  UseFile(UseFilesCommand)
 }
 
 #[derive(Subcommand)]
@@ -110,7 +114,6 @@ pub enum FileCreationLang {
   Cpp
 }
 
-// TODO: Change this so that multiple file sets can be created with one command.
 #[derive(Args)]
 #[clap(setting = AppSettings::ColoredHelp)]
 pub struct CreateFilesCommand {
@@ -152,4 +155,34 @@ pub struct UpdateDependencyConfigsCommand {
   /// updated or the repo is cloned into the 'develop' branch.
   #[clap(long = "to-branch", short = 'b')]
   pub branch: Option<String>,
+}
+
+#[derive(ValueEnum, Clone, Copy)]
+pub enum UseFileOption {
+  #[clap(name = "clang-tidy")]
+  ClangTidy,
+
+  #[clap(name = "clang-format")]
+  ClangFormat,
+
+  #[clap(name = "gitignore")]
+  GitIgnore
+}
+
+impl UseFileOption {
+  pub fn to_file_name(&self) -> &str {
+    match self {
+      Self::ClangTidy => ".clang-tidy",
+      Self::ClangFormat => ".clang-format",
+      Self::GitIgnore => ".gitignore"
+    }
+  }
+}
+
+#[derive(Args)]
+#[clap(setting = AppSettings::ColoredHelp)]
+pub struct UseFilesCommand {
+  /// The file to copy, without the leading '.'
+  #[clap(value_enum)]
+  pub file: UseFileOption
 }
