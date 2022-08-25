@@ -1,4 +1,4 @@
-use std::{path::Path, fs::{self, File}, io::{self, Write}, collections::{HashMap, HashSet}};
+use std::{path::{Path, PathBuf}, fs::{self, File}, io::{self, Write}, collections::{HashMap, HashSet}};
 
 fn main() {
   let ordered_cmake_util_names: Vec<&str> = vec![
@@ -18,7 +18,55 @@ fn main() {
     },
     Err(io_error) => panic!("IO error when combining CMake util files: \"{}\"", io_error.to_string())
   }
+
+  if let Err(io_error) = write_test_mains() {
+    panic!("IO Error when writing test_mains: \"{}\"", io_error.to_string());
+  }
 }
+
+// ==================================================
+// Write main files as rust strings 
+// ==================================================
+
+fn write_test_mains() -> io::Result<()> {
+  let mains_root_dir: PathBuf = PathBuf::from("./src/project_generator/cpp_test_mains");
+
+  let mut output_file_path: PathBuf = mains_root_dir.clone();
+  output_file_path.push("test_mains.rs");
+
+  let output_file: File = File::create(&output_file_path)?;
+
+  let main_group = [
+    ("auto_main.cpp", "AUTO_MAIN"),
+    ("custom_main.cpp", "CUSTOM_MAIN")
+  ];
+
+  for test_file_dir_name in ["catch2", "doctest", "googletest"] {
+    let mut main_file_path: PathBuf = mains_root_dir.clone();
+    main_file_path.push(test_file_dir_name);
+
+    for (main_file_name, main_type_name) in &main_group {
+      main_file_path.push(main_file_name);
+
+      writeln!(&output_file,
+        "pub const {}_{}: &'static str =\n\"{}\";\n",
+        test_file_dir_name.to_uppercase(),
+        main_type_name,
+        fs::read_to_string(&main_file_path)?
+          .replace('"', "\\\"")
+      )?;
+
+      main_file_path.pop();
+    }
+  }
+
+  Ok(())
+}
+
+
+// ==================================================
+// Write CMake util files into strings
+// ==================================================
 
 struct UtilInfo {
   name: String,

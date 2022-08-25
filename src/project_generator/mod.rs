@@ -2,13 +2,14 @@ mod c_file_generation;
 mod cpp_file_generation;
 mod default_project_config;
 mod project_generator_prompts;
+mod cpp_test_mains;
 
 pub use default_project_config::{*, configuration::*};
 use serde::Serialize;
 
 use std::{fs::{File, remove_dir_all, create_dir_all, self}, io::{self, ErrorKind}, path::{Path, PathBuf}};
 
-use crate::{program_actions::{ProjectTypeCreating, gcmake_config_root_dir}, common::prompt::{prompt_until_boolean, PromptResult, prompt_once}, project_info::{base_include_prefix_for_test, gcmake_constants::{SRC_DIR, INCLUDE_DIR, TEMPLATE_IMPL_DIR, ASSETS_DIR, SUBPROJECTS_DIR, TESTS_DIR}}, project_generator::{project_generator_prompts::{prompt_for_project_output_type, prompt_for_language, prompt_for_vendor, prompt_for_description, prompt_for_needs_custom_main}, c_file_generation::generate_c_main, cpp_file_generation::generate_cpp_main}};
+use crate::{program_actions::{ProjectTypeCreating, gcmake_config_root_dir}, common::prompt::{prompt_until_boolean, PromptResult, prompt_once}, project_info::{base_include_prefix_for_test, gcmake_constants::{SRC_DIR, INCLUDE_DIR, TEMPLATE_IMPL_DIR, ASSETS_DIR, SUBPROJECTS_DIR, TESTS_DIR}}, project_generator::{project_generator_prompts::{prompt_for_project_output_type, prompt_for_language, prompt_for_vendor, prompt_for_description, prompt_for_needs_custom_main}, c_file_generation::generate_c_main, cpp_file_generation::{generate_cpp_main, TestMainInitInfo}}};
 
 pub struct GeneralNewProjectInfo {
   pub project: CreatedProject,
@@ -142,9 +143,33 @@ pub fn create_project_at(
     let mut main_file_path = project_root.to_owned();
     main_file_path.push(main_file_name(project_name, &lang_selection, &output_type_selection));
 
-    match lang_selection {
-      MainFileLanguage::C => generate_c_main(main_file_path, &output_type_selection)?,
-      MainFileLanguage::Cpp => generate_cpp_main(main_file_path, &output_type_selection)?
+    if let ProjectTypeCreating::Test { parent_project } = &project_type_creating {
+      match parent_project.get_test_framework() {
+        Some(test_framework) => {
+          generate_cpp_main(
+            main_file_path,
+            &output_type_selection,
+            Some(TestMainInitInfo {
+              test_framework,
+              requires_custom_main: requires_custom_main.unwrap()
+            })
+          )?;
+        },
+        None => {
+          return Err(io::Error::new(
+            io::ErrorKind::Other,
+            format!(
+              "Tried to create a test project, however the root project doesn't specify a test framework. Please specify a test framework in the root project before generating a test."
+            )
+          ));
+        }
+      }
+    }
+    else {
+      match lang_selection {
+        MainFileLanguage::C => generate_c_main(main_file_path, &output_type_selection)?,
+        MainFileLanguage::Cpp => generate_cpp_main(main_file_path, &output_type_selection, None)?
+      }
     }
 
     println!("Generated {}", main_file_name(project_name, &lang_selection, &output_type_selection));

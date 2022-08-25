@@ -2,6 +2,7 @@
 # if( "${CMAKE_SOURCE_DIR}" STREQUAL "${CMAKE_CURRENT_SOURCE_DIR}" )
 
 function( gcmake_configure_cpack )
+  include( CPackComponent )
   include( ProcessorCount )
   ProcessorCount( num_cpu_cores )
 

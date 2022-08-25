@@ -119,12 +119,12 @@ pub fn get_default_project_config(
           defines: Some(create_string_set(["NDEBUG"]))
         }),
         (BuildConfigCompilerSpecifier::GCC, RawBuildConfig {
-          compiler_flags: Some(create_string_set([ "-O3", "-flto" ])),
+          compiler_flags: Some(create_string_set([ "-O3" ])),
           linker_flags: Some(create_string_set([ "-s" ])),
           defines: None
         }),
         (BuildConfigCompilerSpecifier::Clang, RawBuildConfig {
-          compiler_flags: Some(create_string_set([ "-O3", "-flto" ])),
+          compiler_flags: Some(create_string_set([ "-O3" ])),
           linker_flags: Some(create_string_set([ "-s" ])),
           defines: None
         }),
@@ -141,12 +141,12 @@ pub fn get_default_project_config(
           defines: Some(create_string_set(["NDEBUG"]))
         }),
         (BuildConfigCompilerSpecifier::GCC, RawBuildConfig {
-          compiler_flags: Some(create_string_set([ "-Os", "-flto" ])),
+          compiler_flags: Some(create_string_set([ "-Os" ])),
           linker_flags: Some(create_string_set([ "-s" ])),
           defines: None
         }),
         (BuildConfigCompilerSpecifier::Clang, RawBuildConfig {
-          compiler_flags: Some(create_string_set([ "-Os", "-flto" ])),
+          compiler_flags: Some(create_string_set([ "-Os" ])),
           linker_flags: Some(create_string_set([ "-s" ])),
           defines: None
         }),

@@ -286,12 +286,11 @@ impl LinkSection {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(deny_unknown_fields)]
 pub struct RawCompiledItem {
+  pub requires_custom_main: Option<bool>, // Used for tests executables only
   pub output_type: OutputItemType,
   pub entry_file: String,
   pub link: Option<LinkSection>,
-  pub build_config: Option<TargetBuildConfigMap>,
-  // Used for tests only
-  pub requires_custom_main: Option<bool>
+  pub build_config: Option<TargetBuildConfigMap>
 }
 
 impl RawCompiledItem {
