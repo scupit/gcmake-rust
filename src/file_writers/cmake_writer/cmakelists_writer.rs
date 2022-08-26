@@ -455,6 +455,20 @@ impl<'a> CMakeListsWriter<'a> {
 
     self.write_newline()?;
     writeln!(&self.cmakelists_file, "get_property( isMultiConfigGenerator GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)")?;
+
+    if self.project_data.uses_any_ipo() {
+      write!(&self.cmakelists_file, "enable_ipo_for_configs( ")?;
+
+      for build_type in &self.project_data.get_global_properties().unwrap().ipo_supported_for {
+        write!(&self.cmakelists_file,
+          "{} ",
+          build_type.name_str().to_uppercase()
+        )?;
+      }
+
+      writeln!(&self.cmakelists_file, ")")?;
+    }
+
     
     // Change the default install COMPONENT to play nice with NSIS installers.
     self.set_basic_var(

@@ -191,3 +191,30 @@ function( propagate_all_configs_local_defines )
     list( APPEND ${config_name}_LOCAL_DEFINES ${ALL_CONFIGS_LOCAL_DEFINES} )
   endforeach()
 endfunction()
+
+# Example: 
+# enable_ipo_for_configs( RELEASE MINSIZEREL )
+function( enable_ipo_for_configs )
+  include( CheckIPOSupported )
+
+  check_ipo_supported(
+    RESULT is_ipo_supported
+    OUTPUT additional_info
+  )
+
+  if( is_ipo_supported )
+    set( requiredOptions DEBUG RELEASE MINSIZEREL RELWITHDEBINFO )
+    cmake_parse_arguments( PARSE_ARGV 0 IPO_DEFAULTS "${requiredOptions}" "" "" )
+
+    foreach( build_config_name IN LISTS requiredOptions )
+      if( IPO_DEFAULTS_${build_config_name} )
+        # This branch only runs if the variable is defined and evaluates to a truthy value.
+        set( CMAKE_INTERPROCEDURAL_OPTIMIZATION_${build_config_name} TRUE PARENT_SCOPE )
+      else()
+        set( CMAKE_INTERPROCEDURAL_OPTIMIZATION_${build_config_name} FALSE PARENT_SCOPE )
+      endif()
+    endforeach()
+  else()
+    message( WARNING "Skipping enabling IPO because is isn't supported. Additional info: ${additional_info}" )
+  endif()
+endfunction()

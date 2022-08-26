@@ -1,6 +1,6 @@
 use std::{collections::{HashMap, HashSet}, iter::FromIterator};
 
-use crate::{project_info::{raw_data_in::{RawProject, RawSubproject, SpecificCompilerSpecifier, RawCompiledItem, OutputItemType, BuildType, BuildConfigCompilerSpecifier, RawBuildConfig, SingleLanguageConfig, LanguageConfigMap, RawTestProject}}, program_actions::ProjectTypeCreating};
+use crate::{project_info::{raw_data_in::{RawProject, RawSubproject, SpecificCompilerSpecifier, RawCompiledItem, OutputItemType, BuildType, BuildConfigCompilerSpecifier, RawBuildConfig, SingleLanguageConfig, LanguageConfigMap, RawTestProject, RawGlobalPropertyConfig}}, program_actions::ProjectTypeCreating};
 
 use self::configuration::{MainFileLanguage, OutputLibType, CreationProjectOutputType};
 
@@ -181,6 +181,12 @@ pub fn get_default_project_config(
     ]),
     default_build_type: BuildType::Debug,
     global_defines: None,
+    global_properties: Some(RawGlobalPropertyConfig {
+      ipo_enabled_for: Some(HashSet::from_iter([
+        BuildType::Release,
+        BuildType::MinSizeRel
+      ]))
+    }),
     test_framework: None
   }
 }

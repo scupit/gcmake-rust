@@ -54,6 +54,12 @@ pub struct RawInstallerConfig {
 
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(deny_unknown_fields)]
+pub struct RawGlobalPropertyConfig {
+  pub ipo_enabled_for: Option<HashSet<BuildType>>
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(deny_unknown_fields)]
 pub struct RawProject {
   pub name: String,
   // If possible, should be the same as the project name
@@ -69,6 +75,7 @@ pub struct RawProject {
   pub test_framework: Option<RawTestFramework>,
   pub output: HashMap<String, RawCompiledItem>,
   pub global_defines: Option<Vec<String>>,
+  pub global_properties: Option<RawGlobalPropertyConfig>,
   pub predefined_dependencies: Option<PredefinedDepMap>,
   pub gcmake_dependencies: Option<GCMakeDepMap>,
   pub build_configs: BuildConfigMap

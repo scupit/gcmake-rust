@@ -59,6 +59,7 @@ impl Into<RawProject> for RawSubproject {
       build_configs: HashMap::new(),
       // Placeholder, no meaning
       global_defines: None,
+      global_properties: None,
       output: self.output,
       predefined_dependencies: None,
       gcmake_dependencies: None
