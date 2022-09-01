@@ -456,6 +456,18 @@ impl<'a> CMakeListsWriter<'a> {
     self.write_newline()?;
     writeln!(&self.cmakelists_file, "get_property( isMultiConfigGenerator GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)")?;
 
+    writeln!(&self.cmakelists_file,
+      "set( GCMAKE_SANITIZER_FLAGS \"\" CACHE STRING \"SEMICOLON SEPARATED list of sanitizer flags to build the project with. These are included in bot compiler flags and linker flags.\" )"
+    )?;
+
+    writeln!(&self.cmakelists_file,
+      "set( GCMAKE_ADDITIONAL_COMPILER_FLAGS \"\" CACHE STRING \"SEMICOLON SEPARATED list of additional compiler flags to use for the project. Useful for static analyzers or flags like -march which shouldn't be included by default.\" )"
+    )?;
+
+    writeln!(&self.cmakelists_file,
+      "set( GCMAKE_ADDITIONAL_LINKER_FLAGS \"\" CACHE STRING \"SEMICOLON SEPARATED list of additional linker flags to use for the project\" )"
+    )?;
+
     if self.project_data.uses_any_ipo() {
       // TODO: Set to OFF by default when USING_MINGW, since MinGW doesn't seem to have perfectly
       // stable IPO (flto) yet.
@@ -1061,8 +1073,13 @@ impl<'a> CMakeListsWriter<'a> {
           // Write compiler flags per compiler for each config.
           if build_config.has_compiler_flags() {
             writeln!(&self.cmakelists_file,
-              "\tset( {}_LOCAL_COMPILER_FLAGS\n\t\t{}\n\t)",
-              uppercase_config_name,
+              "\tset( {}_LOCAL_COMPILER_FLAGS ${{GCMAKE_SANITIZER_FLAGS}};${{GCMAKE_ADDITIONAL_COMPILER_FLAGS}} )",
+              &uppercase_config_name
+            )?;
+
+            writeln!(&self.cmakelists_file,
+              "\tlist( APPEND {}_LOCAL_COMPILER_FLAGS\n\t\t{}\n\t)",
+              &uppercase_config_name,
               &flattened_compiler_flags_string("\t\t", &build_config.compiler_flags)
             )?;
           }
@@ -1070,7 +1087,12 @@ impl<'a> CMakeListsWriter<'a> {
           // Write linker flags per "compiler" for each config
           if build_config.has_linker_flags() {
             writeln!(&self.cmakelists_file,
-              "\tset( {}_LOCAL_LINKER_FLAGS\n\t\t{}\n\t)",
+              "\tset( {}_LOCAL_LINKER_FLAGS ${{GCMAKE_SANITIZER_FLAGS}};${{GCMAKE_ADDITIONAL_LINKER_FLAGS}} )",
+              uppercase_config_name,
+            )?;
+
+            writeln!(&self.cmakelists_file,
+              "\tlist( APPEND {}_LOCAL_LINKER_FLAGS\n\t\t{}\n\t)",
               uppercase_config_name,
               &flattened_linker_flags_string(&build_config.linker_flags)
             )?;
