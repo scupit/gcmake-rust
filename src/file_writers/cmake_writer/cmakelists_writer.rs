@@ -1,6 +1,6 @@
 use std::{collections::{HashMap, HashSet}, fs::File, io::{self, Write, ErrorKind}, path::{PathBuf, Path}, rc::Rc, cell::{RefCell, Ref}};
 
-use crate::{project_info::{final_project_data::{FinalProjectData}, path_manipulation::{cleaned_path_str, relative_to_project_root}, final_dependencies::{GitRevisionSpecifier, PredefinedCMakeComponentsModuleDep, PredefinedSubdirDep, PredefinedCMakeModuleDep, FinalPredepInfo, GCMakeDependencyStatus, FinalPredefinedDependencyConfig}, raw_data_in::{BuildType, RawBuildConfig, BuildConfigCompilerSpecifier, SpecificCompilerSpecifier, OutputItemType, LanguageConfigMap, TargetSpecificBuildType, dependencies::internal_dep_config::{CMakeModuleType}}, FinalProjectType, CompiledOutputItem, PreBuildScript, LinkMode, FinalTestFramework, dependency_graph_mod::dependency_graph::{DependencyGraph, OrderedTargetInfo, ProjectWrapper, TargetNode, SimpleNodeOutputType, Link}, SystemSpecifierWrapper, SingleSystemSpec, CompilerDefine, FinalBuildConfig, CompilerFlag, LinkerFlag}, file_writers::cmake_writer::cmake_writer_helpers::system_constraint_expression};
+use crate::{project_info::{final_project_data::{FinalProjectData}, path_manipulation::{cleaned_path_str, relative_to_project_root}, final_dependencies::{GitRevisionSpecifier, PredefinedCMakeComponentsModuleDep, PredefinedSubdirDep, PredefinedCMakeModuleDep, FinalPredepInfo, GCMakeDependencyStatus, FinalPredefinedDependencyConfig}, raw_data_in::{BuildType, RawBuildConfig, BuildConfigCompilerSpecifier, SpecificCompilerSpecifier, OutputItemType, LanguageConfigMap, TargetSpecificBuildType, dependencies::internal_dep_config::{CMakeModuleType}, DefaultCompiledLibType}, FinalProjectType, CompiledOutputItem, PreBuildScript, LinkMode, FinalTestFramework, dependency_graph_mod::dependency_graph::{DependencyGraph, OrderedTargetInfo, ProjectWrapper, TargetNode, SimpleNodeOutputType, Link}, SystemSpecifierWrapper, SingleSystemSpec, CompilerDefine, FinalBuildConfig, CompilerFlag, LinkerFlag}, file_writers::cmake_writer::cmake_writer_helpers::system_constraint_expression};
 
 use super::cmake_utils_writer::{CMakeUtilFile, CMakeUtilWriter};
 
@@ -457,15 +457,15 @@ impl<'a> CMakeListsWriter<'a> {
     writeln!(&self.cmakelists_file, "get_property( isMultiConfigGenerator GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)")?;
 
     writeln!(&self.cmakelists_file,
-      "set( GCMAKE_SANITIZER_FLAGS \"\" CACHE STRING \"SEMICOLON SEPARATED list of sanitizer flags to build the project with. These are included in bot compiler flags and linker flags.\" )"
+      "set( GCMAKE_SANITIZER_FLAGS \"\" CACHE STRING \"SEMICOLON SEPARATED list of sanitizer flags to build the project with. These are included in both compiler flags and linker flags\" )"
     )?;
 
     writeln!(&self.cmakelists_file,
-      "set( GCMAKE_ADDITIONAL_COMPILER_FLAGS \"\" CACHE STRING \"SEMICOLON SEPARATED list of additional compiler flags to use for the project. Useful for static analyzers or flags like -march which shouldn't be included by default.\" )"
+      "set( GCMAKE_ADDITIONAL_COMPILER_FLAGS \"\" CACHE STRING \"SEMICOLON SEPARATED list of additional compiler flags to build the project with. Useful for static analyzers or flags like -march which shouldn't be included by default\" )"
     )?;
 
     writeln!(&self.cmakelists_file,
-      "set( GCMAKE_ADDITIONAL_LINKER_FLAGS \"\" CACHE STRING \"SEMICOLON SEPARATED list of additional linker flags to use for the project\" )"
+      "set( GCMAKE_ADDITIONAL_LINKER_FLAGS \"\" CACHE STRING \"SEMICOLON SEPARATED list of additional linker flags to build the project with\" )"
     )?;
 
     if self.project_data.uses_any_ipo() {
@@ -531,6 +531,39 @@ impl<'a> CMakeListsWriter<'a> {
     )?;
     self.write_newline()?;
 
+    self.set_basic_var(
+      "",
+      "LOCAL_BUILD_SHARED_LIBS_DOC_STRING",
+      "\"Build compiled libraries as SHARED when their type is not explicitly specified\""
+    )?;
+
+    self.set_basic_var(
+      "",
+      "LOCAL_BUILD_STATIC_LIBS_DOC_STRING",
+      "\"Build compiled libraries as STATIC when their type is not explicitly specified\""
+    )?;
+
+    self.set_basic_var(
+      "",
+      "LOCAL_CMAKE_BUILD_TYPE_DOC_STRING",
+      "\"Which project configuration to build\""
+    )?;
+
+    writeln!(&self.cmakelists_file,
+      "initialize_lib_type_options( {} )",
+      match self.project_data.get_default_compiled_lib_type() {
+        DefaultCompiledLibType::Shared => "SHARED",
+        DefaultCompiledLibType::Static => "STATIC",
+      }
+    )?;
+
+    self.set_basic_option(
+      "",
+      "BUILD_TESTING",
+      "OFF",
+      "Build the testing tree for all non-GCMake projects. Testing trees for GCMake projects are enabled per-project. For example, this project uses the ${LOCAL_TOPLEVEL_PROJECT_NAME}_BUILD_TESTS variable."
+    )?;
+
     writeln!(&self.cmakelists_file, "\ninitialize_build_tests_var()")?;
 
     let config_names: Vec<&'static str> = self.project_data.get_build_configs()
@@ -548,7 +581,7 @@ impl<'a> CMakeListsWriter<'a> {
     )?;
 
     writeln!(&self.cmakelists_file,
-      "\n\tif( \"${{CMAKE_BUILD_TYPE}}\" STREQUAL \"\")\n\t\tset( CMAKE_BUILD_TYPE \"{}\" CACHE STRING \"Project Build configuration\" FORCE )\n\tendif()",
+      "\n\tif( \"${{CMAKE_BUILD_TYPE}}\" STREQUAL \"\")\n\t\tset( CMAKE_BUILD_TYPE \"{}\" CACHE STRING \"${{LOCAL_CMAKE_BUILD_TYPE_DOC_STRING}}\" FORCE )\n\tendif()",
       self.project_data.get_default_build_config().name_str()
     )?;
     self.write_newline()?;
@@ -779,11 +812,6 @@ impl<'a> CMakeListsWriter<'a> {
           self.write_predefined_subdirectory_dependency(dep_name, subdir_dep)?;
         }
       }
-
-      if let Some(post_load) = dep_info.post_load_script() {
-        writeln!(&self.cmakelists_file, "{}", post_load.contents_ref())?;
-      }
-
     }
 
     Ok(())
@@ -994,6 +1022,10 @@ impl<'a> CMakeListsWriter<'a> {
 
           writeln!(&self.cmakelists_file, "endif()")?;
         }
+      }
+
+      if let Some(post_load) = combined_dep_info.post_load_script() {
+        writeln!(&self.cmakelists_file, "{}", post_load.contents_ref())?;
       }
     }
 
@@ -1780,7 +1812,7 @@ impl<'a> CMakeListsWriter<'a> {
       // struct. This could easily cause hard to track bugs if the function name is changed.
       "make_toggle_lib( {} {} )",
       output_name,
-      "STATIC"
+      "DEFAULT"
     )?;
 
     self.write_general_library_data(

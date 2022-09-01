@@ -1,6 +1,6 @@
 use std::{rc::Rc, collections::{HashMap, HashSet}};
 
-use super::{raw_data_in::{OutputItemType, RawCompiledItem, TargetBuildConfigMap, LinkSection, BuildConfigCompilerSpecifier, BuildType, TargetSpecificBuildType, RawBuildConfig, BuildTypeOptionMap, BuildConfigMap, RawGlobalPropertyConfig}, final_dependencies::FinalPredefinedDependencyConfig, LinkSpecifier, parsers::{link_spec_parser::LinkAccessMode, general_parser::ParseSuccess}, SystemSpecifierWrapper, platform_spec_parser::parse_leading_system_spec};
+use super::{raw_data_in::{OutputItemType, RawCompiledItem, TargetBuildConfigMap, LinkSection, BuildConfigCompilerSpecifier, BuildType, TargetSpecificBuildType, RawBuildConfig, BuildTypeOptionMap, BuildConfigMap, RawGlobalPropertyConfig, DefaultCompiledLibType}, final_dependencies::FinalPredefinedDependencyConfig, LinkSpecifier, parsers::{link_spec_parser::LinkAccessMode, general_parser::ParseSuccess}, SystemSpecifierWrapper, platform_spec_parser::parse_leading_system_spec};
 
 #[derive(Clone)]
 pub enum FinalTestFramework {
@@ -401,13 +401,16 @@ pub fn make_final_target_build_config(raw_build_config: Option<&TargetBuildConfi
 }
 
 pub struct FinalGlobalProperties {
-  pub ipo_supported_for: HashSet<BuildType>
+  pub ipo_supported_for: HashSet<BuildType>,
+  pub default_compiled_lib_type: DefaultCompiledLibType
 }
 
 impl FinalGlobalProperties {
   pub fn from_raw(raw_global_properties: &RawGlobalPropertyConfig) -> Self {
     let mut final_property_config: Self = Self {
-      ipo_supported_for: HashSet::new()
+      ipo_supported_for: HashSet::new(),
+      default_compiled_lib_type: raw_global_properties.default_compiled_lib_type.clone()
+        .unwrap_or(DefaultCompiledLibType::Shared)
     };
 
     if let Some(ipo_support_set) = &raw_global_properties.ipo_enabled_for {

@@ -220,3 +220,20 @@ function( enable_ipo_for_configs )
     endif()
   endif()
 endfunction()
+
+function( initialize_lib_type_options
+  DEFAULT_COMPILED_LIB_TYPE
+)
+  if( "${DEFAULT_COMPILED_LIB_TYPE}" STREQUAL "STATIC" )
+    set( SHOULD_DEFAULT_TO_STATIC ON )
+    set( SHOULD_DEFAULT_TO_SHARED OFF )
+  elseif( "${DEFAULT_COMPILED_LIB_TYPE}" STREQUAL "SHARED" )
+    set( SHOULD_DEFAULT_TO_STATIC OFF )
+    set( SHOULD_DEFAULT_TO_SHARED ON )
+  else()
+    message( FATAL_ERROR "(GCMake error): DEFAULT_COMPILED_LIB_TYPE should be set to either STATIC or SHARED, but is set to invalid value '${DEFAULT_COMPILED_LIB_TYPE}'.")
+  endif()
+
+  option( BUILD_SHARED_LIBS "${LOCAL_BUILD_SHARED_LIBS_DOC_STRING}" ${SHOULD_DEFAULT_TO_SHARED} )
+  option( BUILD_STATIC_LIBS "${LOCAL_BUILD_STATIC_LIBS_DOC_STRING}" ${SHOULD_DEFAULT_TO_STATIC} )
+endfunction()

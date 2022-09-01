@@ -52,10 +52,19 @@ pub struct RawInstallerConfig {
   pub name_prefix: Option<String>
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(deny_unknown_fields)]
+pub enum DefaultCompiledLibType {
+  Static,
+  Shared
+}
+
+
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(deny_unknown_fields)]
 pub struct RawGlobalPropertyConfig {
-  pub ipo_enabled_for: Option<HashSet<BuildType>>
+  pub ipo_enabled_for: Option<HashSet<BuildType>>,
+  pub default_compiled_lib_type: Option<DefaultCompiledLibType>
 }
 
 #[derive(Serialize, Deserialize, Debug)]

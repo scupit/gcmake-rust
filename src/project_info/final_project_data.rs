@@ -2,7 +2,7 @@ use std::{collections::{HashMap, HashSet}, path::{Path, PathBuf}, io, rc::Rc, fs
 
 use crate::project_info::path_manipulation::cleaned_pathbuf;
 
-use super::{path_manipulation::{cleaned_path_str, relative_to_project_root, absolute_path}, final_dependencies::{FinalGCMakeDependency, FinalPredefinedDependencyConfig}, raw_data_in::{RawProject, dependencies::internal_dep_config::AllRawPredefinedDependencies, BuildConfigMap, BuildType, LanguageConfigMap, OutputItemType, PreBuildConfigIn, SpecificCompilerSpecifier, BuildConfigCompilerSpecifier, TargetBuildConfigMap, TargetSpecificBuildType, LinkSection, RawTestFramework, RawInstallerConfig}, final_project_configurables::{FinalProjectType}, CompiledOutputItem, helpers::{parse_subproject_data, parse_root_project_data, populate_files, find_prebuild_script, PrebuildScriptFile, validate_raw_project_outputs, ProjectOutputType, RetrievedCodeFileType, retrieve_file_type, parse_test_project_data}, PreBuildScript, OutputItemLinks, FinalTestFramework, base_include_prefix_for_test, gcmake_constants::{SRC_DIR, INCLUDE_DIR, TEMPLATE_IMPL_DIR, TESTS_DIR, SUBPROJECTS_DIR}, FinalInstallerConfig, CompilerDefine, FinalBuildConfigMap, make_final_target_build_config, make_final_build_config_map, FinalTargetBuildConfigMap, FinalGlobalProperties};
+use super::{path_manipulation::{cleaned_path_str, relative_to_project_root, absolute_path}, final_dependencies::{FinalGCMakeDependency, FinalPredefinedDependencyConfig}, raw_data_in::{RawProject, dependencies::internal_dep_config::AllRawPredefinedDependencies, BuildConfigMap, BuildType, LanguageConfigMap, OutputItemType, PreBuildConfigIn, SpecificCompilerSpecifier, BuildConfigCompilerSpecifier, TargetBuildConfigMap, TargetSpecificBuildType, LinkSection, RawTestFramework, RawInstallerConfig, DefaultCompiledLibType}, final_project_configurables::{FinalProjectType}, CompiledOutputItem, helpers::{parse_subproject_data, parse_root_project_data, populate_files, find_prebuild_script, PrebuildScriptFile, validate_raw_project_outputs, ProjectOutputType, RetrievedCodeFileType, retrieve_file_type, parse_test_project_data}, PreBuildScript, OutputItemLinks, FinalTestFramework, base_include_prefix_for_test, gcmake_constants::{SRC_DIR, INCLUDE_DIR, TEMPLATE_IMPL_DIR, TESTS_DIR, SUBPROJECTS_DIR}, FinalInstallerConfig, CompilerDefine, FinalBuildConfigMap, make_final_target_build_config, make_final_build_config_map, FinalTargetBuildConfigMap, FinalGlobalProperties};
 
 const SUBPROJECT_JOIN_STR: &'static str = "_S_";
 const TEST_PROJECT_JOIN_STR: &'static str = "_TP_";
@@ -1211,6 +1211,13 @@ impl FinalProjectData {
 
   pub fn get_global_properties(&self) -> Option<&FinalGlobalProperties> {
     self.global_properties.as_ref()
+  }
+
+  pub fn get_default_compiled_lib_type(&self) -> DefaultCompiledLibType {
+    match &self.global_properties {
+      Some(global_props) => global_props.default_compiled_lib_type.clone(),
+      None => DefaultCompiledLibType::Shared
+    }
   }
   
   pub fn get_test_projects(&self) -> &SubprojectMap {
