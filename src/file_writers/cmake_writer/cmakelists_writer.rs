@@ -457,6 +457,30 @@ impl<'a> CMakeListsWriter<'a> {
     writeln!(&self.cmakelists_file, "get_property( isMultiConfigGenerator GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)")?;
 
     if self.project_data.uses_any_ipo() {
+      // TODO: Set to OFF by default when USING_MINGW, since MinGW doesn't seem to have perfectly
+      // stable IPO (flto) yet.
+      writeln!(&self.cmakelists_file, "if( USING_MINGW )")?;
+      self.set_basic_var(
+        "\t",
+        "IS_IPO_DISABLED_DEFAULT",
+        "ON"
+      )?;
+      writeln!(&self.cmakelists_file, "else()")?;
+      self.set_basic_var(
+        "\t",
+        "IS_IPO_DISABLED_DEFAULT",
+        "OFF"
+      )?;
+      writeln!(&self.cmakelists_file, "endif()\n")?;
+
+      self.set_basic_option(
+        "",
+        "GCMAKE_DISABLE_IPO",
+        "${IS_IPO_DISABLED_DEFAULT}",
+        "When set to ON, ensures INTERPROCEDURAL_OPTIMIZATION will never be turned on.",
+      )?;
+
+      // Only enables IPO for the given configs is GCMAKE_DISABLE_IPO is FALSE.
       write!(&self.cmakelists_file, "enable_ipo_for_configs( ")?;
 
       for build_type in &self.project_data.get_global_properties().unwrap().ipo_supported_for {
@@ -1069,6 +1093,23 @@ impl<'a> CMakeListsWriter<'a> {
     if has_written_a_config {
       writeln!(&self.cmakelists_file, "endif()")?;
     }
+    Ok(())
+  }
+
+  fn set_basic_option(
+    &self,
+    spacer: &str,
+    var_name: &str,
+    default_value: &str,
+    description: &str
+  ) -> io::Result<()> {
+    writeln!(&self.cmakelists_file,
+      "{}option( {} \"{}\" {} )",
+      spacer,
+      var_name,
+      description,
+      default_value
+    )?;
     Ok(())
   }
 
