@@ -63,7 +63,7 @@ pub enum DefaultCompiledLibType {
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(deny_unknown_fields)]
 pub struct RawGlobalPropertyConfig {
-  pub ipo_enabled_for: Option<HashSet<BuildType>>,
+  pub ipo_enabled_by_default: Option<bool>,
   pub default_compiled_lib_type: Option<DefaultCompiledLibType>
 }
 

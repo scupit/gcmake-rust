@@ -468,44 +468,6 @@ impl<'a> CMakeListsWriter<'a> {
       "set( GCMAKE_ADDITIONAL_LINKER_FLAGS \"\" CACHE STRING \"SEMICOLON SEPARATED list of additional linker flags to build the project with\" )"
     )?;
 
-    if self.project_data.uses_any_ipo() {
-      // TODO: Set to OFF by default when USING_MINGW, since MinGW doesn't seem to have perfectly
-      // stable IPO (flto) yet.
-      writeln!(&self.cmakelists_file, "if( USING_MINGW )")?;
-      self.set_basic_var(
-        "\t",
-        "IS_IPO_DISABLED_DEFAULT",
-        "ON"
-      )?;
-      writeln!(&self.cmakelists_file, "else()")?;
-      self.set_basic_var(
-        "\t",
-        "IS_IPO_DISABLED_DEFAULT",
-        "OFF"
-      )?;
-      writeln!(&self.cmakelists_file, "endif()\n")?;
-
-      self.set_basic_option(
-        "",
-        "GCMAKE_DISABLE_IPO",
-        "${IS_IPO_DISABLED_DEFAULT}",
-        "When set to ON, ensures INTERPROCEDURAL_OPTIMIZATION will never be turned on.",
-      )?;
-
-      // Only enables IPO for the given configs is GCMAKE_DISABLE_IPO is FALSE.
-      write!(&self.cmakelists_file, "enable_ipo_for_configs( ")?;
-
-      for build_type in &self.project_data.get_global_properties().unwrap().ipo_supported_for {
-        write!(&self.cmakelists_file,
-          "{} ",
-          build_type.name_str().to_uppercase()
-        )?;
-      }
-
-      writeln!(&self.cmakelists_file, ")")?;
-    }
-
-    
     // Change the default install COMPONENT to play nice with NSIS installers.
     self.set_basic_var(
       "",
@@ -530,6 +492,21 @@ impl<'a> CMakeListsWriter<'a> {
       "${CMAKE_CURRENT_SOURCE_DIR}"
     )?;
     self.write_newline()?;
+
+    {
+      let ipo_default_status_str: &str = if self.project_data.ipo_enabled_by_default()
+        { "ON" }
+        else { "OFF" };
+
+      writeln!(&self.cmakelists_file,
+        "initialize_ipo_defaults( {} )",
+        ipo_default_status_str
+      )?;
+    }
+
+    writeln!(&self.cmakelists_file,
+      "initialize_pgo_defaults()"
+    )?;
 
     self.set_basic_var(
       "",

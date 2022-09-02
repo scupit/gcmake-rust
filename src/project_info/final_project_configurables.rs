@@ -401,21 +401,17 @@ pub fn make_final_target_build_config(raw_build_config: Option<&TargetBuildConfi
 }
 
 pub struct FinalGlobalProperties {
-  pub ipo_supported_for: HashSet<BuildType>,
+  pub ipo_enabled_by_default: bool,
   pub default_compiled_lib_type: DefaultCompiledLibType
 }
 
 impl FinalGlobalProperties {
   pub fn from_raw(raw_global_properties: &RawGlobalPropertyConfig) -> Self {
-    let mut final_property_config: Self = Self {
-      ipo_supported_for: HashSet::new(),
+    let final_property_config: Self = Self {
+      ipo_enabled_by_default: raw_global_properties.ipo_enabled_by_default.clone().unwrap_or(false),
       default_compiled_lib_type: raw_global_properties.default_compiled_lib_type.clone()
         .unwrap_or(DefaultCompiledLibType::Shared)
     };
-
-    if let Some(ipo_support_set) = &raw_global_properties.ipo_enabled_for {
-      final_property_config.ipo_supported_for = ipo_support_set.clone();
-    }
 
     return final_property_config;
   }

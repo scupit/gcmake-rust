@@ -8,6 +8,7 @@ fn main() {
     "gcmake-pre-build-configuration-utils",
     "gcmake-resource-copy-util",
     "gcmake-general-utils",
+    "gcmake-pgo-utils",
     "gcmake-installation-utils",
     "gcmake-cpack-utils"
   ];

@@ -194,30 +194,32 @@ endfunction()
 
 # Example: 
 # enable_ipo_for_configs( RELEASE MINSIZEREL )
-function( enable_ipo_for_configs )
-  if( NOT GCMAKE_DISABLE_IPO )
-    include( CheckIPOSupported )
+function( initialize_ipo_defaults
+  ipo_on_by_default
+)
+  include( CheckIPOSupported )
 
-    check_ipo_supported(
-      RESULT is_ipo_supported
-      OUTPUT additional_info
+  check_ipo_supported(
+    RESULT is_ipo_supported
+    OUTPUT additional_info
+  )
+
+  if( is_ipo_supported )
+    if( USING_MINGW )
+      set( IPO_ENABLED_DEFAULT_VALUE OFF )
+    else()
+      set( IPO_ENABLED_DEFAULT_VALUE ${ipo_on_by_default} )
+    endif()
+
+    option(
+      GCMAKE_ENABLE_IPO
+      "When set to ON, enables INTERPROCEDURAL_OPTIMIZATION for the whole project tree (including dependencies built as part of the project). Set to OFF by default when using MinGW"
+      ${IPO_ENABLED_DEFAULT_VALUE}
     )
 
-    if( is_ipo_supported )
-      set( requiredOptions DEBUG RELEASE MINSIZEREL RELWITHDEBINFO )
-      cmake_parse_arguments( PARSE_ARGV 0 IPO_DEFAULTS "${requiredOptions}" "" "" )
-
-      foreach( build_config_name IN LISTS requiredOptions )
-        if( IPO_DEFAULTS_${build_config_name} )
-          # This branch only runs if the variable is defined and evaluates to a truthy value.
-          set( CMAKE_INTERPROCEDURAL_OPTIMIZATION_${build_config_name} TRUE PARENT_SCOPE )
-        else()
-          set( CMAKE_INTERPROCEDURAL_OPTIMIZATION_${build_config_name} FALSE PARENT_SCOPE )
-        endif()
-      endforeach()
-    else()
-      message( WARNING "Skipping enabling IPO because is isn't supported. Additional info: ${additional_info}" )
-    endif()
+    set( CMAKE_INTERPROCEDURAL_OPTIMIZATION GCMAKE_ENABLE_IPO )
+  else()
+    message( WARNING "Skipping enabling IPO because is isn't supported. Additional info: ${additional_info}" )
   endif()
 endfunction()
 

@@ -1198,10 +1198,10 @@ impl FinalProjectData {
     !self.global_defines.is_empty()
   }
 
-  pub fn uses_any_ipo(&self) -> bool {
+  pub fn ipo_enabled_by_default(&self) -> bool {
     match &self.global_properties {
       None => false,
-      Some(global_properties) => !global_properties.ipo_supported_for.is_empty()
+      Some(global_properties) => global_properties.ipo_enabled_by_default
     }
   }
 

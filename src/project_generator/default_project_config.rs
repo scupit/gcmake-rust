@@ -182,11 +182,8 @@ pub fn get_default_project_config(
     default_build_type: BuildType::Debug,
     global_defines: None,
     global_properties: Some(RawGlobalPropertyConfig {
-      default_compiled_lib_type: Some(DefaultCompiledLibType::Shared),
-      ipo_enabled_for: Some(HashSet::from_iter([
-        BuildType::Release,
-        BuildType::MinSizeRel
-      ]))
+      default_compiled_lib_type: None,
+      ipo_enabled_by_default: None
     }),
     test_framework: None
   }
