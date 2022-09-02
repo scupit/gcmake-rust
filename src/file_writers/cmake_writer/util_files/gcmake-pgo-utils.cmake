@@ -14,16 +14,26 @@ macro( initialize_pgo_defaults )
       # endif()
     endif()
 
-    set( PROFILES_DIR "${CMAKE_BINARY_DIR}/instrumentation_profiles" )
+    if( USING_GCC )
+      if( GCMAKE_PGO_STEP STREQUAL "PROFILE_GENERATION" )
+        link_libraries(gcov)
+      endif()
 
-    if( USING_GCC AND NOT USING_MINGW )
       add_compile_options(
         # GCC generation step
-        "$<$<STREQUAL:${GCMAKE_PGO_STEP},PROFILE_GENERATION>:-fprofile-generate=${PROFILES_DIR};-fprofile-update=atomic>"
+        "$<$<STREQUAL:${GCMAKE_PGO_STEP},PROFILE_GENERATION>:-fprofile-generate;-fprofile-update=prefer-atomic>"
         # GCC usage step
-        "$<$<STREQUAL:${GCMAKE_PGO_STEP},USE_PROFILES>:-fprofile-use=${PROFILES_DIR};-fprofile-correction>"
+        "$<$<STREQUAL:${GCMAKE_PGO_STEP},USE_PROFILES>:-fprofile-use;-fprofile-correction>"
+      )
+      add_link_options(
+        # GCC generation step
+        "$<$<STREQUAL:${GCMAKE_PGO_STEP},PROFILE_GENERATION>:-fprofile-generate;-fprofile-update=prefer-atomic>"
+        # GCC usage step
+        "$<$<STREQUAL:${GCMAKE_PGO_STEP},USE_PROFILES>:-fprofile-use;-fprofile-correction>"
       )
     elseif( USING_CLANG AND NOT USING_MINGW )
+      set( PROFILES_DIR "${CMAKE_BINARY_DIR}/instrumentation_profiles" )
+
       add_compile_options(
         # Clang generation step
         "$<$<STREQUAL:${GCMAKE_PGO_STEP},PROFILE_GENERATION>:-fprofile-generate=${PROFILES_DIR};-fprofile-update=atomic>"
@@ -60,7 +70,8 @@ macro( initialize_pgo_defaults )
         "$<$<STREQUAL:${GCMAKE_PGO_STEP},USE_PROFILES>:/GL;/LTCG/USEPROFILE>"
       )
     endif()
-  endif()
 
-  set( PGO_DEFAULTS_INITIALIZED TRUE )
+    set( PGO_DEFAULTS_INITIALIZED TRUE )
+    message( STATUS "PGO Step: ${GCMAKE_PGO_STEP}")
+  endif()
 endmacro()

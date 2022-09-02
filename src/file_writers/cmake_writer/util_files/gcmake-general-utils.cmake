@@ -194,34 +194,39 @@ endfunction()
 
 # Example: 
 # enable_ipo_for_configs( RELEASE MINSIZEREL )
-function( initialize_ipo_defaults
+macro( initialize_ipo_defaults
   ipo_on_by_default
 )
-  include( CheckIPOSupported )
+  if( NOT IPO_DEFAULTS_INITIALIZED )
+    include( CheckIPOSupported )
 
-  check_ipo_supported(
-    RESULT is_ipo_supported
-    OUTPUT additional_info
-  )
-
-  if( is_ipo_supported )
-    if( USING_MINGW )
-      set( IPO_ENABLED_DEFAULT_VALUE OFF )
-    else()
-      set( IPO_ENABLED_DEFAULT_VALUE ${ipo_on_by_default} )
-    endif()
-
-    option(
-      GCMAKE_ENABLE_IPO
-      "When set to ON, enables INTERPROCEDURAL_OPTIMIZATION for the whole project tree (including dependencies built as part of the project). Set to OFF by default when using MinGW"
-      ${IPO_ENABLED_DEFAULT_VALUE}
+    check_ipo_supported(
+      RESULT is_ipo_supported
+      OUTPUT additional_info
     )
 
-    set( CMAKE_INTERPROCEDURAL_OPTIMIZATION GCMAKE_ENABLE_IPO )
-  else()
-    message( WARNING "Skipping enabling IPO because is isn't supported. Additional info: ${additional_info}" )
+    if( is_ipo_supported )
+      if( USING_MINGW )
+        set( IPO_ENABLED_DEFAULT_VALUE OFF )
+      else()
+        set( IPO_ENABLED_DEFAULT_VALUE ${ipo_on_by_default} )
+      endif()
+
+      option(
+        GCMAKE_ENABLE_IPO
+        "When set to ON, enables INTERPROCEDURAL_OPTIMIZATION for the whole project tree (including dependencies built as part of the project). Set to OFF by default when using MinGW"
+        ${IPO_ENABLED_DEFAULT_VALUE}
+      )
+
+      set( CMAKE_INTERPROCEDURAL_OPTIMIZATION GCMAKE_ENABLE_IPO )
+      message( STATUS "Interprocedural Optimization: ${GCMAKE_ENABLE_IPO}" )
+    else()
+      message( WARNING "Skipping enabling IPO because is isn't supported. Additional info: ${additional_info}" )
+    endif()
+
+    set( IPO_DEFAULTS_INITIALIZED TRUE )
   endif()
-endfunction()
+endmacro()
 
 function( initialize_lib_type_options
   DEFAULT_COMPILED_LIB_TYPE
