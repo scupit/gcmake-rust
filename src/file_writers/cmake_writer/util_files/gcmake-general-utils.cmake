@@ -192,8 +192,6 @@ function( propagate_all_configs_local_defines )
   endforeach()
 endfunction()
 
-# Example: 
-# enable_ipo_for_configs( RELEASE MINSIZEREL )
 macro( initialize_ipo_defaults
   ipo_on_by_default
 )
@@ -206,15 +204,11 @@ macro( initialize_ipo_defaults
     )
 
     if( is_ipo_supported )
-      if( USING_MINGW )
-        set( IPO_ENABLED_DEFAULT_VALUE OFF )
-      else()
-        set( IPO_ENABLED_DEFAULT_VALUE ${ipo_on_by_default} )
-      endif()
+      set( IPO_ENABLED_DEFAULT_VALUE ${ipo_on_by_default} )
 
       option(
         GCMAKE_ENABLE_IPO
-        "When set to ON, enables INTERPROCEDURAL_OPTIMIZATION for the whole project tree (including dependencies built as part of the project). Set to OFF by default when using MinGW"
+        "When set to ON, enables INTERPROCEDURAL_OPTIMIZATION for the whole project tree (including dependencies built as part of the project)"
         ${IPO_ENABLED_DEFAULT_VALUE}
       )
 

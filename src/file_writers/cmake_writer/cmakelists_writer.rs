@@ -1750,13 +1750,6 @@ impl<'a> CMakeListsWriter<'a> {
       lib_type_string
     )?;
 
-    if output_data.is_compiled_library_type() {
-      writeln!(&self.cmakelists_file,
-        "generate_and_install_export_header( {} )",
-        output_name
-      )?;
-    }
-
     self.write_general_library_data(
       output_data,
       output_target_node,
@@ -1832,6 +1825,14 @@ impl<'a> CMakeListsWriter<'a> {
       target_name
     )?;
     self.write_newline()?;
+
+
+    if output_data.is_compiled_library_type() {
+      writeln!(&self.cmakelists_file,
+        "generate_and_install_export_header( {} )",
+        target_name
+      )?;
+    }
 
     writeln!(&self.cmakelists_file,
       "add_to_target_installation_list( {} )",
