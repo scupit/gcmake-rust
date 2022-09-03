@@ -493,21 +493,6 @@ impl<'a> CMakeListsWriter<'a> {
     )?;
     self.write_newline()?;
 
-    {
-      let ipo_default_status_str: &str = if self.project_data.ipo_enabled_by_default()
-        { "ON" }
-        else { "OFF" };
-
-      writeln!(&self.cmakelists_file,
-        "initialize_ipo_defaults( {} )",
-        ipo_default_status_str
-      )?;
-    }
-
-    writeln!(&self.cmakelists_file,
-      "initialize_pgo_defaults()"
-    )?;
-
     self.set_basic_var(
       "",
       "LOCAL_BUILD_SHARED_LIBS_DOC_STRING",
@@ -567,15 +552,9 @@ impl<'a> CMakeListsWriter<'a> {
     writeln!(&self.cmakelists_file, "endif()")?;
     self.write_newline()?;
 
-    writeln!(&self.cmakelists_file,
-      "if( ${{isMultiConfigGenerator}} )"
-    )?;
-      self.set_basic_var("\t", "MY_RUNTIME_OUTPUT_DIR", "\"$<1:${CMAKE_BINARY_DIR}/bin>\"")?;
-      self.set_basic_var("\t", "MY_LIBRARY_OUTPUT_DIR", "\"$<1:${CMAKE_BINARY_DIR}/lib>\"")?;
-    writeln!(&self.cmakelists_file, "else()")?;
-      self.set_basic_var("\t", "MY_RUNTIME_OUTPUT_DIR", "\"${CMAKE_BINARY_DIR}/bin/${CMAKE_BUILD_TYPE}\"")?;
-      self.set_basic_var("\t", "MY_LIBRARY_OUTPUT_DIR", "\"${CMAKE_BINARY_DIR}/lib/${CMAKE_BUILD_TYPE}\"")?;
-    writeln!(&self.cmakelists_file, "endif()\n")?;
+    self.set_basic_var("", "MY_RUNTIME_OUTPUT_DIR", "\"${CMAKE_BINARY_DIR}/bin/$<CONFIG>\"")?;
+    self.set_basic_var("", "MY_LIBRARY_OUTPUT_DIR", "\"${CMAKE_BINARY_DIR}/lib/$<CONFIG>\"")?;
+    self.write_newline()?;
 
     writeln!(&self.cmakelists_file,
       "if( \"${{CMAKE_CURRENT_SOURCE_DIR}}\" STREQUAL \"${{CMAKE_SOURCE_DIR}}\" )"
@@ -593,6 +572,23 @@ impl<'a> CMakeListsWriter<'a> {
     self.set_basic_var("\t", "CMAKE_ARCHIVE_OUTPUT_DIRECTORY", LIB_BUILD_DIR_VAR)?;
 
     writeln!(&self.cmakelists_file, "endif()")?;
+    self.write_newline()?;
+
+    {
+      let ipo_default_status_str: &str = if self.project_data.ipo_enabled_by_default()
+        { "ON" }
+        else { "OFF" };
+
+      writeln!(&self.cmakelists_file,
+        "initialize_ipo_defaults( {} )",
+        ipo_default_status_str
+      )?;
+    }
+
+    writeln!(&self.cmakelists_file,
+      "initialize_pgo_defaults()"
+    )?;
+
     Ok(())
   }
 
@@ -609,6 +605,7 @@ impl<'a> CMakeListsWriter<'a> {
     }
 
     if self.project_data.is_root_project() {
+      writeln!(&self.cmakelists_file, "include(GenerateExportHeader)")?;
       assert!(
         self.util_writer.is_some(),
         "A CMakeListsWriter for a root project should always have a util_writer."
@@ -625,6 +622,7 @@ impl<'a> CMakeListsWriter<'a> {
     writeln!(&self.cmakelists_file, "initialize_target_list()")?;
     writeln!(&self.cmakelists_file, "initialize_needed_bin_files_list()")?;
     writeln!(&self.cmakelists_file, "initialize_install_list()")?;
+    writeln!(&self.cmakelists_file, "initialize_generated_export_headers_list()")?;
     
     if self.project_data.is_root_project() {
       writeln!(&self.cmakelists_file, "initialize_uncached_dep_list()")?;
@@ -1753,8 +1751,9 @@ impl<'a> CMakeListsWriter<'a> {
     )?;
 
     if let OutputItemType::SharedLib = output_data.get_output_type() {
+      // TODO: IMPORTANT! Install exports headers
       writeln!(&self.cmakelists_file,
-        "set_target_properties( {}\n\tPROPERTIES\n\t\tWINDOWS_EXPORT_ALL_SYMBOLS TRUE\n)",
+        "generate_and_install_export_header( {} )",
         output_name
       )?;
     }
@@ -2057,6 +2056,7 @@ impl<'a> CMakeListsWriter<'a> {
         writeln!(&self.cmakelists_file, "raise_target_list()")?;
         writeln!(&self.cmakelists_file, "raise_needed_bin_files_list()")?;
         writeln!(&self.cmakelists_file, "raise_install_list()")?;
+        writeln!(&self.cmakelists_file, "raise_generated_export_headers_list()")?;
       },
       FinalProjectType::Test { .. } => {
         // NOTE: I don't think anything needs to happen here since tests are never installed
