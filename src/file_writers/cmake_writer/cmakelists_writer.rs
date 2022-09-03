@@ -1750,8 +1750,7 @@ impl<'a> CMakeListsWriter<'a> {
       lib_type_string
     )?;
 
-    if let OutputItemType::SharedLib = output_data.get_output_type() {
-      // TODO: IMPORTANT! Install exports headers
+    if output_data.is_compiled_library_type() {
       writeln!(&self.cmakelists_file,
         "generate_and_install_export_header( {} )",
         output_name

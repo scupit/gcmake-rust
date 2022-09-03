@@ -220,6 +220,15 @@ impl CompiledOutputItem {
     self.output_type == OutputItemType::HeaderOnlyLib
   }
 
+  pub fn is_compiled_library_type(&self) -> bool {
+    match self.output_type {
+      OutputItemType::CompiledLib
+      | OutputItemType::SharedLib
+      | OutputItemType::StaticLib => true,
+      _ => false
+    }
+  }
+
   pub fn is_library_type(&self) -> bool {
     match self.output_type {
       OutputItemType::CompiledLib

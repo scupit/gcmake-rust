@@ -128,7 +128,7 @@ function( generate_and_install_export_header
     EXPORT_FILE_NAME "${the_export_header_file}"
   )
 
-  target_include_directories( inner-lib
+  target_include_directories( ${target_name}
     PUBLIC
       "$<BUILD_INTERFACE:${CMAKE_BINARY_DIR}/generated_export_headers>"
   )
