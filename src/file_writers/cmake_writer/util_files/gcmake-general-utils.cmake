@@ -204,7 +204,11 @@ macro( initialize_ipo_defaults
     )
 
     if( is_ipo_supported )
-      set( IPO_ENABLED_DEFAULT_VALUE ${ipo_on_by_default} )
+      if( USING_MINGW )
+        set( IPO_ENABLED_DEFAULT_VALUE OFF )
+      else()
+        set( IPO_ENABLED_DEFAULT_VALUE ${ipo_on_by_default} )
+      endif()
 
       option(
         GCMAKE_ENABLE_IPO
@@ -212,8 +216,8 @@ macro( initialize_ipo_defaults
         ${IPO_ENABLED_DEFAULT_VALUE}
       )
 
-      set( CMAKE_INTERPROCEDURAL_OPTIMIZATION GCMAKE_ENABLE_IPO )
-      message( STATUS "Interprocedural Optimization: ${GCMAKE_ENABLE_IPO}" )
+      set( CMAKE_INTERPROCEDURAL_OPTIMIZATION ${GCMAKE_ENABLE_IPO} )
+      message( STATUS "Interprocedural Optimization: ${CMAKE_INTERPROCEDURAL_OPTIMIZATION}" )
     else()
       message( WARNING "Skipping enabling IPO because is isn't supported. Additional info: ${additional_info}" )
     endif()
