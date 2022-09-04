@@ -311,6 +311,30 @@ pub fn write_configurations<'a, FBefore, FAfter>(
           borrow_target(target2).get_name(),
           borrow_target(target2).get_name(),
         ))
+      },
+      GraphLoadFailureReason::DuplicateRootProjectIdentifier {
+        ref project1,
+        ref project2
+      } => {
+        return wrap_error_msg(format!(
+          "Duplicate root project names detected:\n\t[{}] == \"{}\"\n\t[{}] == \"{}\"",
+          borrow_project(project1).project_name_for_error_messages(),
+          borrow_project(project1).project_base_name(),
+          borrow_project(project2).project_name_for_error_messages(),
+          borrow_project(project2).project_base_name()
+        ))
+      },
+      GraphLoadFailureReason::SubprojectNameOverlapsDependency {
+        ref subproject,
+        ref dependency_project
+      } => {
+        return wrap_error_msg(format!(
+          "Subproject name overlaps dependency name, which could create linking ambiguity issues.\n\tSubproject: [{}] == \"{}\"\n\tDependency: [{}] == \"{}\"",
+          borrow_project(subproject).project_name_for_error_messages(),
+          borrow_project(subproject).project_base_name(),
+          borrow_project(dependency_project).project_name_for_error_messages(),
+          borrow_project(dependency_project).project_base_name()
+        ))
       }
     }
   }

@@ -135,7 +135,7 @@ impl<'a> CMakeListsWriter<'a> {
             ErrorKind::Other,
             format!(
               "Tried to write a CMakeLists configuration for GCMake dependency '{}' which hasn't been cloned yet.",
-              borrowed_graph.project_name()
+              borrowed_graph.project_mangled_name()
             )
           ));
         }
@@ -145,7 +145,7 @@ impl<'a> CMakeListsWriter<'a> {
           ErrorKind::Other,
           format!(
             "Tried to write a CMakeLists configuration for predefined dependency '{}'.",
-            borrowed_graph.project_name()
+            borrowed_graph.project_mangled_name()
           )
         ));
       }
@@ -218,7 +218,7 @@ impl<'a> CMakeListsWriter<'a> {
       if borrowed_target.should_be_searched_in_package_config() {
         let borrowed_container_graph = borrowed_target.container_project();
         let container_graph = borrowed_container_graph.as_ref().borrow();
-        let container_graph_name: String = container_graph.project_name().to_string();
+        let container_graph_name: String = container_graph.project_mangled_name().to_string();
 
         match container_graph.wrapped_project() {
           ProjectWrapper::NormalProject(_) => {
@@ -2015,7 +2015,7 @@ impl<'a> CMakeListsWriter<'a> {
       for used_target in &self.sorted_target_info.targets_in_build_order {
         let borrowed_target: &TargetNode = &used_target.as_ref().borrow();
         let namespaced_target_name = borrowed_target.get_cmake_namespaced_target_name().to_string();
-        let container_project_name = borrowed_target.container_project().as_ref().borrow().project_name().to_string();
+        let container_project_name = borrowed_target.container_project().as_ref().borrow().project_mangled_name().to_string();
 
         if borrowed_target.must_be_additionally_installed() {
           extra_targets_to_install.insert(

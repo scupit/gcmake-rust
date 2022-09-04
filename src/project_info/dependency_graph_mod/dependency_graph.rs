@@ -1,5 +1,5 @@
 use core::borrow;
-use std::{cell::{RefCell, BorrowError}, rc::{Rc, Weak}, hash::{Hash, Hasher}, collections::{HashMap, HashSet}};
+use std::{cell::{RefCell, BorrowError}, rc::{Rc, Weak}, hash::{Hash, Hasher}, collections::{HashMap, HashSet}, borrow::Borrow};
 
 use crate::project_info::{LinkMode, CompiledOutputItem, PreBuildScript, OutputItemLinks, final_project_data::FinalProjectData, final_dependencies::{FinalGCMakeDependency, FinalPredefinedDependencyConfig, GCMakeDependencyStatus, FinalRequirementSpecifier}, LinkSpecifier, FinalProjectType, parsers::{link_spec_parser::{LinkAccessMode, LinkSpecTargetList, LinkSpecifierTarget}, system_spec::platform_spec_parser::SystemSpecifierWrapper}};
 
@@ -36,6 +36,14 @@ impl CycleNode {
 }
 
 pub enum GraphLoadFailureReason {
+  SubprojectNameOverlapsDependency {
+    subproject: Rc<RefCell<DependencyGraph>>,
+    dependency_project: Rc<RefCell<DependencyGraph>>
+  },
+  DuplicateRootProjectIdentifier {
+    project1: Rc<RefCell<DependencyGraph>>,
+    project2: Rc<RefCell<DependencyGraph>>
+  },
   DuplicateCMakeIdentifier {
     target1: Rc<RefCell<TargetNode>>,
     target1_project: Rc<RefCell<DependencyGraph>>,
@@ -464,7 +472,15 @@ pub enum ProjectWrapper {
 }
 
 impl ProjectWrapper {
-  pub fn name(&self) -> &str {
+  pub fn base_name(&self) -> &str {
+    match self {
+      Self::NormalProject(project_info) => project_info.get_project_base_name(),
+      Self::GCMakeDependencyRoot(gcmake_dep) => gcmake_dep.get_name(),
+      Self::PredefinedDependency(predef_dep) => predef_dep.get_name()
+    }
+  }
+
+  pub fn mangled_name(&self) -> &str {
     match self {
       Self::NormalProject(project_info) => project_info.get_full_namespaced_project_name(),
       Self::GCMakeDependencyRoot(gcmake_dep) => gcmake_dep.get_name(),
@@ -583,7 +599,7 @@ impl DependencyGraph {
       borrowed_graph.make_auto_inner_project_link_associations()?;
       borrowed_graph.ensure_proper_predefined_dep_links()?;
       borrowed_graph.ensure_valid_system_spec_links()?;
-      borrowed_graph.ensure_no_duplicate_target_identifiers()?;
+      borrowed_graph.ensure_no_duplicate_identifiers()?;
     }
 
     let all_used_targets: HashSet<RcRefcHashWrapper<TargetNode>> = match full_graph.as_ref().borrow().find_cycle() {
@@ -606,8 +622,12 @@ impl DependencyGraph {
     });
   }
 
-  pub fn project_name(&self) -> &str {
-    self.wrapped_project().name()
+  pub fn project_mangled_name(&self) -> &str {
+    self.wrapped_project().mangled_name()
+  }
+
+  pub fn project_base_name(&self) -> &str {
+    self.wrapped_project().base_name()
   }
 
   pub fn project_name_for_error_messages(&self) -> &str {
@@ -826,13 +846,16 @@ impl DependencyGraph {
     Ok(())
   }
 
-  fn ensure_no_duplicate_target_identifiers(&self) -> Result<(), GraphLoadFailureReason> {
-    return self.ensure_no_duplicate_target_identifiers_helper(
+  fn ensure_no_duplicate_identifiers(&self) -> Result<(), GraphLoadFailureReason> {
+    return self.ensure_no_duplicate_identifiers_helper(
+      &mut HashMap::new(),
       &mut HashMap::new(),
       &mut HashMap::new()
     );
   }
 
+  // TODO: Make a warning system, then warn when target names are too similar (i.e. match
+  // when case-insensitive).
   fn err_if_target_ident_is_duplicate(
     target: &Rc<RefCell<TargetNode>>,
     cmake_identifiers: &mut HashMap<String, Rc<RefCell<TargetNode>>>,
@@ -845,12 +868,17 @@ impl DependencyGraph {
 
     match yaml_identifiers.get(target_yaml_ident) {
       Some(matching_target) => {
-        return Err(GraphLoadFailureReason::DuplicateYamlIdentifier {
-          target1: Rc::clone(target),
-          target1_project: borrowed_target.container_project(),
-          target2: Rc::clone(matching_target),
-          target2_project: matching_target.as_ref().borrow().container_project()
-        })
+        // Only err if two different targets share the same identifier. Obviously
+        // a target has the same identifier as itself. This check is important because
+        // dependency targets are checked once for each root project tree they are a part of.
+        if matching_target.as_ref().borrow().ne(borrowed_target.borrow()) {
+          return Err(GraphLoadFailureReason::DuplicateYamlIdentifier {
+            target1: Rc::clone(target),
+            target1_project: borrowed_target.container_project(),
+            target2: Rc::clone(matching_target),
+            target2_project: matching_target.as_ref().borrow().container_project()
+          });
+        }
       },
       None => {
         yaml_identifiers.insert(target_yaml_ident.to_string(), Rc::clone(target));
@@ -859,12 +887,14 @@ impl DependencyGraph {
 
     match cmake_identifiers.get(target_cmake_ident) {
       Some(matching_target) => {
-        return Err(GraphLoadFailureReason::DuplicateCMakeIdentifier {
-          target1: Rc::clone(target),
-          target1_project: borrowed_target.container_project(),
-          target2: Rc::clone(matching_target),
-          target2_project: matching_target.as_ref().borrow().container_project()
-        })
+        if matching_target.as_ref().borrow().ne(borrowed_target.borrow()) {
+          return Err(GraphLoadFailureReason::DuplicateCMakeIdentifier {
+            target1: Rc::clone(target),
+            target1_project: borrowed_target.container_project(),
+            target2: Rc::clone(matching_target),
+            target2_project: matching_target.as_ref().borrow().container_project()
+          });
+        }
       },
       None => {
         cmake_identifiers.insert(target_cmake_ident.to_string(), Rc::clone(target));
@@ -874,13 +904,82 @@ impl DependencyGraph {
     Ok(())
   }
 
-  fn ensure_no_duplicate_target_identifiers_helper(
+  // TODO: Make a warning system, then warn when project names are too similar (i.e. match
+  // when case-insensitive).
+  fn err_if_root_project_ident_is_duplicate(
+    &self, 
+    root_project_name_idents: &mut HashMap<String, Rc<RefCell<DependencyGraph>>>
+  ) -> Result<(), GraphLoadFailureReason> {
+    match root_project_name_idents.get(self.project_base_name()) {
+      Some(matching_project) => {
+        if matching_project.as_ref().borrow().ne(self) {
+          return Err(GraphLoadFailureReason::DuplicateRootProjectIdentifier {
+            project1: Weak::upgrade(&self.current_graph_ref).unwrap(),
+            project2: Rc::clone(matching_project)
+          });
+        }
+      },
+      None => {
+        root_project_name_idents.insert(
+          self.project_base_name().to_string(),
+          Weak::upgrade(&self.current_graph_ref).unwrap()
+        );
+      }
+    }
+
+    Ok(())
+  }
+
+  // TODO: Make a warning system, then warn when project names are too similar (i.e. match
+  // when case-insensitive).
+  fn err_if_subproject_overlaps_dependency_name(
+    subproject_graph: &Rc<RefCell<DependencyGraph>>
+  ) -> Result<(), GraphLoadFailureReason> {
+    let subproject_name: String = subproject_graph.as_ref().borrow().project_base_name().to_string();
+    let root_project: Rc<RefCell<DependencyGraph>> = Weak::upgrade(&subproject_graph.as_ref().borrow().toplevel).unwrap();
+
+    if let Some(matching_predep) = root_project.as_ref().borrow().predefined_deps.get(&subproject_name) {
+      return Err(GraphLoadFailureReason::SubprojectNameOverlapsDependency {
+        subproject: Rc::clone(subproject_graph),
+        dependency_project: Rc::clone(matching_predep)
+      });
+    }
+
+    if let Some(matching_gcmake_dep) = root_project.as_ref().borrow().gcmake_deps.get(&subproject_name) {
+      return Err(GraphLoadFailureReason::SubprojectNameOverlapsDependency {
+        subproject: Rc::clone(subproject_graph),
+        dependency_project: Rc::clone(matching_gcmake_dep)
+      });
+    }
+
+    Ok(())
+  }
+
+  fn ensure_no_duplicate_identifiers_helper(
     &self,
     cmake_identifiers: &mut HashMap<String, Rc<RefCell<TargetNode>>>,
-    yaml_identifiers: &mut HashMap<String, Rc<RefCell<TargetNode>>>
+    yaml_identifiers: &mut HashMap<String, Rc<RefCell<TargetNode>>>,
+    root_project_name_idents: &mut HashMap<String, Rc<RefCell<DependencyGraph>>>
   ) -> Result<(), GraphLoadFailureReason> {
+    match self.wrapped_project() {
+      ProjectWrapper::GCMakeDependencyRoot(_)
+        | ProjectWrapper::PredefinedDependency(_) =>
+      {
+        self.err_if_root_project_ident_is_duplicate(root_project_name_idents)?;
+      },
+      ProjectWrapper::NormalProject(normal_project) => {
+        if normal_project.is_root_project() {
+          self.err_if_root_project_ident_is_duplicate(root_project_name_idents)?;
+        }
+      }
+    }
+
     for (_, predef_dep_graph) in &self.predefined_deps {
-      predef_dep_graph.as_ref().borrow().ensure_no_duplicate_target_identifiers_helper(cmake_identifiers, yaml_identifiers)?;
+      predef_dep_graph.as_ref().borrow().ensure_no_duplicate_identifiers_helper(
+        cmake_identifiers,
+        yaml_identifiers,
+        root_project_name_idents
+      )?;
     }
 
     if let Some(pre_build_target) = &self.pre_build_wrapper {
@@ -900,15 +999,35 @@ impl DependencyGraph {
     }
 
     for (_, test_project) in &self.test_projects {
-      test_project.as_ref().borrow().ensure_no_duplicate_target_identifiers_helper(cmake_identifiers, yaml_identifiers)?;
+      test_project.as_ref().borrow().ensure_no_duplicate_identifiers_helper(
+        cmake_identifiers,
+        yaml_identifiers,
+        root_project_name_idents
+      )?;
     }
 
     for (_, subproject_graph) in &self.subprojects {
-      subproject_graph.as_ref().borrow().ensure_no_duplicate_target_identifiers_helper(cmake_identifiers, yaml_identifiers)?;
+      subproject_graph.as_ref().borrow().ensure_no_duplicate_identifiers_helper(
+        cmake_identifiers,
+        yaml_identifiers,
+        root_project_name_idents
+      )?;
+
+      // Ensure no subproject names overlap with the root project's predefined dependencies.
+      // This overlap doesn't cause issues in the CMakeLists because the project( ... ) name written
+      // is "mangled" (prefixed with the parent project's mangled name). However, it may cause issues
+      // when linking from the parent project because the used namespace becomes ambiguous.
+      // For example, with a subproject SFML, we can't tell at a glance whether linking to SFML::system
+      // links to a target in subproject SFML or predefined dependency SFML.
+      Self::err_if_subproject_overlaps_dependency_name(subproject_graph)?;
     }
 
     for (_, gcmake_dep_graph) in &self.gcmake_deps {
-      gcmake_dep_graph.as_ref().borrow().ensure_no_duplicate_target_identifiers_helper(cmake_identifiers, yaml_identifiers)?;
+      gcmake_dep_graph.as_ref().borrow().ensure_no_duplicate_identifiers_helper(
+        cmake_identifiers,
+        yaml_identifiers,
+        root_project_name_idents
+      )?;
     }
 
     Ok(())
