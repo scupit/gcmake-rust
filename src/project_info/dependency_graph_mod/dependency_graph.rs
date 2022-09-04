@@ -1,4 +1,5 @@
-use std::{cell::RefCell, rc::{Rc, Weak}, hash::{Hash, Hasher}, collections::{HashMap, HashSet}};
+use core::borrow;
+use std::{cell::{RefCell, BorrowError}, rc::{Rc, Weak}, hash::{Hash, Hasher}, collections::{HashMap, HashSet}};
 
 use crate::project_info::{LinkMode, CompiledOutputItem, PreBuildScript, OutputItemLinks, final_project_data::FinalProjectData, final_dependencies::{FinalGCMakeDependency, FinalPredefinedDependencyConfig, GCMakeDependencyStatus, FinalRequirementSpecifier}, LinkSpecifier, FinalProjectType, parsers::{link_spec_parser::{LinkAccessMode, LinkSpecTargetList, LinkSpecifierTarget}, system_spec::platform_spec_parser::SystemSpecifierWrapper}};
 
@@ -35,6 +36,18 @@ impl CycleNode {
 }
 
 pub enum GraphLoadFailureReason {
+  DuplicateCMakeIdentifier {
+    target1: Rc<RefCell<TargetNode>>,
+    target1_project: Rc<RefCell<DependencyGraph>>,
+    target2: Rc<RefCell<TargetNode>>,
+    target2_project: Rc<RefCell<DependencyGraph>>
+  },
+  DuplicateYamlIdentifier {
+    target1: Rc<RefCell<TargetNode>>,
+    target1_project: Rc<RefCell<DependencyGraph>>,
+    target2: Rc<RefCell<TargetNode>>,
+    target2_project: Rc<RefCell<DependencyGraph>>
+  },
   DuplicateLinkTarget {
     link_spec_container_target: Rc<RefCell<TargetNode>>,
     link_spec_container_project: Rc<RefCell<DependencyGraph>>,
@@ -563,11 +576,15 @@ impl DependencyGraph {
       toplevel_project
     );
 
-    full_graph.as_ref().borrow().make_given_link_associations(&mut target_id_counter)?;
-    full_graph.as_ref().borrow().make_auto_inner_project_link_associations()?;
-    full_graph.as_ref().borrow().ensure_proper_predefined_dep_links()?;
+    {
+      let borrowed_graph = full_graph.as_ref().borrow();
 
-    full_graph.as_ref().borrow().ensure_valid_system_spec_links()?;
+      borrowed_graph.make_given_link_associations(&mut target_id_counter)?;
+      borrowed_graph.make_auto_inner_project_link_associations()?;
+      borrowed_graph.ensure_proper_predefined_dep_links()?;
+      borrowed_graph.ensure_valid_system_spec_links()?;
+      borrowed_graph.ensure_no_duplicate_target_identifiers()?;
+    }
 
     let all_used_targets: HashSet<RcRefcHashWrapper<TargetNode>> = match full_graph.as_ref().borrow().find_cycle() {
       CycleCheckResult::AllUsedTargets(all_used) => all_used,
@@ -804,6 +821,94 @@ impl DependencyGraph {
 
     for (_, gcmake_dep_graph) in &self.gcmake_deps {
       gcmake_dep_graph.as_ref().borrow().ensure_valid_system_spec_links()?;
+    }
+
+    Ok(())
+  }
+
+  fn ensure_no_duplicate_target_identifiers(&self) -> Result<(), GraphLoadFailureReason> {
+    return self.ensure_no_duplicate_target_identifiers_helper(
+      &mut HashMap::new(),
+      &mut HashMap::new()
+    );
+  }
+
+  fn err_if_target_ident_is_duplicate(
+    target: &Rc<RefCell<TargetNode>>,
+    cmake_identifiers: &mut HashMap<String, Rc<RefCell<TargetNode>>>,
+    yaml_identifiers: &mut HashMap<String, Rc<RefCell<TargetNode>>>
+  ) -> Result<(), GraphLoadFailureReason> {
+    let borrowed_target = target.as_ref().borrow();
+
+    let target_cmake_ident: &str = borrowed_target.get_cmake_target_base_name();
+    let target_yaml_ident: &str = borrowed_target.get_name();
+
+    match yaml_identifiers.get(target_yaml_ident) {
+      Some(matching_target) => {
+        return Err(GraphLoadFailureReason::DuplicateYamlIdentifier {
+          target1: Rc::clone(target),
+          target1_project: borrowed_target.container_project(),
+          target2: Rc::clone(matching_target),
+          target2_project: matching_target.as_ref().borrow().container_project()
+        })
+      },
+      None => {
+        yaml_identifiers.insert(target_yaml_ident.to_string(), Rc::clone(target));
+      }
+    }
+
+    match cmake_identifiers.get(target_cmake_ident) {
+      Some(matching_target) => {
+        return Err(GraphLoadFailureReason::DuplicateCMakeIdentifier {
+          target1: Rc::clone(target),
+          target1_project: borrowed_target.container_project(),
+          target2: Rc::clone(matching_target),
+          target2_project: matching_target.as_ref().borrow().container_project()
+        })
+      },
+      None => {
+        cmake_identifiers.insert(target_cmake_ident.to_string(), Rc::clone(target));
+      }
+    }
+    
+    Ok(())
+  }
+
+  fn ensure_no_duplicate_target_identifiers_helper(
+    &self,
+    cmake_identifiers: &mut HashMap<String, Rc<RefCell<TargetNode>>>,
+    yaml_identifiers: &mut HashMap<String, Rc<RefCell<TargetNode>>>
+  ) -> Result<(), GraphLoadFailureReason> {
+    for (_, predef_dep_graph) in &self.predefined_deps {
+      predef_dep_graph.as_ref().borrow().ensure_no_duplicate_target_identifiers_helper(cmake_identifiers, yaml_identifiers)?;
+    }
+
+    if let Some(pre_build_target) = &self.pre_build_wrapper {
+      Self::err_if_target_ident_is_duplicate(
+        pre_build_target,
+        cmake_identifiers,
+        yaml_identifiers
+      )?;
+    }
+
+    for (_, target) in self.targets.borrow().iter() {
+      Self::err_if_target_ident_is_duplicate(
+        target,
+        cmake_identifiers,
+        yaml_identifiers
+      )?;
+    }
+
+    for (_, test_project) in &self.test_projects {
+      test_project.as_ref().borrow().ensure_no_duplicate_target_identifiers_helper(cmake_identifiers, yaml_identifiers)?;
+    }
+
+    for (_, subproject_graph) in &self.subprojects {
+      subproject_graph.as_ref().borrow().ensure_no_duplicate_target_identifiers_helper(cmake_identifiers, yaml_identifiers)?;
+    }
+
+    for (_, gcmake_dep_graph) in &self.gcmake_deps {
+      gcmake_dep_graph.as_ref().borrow().ensure_no_duplicate_target_identifiers_helper(cmake_identifiers, yaml_identifiers)?;
     }
 
     Ok(())

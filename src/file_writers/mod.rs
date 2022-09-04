@@ -279,6 +279,38 @@ pub fn write_configurations<'a, FBefore, FAfter>(
           borrow_target(dependency).get_yaml_namespaced_target_name(),
           systems_string(borrow_target(dependency).get_system_spec_info())
         ));
+      },
+      GraphLoadFailureReason::DuplicateCMakeIdentifier {
+        ref target1,
+        ref target1_project,
+        ref target2,
+        ref target2_project
+      } => {
+        return wrap_error_msg(format!(
+          "Duplicate CMake identifiers detected:\n\t[{}::{}] == \"{}\"\n\t[{}::{}] == \"{}\"",
+          borrow_project(target1_project).project_name_for_error_messages(),
+          borrow_target(target1).get_name(),
+          borrow_target(target1).get_cmake_target_base_name(),
+          borrow_project(target2_project).project_name_for_error_messages(),
+          borrow_target(target2).get_name(),
+          borrow_target(target2).get_cmake_target_base_name(),
+        ))
+      },
+      GraphLoadFailureReason::DuplicateYamlIdentifier {
+        ref target1,
+        ref target1_project,
+        ref target2,
+        ref target2_project
+      } => {
+        return wrap_error_msg(format!(
+          "Duplicate config identifiers detected:\n\t[{}::{}] == \"{}\"\n\t[{}::{}] == \"{}\"",
+          borrow_project(target1_project).project_name_for_error_messages(),
+          borrow_target(target1).get_name(),
+          borrow_target(target1).get_name(),
+          borrow_project(target2_project).project_name_for_error_messages(),
+          borrow_target(target2).get_name(),
+          borrow_target(target2).get_name(),
+        ))
       }
     }
   }
