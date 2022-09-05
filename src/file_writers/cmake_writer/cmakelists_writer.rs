@@ -1358,16 +1358,28 @@ impl<'a> CMakeListsWriter<'a> {
     for (build_type, _) in self.project_data.get_build_configs() {
       let build_type_name_upper: String = build_type.name_str().to_uppercase();
 
+      let inherited_linker_flags: String;
+      let inherited_compiler_flags: String;
+
+      if output_data.is_header_only_type() {
+        inherited_linker_flags = String::from("");
+        inherited_compiler_flags = String::from("");
+      }
+      else {
+        inherited_linker_flags = format!("\"${{{}_LOCAL_LINKER_FLAGS}}\"", &build_type_name_upper);
+        inherited_compiler_flags = format!("\"${{{}_LOCAL_COMPILER_FLAGS}}\"", &build_type_name_upper);
+      }
+
       self.set_basic_var(
         "",
         &format!("{}_{}_OWN_LINKER_FLAGS", variable_base_name, &build_type_name_upper),
-        &format!("\"${{{}_LOCAL_LINKER_FLAGS}}\"", &build_type_name_upper)
+        &inherited_linker_flags
       )?;
 
       self.set_basic_var(
         "",
         &format!("{}_{}_OWN_COMPILER_FLAGS", variable_base_name, &build_type_name_upper),
-        &format!("\"${{{}_LOCAL_COMPILER_FLAGS}}\"", &build_type_name_upper)
+        &inherited_compiler_flags
       )?;
 
       self.set_basic_var(
