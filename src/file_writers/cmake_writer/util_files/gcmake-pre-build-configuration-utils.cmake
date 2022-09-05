@@ -1,3 +1,12 @@
+if( NOT GCMAKE_PRE_BUILD_UTIL_HAS_BEEN_INCLUDED )
+  add_custom_target( run-pre-build
+    ALL
+    COMMENT "Running all pre-build scripts in the entire GCMake project tree, including GCMake dependencies"
+  )
+  
+  set( GCMAKE_PRE_BUILD_UTIL_HAS_BEEN_INCLUDED TRUE )
+endif()
+
 function( initialize_prebuild_step
   pre_build_name
 )
@@ -8,6 +17,7 @@ function( initialize_prebuild_step
     COMMENT "Beginning pre-build processing"
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
   )
+  add_dependencies( run-pre-build ${PRE_BUILD_TARGET_NAME} )
 endfunction()
 
 function( use_executable_prebuild_script
