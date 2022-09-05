@@ -1,6 +1,6 @@
 use std::collections::{HashSet, HashMap};
 
-use crate::project_info::raw_data_in::dependencies::{internal_dep_config::{RawComponentsModuleDep, ComponentsFindModuleLinks, UsageMode, CMakeModuleType}, user_given_dep_config::{UserGivenPredefinedDependencyConfig}};
+use crate::project_info::raw_data_in::dependencies::{internal_dep_config::{RawComponentsModuleDep, ComponentsFindModuleLinks, UsageMode, CMakeModuleType, raw_dep_common::RawPredepCommon}, user_given_dep_config::{UserGivenPredefinedDependencyConfig}};
 
 use super::{predep_module_common::PredefinedDepFunctionality, final_target_map_common::{FinalTargetConfigMap, make_final_target_config_map}};
 
@@ -10,7 +10,8 @@ pub struct PredefinedCMakeComponentsModuleDep {
   lib_link_mode: UsageMode,
   cmake_namespaced_target_map: HashMap<String, String>,
   yaml_namespaced_target_map: HashMap<String, String>,
-  components: FinalTargetConfigMap
+  components: FinalTargetConfigMap,
+  _can_cross_compile: bool
 }
 
 impl PredefinedCMakeComponentsModuleDep {
@@ -98,12 +99,17 @@ impl PredefinedCMakeComponentsModuleDep {
       cmake_namespaced_target_map,
       yaml_namespaced_target_map,
       lib_link_mode: components_dep.cmakelists_usage.link_format.clone(),
-      raw_dep: components_dep.clone()
+      raw_dep: components_dep.clone(),
+      _can_cross_compile: components_dep.can_cross_compile()
     });
   }
 }
 
 impl PredefinedDepFunctionality for PredefinedCMakeComponentsModuleDep {
+  fn can_cross_compile(&self) -> bool {
+    self._can_cross_compile
+  }
+
   fn get_target_config_map(&self) -> &FinalTargetConfigMap {
     &self.components
   }

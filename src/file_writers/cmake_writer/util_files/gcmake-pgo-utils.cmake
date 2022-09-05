@@ -1,5 +1,5 @@
 macro( initialize_pgo_defaults )
-  if( NOT PGO_DEFAULTS_INITIALIZED )
+  if( NOT PGO_DEFAULTS_INITIALIZED AND NOT CMAKE_CROSSCOMPILING )
     set( VALID_PGO_STEP_VALUES NONE PROFILE_GENERATION USE_PROFILES )
     set( GCMAKE_PGO_STEP "NONE" CACHE STRING "The current step in the profile-guided optimization process. To turn off (not use) PGO, set this to NONE" )
     set_property( CACHE GCMAKE_PGO_STEP PROPERTY STRINGS ${VALID_PGO_STEP_VALUES} )

@@ -34,11 +34,19 @@ pub struct RawSubdirectoryDependency {
   pub git_repo: GitRepoConfig,
   pub target_configs: RawPredefinedTargetMapIn,
   pub mutually_exclusive: Option<RawMutualExclusionSet>,
+
   #[serde(default = "default_requires_custom_populate")]
-  pub requires_custom_fetchcontent_populate: bool
+  pub requires_custom_fetchcontent_populate: bool,
+  
+  #[serde(rename = "can_cross_compile")]
+  _can_cross_compile: bool
 }
 
 impl RawPredepCommon for RawSubdirectoryDependency {
+  fn can_cross_compile(&self) -> bool {
+    self._can_cross_compile
+  }
+
   fn maybe_mutual_exclusion_groups(&self) -> &Option<RawMutualExclusionSet> {
     &self.mutually_exclusive
   }

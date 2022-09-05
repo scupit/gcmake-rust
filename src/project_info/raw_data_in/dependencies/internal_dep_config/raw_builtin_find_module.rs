@@ -27,6 +27,10 @@ pub struct RawModuleDep {
 }
 
 impl RawPredepCommon for RawModuleDep {
+  fn can_cross_compile(&self) -> bool {
+    false
+  }
+
   fn maybe_mutual_exclusion_groups(&self) -> &Option<RawMutualExclusionSet> {
     &self.mutually_exclusive
   }

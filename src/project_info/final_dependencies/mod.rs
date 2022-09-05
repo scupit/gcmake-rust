@@ -26,6 +26,16 @@ pub enum FinalPredepInfo {
   CMakeModule(PredefinedCMakeModuleDep)
 }
 
+impl FinalPredepInfo {
+  pub fn can_cross_compile(&self) -> bool {
+    match self {
+      Self::Subdirectory(subdir_dep) => subdir_dep.can_cross_compile(),
+      Self::CMakeComponentsModule(components_dep) => components_dep.can_cross_compile(),
+      Self::CMakeModule(module_dep) => module_dep.can_cross_compile()
+    }
+  }
+}
+
 #[derive(Clone)]
 pub struct FinalPredefinedDependencyConfig {
   name: String,
@@ -83,6 +93,10 @@ impl FinalPredefinedDependencyConfig {
       post_load: post_load.clone(),
       custom_populate: custom_populate.clone()
     });
+  }
+
+  pub fn can_cross_compile(&self) -> bool {
+    self.predep_info.can_cross_compile()
   }
 
   pub fn get_name(&self) -> &str {

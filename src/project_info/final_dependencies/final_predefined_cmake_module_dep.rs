@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
-use crate::project_info::raw_data_in::dependencies::{internal_dep_config::{RawModuleDep, CMakeModuleType}, user_given_dep_config::UserGivenPredefinedDependencyConfig};
+use crate::project_info::raw_data_in::dependencies::{internal_dep_config::{RawModuleDep, CMakeModuleType, raw_dep_common::RawPredepCommon}, user_given_dep_config::UserGivenPredefinedDependencyConfig};
 
 use super::{predep_module_common::PredefinedDepFunctionality, final_target_map_common::{FinalTargetConfigMap, make_final_target_config_map}};
 
@@ -9,7 +9,8 @@ pub struct PredefinedCMakeModuleDep {
   raw_dep: RawModuleDep,
   target_map: FinalTargetConfigMap,
   cmake_namespaced_target_map: HashMap<String, String>,
-  yaml_namespaced_target_map: HashMap<String, String>
+  yaml_namespaced_target_map: HashMap<String, String>,
+  _can_cross_compile: bool
 }
 
 impl PredefinedCMakeModuleDep {
@@ -81,12 +82,17 @@ impl PredefinedCMakeModuleDep {
       raw_dep: dep.clone(),
       target_map,
       cmake_namespaced_target_map,
-      yaml_namespaced_target_map
+      yaml_namespaced_target_map,
+      _can_cross_compile: dep.can_cross_compile()
     });
   }
 }
 
 impl PredefinedDepFunctionality for PredefinedCMakeModuleDep {
+  fn can_cross_compile(&self) -> bool {
+    self._can_cross_compile
+  }
+
   fn get_target_config_map(&self) -> &FinalTargetConfigMap {
     &self.target_map
   }

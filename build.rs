@@ -3,6 +3,7 @@ use std::{path::{Path, PathBuf}, fs::{self, File}, io::{self, Write}, collection
 fn main() {
   let ordered_cmake_util_names: Vec<&str> = vec![
     "gcmake-variables",
+    "gcmake-cross-compilation-utils",
     "gcmake-dir-config",
     "gcmake-toggle-lib-util",
     "gcmake-pre-build-configuration-utils",

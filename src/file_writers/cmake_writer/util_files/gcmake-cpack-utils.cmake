@@ -79,6 +79,7 @@ function( gcmake_configure_cpack )
 
     if( CPACK_DEB_ENABLED )
       list( APPEND CPACK_GENERATOR "DEB" )
+      set( CPACK_DEBIAN_PACKAGE_MAINTAINER "${INSTALLER_CONFIG_VENDOR}" )
     endif()
 
     if( CPACK_RPM_ENABLED )

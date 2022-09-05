@@ -45,6 +45,10 @@ pub struct RawComponentsModuleDep {
 }
 
 impl RawPredepCommon for RawComponentsModuleDep {
+  fn can_cross_compile(&self) -> bool {
+    false
+  }
+
   fn maybe_mutual_exclusion_groups(&self) -> &Option<RawMutualExclusionSet> {
     &self.mutually_exclusive
   }

@@ -14,7 +14,7 @@ pub enum GCMakeDependencyStatus {
 pub struct FinalGCMakeDependency {
   name: String,
   git_repo: FinalGitRepoDescriptor,
-  dep_project_status: GCMakeDependencyStatus
+  dep_project_status: GCMakeDependencyStatus,
 }
 
 impl FinalGCMakeDependency {

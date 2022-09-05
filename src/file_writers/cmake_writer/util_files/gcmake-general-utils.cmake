@@ -2,7 +2,6 @@ function( exe_add_lib_relative_install_rpath
   exe_target
 )
   if( NOT TARGET_SYSTEM_IS_WINDOWS )
-    set( CMAKE_INSTALL_RPATH )
     set_property(
       TARGET ${exe_target}
       APPEND PROPERTY

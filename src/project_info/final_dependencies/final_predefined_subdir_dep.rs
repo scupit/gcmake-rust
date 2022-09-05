@@ -1,6 +1,6 @@
 use std::{collections::{HashMap, HashSet}};
 
-use crate::project_info::{raw_data_in::dependencies::{internal_dep_config::{RawSubdirectoryDependency}, user_given_dep_config::{UserGivenPredefinedDependencyConfig}}};
+use crate::project_info::{raw_data_in::dependencies::{internal_dep_config::{RawSubdirectoryDependency, raw_dep_common::RawPredepCommon}, user_given_dep_config::{UserGivenPredefinedDependencyConfig}}};
 
 use super::{predep_module_common::PredefinedDepFunctionality, final_target_map_common::{FinalTargetConfigMap, make_final_target_config_map}};
 
@@ -35,7 +35,8 @@ pub struct PredefinedSubdirDep {
   target_map: FinalTargetConfigMap,
   cmake_namespaced_target_map: HashMap<String, String>,
   yaml_namespaced_target_map: HashMap<String, String>,
-  requires_custom_populate: bool
+  requires_custom_populate: bool,
+  _can_cross_compile: bool
 }
 
 impl PredefinedSubdirDep {
@@ -136,13 +137,18 @@ impl PredefinedSubdirDep {
         target_map,
         cmake_namespaced_target_map,
         yaml_namespaced_target_map,
-        requires_custom_populate: subdir_dep.requires_custom_fetchcontent_populate
+        requires_custom_populate: subdir_dep.requires_custom_fetchcontent_populate,
+        _can_cross_compile: subdir_dep.can_cross_compile()
       }
     )
   }
 }
 
 impl PredefinedDepFunctionality for PredefinedSubdirDep {
+  fn can_cross_compile(&self) -> bool {
+    self._can_cross_compile
+  }
+
   fn get_target_config_map(&self) -> &FinalTargetConfigMap {
     &self.target_map
   }

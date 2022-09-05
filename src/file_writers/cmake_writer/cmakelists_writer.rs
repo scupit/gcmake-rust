@@ -453,6 +453,19 @@ impl<'a> CMakeListsWriter<'a> {
   fn write_toplevel_tweaks(&self) -> io::Result<()> {
     writeln!(&self.cmakelists_file, "ensure_gcmake_config_dirs_exist()")?;
 
+    if !self.project_data.can_cross_compile() {
+      self.set_basic_option(
+        "",
+        "GCMAKE_OVERRIDE_CROSS_COMPILATION",
+        "OFF",
+        "When ON, force-allows cross compilation for projects which don't support trivial cross-compilation."
+      )?;
+
+      writeln!(&self.cmakelists_file,
+        "err_if_cross_compiling( GCMAKE_OVERRIDE_CROSS_COMPILATION )"
+      )?;
+    }
+
     self.write_newline()?;
     writeln!(&self.cmakelists_file, "get_property( isMultiConfigGenerator GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)")?;
 
