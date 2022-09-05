@@ -1,3 +1,28 @@
+function( exe_add_lib_relative_install_rpath
+  exe_target
+)
+  if( NOT TARGET_SYSTEM_IS_WINDOWS )
+    set( CMAKE_INSTALL_RPATH )
+    set_property(
+      TARGET ${exe_target}
+      APPEND PROPERTY
+        INSTALL_RPATH "\${ORIGIN}/../lib"
+    )
+  endif()
+endfunction()
+
+function( shared_lib_add_relative_install_rpath
+  shared_lib_target
+)
+  if( NOT TARGET_SYSTEM_IS_WINDOWS )
+    set_property(
+      TARGET ${shared_lib_target}
+      APPEND PROPERTY
+        INSTALL_RPATH "\${ORIGIN}"
+    )
+  endif()
+endfunction()
+
 function( clean_list
   content
   output_var
@@ -169,7 +194,7 @@ endfunction()
 function( initialize_build_tests_var )
   set( option_description "Whether to build tests for the ${PROJECT_NAME} project tree." )
 
-  if( "${CMAKE_SOURCE_DIR}" STREQUAL "${CMAKE_CURRENT_SOURCE_DIR}" )
+  if( "${CMAKE_SOURCE_DIR}" STREQUAL "${CMAKE_CURRENT_SOURCE_DIR}" AND NOT CMAKE_CROSSCOMPILING )
     option( ${LOCAL_TOPLEVEL_PROJECT_NAME}_BUILD_TESTS "${option_description}" ON )
   else()
     option( ${LOCAL_TOPLEVEL_PROJECT_NAME}_BUILD_TESTS "${option_description}" OFF )

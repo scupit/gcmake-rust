@@ -13,13 +13,15 @@ endfunction()
 function( use_executable_prebuild_script
   pre_build_executable_target
 )
-  add_custom_command(
-    TARGET ${PRE_BUILD_TARGET_NAME}
-    PRE_BUILD
-    COMMAND ${pre_build_executable_target}
-    COMMENT "Running ${PROJECT_NAME} pre-build executable script"
-    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-  )
+  if( NOT CMAKE_CROSSCOMPILING )
+    add_custom_command(
+      TARGET ${PRE_BUILD_TARGET_NAME}
+      PRE_BUILD
+      COMMAND ${pre_build_executable_target}
+      COMMENT "Running ${PROJECT_NAME} pre-build executable script"
+      WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+    )
+  endif()
 endfunction()
 
 function( use_python_prebuild_script

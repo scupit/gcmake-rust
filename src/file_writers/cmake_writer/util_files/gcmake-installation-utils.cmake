@@ -1,3 +1,9 @@
+if( NOT HAS_GCMAKE_INSTALL_DEFAULTS_CONFIG_RUN )
+  option( GCMAKE_INSTALL "When ON, CMake will create both install and packaging configurations for the project tree" ON )
+
+  set( HAS_GCMAKE_INSTALL_DEFAULTS_CONFIG_RUN TRUE )
+endif()
+
 function( configure_installation
   project_component_name_var
 )
@@ -34,6 +40,10 @@ function( configure_installation
     EXPORT ${PROJECT_NAME}Targets
     RUNTIME 
       DESTINATION bin
+      PERMISSIONS
+        OWNER_READ OWNER_WRITE OWNER_EXECUTE 
+        GROUP_READ GROUP_EXECUTE
+        WORLD_READ
     LIBRARY
       DESTINATION lib
     ARCHIVE
@@ -78,10 +88,12 @@ function( configure_installation
     )
   endif()
 
-  install( DIRECTORY "${MY_RUNTIME_OUTPUT_DIR}/resources"
-    DESTINATION bin
-    COMPONENT ${project_component_name}
-  )
+  if( EXISTS "${MY_RUNTIME_OUTPUT_DIR}/resources" )
+    install( DIRECTORY "${MY_RUNTIME_OUTPUT_DIR}/resources"
+      DESTINATION bin
+      COMPONENT ${project_component_name}
+    )
+  endif()
 
   install( EXPORT ${PROJECT_NAME}Targets
     FILE ${PROJECT_NAME}Targets.cmake

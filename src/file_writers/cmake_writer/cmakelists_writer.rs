@@ -1750,6 +1750,13 @@ impl<'a> CMakeListsWriter<'a> {
       lib_type_string
     )?;
 
+    if let OutputItemType::SharedLib = output_data.get_output_type() {
+      writeln!(&self.cmakelists_file,
+        "shared_lib_add_relative_install_rpath( {} )",
+        output_name
+      )?;
+    }
+
     self.write_general_library_data(
       output_data,
       output_target_node,
@@ -1922,6 +1929,11 @@ impl<'a> CMakeListsWriter<'a> {
 
     if !is_pre_build_script {
       writeln!(&self.cmakelists_file,
+        "exe_add_lib_relative_install_rpath( {} )",
+        target_name
+      )?;
+
+      writeln!(&self.cmakelists_file,
         "add_to_target_installation_list( {} )",
         target_name
       )?;
@@ -2048,7 +2060,7 @@ impl<'a> CMakeListsWriter<'a> {
         // writeln!(&self.cmakelists_file, "\traise_install_list()")?;
         // writeln!(&self.cmakelists_file, "endif()")?;
 
-        writeln!(&self.cmakelists_file, "if( \"${{CMAKE_CURRENT_SOURCE_DIR}}\" STREQUAL \"${{TOPLEVEL_PROJECT_DIR}}\" )")?;
+        writeln!(&self.cmakelists_file, "if( GCMAKE_INSTALL AND \"${{CMAKE_CURRENT_SOURCE_DIR}}\" STREQUAL \"${{TOPLEVEL_PROJECT_DIR}}\" )")?;
         writeln!(&self.cmakelists_file, "\tconfigure_installation( LOCAL_PROJECT_COMPONENT_NAME )")?;
         writeln!(&self.cmakelists_file, "endif()")?;
       },
@@ -2069,7 +2081,7 @@ impl<'a> CMakeListsWriter<'a> {
 
   fn write_toplevel_cpack_config(&self) -> io::Result<()> {
     writeln!(&self.cmakelists_file,
-      "if( \"${{CMAKE_SOURCE_DIR}}\" STREQUAL \"${{CMAKE_CURRENT_SOURCE_DIR}}\" )"
+      "if( GCMAKE_INSTALL AND \"${{CMAKE_SOURCE_DIR}}\" STREQUAL \"${{CMAKE_CURRENT_SOURCE_DIR}}\" )"
     )?;
 
     writeln!(&self.cmakelists_file,

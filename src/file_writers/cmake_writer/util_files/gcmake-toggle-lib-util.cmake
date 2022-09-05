@@ -60,6 +60,7 @@ function( make_toggle_lib
     add_library( ${lib_name} STATIC )
   elseif( actual_lib_type STREQUAL SHARED )
     add_library( ${lib_name} SHARED )
+    shared_lib_add_relative_install_rpath( ${lib_name} )
     set_target_properties( ${lib_name}
       PROPERTIES
         WINDOWS_EXPORT_ALL_SYMBOLS TRUE
