@@ -42,7 +42,12 @@ pub enum SubCommandStruct {
 
   /// Select and print information about project outputs and pre-build script.
   TargetInfo(TargetInfoCommand),
-  ProjectInfo(ProjectInfoCommand)
+  
+  /// Select and print information about projects. Dependency print information is limited.
+  ProjectInfo(ProjectInfoCommand),
+
+  /// Select and print information about predefined dependencies
+  PredepInfo(PredepInfoCommand)
 }
 
 #[derive(Subcommand)]
@@ -220,4 +225,17 @@ pub struct ProjectInfoCommand {
   /// List immediate subprojects
   #[clap(short = 's')]
   pub show_subprojects: bool,
+}
+
+#[derive(Args)]
+#[clap(setting = AppSettings::ColoredHelp)]
+pub struct PredepInfoCommand {
+  /// Select which predefined dependencies to print info for. If no selectors are provided,
+  /// then the full list of predefined dependencies is printed out.
+  #[clap(required = false)]
+  pub selectors: Vec<String>,
+
+  /// List out all the dependency's available targets
+  #[clap(short = 't')]
+  pub show_targets: bool
 }

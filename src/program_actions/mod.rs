@@ -3,15 +3,16 @@ mod code_file_creator;
 mod manage_dependencies;
 mod target_info_print_funcs;
 mod project_info_print_funcs;
+mod predef_dep_info_print_funcs;
 
 pub use create_project::*;
 pub use code_file_creator::*;
 pub use manage_dependencies::*;
-use std::{io, path::PathBuf, fs, cell::RefCell, rc::Rc, borrow::Borrow};
+use std::{io, path::PathBuf, fs, cell::RefCell, rc::Rc, borrow::Borrow, process::exit};
 
-use crate::{cli_config::{clap_cli_config::{UseFilesCommand, CreateFilesCommand, UpdateDependencyConfigsCommand, TargetInfoCommand, ProjectInfoCommand}, CLIProjectGenerationInfo, CLIProjectTypeGenerating}, common::prompt::prompt_until_boolean, logger::exit_error_log, project_info::{raw_data_in::dependencies::internal_dep_config::AllRawPredefinedDependencies, final_project_data::{UseableFinalProjectDataGroup, ProjectLoadFailureReason, FinalProjectData, ProjectConstructorConfig}, path_manipulation::absolute_path, dep_graph_loader::load_graph, dependency_graph_mod::dependency_graph::{DependencyGraphInfoWrapper, DependencyGraph, TargetNode, BasicTargetSearchResult, DependencyGraphWarningMode, BasicProjectSearchResult}, LinkSpecifier, validators::{is_valid_target_name, is_valid_project_name}}, file_writers::write_configurations, project_generator::GeneralNewProjectInfo, program_actions::project_info_print_funcs::{print_project_header, print_project_include_prefix, print_immediate_subprojects}};
+use crate::{cli_config::{clap_cli_config::{UseFilesCommand, CreateFilesCommand, UpdateDependencyConfigsCommand, TargetInfoCommand, ProjectInfoCommand, PredepInfoCommand}, CLIProjectGenerationInfo, CLIProjectTypeGenerating}, common::{prompt::prompt_until_boolean, self}, logger::exit_error_log, project_info::{raw_data_in::dependencies::internal_dep_config::AllRawPredefinedDependencies, final_project_data::{UseableFinalProjectDataGroup, ProjectLoadFailureReason, FinalProjectData, ProjectConstructorConfig}, path_manipulation::absolute_path, dep_graph_loader::load_graph, dependency_graph_mod::dependency_graph::{DependencyGraphInfoWrapper, DependencyGraph, TargetNode, BasicTargetSearchResult, DependencyGraphWarningMode, BasicProjectSearchResult}, LinkSpecifier, validators::{is_valid_target_name, is_valid_project_name}}, file_writers::write_configurations, project_generator::GeneralNewProjectInfo, program_actions::project_info_print_funcs::{print_project_header, print_project_include_prefix, print_immediate_subprojects}};
 
-use self::target_info_print_funcs::{print_target_header, print_export_header_include_path};
+use self::{target_info_print_funcs::{print_target_header, print_export_header_include_path}, predef_dep_info_print_funcs::{print_predef_dep_header, print_predep_targets}};
 
 fn parse_project_info(
   project_root_dir: &str,
@@ -208,6 +209,46 @@ pub fn print_project_info(
 
           if command.show_subprojects {
             print_immediate_subprojects(project_graph);
+          }
+        }
+      }
+    }
+  }
+}
+
+pub fn print_predep_info(
+  command: &PredepInfoCommand,
+  given_root_dir: &str,
+  dep_config: &AllRawPredefinedDependencies,
+  just_created_project_at: Option<String>
+) {
+  if command.selectors.is_empty() {
+    let mut dep_names: Vec<&String> = dep_config.keys().collect();
+    dep_names.sort_by(|name1, name2| name1.to_lowercase().cmp(&name2.to_lowercase()));
+
+    for dep_name in dep_names {
+      println!("{}", dep_name);
+    }
+  }
+  else {
+    for dep_name in &command.selectors {
+      print_predef_dep_header(dep_name);
+
+      match dep_config.get(dep_name) {
+        None => println!("Unable to find predefined dependency \"{}\"", dep_name),
+        Some(raw_predep_config) => match raw_predep_config.dep_configs.get_common() {
+          Err(err_msg) => {
+            println!(
+              "Error when trying to get target info for predefined dependency \"{}\": {}",
+              dep_name,
+              err_msg
+            );
+          },
+          Ok(common_info) => {
+            // Do info printing here.
+            if command.show_targets {
+              print_predep_targets(dep_name, common_info);
+            }
           }
         }
       }

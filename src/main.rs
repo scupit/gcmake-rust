@@ -57,8 +57,6 @@ fn main() {
   let mut given_root_dir: String = opts.project_root;
   let mut should_generate_cmakelists: bool = true;
 
-  println!("");
-
   if let Some(subcommand) = opts.subcommand {
     match subcommand {
       SubCommandStruct::New(new_project_subcommand) => {
@@ -139,7 +137,17 @@ fn main() {
           &dep_config,
           None
         );
-      }
+      },
+      SubCommandStruct::PredepInfo(command) => {
+        should_generate_cmakelists = false;
+
+        print_predep_info(
+          &command,
+          &given_root_dir,
+          &dep_config,
+          None
+        );
+      },
       SubCommandStruct::DepConfig(_) => {
         unreachable!();
       }

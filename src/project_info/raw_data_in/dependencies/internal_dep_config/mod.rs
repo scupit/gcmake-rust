@@ -13,12 +13,36 @@ pub use raw_target_config_common::*;
 use std::{collections::HashMap, path::{PathBuf, Path}, fs, io, rc::Rc};
 use serde::{Deserialize};
 
+use self::raw_dep_common::RawPredepCommon;
+
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct SingleRawPredefinedDependencyConfigGroup {
   pub as_subdirectory: Option<RawSubdirectoryDependency>,
   pub cmake_components_module: Option<RawComponentsModuleDep>,
   pub cmake_module: Option<RawModuleDep>
+}
+
+impl SingleRawPredefinedDependencyConfigGroup {
+  pub fn get_common(&self) -> Result<&dyn RawPredepCommon, String> {
+    let first_available: Option<&dyn RawPredepCommon> = if let Some(subdir_dep) = &self.as_subdirectory {
+      Some(subdir_dep)
+    }
+    else if let Some(components_dep) = &self.cmake_components_module {
+      Some(components_dep)
+    }
+    else if let Some(module_dep) = &self.cmake_module {
+      Some(module_dep)
+    }
+    else {
+      None
+    };
+    
+    return match first_available {
+      Some(available_config) => Ok(available_config),
+      None => Err(format!("The dependency doesn't contain a configuration."))
+    }
+  }
 }
 
 pub struct PredefinedCMakeDepHookFile {
