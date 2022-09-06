@@ -5,9 +5,9 @@ mod manage_dependencies;
 pub use create_project::*;
 pub use code_file_creator::*;
 pub use manage_dependencies::*;
-use std::{io, path::PathBuf, fs, thread::current};
+use std::{io, path::PathBuf, fs, cell::RefCell, rc::Rc, borrow::Borrow};
 
-use crate::{cli_config::{clap_cli_config::{UseFilesCommand, CreateFilesCommand, UpdateDependencyConfigsCommand}, CLIProjectGenerationInfo, CLIProjectTypeGenerating}, common::prompt::prompt_until_boolean, logger::exit_error_log, project_info::{raw_data_in::dependencies::internal_dep_config::AllRawPredefinedDependencies, final_project_data::{UseableFinalProjectDataGroup, ProjectLoadFailureReason, FinalProjectData, ProjectConstructorConfig}, path_manipulation::absolute_path}, file_writers::write_configurations, project_generator::GeneralNewProjectInfo};
+use crate::{cli_config::{clap_cli_config::{UseFilesCommand, CreateFilesCommand, UpdateDependencyConfigsCommand, TargetInfoCommand}, CLIProjectGenerationInfo, CLIProjectTypeGenerating}, common::prompt::prompt_until_boolean, logger::exit_error_log, project_info::{raw_data_in::dependencies::internal_dep_config::AllRawPredefinedDependencies, final_project_data::{UseableFinalProjectDataGroup, ProjectLoadFailureReason, FinalProjectData, ProjectConstructorConfig}, path_manipulation::absolute_path, dep_graph_loader::load_graph, dependency_graph_mod::dependency_graph::{DependencyGraphInfoWrapper, DependencyGraph, TargetNode, BasicTargetSearchResult, ContainedItem}, LinkSpecifier}, file_writers::write_configurations, project_generator::GeneralNewProjectInfo};
 
 fn parse_project_info(
   project_root_dir: &str,
@@ -38,6 +38,95 @@ fn get_project_info_or_exit(
   match parse_project_info(project_root_dir, dep_config, just_created_project_at) {
     Ok(project_group) => project_group,
     Err(failure_reason) => exit_error_log(failure_reason.extract_message())
+  }
+}
+
+struct RootAndOperatingGraphs<'a> {
+  root_graph: Rc<RefCell<DependencyGraph<'a>>>,
+  operating_on: Option<Rc<RefCell<DependencyGraph<'a>>>>
+}
+
+fn get_project_graph_or_exit<'a>(
+  project_group: &'a UseableFinalProjectDataGroup
+) -> RootAndOperatingGraphs<'a> {
+  match load_graph(&project_group) {
+    Ok(graph_info) => {
+      return RootAndOperatingGraphs {
+        operating_on: project_group.operating_on
+          .as_ref()
+          .map(|operatng_on_project|
+            graph_info.root_dep_graph
+              .as_ref()
+              .borrow()
+              .find_using_project_data(&operatng_on_project)
+              .unwrap()
+          ),
+        root_graph: graph_info.root_dep_graph
+      }
+    },
+    Err(err_msg) => exit_error_log(err_msg)
+  }
+}
+
+pub fn print_target_info(
+  command: &TargetInfoCommand,
+  given_root_dir: &str,
+  dep_config: &AllRawPredefinedDependencies,
+  just_created_project_at: Option<String>
+) {
+  if command.selectors.is_empty() {
+    // TODO: When no selector is provided, just print the info for all project targets.
+    exit_error_log("Must provide at least one target selector. Example: self::main_exe");
+  }
+
+  let project_group: UseableFinalProjectDataGroup =
+    get_project_info_or_exit(given_root_dir, dep_config, just_created_project_at);
+ 
+  let graph_info: RootAndOperatingGraphs = get_project_graph_or_exit(&project_group);
+
+  match &graph_info.operating_on {
+    None => exit_error_log(format!(
+      "Tried to print target data when operating on project at '{}', however the project could not be found.",
+      given_root_dir
+    )),
+    Some(operating_on) => {
+      let result_list: Vec<Vec<BasicTargetSearchResult>> = command.selectors
+        .iter()
+        .map(|selector| {
+          Ok(operating_on.as_ref().borrow().find_targets_using_link_spec(
+            false,
+            &LinkSpecifier::parse_with_full_permissions(selector)?
+          )?)
+        })
+        .collect::<Result<_, String>>()
+        .unwrap_or_else(|err_msg| exit_error_log(err_msg));
+
+      for list_from_selector in result_list {
+        for search_result in list_from_selector {
+          match search_result.target {
+            None => println!("{} not found", search_result.searched_with),
+            Some(target_rc) => {
+              let target = target_rc.as_ref().borrow();
+              println!("\n========== {} ==========", target.get_yaml_namespaced_target_name());
+
+              if command.export_header {
+
+                match target.get_contained_item() {
+                  ContainedItem::CompiledOutput(output) if output.is_compiled_library_type() => {
+                    println!(
+                      "Export header:\n\t\"{}/{}_export.h\"",
+                      target.container_project().as_ref().borrow().project_wrapper().clone().unwrap_normal_project().get_full_include_prefix(),
+                      target.get_name()
+                    )
+                  },
+                  _ => println!("No export header")
+                }
+              }
+            }
+          }
+        }
+      }
+    }
   }
 }
 
@@ -116,22 +205,27 @@ pub fn do_generate_project_configs(
   let project_data_group: UseableFinalProjectDataGroup =
     get_project_info_or_exit(&given_root_dir, &dep_config, just_created_project_at);
 
-  // print_project_info(project_data_group);
-  let config_write_result: io::Result<()> = write_configurations(
-    &project_data_group,
-    |config_name| println!("\nBeginning {} configuration step...", config_name),
-    |(config_name, config_result)| match config_result {
-      Ok(_) => println!("{} configuration written successfully!", config_name),
-      Err(err) => {
-        println!("Writing {} configuration failed with error:", config_name);
-        println!("{:?}", err)
+  match load_graph(&project_data_group) {
+    Err(err_msg) => exit_error_log(err_msg.to_string()),
+    Ok(root_graph_info) => {
+      let config_write_result: io::Result<()> = write_configurations(
+        &root_graph_info,
+        |config_name| println!("\nBeginning {} configuration step...", config_name),
+        |(config_name, config_result)| match config_result {
+          Ok(_) => println!("{} configuration written successfully!", config_name),
+          Err(err) => {
+            println!("Writing {} configuration failed with error:", config_name);
+            println!("{:?}", err)
+          }
+        }
+      ); 
+      
+      if let Err(err) = config_write_result {
+        exit_error_log(err.to_string());
       }
     }
-  ); 
-  
-  if let Err(err) = config_write_result {
-    exit_error_log(err.to_string());
   }
+  // print_project_info(project_data_group);
 }
 
 pub fn do_new_files_subcommand(

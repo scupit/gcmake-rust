@@ -38,7 +38,10 @@ pub enum SubCommandStruct {
   DepConfig(DepConfigSubCommand),
 
   /// Copy a default file from ~/.gcmake into the project root.
-  UseFile(UseFilesCommand)
+  UseFile(UseFilesCommand),
+
+  /// Select and print information about project outputs and pre-build script.
+  TargetInfo(TargetInfoCommand)
 }
 
 #[derive(Subcommand)]
@@ -185,4 +188,16 @@ pub struct UseFilesCommand {
   /// The file to copy, without the leading '.'
   #[clap(value_enum)]
   pub file: UseFileOption
+}
+
+#[derive(Args)]
+#[clap(setting = AppSettings::ColoredHelp)]
+pub struct TargetInfoCommand {
+  /// The file to copy, without the leading '.'
+  #[clap(required = true)]
+  pub selectors: Vec<String>,
+
+  /// Print the include path of the auto-generated export header
+  #[clap(short = 'e')]
+  pub export_header: bool
 }

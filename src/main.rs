@@ -119,6 +119,16 @@ fn main() {
         if let Err(err) = file_copy_result {
           exit_error_log(err.to_string());
         }
+      },
+      SubCommandStruct::TargetInfo(command) => {
+        should_generate_cmakelists = false;
+
+        print_target_info(
+          &command,
+          &given_root_dir,
+          &dep_config,
+          None
+        );
       }
       SubCommandStruct::DepConfig(_) => {
         unreachable!();

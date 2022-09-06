@@ -5,11 +5,11 @@ mod ordered_utils;
 
 use std::{io};
 
-use crate::project_info::{final_project_data::UseableFinalProjectDataGroup, dependency_graph_mod::dependency_graph::{DependencyGraphInfoWrapper, DependencyGraph}};
+use crate::project_info::{dependency_graph_mod::dependency_graph::{DependencyGraphInfoWrapper}};
 
 use self::cmakelists_writer::configure_cmake_helper;
 
-pub fn configure_cmake(root_graph_info: &DependencyGraphInfoWrapper) -> io::Result<()> {
+pub fn configure_cmake<'a>(root_graph_info: &'a DependencyGraphInfoWrapper<'a>) -> io::Result<()> {
   configure_cmake_helper(&root_graph_info.root_dep_graph, &root_graph_info.sorted_info)?;
   Ok(())
 }

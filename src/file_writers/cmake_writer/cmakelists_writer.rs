@@ -7,9 +7,9 @@ use super::cmake_utils_writer::{CMakeUtilFile, CMakeUtilWriter};
 const RUNTIME_BUILD_DIR_VAR: &'static str = "${MY_RUNTIME_OUTPUT_DIR}";
 const LIB_BUILD_DIR_VAR: &'static str = "${MY_LIBRARY_OUTPUT_DIR}";
 
-pub fn configure_cmake_helper(
-  dep_graph: &Rc<RefCell<DependencyGraph>>,
-  sorted_target_info: &OrderedTargetInfo
+pub fn configure_cmake_helper<'a>(
+  dep_graph: &Rc<RefCell<DependencyGraph<'a>>>,
+  sorted_target_info: &'a OrderedTargetInfo<'a>
 ) -> io::Result<()> {
   let borrowed_graph = dep_graph.as_ref().borrow();
   for (_, test_project_graph) in borrowed_graph.get_test_projects() {
@@ -22,7 +22,7 @@ pub fn configure_cmake_helper(
 
   // TODO: Should we write available GCMake dependency CMakeLists as well?
 
-  if let ProjectWrapper::NormalProject(project_data) = borrowed_graph.wrapped_project() {
+  if let ProjectWrapper::NormalProject(project_data) = borrowed_graph.project_wrapper() {
     let cmake_util_path = Path::new(project_data.get_project_root()).join("cmake");
     let maybe_util_writer: Option<CMakeUtilWriter> = if project_data.is_root_project()
       { Some(CMakeUtilWriter::new(cmake_util_path)) }
@@ -111,8 +111,8 @@ fn flattened_linker_flags_string(linker_flags: &Vec<LinkerFlag>) -> String {
 }
 
 struct CMakeListsWriter<'a> {
-  dep_graph: Rc<RefCell<DependencyGraph>>,
-  sorted_target_info: &'a OrderedTargetInfo,
+  dep_graph: Rc<RefCell<DependencyGraph<'a>>>,
+  sorted_target_info: &'a OrderedTargetInfo<'a>,
   project_data: Rc<FinalProjectData>,
   util_writer: Option<CMakeUtilWriter>,
   cmakelists_file: File,
@@ -121,12 +121,12 @@ struct CMakeListsWriter<'a> {
 
 impl<'a> CMakeListsWriter<'a> {
   fn new(
-    dep_graph: Rc<RefCell<DependencyGraph>>,
-    sorted_target_info: &'a OrderedTargetInfo,
+    dep_graph: Rc<RefCell<DependencyGraph<'a>>>,
+    sorted_target_info: &'a OrderedTargetInfo<'a>,
     util_writer: Option<CMakeUtilWriter>
   ) -> io::Result<Self> {
     let borrowed_graph = dep_graph.as_ref().borrow();
-    let project_data: Rc<FinalProjectData> = match borrowed_graph.wrapped_project() {
+    let project_data: Rc<FinalProjectData> = match borrowed_graph.project_wrapper() {
       ProjectWrapper::NormalProject(normal_project) => Rc::clone(normal_project),
       ProjectWrapper::GCMakeDependencyRoot(gcmake_dep) => match gcmake_dep.project_status() {
         GCMakeDependencyStatus::Available(normal_project) => Rc::clone(normal_project),
@@ -220,7 +220,7 @@ impl<'a> CMakeListsWriter<'a> {
         let container_graph = borrowed_container_graph.as_ref().borrow();
         let container_graph_name: String = container_graph.project_mangled_name().to_string();
 
-        match container_graph.wrapped_project() {
+        match container_graph.project_wrapper() {
           ProjectWrapper::NormalProject(_) => {
             // If the target is built by a GCMake dependency
             if container_graph.root_project_id() != self.dep_graph.as_ref().borrow().root_project_id() {
@@ -409,12 +409,12 @@ impl<'a> CMakeListsWriter<'a> {
           project_ref.root_project_id() == self.dep_graph_ref().project_id()
         });
 
-      let root_project_info = self.dep_graph_ref().wrapped_project().clone().unwrap_normal_project();
+      let root_project_info = self.dep_graph_ref().project_wrapper().clone().unwrap_normal_project();
       let root_project_root_path: &str = root_project_info.get_project_root();
 
       for some_project_graph in ordered_projects_in_this_tree {
         let borrowed_graph = some_project_graph.as_ref().borrow();
-        let subproject_data: Rc<FinalProjectData> = borrowed_graph.wrapped_project().clone().unwrap_normal_project();
+        let subproject_data: Rc<FinalProjectData> = borrowed_graph.project_wrapper().clone().unwrap_normal_project();
 
         if borrowed_graph.project_id() == self.dep_graph_ref().project_id() {
           self.write_pre_build_and_outputs()?;
@@ -775,7 +775,7 @@ impl<'a> CMakeListsWriter<'a> {
 
   fn write_predefined_dependencies(&self) -> io::Result<()> {
     for (dep_name, predep_graph) in self.dep_graph_ref().get_predefined_dependencies() {
-      let dep_info: Rc<FinalPredefinedDependencyConfig> = predep_graph.as_ref().borrow().wrapped_project().clone().unwrap_predef_dep();
+      let dep_info: Rc<FinalPredefinedDependencyConfig> = predep_graph.as_ref().borrow().project_wrapper().clone().unwrap_predef_dep();
 
       if let Some(pre_load) = dep_info.pre_load_script() {
         writeln!(&self.cmakelists_file, "{}", pre_load.contents_ref())?;
@@ -1260,11 +1260,13 @@ impl<'a> CMakeListsWriter<'a> {
         matching_output = self.project_data.get_outputs().get(&output_name).unwrap();
       }
 
+      let unwrapped_target = output_target.unwrap();
+
       match matching_output.get_output_type() {
         OutputItemType::Executable => {
           self.write_executable(
             matching_output,
-            &output_target.unwrap(),
+            &unwrapped_target,
             &output_name,
             &src_var_name,
             &includes_var_name,
@@ -1278,7 +1280,7 @@ impl<'a> CMakeListsWriter<'a> {
         {
           self.write_defined_type_library(
             matching_output,
-            &output_target.unwrap(),
+            &unwrapped_target,
             &output_name,
             &src_var_name,
             &includes_var_name,
@@ -1289,7 +1291,7 @@ impl<'a> CMakeListsWriter<'a> {
         OutputItemType::CompiledLib => {
           self.write_toggle_type_library(
             matching_output,
-            &output_target.unwrap(),
+            &unwrapped_target,
             &output_name,
             &src_var_name,
             &includes_var_name,
@@ -1634,7 +1636,7 @@ impl<'a> CMakeListsWriter<'a> {
     &self,
     output_name: &str,
     output_data: &CompiledOutputItem,
-    output_target_node: &Rc<RefCell<TargetNode>>
+    output_target_node: &Rc<RefCell<TargetNode<'a>>>
   ) -> io::Result<()> {
     let borrowed_output_target_node = output_target_node.as_ref().borrow();
 
@@ -1753,7 +1755,7 @@ impl<'a> CMakeListsWriter<'a> {
   fn write_defined_type_library(
     &self,
     output_data: &CompiledOutputItem,
-    output_target_node: &Rc<RefCell<TargetNode>>,
+    output_target_node: &Rc<RefCell<TargetNode<'a>>>,
     output_name: &str,
     src_var_name: &str,
     includes_var_name: &str,
@@ -1798,7 +1800,7 @@ impl<'a> CMakeListsWriter<'a> {
   fn write_toggle_type_library(
     &self,
     output_data: &CompiledOutputItem,
-    output_target_node: &Rc<RefCell<TargetNode>>,
+    output_target_node: &Rc<RefCell<TargetNode<'a>>>,
     output_name: &str,
     src_var_name: &str,
     includes_var_name: &str,
@@ -1831,7 +1833,7 @@ impl<'a> CMakeListsWriter<'a> {
   fn write_general_library_data(
     &self,
     output_data: &CompiledOutputItem,
-    output_target_node: &Rc<RefCell<TargetNode>>,
+    output_target_node: &Rc<RefCell<TargetNode<'a>>>,
     output_name: &str,
     project_include_dir_varname: &str,
     includes_var_name: &str,
@@ -1917,7 +1919,7 @@ impl<'a> CMakeListsWriter<'a> {
   fn write_executable(
     &self,
     output_data: &CompiledOutputItem,
-    output_target_node: &Rc<RefCell<TargetNode>>,
+    output_target_node: &Rc<RefCell<TargetNode<'a>>>,
     output_name: &str,
     src_var_name: &str,
     includes_var_name: &str,
@@ -2173,7 +2175,7 @@ impl<'a> CMakeListsWriter<'a> {
     Ok(())
   }
 
-  fn dep_graph_ref(&self) -> Ref<DependencyGraph> {
+  fn dep_graph_ref(&self) -> Ref<DependencyGraph<'a>> {
     return self.dep_graph.as_ref().borrow();
   }
 }

@@ -98,6 +98,10 @@ impl LinkSpecifier {
     &self.namespace_stack
   }
 
+  pub fn parse_with_full_permissions(link_spec: impl AsRef<str>) -> Result<Self, String> {
+    Self::parse_from(link_spec, LinkAccessMode::Internal)
+  }
+
   pub fn parse_from(
     link_spec: impl AsRef<str>,
     access_mode: LinkAccessMode

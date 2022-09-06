@@ -6,6 +6,7 @@ pub mod raw_data_in;
 pub mod final_project_configurables;
 pub mod dependency_graph_mod;
 pub mod gcmake_constants;
+pub mod dep_graph_loader;
 mod parsers;
 
 pub use final_project_configurables::*;
