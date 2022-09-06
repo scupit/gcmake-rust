@@ -801,7 +801,7 @@ impl<'a> DependencyGraph<'a> {
         };
 
         if let DependencyGraphWarningMode::All = warning_mode {
-          println!("Warning: Platform-specific subset checks have not been implemented yet.");
+          println!("\nWarning: Platform-specific subset validation at GCMake configuration time has not been implemented yet. However, the correct CMake generator expressions will still be written.");
           println!(
             "-- target '{}' in project '{}' links to '{}', which has a platform specifier '{}'. Please make sure the link to {} is prefixed with a platform specifier that is a subset of {}. {}",
             target.as_ref().borrow().get_name(),

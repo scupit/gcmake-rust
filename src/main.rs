@@ -17,7 +17,7 @@ use logger::exit_error_log;
 use program_actions::*;
 use project_generator::{DefaultProjectInfo};
 
-use crate::{project_info::{raw_data_in::dependencies::{all_raw_supported_dependency_configs, internal_dep_config::AllRawPredefinedDependencies}}, project_generator::configuration::{MainFileLanguage, CreationProjectOutputType}, cli_config::clap_cli_config::{Opts, SubCommandStruct, DepConfigSubCommand, CreateFilesCommand, FileCreationLang}};
+use crate::{project_info::{raw_data_in::dependencies::{all_raw_supported_dependency_configs, internal_dep_config::AllRawPredefinedDependencies}}, project_generator::configuration::{MainFileLanguage, CreationProjectOutputType}, cli_config::clap_cli_config::{Opts, SubCommandStruct, DepConfigSubCommand, CreateFilesCommand, FileCreationLang}, common::prompt};
 
 // fn print_project_info(project_data_group: UseableFinalProjectDataGroup) {
 //   println!("PROJECT INFORMATION\n----------------------------------------");
@@ -74,6 +74,11 @@ fn main() {
 
           if let CreationProjectOutputType::Library(lib_type) = new_project_info.project_output_type {
             if lib_type.is_compiled_lib() {
+              let new_file_name: String = match prompt_for_initial_compiled_lib_file_pair_name(&new_project_info.project.name) {
+                Err(io_err) => exit_error_log(io_err.to_string()),
+                Ok(relative_name) => relative_name
+              };
+
               // TODO: Refactor this somehow. Right now, this parses all cmake_data.yaml files 
               // for the whole project, then does it again when generating the CMakeLists.
               // While that isn't causing problems, it shouldn't have to be done twice
@@ -86,8 +91,8 @@ fn main() {
                     MainFileLanguage::C => FileCreationLang::Cpp,
                     MainFileLanguage::Cpp => FileCreationLang::Cpp
                   },
-                  file_name: String::from("Placeholder"),
-                  file_types: String::from("hs"),
+                  relative_file_names: vec![new_file_name],
+                  which: String::from("hs"),
                   use_pragma_guards: false
                 },
                 &new_project_info.project_root,

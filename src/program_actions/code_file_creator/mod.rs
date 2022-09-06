@@ -5,16 +5,37 @@ use self::{file_creation_info::{FileTypeGeneratingInfo, validate_which_generatin
 
 mod code_file_writer;
 mod file_creation_info;
+mod file_creation_prompts;
+
+pub use file_creation_prompts::prompt_for_initial_compiled_lib_file_pair_name;
 
 pub fn handle_create_files(
   project_data: &Rc<FinalProjectData>,
   command: &CreateFilesCommand
 ) -> Result<(), String> {
-  let which_generating: FileTypeGeneratingInfo = FileTypeGeneratingInfo::new(&command.file_types)?;
+  let which_generating: FileTypeGeneratingInfo = FileTypeGeneratingInfo::new(&command.which)?;
   validate_which_generating(&command.language, &which_generating)?;
 
+  for relative_file_name in &command.relative_file_names {
+    create_single_file_set(
+      project_data,
+      command,
+      &which_generating,
+      relative_file_name
+    )?;
+  }
+
+  Ok(())
+}
+
+pub fn create_single_file_set(
+  project_data: &Rc<FinalProjectData>,
+  command: &CreateFilesCommand,
+  which_generating: &FileTypeGeneratingInfo,
+  file_name: &str
+) -> Result<(), String> {
   let shared_file_info: SharedFileInfo = SharedFileInfo::new(
-    &command.file_name,
+    &file_name,
     project_data.get_project_root()
   );
   validate_shared_file_info(&shared_file_info)?;
@@ -57,8 +78,8 @@ pub fn handle_create_files(
           ""
         );
 
-      // TODO: This should skip existing files (and print a message saying so), instead of
-      // throwing an error when one doesn't exist.
+      // TODO: This should prompt to [c]ancel all, [s]kip one, [o]verwrite one, replace [a]ll
+      // instead of // throwing an error when one doesn't exist.
       return Err(format!(
         "No files were created because file '{}' already exists and would be overwritten.",
         file_path_relative_to_working_dir

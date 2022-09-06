@@ -129,6 +129,11 @@ pub struct CreateFilesCommand {
   #[clap(arg_enum, required = true)]
   pub language: FileCreationLang,
 
+  /// Combination of 'h' 's' and 't' (example: hs), where 'h' = Header, 's' = Source,
+  /// and 't' = Template implementation
+  #[clap(long = "which", default_value = "hs")]
+  pub which: String,
+
   /// Name of the generated file relative to any code folder.
   /// Example: Assuming file_types == hs (header and source generated)
   /// and language == cpp,
@@ -136,12 +141,7 @@ pub struct CreateFilesCommand {
   /// while "nested/SomeClass" turns into "include/<FULL_INCLUDE_PREFIX>/nested/SomeClass.hpp" and
   /// "src/<FULL_INCLUDE_PREFIX>/nested/SomeClass.cpp" 
   #[clap(required = true)]
-  pub file_name: String,
-
-  /// Combination of 'h' 's' and 't' (example: hs), where 'h' = Header, 's' = Source,
-  /// and 't' = Template implementation
-  #[clap(required = false, default_value = "hs")]
-  pub file_types: String,
+  pub relative_file_names: Vec<String>,
 
   /// Use '#pragma once' instead of include guards.
   #[clap(short = 'p', long = "use-pragma")]
