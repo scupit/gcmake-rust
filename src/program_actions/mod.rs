@@ -1,13 +1,16 @@
 mod create_project;
 mod code_file_creator;
 mod manage_dependencies;
+mod target_info_print_funcs;
 
 pub use create_project::*;
 pub use code_file_creator::*;
 pub use manage_dependencies::*;
-use std::{io, path::PathBuf, fs, cell::RefCell, rc::Rc, borrow::Borrow};
+use std::{io, path::PathBuf, fs, cell::RefCell, rc::Rc};
 
-use crate::{cli_config::{clap_cli_config::{UseFilesCommand, CreateFilesCommand, UpdateDependencyConfigsCommand, TargetInfoCommand}, CLIProjectGenerationInfo, CLIProjectTypeGenerating}, common::prompt::prompt_until_boolean, logger::exit_error_log, project_info::{raw_data_in::dependencies::internal_dep_config::AllRawPredefinedDependencies, final_project_data::{UseableFinalProjectDataGroup, ProjectLoadFailureReason, FinalProjectData, ProjectConstructorConfig}, path_manipulation::absolute_path, dep_graph_loader::load_graph, dependency_graph_mod::dependency_graph::{DependencyGraphInfoWrapper, DependencyGraph, TargetNode, BasicTargetSearchResult, ContainedItem}, LinkSpecifier}, file_writers::write_configurations, project_generator::GeneralNewProjectInfo};
+use crate::{cli_config::{clap_cli_config::{UseFilesCommand, CreateFilesCommand, UpdateDependencyConfigsCommand, TargetInfoCommand}, CLIProjectGenerationInfo, CLIProjectTypeGenerating}, common::prompt::prompt_until_boolean, logger::exit_error_log, project_info::{raw_data_in::dependencies::internal_dep_config::AllRawPredefinedDependencies, final_project_data::{UseableFinalProjectDataGroup, ProjectLoadFailureReason, FinalProjectData, ProjectConstructorConfig}, path_manipulation::absolute_path, dep_graph_loader::load_graph, dependency_graph_mod::dependency_graph::{DependencyGraphInfoWrapper, DependencyGraph, TargetNode, BasicTargetSearchResult}, LinkSpecifier}, file_writers::write_configurations, project_generator::GeneralNewProjectInfo};
+
+use self::target_info_print_funcs::{print_target_header, print_export_header_include_path};
 
 fn parse_project_info(
   project_root_dir: &str,
@@ -42,6 +45,7 @@ fn get_project_info_or_exit(
 }
 
 struct RootAndOperatingGraphs<'a> {
+  graph_info_wrapper: DependencyGraphInfoWrapper<'a>,
   root_graph: Rc<RefCell<DependencyGraph<'a>>>,
   operating_on: Option<Rc<RefCell<DependencyGraph<'a>>>>
 }
@@ -61,7 +65,8 @@ fn get_project_graph_or_exit<'a>(
               .find_using_project_data(&operatng_on_project)
               .unwrap()
           ),
-        root_graph: graph_info.root_dep_graph
+        root_graph: Rc::clone(&graph_info.root_dep_graph),
+        graph_info_wrapper: graph_info
       }
     },
     Err(err_msg) => exit_error_log(err_msg)
@@ -106,21 +111,11 @@ pub fn print_target_info(
           match search_result.target {
             None => println!("{} not found", search_result.searched_with),
             Some(target_rc) => {
-              let target = target_rc.as_ref().borrow();
-              println!("\n========== {} ==========", target.get_yaml_namespaced_target_name());
+              let target: &TargetNode = &target_rc.as_ref().borrow();
+              print_target_header(target);
 
               if command.export_header {
-
-                match target.get_contained_item() {
-                  ContainedItem::CompiledOutput(output) if output.is_compiled_library_type() => {
-                    println!(
-                      "Export header:\n\t\"{}/{}_export.h\"",
-                      target.container_project().as_ref().borrow().project_wrapper().clone().unwrap_normal_project().get_full_include_prefix(),
-                      target.get_name()
-                    )
-                  },
-                  _ => println!("No export header")
-                }
+                print_export_header_include_path(target);
               }
             }
           }
@@ -205,25 +200,22 @@ pub fn do_generate_project_configs(
   let project_data_group: UseableFinalProjectDataGroup =
     get_project_info_or_exit(&given_root_dir, &dep_config, just_created_project_at);
 
-  match load_graph(&project_data_group) {
-    Err(err_msg) => exit_error_log(err_msg.to_string()),
-    Ok(root_graph_info) => {
-      let config_write_result: io::Result<()> = write_configurations(
-        &root_graph_info,
-        |config_name| println!("\nBeginning {} configuration step...", config_name),
-        |(config_name, config_result)| match config_result {
-          Ok(_) => println!("{} configuration written successfully!", config_name),
-          Err(err) => {
-            println!("Writing {} configuration failed with error:", config_name);
-            println!("{:?}", err)
-          }
-        }
-      ); 
-      
-      if let Err(err) = config_write_result {
-        exit_error_log(err.to_string());
+  let RootAndOperatingGraphs { graph_info_wrapper, .. } = get_project_graph_or_exit(&project_data_group);
+
+  let config_write_result: io::Result<()> = write_configurations(
+    &graph_info_wrapper,
+    |config_name| println!("\nBeginning {} configuration step...", config_name),
+    |(config_name, config_result)| match config_result {
+      Ok(_) => println!("{} configuration written successfully!", config_name),
+      Err(err) => {
+        println!("Writing {} configuration failed with error:", config_name);
+        println!("{:?}", err)
       }
     }
+  ); 
+  
+  if let Err(err) = config_write_result {
+    exit_error_log(err.to_string());
   }
   // print_project_info(project_data_group);
 }
