@@ -80,6 +80,9 @@ fn resolve_prebuild_script(project_root: &str, pre_build_config: &PreBuildConfig
 }
 
 pub struct UseableFinalProjectDataGroup {
+  // When determining root project, we don't traverse upward if the project is a GCMake dependency.
+  // Therefore it's safe to assume that 'operating_on' and 'root_project' will always be part of the
+  // same project tree.
   pub root_project: Rc<FinalProjectData>,
   pub operating_on: Option<Rc<FinalProjectData>>
 }
@@ -108,6 +111,8 @@ fn project_levels_below_root(clean_path_root: &str) -> io::Result<Option<usize>>
     path_using.pop();
     path_using.pop();
 
+    // Doesn't traverse up GCMake dependencies. This allows us to assume that the "root project"
+    // referenced elsewhere means the project root which contains the specified project directory.
     match path_using.file_name().unwrap().to_str().unwrap() {
       "subprojects" | "tests" => {
         path_using.pop();

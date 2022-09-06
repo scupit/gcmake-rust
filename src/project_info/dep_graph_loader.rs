@@ -1,6 +1,6 @@
 use std::{rc::Rc, cell::{RefCell, Ref}};
 
-use super::{final_project_data::{UseableFinalProjectDataGroup}, dependency_graph_mod::dependency_graph::{DependencyGraphInfoWrapper, DependencyGraph, GraphLoadFailureReason, TargetNode, OwningComplexTargetRequirement}, SystemSpecifierWrapper};
+use super::{final_project_data::{UseableFinalProjectDataGroup}, dependency_graph_mod::dependency_graph::{DependencyGraphInfoWrapper, DependencyGraph, GraphLoadFailureReason, TargetNode, OwningComplexTargetRequirement, DependencyGraphWarningMode}, SystemSpecifierWrapper};
 
 fn borrow_target<'a, 'b>(target_node: &'b Rc<RefCell<TargetNode<'a>>>) -> Ref<'b, TargetNode<'a>> {
   return target_node.as_ref().borrow();
@@ -12,8 +12,9 @@ fn borrow_project<'a, 'b>(project: &'b Rc<RefCell<DependencyGraph<'a>>>) -> Ref<
 
 pub fn load_graph(
   project_data: &UseableFinalProjectDataGroup,
+  warning_mode: DependencyGraphWarningMode
 ) -> Result<DependencyGraphInfoWrapper, String> {
-  match DependencyGraph::new_info_from_root(&project_data.root_project) {
+  match DependencyGraph::new_info_from_root(&project_data.root_project, warning_mode) {
     Ok(dep_graph_info) => {
       return Ok(dep_graph_info);
     },

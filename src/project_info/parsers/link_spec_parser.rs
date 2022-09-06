@@ -3,7 +3,7 @@ use regex::Regex;
 
 use super::{system_spec::platform_spec_parser::{SystemSpecifierWrapper, parse_leading_system_spec}, general_parser::ParseSuccess};
 
-use std::hash::{Hash, Hasher};
+use std::{hash::{Hash, Hasher}, collections::VecDeque};
 
 const NAMESPACE_SEPARATOR: &'static str = "::";
 
@@ -75,13 +75,20 @@ pub type LinkSpecTargetList = Vec<LinkSpecifierTarget>;
 #[derive(Clone)]
 pub struct LinkSpecifier {
   original_specifier_string: String,
-  namespace_stack: Vec<String>,
+  namespace_queue: VecDeque<String>,
   // target_list: Vec<String>,
   target_list: LinkSpecTargetList,
   access_mode: LinkAccessMode
 }
 
 impl LinkSpecifier {
+  pub fn join_some_namespace_queue(namespace_queue: &VecDeque<String>) -> String {
+    return namespace_queue.iter()
+      .map(|the_str| &the_str[..])
+      .collect::<Vec<&str>>()
+      .join("::");
+  }
+
   pub fn get_spec_string(&self) -> &str {
     &self.original_specifier_string
   }
@@ -94,8 +101,8 @@ impl LinkSpecifier {
     &self.target_list
   }
 
-  pub fn get_namespace_stack(&self) -> &Vec<String> {
-    &self.namespace_stack
+  pub fn get_namespace_queue(&self) -> &VecDeque<String> {
+    &self.namespace_queue
   }
 
   pub fn parse_with_full_permissions(link_spec: impl AsRef<str>) -> Result<Self, String> {
@@ -166,14 +173,14 @@ impl LinkSpecifier {
         return Self::parsing_error(&full_specifier_string, "At least one target must be provided.");
       }
 
-      let namespace_stack: Vec<String> = match Self::parse_namespace_list(&specifiers_only_str[..open_brace_index], true) {
+      let namespace_queue: VecDeque<String> = match Self::parse_namespace_list(&specifiers_only_str[..open_brace_index], true) {
         Ok(the_stack) => the_stack,
         Err(err) => return Self::parsing_error(&full_specifier_string, err.to_string())
       };
 
       return Ok(Self {
         original_specifier_string: full_specifier_string,
-        namespace_stack,
+        namespace_queue,
         target_list,
         access_mode
       });
@@ -184,37 +191,35 @@ impl LinkSpecifier {
         "There are no opening or closing braces"
       );
       
-      let mut namespace_stack: Vec<String> = match Self::parse_namespace_list(&specifiers_only_str, false) {
+      let mut namespace_queue: VecDeque<String> = match Self::parse_namespace_list(&specifiers_only_str, false) {
         Ok(the_stack) => the_stack,
         Err(err) => return Self::parsing_error(&full_specifier_string, err.to_string())
       };
 
       assert!(
-        !namespace_stack.is_empty(),
+        !namespace_queue.is_empty(),
         "Namespace stack should not be empty after parsing"
       );
 
-      if namespace_stack.len() == 1 {
+      if namespace_queue.len() == 1 {
         return Self::parsing_error(
           &full_specifier_string,
           format!(
             "Only the target name \"{}\" was given, but it's missing a namespace. Try namespacing the target name. Ex: \"some_project_name::{}\"",
-            namespace_stack[0],
-            namespace_stack[0]
+            namespace_queue[0],
+            namespace_queue[0]
           )
         )
       }
       
       let target_list: LinkSpecTargetList = vec![LinkSpecifierTarget {
-        name: namespace_stack.last().unwrap().to_string(),
+        name: namespace_queue.pop_back().unwrap().to_string(),
         system_spec_info: maybe_system_spec.unwrap_or_default()
       }];
 
-      namespace_stack.pop();
-
       return Ok(Self {
         original_specifier_string: full_specifier_string,
-        namespace_stack,
+        namespace_queue,
         target_list,
         access_mode
       })
@@ -274,7 +279,7 @@ impl LinkSpecifier {
   fn parse_namespace_list(
     namespace_list_str: &str,
     was_braced_target_list_already_parsed: bool
-  ) -> Result<Vec<String>, String> {
+  ) -> Result<VecDeque<String>, String> {
     let mut raw_split_results: Vec<&str> = namespace_list_str.split(NAMESPACE_SEPARATOR)
       .map(|split_result| split_result.trim())
       .collect();
@@ -288,7 +293,7 @@ impl LinkSpecifier {
       raw_split_results.pop();
     }
 
-    let mut valid_split_results: Vec<String> = Vec::new();
+    let mut valid_split_results: VecDeque<String> = VecDeque::new();
 
     for raw_namespace_string in raw_split_results {
       if raw_namespace_string.is_empty() {
@@ -297,7 +302,7 @@ impl LinkSpecifier {
         ))
       }
       else if VALID_SINGLE_ITEM_SPEC_REGEX.is_match(&raw_namespace_string) {
-        valid_split_results.push(raw_namespace_string.to_string());
+        valid_split_results.push_back(raw_namespace_string.to_string());
       }
       else {
         return Err(format!(

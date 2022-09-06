@@ -6,9 +6,9 @@ mod target_info_print_funcs;
 pub use create_project::*;
 pub use code_file_creator::*;
 pub use manage_dependencies::*;
-use std::{io, path::PathBuf, fs, cell::RefCell, rc::Rc};
+use std::{io, path::PathBuf, fs, cell::RefCell, rc::Rc, borrow::Borrow};
 
-use crate::{cli_config::{clap_cli_config::{UseFilesCommand, CreateFilesCommand, UpdateDependencyConfigsCommand, TargetInfoCommand}, CLIProjectGenerationInfo, CLIProjectTypeGenerating}, common::prompt::prompt_until_boolean, logger::exit_error_log, project_info::{raw_data_in::dependencies::internal_dep_config::AllRawPredefinedDependencies, final_project_data::{UseableFinalProjectDataGroup, ProjectLoadFailureReason, FinalProjectData, ProjectConstructorConfig}, path_manipulation::absolute_path, dep_graph_loader::load_graph, dependency_graph_mod::dependency_graph::{DependencyGraphInfoWrapper, DependencyGraph, TargetNode, BasicTargetSearchResult}, LinkSpecifier}, file_writers::write_configurations, project_generator::GeneralNewProjectInfo};
+use crate::{cli_config::{clap_cli_config::{UseFilesCommand, CreateFilesCommand, UpdateDependencyConfigsCommand, TargetInfoCommand}, CLIProjectGenerationInfo, CLIProjectTypeGenerating}, common::prompt::prompt_until_boolean, logger::exit_error_log, project_info::{raw_data_in::dependencies::internal_dep_config::AllRawPredefinedDependencies, final_project_data::{UseableFinalProjectDataGroup, ProjectLoadFailureReason, FinalProjectData, ProjectConstructorConfig}, path_manipulation::absolute_path, dep_graph_loader::load_graph, dependency_graph_mod::dependency_graph::{DependencyGraphInfoWrapper, DependencyGraph, TargetNode, BasicTargetSearchResult, DependencyGraphWarningMode}, LinkSpecifier, validators::is_valid_target_name}, file_writers::write_configurations, project_generator::GeneralNewProjectInfo};
 
 use self::target_info_print_funcs::{print_target_header, print_export_header_include_path};
 
@@ -46,14 +46,15 @@ fn get_project_info_or_exit(
 
 struct RootAndOperatingGraphs<'a> {
   graph_info_wrapper: DependencyGraphInfoWrapper<'a>,
-  root_graph: Rc<RefCell<DependencyGraph<'a>>>,
+  project_root_graph: Rc<RefCell<DependencyGraph<'a>>>,
   operating_on: Option<Rc<RefCell<DependencyGraph<'a>>>>
 }
 
 fn get_project_graph_or_exit<'a>(
-  project_group: &'a UseableFinalProjectDataGroup
+  project_group: &'a UseableFinalProjectDataGroup,
+  warning_mode: DependencyGraphWarningMode
 ) -> RootAndOperatingGraphs<'a> {
-  match load_graph(&project_group) {
+  match load_graph(&project_group, warning_mode) {
     Ok(graph_info) => {
       return RootAndOperatingGraphs {
         operating_on: project_group.operating_on
@@ -65,7 +66,7 @@ fn get_project_graph_or_exit<'a>(
               .find_using_project_data(&operatng_on_project)
               .unwrap()
           ),
-        root_graph: Rc::clone(&graph_info.root_dep_graph),
+        project_root_graph: Rc::clone(&graph_info.root_dep_graph),
         graph_info_wrapper: graph_info
       }
     },
@@ -87,7 +88,7 @@ pub fn print_target_info(
   let project_group: UseableFinalProjectDataGroup =
     get_project_info_or_exit(given_root_dir, dep_config, just_created_project_at);
  
-  let graph_info: RootAndOperatingGraphs = get_project_graph_or_exit(&project_group);
+  let graph_info: RootAndOperatingGraphs = get_project_graph_or_exit(&project_group, DependencyGraphWarningMode::Off);
 
   match &graph_info.operating_on {
     None => exit_error_log(format!(
@@ -98,10 +99,21 @@ pub fn print_target_info(
       let result_list: Vec<Vec<BasicTargetSearchResult>> = command.selectors
         .iter()
         .map(|selector| {
-          Ok(operating_on.as_ref().borrow().find_targets_using_link_spec(
-            false,
-            &LinkSpecifier::parse_with_full_permissions(selector)?
-          )?)
+          if is_valid_target_name(selector) {
+            // When using only the target name as a selector, just search from the project root.
+            // No need to restrict the search to subprojects here.
+            let search_result = graph_info.project_root_graph
+              .as_ref().borrow().find_targets_using_name_list(&vec![selector]);
+            Ok(search_result)
+          }
+          else {
+            let search_result = operating_on.as_ref().borrow().find_targets_using_link_spec(
+              false,
+              &LinkSpecifier::parse_with_full_permissions(selector)?
+            )?;
+
+            Ok(search_result)
+          }
         })
         .collect::<Result<_, String>>()
         .unwrap_or_else(|err_msg| exit_error_log(err_msg));
@@ -109,8 +121,15 @@ pub fn print_target_info(
       for list_from_selector in result_list {
         for search_result in list_from_selector {
           match search_result.target {
-            None => println!("{} not found", search_result.searched_with),
+            None => {
+              println!(
+                "\nTarget '{}' not found in project [{}]",
+                &search_result.target_name_searched,
+                search_result.searched_project.as_ref().borrow().project_name_for_error_messages()
+              );
+            },
             Some(target_rc) => {
+              // All data printing is done here.
               let target: &TargetNode = &target_rc.as_ref().borrow();
               print_target_header(target);
 
@@ -200,7 +219,10 @@ pub fn do_generate_project_configs(
   let project_data_group: UseableFinalProjectDataGroup =
     get_project_info_or_exit(&given_root_dir, &dep_config, just_created_project_at);
 
-  let RootAndOperatingGraphs { graph_info_wrapper, .. } = get_project_graph_or_exit(&project_data_group);
+  let RootAndOperatingGraphs { graph_info_wrapper, .. } = get_project_graph_or_exit(
+    &project_data_group,
+    DependencyGraphWarningMode::All
+  );
 
   let config_write_result: io::Result<()> = write_configurations(
     &graph_info_wrapper,

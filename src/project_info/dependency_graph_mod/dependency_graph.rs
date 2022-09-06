@@ -1,4 +1,4 @@
-use std::{cell::{RefCell}, rc::{Rc, Weak}, hash::{Hash, Hasher}, collections::{HashMap, HashSet}, borrow::Borrow};
+use std::{cell::{RefCell}, rc::{Rc, Weak}, hash::{Hash, Hasher}, collections::{HashMap, HashSet, VecDeque}, borrow::Borrow};
 
 use crate::project_info::{LinkMode, CompiledOutputItem, PreBuildScript, OutputItemLinks, final_project_data::FinalProjectData, final_dependencies::{FinalGCMakeDependency, FinalPredefinedDependencyConfig, GCMakeDependencyStatus, FinalRequirementSpecifier}, LinkSpecifier, FinalProjectType, parsers::{link_spec_parser::{LinkAccessMode, LinkSpecTargetList, LinkSpecifierTarget}, system_spec::platform_spec_parser::SystemSpecifierWrapper}};
 
@@ -6,7 +6,8 @@ use super::hash_wrapper::RcRefcHashWrapper;
 
 pub struct BasicTargetSearchResult<'a> {
   pub searched_with: String,
-  pub searched_from: Rc<RefCell<DependencyGraph<'a>>>,
+  pub target_name_searched: String,
+  pub searched_project: Rc<RefCell<DependencyGraph<'a>>>,
   pub target: Option<Rc<RefCell<TargetNode<'a>>>>
 }
 
@@ -544,6 +545,11 @@ pub struct DependencyGraphInfoWrapper<'a> {
   pub sorted_info: OrderedTargetInfo<'a>
 }
 
+pub enum DependencyGraphWarningMode {
+  All,
+  Off
+}
+
 // TODO: Allow predefined dependencies to influence target ordering. For instance, SFML
 // targets must be linked in a certain order to work. The SFML predefined configuration
 // should be allowed to specify that its 'window' target depends on 'system', and so on.
@@ -592,7 +598,8 @@ impl<'a> Eq for DependencyGraph<'a> { }
 
 impl<'a> DependencyGraph<'a> {
   pub fn new_info_from_root(
-    toplevel_project: &'a Rc<FinalProjectData>
+    toplevel_project: &'a Rc<FinalProjectData>,
+    warning_mode: DependencyGraphWarningMode
   ) -> Result<DependencyGraphInfoWrapper<'a>, GraphLoadFailureReason<'a>> {
     let mut target_id_counter: TargetId = 0;
     let mut toplevel_tree_id_counter: ProjectId = 0;
@@ -609,7 +616,7 @@ impl<'a> DependencyGraph<'a> {
       borrowed_graph.make_given_link_associations(&mut target_id_counter)?;
       borrowed_graph.make_auto_inner_project_link_associations()?;
       borrowed_graph.ensure_proper_predefined_dep_links()?;
-      borrowed_graph.ensure_valid_system_spec_links()?;
+      borrowed_graph.ensure_valid_system_spec_links(&warning_mode)?;
       borrowed_graph.ensure_no_duplicate_identifiers()?;
     }
 
@@ -759,7 +766,10 @@ impl<'a> DependencyGraph<'a> {
   }
 
   // TODO: Refactor all these as_ref()s and borrow()s a bit.
-  fn check_target_system_spec_links_are_valid(target: &Rc<RefCell<TargetNode<'a>>>) -> Result<(), GraphLoadFailureReason<'a>> {
+  fn check_target_system_spec_links_are_valid(
+    target: &Rc<RefCell<TargetNode<'a>>>,
+    warning_mode: &DependencyGraphWarningMode
+  ) -> Result<(), GraphLoadFailureReason<'a>> {
     for (_, link) in &target.as_ref().borrow().depends_on {
       let dependency: Rc<RefCell<TargetNode>> = Weak::upgrade(&link.target).unwrap();
 
@@ -783,17 +793,19 @@ impl<'a> DependencyGraph<'a> {
             format!("Current: {}", current_platform_spec_tree.to_string())
         };
 
-        println!("Warning: Platform-specific subset checks have not been implemented yet.");
-        println!(
-          "-- target '{}' in project '{}' links to '{}', which has a platform specifier '{}'. Please make sure the link to {} is prefixed with a platform specifier that is a subset of {}. {}",
-          target.as_ref().borrow().get_name(),
-          target.as_ref().borrow().container_project().as_ref().borrow().project_name_for_error_messages(),
-          dependency.as_ref().borrow().get_yaml_namespaced_target_name(),
-          dependency_spec_tree.to_string(),
-          dependency.as_ref().borrow().get_yaml_namespaced_target_name(),
-          dependency_spec_tree.to_string(),
-          current_platform_spec_str
-        );
+        if let DependencyGraphWarningMode::All = warning_mode {
+          println!("Warning: Platform-specific subset checks have not been implemented yet.");
+          println!(
+            "-- target '{}' in project '{}' links to '{}', which has a platform specifier '{}'. Please make sure the link to {} is prefixed with a platform specifier that is a subset of {}. {}",
+            target.as_ref().borrow().get_name(),
+            target.as_ref().borrow().container_project().as_ref().borrow().project_name_for_error_messages(),
+            dependency.as_ref().borrow().get_yaml_namespaced_target_name(),
+            dependency_spec_tree.to_string(),
+            dependency.as_ref().borrow().get_yaml_namespaced_target_name(),
+            dependency_spec_tree.to_string(),
+            current_platform_spec_str
+          );
+        }
       }
 
       // TODO: Re-enable these once I figure out the checking system.
@@ -829,29 +841,29 @@ impl<'a> DependencyGraph<'a> {
     Ok(())
   }
 
-  fn ensure_valid_system_spec_links(&self) -> Result<(), GraphLoadFailureReason<'a>> {
+  fn ensure_valid_system_spec_links(&self, warning_mode: &DependencyGraphWarningMode) -> Result<(), GraphLoadFailureReason<'a>> {
     for (_, predef_dep_graph) in &self.predefined_deps {
-      predef_dep_graph.as_ref().borrow().ensure_valid_system_spec_links()?;
+      predef_dep_graph.as_ref().borrow().ensure_valid_system_spec_links(warning_mode)?;
     }
 
     if let Some(pre_build_target) = &self.pre_build_wrapper {
-      Self::check_target_system_spec_links_are_valid(pre_build_target)?;
+      Self::check_target_system_spec_links_are_valid(pre_build_target, warning_mode)?;
     }
 
     for (_, target) in self.targets.borrow().iter() {
-      Self::check_target_system_spec_links_are_valid(target)?;
+      Self::check_target_system_spec_links_are_valid(target, warning_mode)?;
     }
 
     for (_, test_project) in &self.test_projects {
-      test_project.as_ref().borrow().ensure_valid_system_spec_links()?;
+      test_project.as_ref().borrow().ensure_valid_system_spec_links(warning_mode)?;
     }
 
     for (_, subproject_graph) in &self.subprojects {
-      subproject_graph.as_ref().borrow().ensure_valid_system_spec_links()?;
+      subproject_graph.as_ref().borrow().ensure_valid_system_spec_links(warning_mode)?;
     }
 
     for (_, gcmake_dep_graph) in &self.gcmake_deps {
-      gcmake_dep_graph.as_ref().borrow().ensure_valid_system_spec_links()?;
+      gcmake_dep_graph.as_ref().borrow().ensure_valid_system_spec_links(warning_mode)?;
     }
 
     Ok(())
@@ -1467,14 +1479,14 @@ impl<'a> DependencyGraph<'a> {
     let mut link_set: HashSet<Link> = HashSet::new();
 
     for link_spec in link_specs {
-      let mut namespace_stack: Vec<String> = link_spec.get_namespace_stack().clone();
+      let mut namespace_queue: VecDeque<String> = link_spec.get_namespace_queue().clone();
 
       let resolved_links: HashSet<Link> = self.resolve_namespace_helper(
         link_spec,
         target_container,
         mut_target_node,
         target_id_counter,
-        &mut namespace_stack,
+        &mut namespace_queue,
         link_spec.get_target_list(),
         link_mode,
         link_spec.get_access_mode(),
@@ -1511,13 +1523,13 @@ impl<'a> DependencyGraph<'a> {
     link_spec_container_target: &Rc<RefCell<TargetNode<'a>>>,
     mut_target_node: &mut TargetNode<'a>,
     target_id_counter: &mut i32,
-    namespace_stack: &mut Vec<String>,
+    namespace_queue: &mut VecDeque<String>,
     target_list: &LinkSpecTargetList,
     link_mode: &LinkMode,
     access_mode: &LinkAccessMode,
     is_outside_original_project_context: bool
   ) -> Result<HashSet<Link<'a>>, GraphLoadFailureReason<'a>> {
-    if namespace_stack.is_empty() {
+    if namespace_queue.is_empty() {
       let mut accumulated_link_set: HashSet<Link> = HashSet::new();
 
       for link_target_spec in target_list {
@@ -1539,7 +1551,7 @@ impl<'a> DependencyGraph<'a> {
     else {
       // Needed for namespace resolution because only the root project can define predefined_dependencies
       // and gcmake_dependencies.
-      let next_namespace: String = namespace_stack.pop().unwrap();
+      let next_namespace: String = namespace_queue.pop_front().unwrap();
 
       let next_graph: Rc<RefCell<DependencyGraph>>;
       let will_be_outside_original_project_context: bool;
@@ -1619,7 +1631,7 @@ impl<'a> DependencyGraph<'a> {
         link_spec_container_target,
         mut_target_node,
         target_id_counter,
-        namespace_stack,
+        namespace_queue,
         target_list,
         link_mode,
         access_mode,
@@ -1758,19 +1770,35 @@ impl<'a> DependencyGraph<'a> {
     return Ok(None);
   }
 
+  pub fn find_targets_using_name_list(
+    &self,
+    target_list: &Vec<impl AsRef<str>>
+  ) -> Vec<BasicTargetSearchResult<'a>> {
+    return target_list.iter()
+      .map(|target_name|
+        BasicTargetSearchResult {
+          target: self.get_target_in_current_namespace(target_name.as_ref()),
+          searched_project: Weak::upgrade(&self.current_graph_ref).unwrap(),
+          searched_with: target_name.as_ref().to_string(),
+          target_name_searched: target_name.as_ref().to_string()
+        }
+      )
+      .collect();
+  }
+
   pub fn find_targets_using_link_spec(
     &self,
     in_current_project_only: bool,
     link_spec: &LinkSpecifier
   ) -> Result<Vec<BasicTargetSearchResult<'a>>, String> {
     let mut found_targets: Vec<Option<Rc<RefCell<TargetNode>>>> = Vec::new();
-    let mut namespace_stack = link_spec.get_namespace_stack().clone();
-    let combined_stack_string: String = namespace_stack.join("::");
+    let mut namespace_queue = link_spec.get_namespace_queue().clone();
+    let combined_stack_string: String = LinkSpecifier::join_some_namespace_queue(&namespace_queue);
 
     self.find_targets_using_link_spec_helper(
       in_current_project_only,
       &mut found_targets,
-      &mut namespace_stack,
+      &mut namespace_queue,
       link_spec.get_target_list(),
       link_spec
     )?;
@@ -1778,14 +1806,19 @@ impl<'a> DependencyGraph<'a> {
     return Ok(
       found_targets.into_iter()
         .enumerate()
-        .map(|(index, target)| BasicTargetSearchResult {
-          target,
-          searched_from: Weak::upgrade(&self.current_graph_ref).unwrap(),
-          searched_with: format!(
-            "{}::{}",
-            combined_stack_string,
-            link_spec.get_target_list()[index].get_name()
-          )
+        .map(|(index, target)| {
+          let target_name_searched: String = link_spec.get_target_list()[index].get_name().to_string();
+
+          BasicTargetSearchResult {
+            target,
+            searched_project: Weak::upgrade(&self.current_graph_ref).unwrap(),
+            searched_with: format!(
+              "{}::{}",
+              combined_stack_string,
+              &target_name_searched
+            ),
+            target_name_searched
+          }
         })
         .collect()
     )
@@ -1795,22 +1828,22 @@ impl<'a> DependencyGraph<'a> {
     &self,
     in_current_project_only: bool,
     search_results: &mut Vec<Option<Rc<RefCell<TargetNode<'a>>>>>,
-    namespace_stack: &mut Vec<String>,
+    namespace_queue: &mut VecDeque<String>,
     target_list: &LinkSpecTargetList,
     whole_link_spec: &LinkSpecifier
   ) -> Result<(), String> {
-    if namespace_stack.is_empty() {
+    if namespace_queue.is_empty() {
       for target in target_list {
         search_results.push(self.get_target_in_current_namespace(target.get_name()))
       }
     }
     else {
-      match namespace_stack.pop().unwrap().as_str() {
+      match namespace_queue.pop_front().unwrap().as_str() {
         "self" => {
           self.find_targets_using_link_spec_helper(
             in_current_project_only,
             search_results,
-            namespace_stack,
+            namespace_queue,
             target_list,
             whole_link_spec
           )?;
@@ -1819,7 +1852,7 @@ impl<'a> DependencyGraph<'a> {
           self.root_project().as_ref().borrow().find_targets_using_link_spec_helper(
             in_current_project_only,
             search_results,
-            namespace_stack,
+            namespace_queue,
             target_list,
             whole_link_spec
           )?;
@@ -1829,7 +1862,7 @@ impl<'a> DependencyGraph<'a> {
             Weak::upgrade(parent_graph).unwrap().as_ref().borrow().find_targets_using_link_spec_helper(
               in_current_project_only,
               search_results,
-              namespace_stack,
+              namespace_queue,
               target_list,
               whole_link_spec
             )?;
@@ -1838,7 +1871,7 @@ impl<'a> DependencyGraph<'a> {
             return Err(format!(
               "Error while trying to resolve namespace '{}' ({}::) in [{}]:\n\t[{}] doesn't have a parent project.",
               namespace_ident,
-              whole_link_spec.get_namespace_stack().join("::"),
+              LinkSpecifier::join_some_namespace_queue(whole_link_spec.get_namespace_queue()),
               self.project_name_for_error_messages(),
               self.project_base_name()
             ));
@@ -1857,7 +1890,7 @@ impl<'a> DependencyGraph<'a> {
               return Err(format!(
                 "Error while trying to resolve namespace '{}' ({}::) in [{}]:\n\t'{}' points to a valid GCMake dependency project of the project root [{}], however the search is currently limited to outputs of [{}] (not dependencies).",
                 namespace_ident,
-                whole_link_spec.get_namespace_stack().join("::"),
+                LinkSpecifier::join_some_namespace_queue(whole_link_spec.get_namespace_queue()),
                 self.project_name_for_error_messages(),
                 namespace_ident,
                 &root_project_debug_name,
@@ -1872,7 +1905,7 @@ impl<'a> DependencyGraph<'a> {
               return Err(format!(
                 "Error while trying to resolve namespace '{}' ({}::) in [{}]:\n\t'{}' points to a valid predefined dependency project of the project root [{}], however the search is currently limited to outputs of [{}] (not dependencies).",
                 namespace_ident,
-                whole_link_spec.get_namespace_stack().join("::"),
+                LinkSpecifier::join_some_namespace_queue(whole_link_spec.get_namespace_queue()),
                 self.project_name_for_error_messages(),
                 namespace_ident,
                 &root_project_debug_name,
@@ -1885,7 +1918,7 @@ impl<'a> DependencyGraph<'a> {
             return Err(format!(
               "Error while trying to resolve namespace '{}' ({}::) in [{}]:\n\t- '{}' doesn't point to any existing subproject, test project, or dependency.",
               namespace_ident,
-              whole_link_spec.get_namespace_stack().join("::"),
+              LinkSpecifier::join_some_namespace_queue(whole_link_spec.get_namespace_queue()),
               self.project_name_for_error_messages(),
               namespace_ident
             ));
@@ -1894,7 +1927,7 @@ impl<'a> DependencyGraph<'a> {
           next_project_checking.as_ref().borrow().find_targets_using_link_spec_helper(
             in_current_project_only,
             search_results,
-            namespace_stack,
+            namespace_queue,
             target_list,
             whole_link_spec
           )?;
