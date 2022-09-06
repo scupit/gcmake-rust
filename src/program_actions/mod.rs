@@ -2,13 +2,14 @@ mod create_project;
 mod code_file_creator;
 mod manage_dependencies;
 mod target_info_print_funcs;
+mod project_info_print_funcs;
 
 pub use create_project::*;
 pub use code_file_creator::*;
 pub use manage_dependencies::*;
 use std::{io, path::PathBuf, fs, cell::RefCell, rc::Rc, borrow::Borrow};
 
-use crate::{cli_config::{clap_cli_config::{UseFilesCommand, CreateFilesCommand, UpdateDependencyConfigsCommand, TargetInfoCommand}, CLIProjectGenerationInfo, CLIProjectTypeGenerating}, common::prompt::prompt_until_boolean, logger::exit_error_log, project_info::{raw_data_in::dependencies::internal_dep_config::AllRawPredefinedDependencies, final_project_data::{UseableFinalProjectDataGroup, ProjectLoadFailureReason, FinalProjectData, ProjectConstructorConfig}, path_manipulation::absolute_path, dep_graph_loader::load_graph, dependency_graph_mod::dependency_graph::{DependencyGraphInfoWrapper, DependencyGraph, TargetNode, BasicTargetSearchResult, DependencyGraphWarningMode}, LinkSpecifier, validators::is_valid_target_name}, file_writers::write_configurations, project_generator::GeneralNewProjectInfo};
+use crate::{cli_config::{clap_cli_config::{UseFilesCommand, CreateFilesCommand, UpdateDependencyConfigsCommand, TargetInfoCommand, ProjectInfoCommand}, CLIProjectGenerationInfo, CLIProjectTypeGenerating}, common::prompt::prompt_until_boolean, logger::exit_error_log, project_info::{raw_data_in::dependencies::internal_dep_config::AllRawPredefinedDependencies, final_project_data::{UseableFinalProjectDataGroup, ProjectLoadFailureReason, FinalProjectData, ProjectConstructorConfig}, path_manipulation::absolute_path, dep_graph_loader::load_graph, dependency_graph_mod::dependency_graph::{DependencyGraphInfoWrapper, DependencyGraph, TargetNode, BasicTargetSearchResult, DependencyGraphWarningMode, BasicProjectSearchResult}, LinkSpecifier, validators::{is_valid_target_name, is_valid_project_name}}, file_writers::write_configurations, project_generator::GeneralNewProjectInfo, program_actions::project_info_print_funcs::{print_project_header, print_project_include_prefix, print_immediate_subprojects}};
 
 use self::target_info_print_funcs::{print_target_header, print_export_header_include_path};
 
@@ -90,53 +91,123 @@ pub fn print_target_info(
  
   let graph_info: RootAndOperatingGraphs = get_project_graph_or_exit(&project_group, DependencyGraphWarningMode::Off);
 
-  match &graph_info.operating_on {
-    None => exit_error_log(format!(
-      "Tried to print target data when operating on project at '{}', however the project could not be found.",
-      given_root_dir
-    )),
-    Some(operating_on) => {
-      let result_list: Vec<Vec<BasicTargetSearchResult>> = command.selectors
-        .iter()
-        .map(|selector| {
-          if is_valid_target_name(selector) {
-            // When using only the target name as a selector, just search from the project root.
-            // No need to restrict the search to subprojects here.
-            let search_result = graph_info.project_root_graph
-              .as_ref().borrow().find_targets_using_name_list(&vec![selector]);
-            Ok(search_result)
+  assert!(
+    graph_info.operating_on.is_some(),
+    "When printing target data, there should always be an 'operating on' context project."
+  );
+
+  let operating_on = graph_info.operating_on.as_ref().unwrap();
+  let result_list: Vec<Vec<BasicTargetSearchResult>> = command.selectors
+    .iter()
+    .map(|selector| {
+      if is_valid_target_name(selector) {
+        // When using only the target name as a selector, just search from the project root.
+        // No need to restrict the search to subprojects here.
+        let search_result = graph_info.project_root_graph
+          .as_ref().borrow().find_targets_using_name_list(&vec![selector]);
+        Ok(search_result)
+      }
+      else {
+        let search_result = operating_on.as_ref().borrow().find_targets_using_link_spec(
+          false,
+          &LinkSpecifier::parse_with_full_permissions(selector)?
+        )?;
+
+        Ok(search_result)
+      }
+    })
+    .collect::<Result<_, String>>()
+    .unwrap_or_else(|err_msg| exit_error_log(err_msg));
+
+  for list_from_selector in result_list {
+    for search_result in list_from_selector {
+      match search_result.target {
+        None => {
+          println!(
+            "\nUnable to find '{}' in project [{}]",
+            &search_result.searched_with,
+            search_result.searched_project.as_ref().borrow().project_debug_name()
+          );
+        },
+        Some(target_rc) => {
+          // All data printing is done here.
+          let target: &TargetNode = &target_rc.as_ref().borrow();
+          print_target_header(target);
+
+          if command.export_header {
+            print_export_header_include_path(target);
           }
-          else {
-            let search_result = operating_on.as_ref().borrow().find_targets_using_link_spec(
-              false,
-              &LinkSpecifier::parse_with_full_permissions(selector)?
-            )?;
+        }
+      }
+    }
+  }
+}
 
-            Ok(search_result)
+pub fn print_project_info(
+  command: &ProjectInfoCommand,
+  given_root_dir: &str,
+  dep_config: &AllRawPredefinedDependencies,
+  just_created_project_at: Option<String>
+) {
+  let selectors: Vec<String> = if command.selectors.is_empty()
+    { vec![String::from("self")] }
+    else { command.selectors.clone() };
+
+  let project_group: UseableFinalProjectDataGroup =
+    get_project_info_or_exit(given_root_dir, dep_config, just_created_project_at);
+ 
+  let graph_info: RootAndOperatingGraphs = get_project_graph_or_exit(&project_group, DependencyGraphWarningMode::Off);
+
+  assert!(
+    graph_info.operating_on.is_some(),
+    "When printing project data, there should always be an 'operating on' context project."
+  );
+
+  let operating_on = graph_info.operating_on.as_ref().unwrap();
+
+  let result_list: Vec<Vec<BasicProjectSearchResult>> = selectors
+    .iter()
+    .map(|selector| {
+      if is_valid_project_name(selector) {
+        // When using only the target name as a selector, just search from the project root.
+        // No need to restrict the search to subprojects here.
+        let search_result = operating_on
+          .as_ref().borrow().find_projects_using_name_list(&vec![selector])?;
+        Ok(search_result)
+      }
+      else {
+        let search_result = operating_on.as_ref().borrow().find_projects_using_link_spec(
+          false,
+          &LinkSpecifier::parse_with_full_permissions(selector)?
+        )?;
+
+        Ok(search_result)
+      }
+    })
+    .collect::<Result<_, String>>()
+    .unwrap_or_else(|err_msg| exit_error_log(err_msg));
+
+  for list_from_selector in result_list {
+    for search_result in list_from_selector {
+      match search_result.project {
+        None => {
+          println!(
+            "\nProject '{}' not found in project [{}] as a normal project or dependency.",
+            &search_result.project_name_searched,
+            search_result.searched_project.as_ref().borrow().project_debug_name()
+          );
+        },
+        Some(project_rc) => {
+          // All data printing is done here.
+          let project_graph: &DependencyGraph = &project_rc.as_ref().borrow();
+          print_project_header(project_graph);
+
+          if command.show_include_prefix {
+            print_project_include_prefix(project_graph);
           }
-        })
-        .collect::<Result<_, String>>()
-        .unwrap_or_else(|err_msg| exit_error_log(err_msg));
 
-      for list_from_selector in result_list {
-        for search_result in list_from_selector {
-          match search_result.target {
-            None => {
-              println!(
-                "\nTarget '{}' not found in project [{}]",
-                &search_result.target_name_searched,
-                search_result.searched_project.as_ref().borrow().project_name_for_error_messages()
-              );
-            },
-            Some(target_rc) => {
-              // All data printing is done here.
-              let target: &TargetNode = &target_rc.as_ref().borrow();
-              print_target_header(target);
-
-              if command.export_header {
-                print_export_header_include_path(target);
-              }
-            }
+          if command.show_subprojects {
+            print_immediate_subprojects(project_graph);
           }
         }
       }

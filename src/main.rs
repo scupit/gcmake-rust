@@ -129,6 +129,16 @@ fn main() {
           &dep_config,
           None
         );
+      },
+      SubCommandStruct::ProjectInfo(command) => {
+        should_generate_cmakelists = false;
+
+        print_project_info(
+          &command,
+          &given_root_dir,
+          &dep_config,
+          None
+        );
       }
       SubCommandStruct::DepConfig(_) => {
         unreachable!();

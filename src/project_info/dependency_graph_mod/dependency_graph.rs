@@ -11,6 +11,13 @@ pub struct BasicTargetSearchResult<'a> {
   pub target: Option<Rc<RefCell<TargetNode<'a>>>>
 }
 
+pub struct BasicProjectSearchResult<'a> {
+  pub searched_with: String,
+  pub project_name_searched: String,
+  pub searched_project: Rc<RefCell<DependencyGraph<'a>>>,
+  pub project: Option<Rc<RefCell<DependencyGraph<'a>>>>
+}
+
 #[derive(Clone)]
 pub enum SimpleNodeOutputType {
   Executable,
@@ -518,16 +525,16 @@ impl ProjectWrapper {
 
   pub fn unwrap_normal_project(self) -> Rc<FinalProjectData> {
     return match self.maybe_normal_project() {
-      Some(project_info) => project_info,
+      Some(project_info) => Rc::clone(project_info),
       None => panic!("Tried to unwrap a ProjectWrapper as a normal project, but the wrapper did not contain an available FinalProjectData.")
     }
   }
 
-  pub fn maybe_normal_project(self) -> Option<Rc<FinalProjectData>> {
+  pub fn maybe_normal_project(&self) -> Option<&Rc<FinalProjectData>> {
     return match self {
       Self::NormalProject(project_info) => Some(project_info),
       Self::GCMakeDependencyRoot(gcmake_dep) => match gcmake_dep.project_status() {
-        GCMakeDependencyStatus::Available(project_info) => Some(Rc::clone(project_info)),
+        GCMakeDependencyStatus::Available(project_info) => Some(project_info),
         GCMakeDependencyStatus::NotDownloaded(_) => None
       }
       _ => None
@@ -648,7 +655,7 @@ impl<'a> DependencyGraph<'a> {
     self.project_wrapper().base_name()
   }
 
-  pub fn project_name_for_error_messages(&self) -> &str {
+  pub fn project_debug_name(&self) -> &str {
     self.project_wrapper().name_for_error_messages()
   }
 
@@ -798,7 +805,7 @@ impl<'a> DependencyGraph<'a> {
           println!(
             "-- target '{}' in project '{}' links to '{}', which has a platform specifier '{}'. Please make sure the link to {} is prefixed with a platform specifier that is a subset of {}. {}",
             target.as_ref().borrow().get_name(),
-            target.as_ref().borrow().container_project().as_ref().borrow().project_name_for_error_messages(),
+            target.as_ref().borrow().container_project().as_ref().borrow().project_debug_name(),
             dependency.as_ref().borrow().get_yaml_namespaced_target_name(),
             dependency_spec_tree.to_string(),
             dependency.as_ref().borrow().get_yaml_namespaced_target_name(),
@@ -1267,7 +1274,7 @@ impl<'a> DependencyGraph<'a> {
       // for project targets to be ordered and checked for cycles correctly.
       for (_, project_output_rc) in self.targets.borrow().iter() {
         let project_output_target: &mut TargetNode = &mut project_output_rc.as_ref().borrow_mut();
-        let pre_build_name: String = self._project_wrapper.clone().maybe_normal_project()
+        let pre_build_name: String = self._project_wrapper.maybe_normal_project()
           .map(|project_info| project_info.prebuild_script_name())
           .unwrap_or(String::from("Pre-build script"));
 
@@ -1786,25 +1793,52 @@ impl<'a> DependencyGraph<'a> {
       .collect();
   }
 
+  pub fn find_projects_using_name_list(
+    &self,
+    project_list: &Vec<impl AsRef<str>>
+  ) -> Result<Vec<BasicProjectSearchResult<'a>>, String> {
+    return project_list.iter()
+      .map(|project_name| {
+        let project_search_result = self.get_project_in_current_namespace(project_name.as_ref(), true)?;
+
+        Ok(BasicProjectSearchResult {
+          project: project_search_result,
+          searched_project: Weak::upgrade(&self.current_graph_ref).unwrap(),
+          searched_with: project_name.as_ref().to_string(),
+          project_name_searched: project_name.as_ref().to_string()
+        })
+      })
+      .collect();
+  }
+
   pub fn find_targets_using_link_spec(
     &self,
     in_current_project_only: bool,
     link_spec: &LinkSpecifier
   ) -> Result<Vec<BasicTargetSearchResult<'a>>, String> {
-    let mut found_targets: Vec<Option<Rc<RefCell<TargetNode>>>> = Vec::new();
+    let mut search_results: Vec<Option<Rc<RefCell<TargetNode>>>> = Vec::new();
     let mut namespace_queue = link_spec.get_namespace_queue().clone();
     let combined_stack_string: String = LinkSpecifier::join_some_namespace_queue(&namespace_queue);
 
-    self.find_targets_using_link_spec_helper(
+    assert!(
+      !namespace_queue.is_empty(),
+      "When searching for targets using a link specifier, the namespace queue must contain at least one value."
+    );
+
+    let project_from_namespace = self.basic_namespace_resolve(
       in_current_project_only,
-      &mut found_targets,
       &mut namespace_queue,
-      link_spec.get_target_list(),
       link_spec
     )?;
 
+    for target in link_spec.get_target_list() {
+      search_results.push(
+        project_from_namespace.as_ref().borrow().get_target_in_current_namespace(target.get_name())
+      );
+    }
+
     return Ok(
-      found_targets.into_iter()
+      search_results.into_iter()
         .enumerate()
         .map(|(index, target)| {
           let target_name_searched: String = link_spec.get_target_list()[index].get_name().to_string();
@@ -1824,55 +1858,109 @@ impl<'a> DependencyGraph<'a> {
     )
   }
 
-  fn find_targets_using_link_spec_helper(
+  pub fn find_projects_using_link_spec(
     &self,
     in_current_project_only: bool,
-    search_results: &mut Vec<Option<Rc<RefCell<TargetNode<'a>>>>>,
-    namespace_queue: &mut VecDeque<String>,
-    target_list: &LinkSpecTargetList,
-    whole_link_spec: &LinkSpecifier
-  ) -> Result<(), String> {
-    if namespace_queue.is_empty() {
-      for target in target_list {
-        search_results.push(self.get_target_in_current_namespace(target.get_name()))
+    link_spec: &LinkSpecifier
+  ) -> Result<Vec<BasicProjectSearchResult<'a>>, String> {
+    let mut search_results: Vec<Option<Rc<RefCell<DependencyGraph<'a>>>>> = Vec::new();
+    let mut namespace_queue = link_spec.get_namespace_queue().clone();
+    let combined_stack_string: String = LinkSpecifier::join_some_namespace_queue(&namespace_queue);
+
+    assert!(
+      !namespace_queue.is_empty(),
+      "When searching for projects using a link specifier, the namespace queue must contain at least one value."
+    );
+
+    let project_resolving_from: Rc<RefCell<DependencyGraph<'a>>> = if in_current_project_only {
+      Weak::upgrade(&self.current_graph_ref).unwrap()
+    }
+    else {
+      let project_name: String = namespace_queue.pop_front().unwrap();
+
+      match self.get_project_in_current_namespace(&project_name, true)? {
+        Some(matching_project) => matching_project,
+        None => return Err(format!(
+          "Unable to find a subproject, test project, or dependency named '{}' associated with [{}]",
+          project_name,
+          self.project_debug_name()
+        ))
       }
+    };
+
+    let project_from_namespace = project_resolving_from.as_ref().borrow().basic_namespace_resolve(
+      true,
+      &mut namespace_queue,
+      link_spec
+    )?;
+
+    for target in link_spec.get_target_list() {
+      search_results.push(
+        project_from_namespace.as_ref().borrow().get_project_in_current_namespace(target.get_name(), false)?
+      );
+    }
+
+    return Ok(
+      search_results.into_iter()
+        .enumerate()
+        .map(|(index, project)| {
+          let project_name_searched: String = link_spec.get_target_list()[index].get_name().to_string();
+
+          BasicProjectSearchResult {
+            project,
+            searched_project: Weak::upgrade(&self.current_graph_ref).unwrap(),
+            searched_with: format!(
+              "{}::{}",
+              combined_stack_string,
+              &project_name_searched
+            ),
+            project_name_searched
+          }
+        })
+        .collect()
+    )
+  }
+
+
+  fn basic_namespace_resolve(
+    &self,
+    in_current_project_only: bool,
+    namespace_queue: &mut VecDeque<String>,
+    whole_link_spec: &LinkSpecifier
+  ) -> Result<Rc<RefCell<DependencyGraph<'a>>>, String> {
+    if namespace_queue.is_empty() {
+      return Ok(Weak::upgrade(&self.current_graph_ref).unwrap());
     }
     else {
       match namespace_queue.pop_front().unwrap().as_str() {
         "self" => {
-          self.find_targets_using_link_spec_helper(
+          return self.basic_namespace_resolve(
             in_current_project_only,
-            search_results,
             namespace_queue,
-            target_list,
             whole_link_spec
-          )?;
+          );
         },
         "root" => {
-          self.root_project().as_ref().borrow().find_targets_using_link_spec_helper(
+          return self.root_project().as_ref().borrow().basic_namespace_resolve(
             in_current_project_only,
-            search_results,
             namespace_queue,
-            target_list,
             whole_link_spec
-          )?;
+          );
         },
         namespace_ident @ ("super" | "parent") => match &self.parent {
           Some(parent_graph) => {
-            Weak::upgrade(parent_graph).unwrap().as_ref().borrow().find_targets_using_link_spec_helper(
+            return Weak::upgrade(parent_graph).unwrap().as_ref().borrow().basic_namespace_resolve(
               in_current_project_only,
-              search_results,
               namespace_queue,
-              target_list,
               whole_link_spec
-            )?;
+            );
           },
           None => {
             return Err(format!(
               "Error while trying to resolve namespace '{}' ({}::) in [{}]:\n\t[{}] doesn't have a parent project.",
               namespace_ident,
               LinkSpecifier::join_some_namespace_queue(whole_link_spec.get_namespace_queue()),
-              self.project_name_for_error_messages(),
+              self.project_debug_name(),
               self.project_base_name()
             ));
           }
@@ -1886,12 +1974,12 @@ impl<'a> DependencyGraph<'a> {
           }
           else if let Some(matching_gcmake_dep) = self.gcmake_deps.get(namespace_ident) {
             if in_current_project_only {
-              let root_project_debug_name: String = self.root_project().as_ref().borrow().project_name_for_error_messages().to_string();
+              let root_project_debug_name: String = self.root_project().as_ref().borrow().project_debug_name().to_string();
               return Err(format!(
                 "Error while trying to resolve namespace '{}' ({}::) in [{}]:\n\t'{}' points to a valid GCMake dependency project of the project root [{}], however the search is currently limited to outputs of [{}] (not dependencies).",
                 namespace_ident,
                 LinkSpecifier::join_some_namespace_queue(whole_link_spec.get_namespace_queue()),
-                self.project_name_for_error_messages(),
+                self.project_debug_name(),
                 namespace_ident,
                 &root_project_debug_name,
                 &root_project_debug_name
@@ -1901,12 +1989,12 @@ impl<'a> DependencyGraph<'a> {
           }
           else if let Some(matching_predef_dep) = self.predefined_deps.get(namespace_ident) {
             if in_current_project_only {
-              let root_project_debug_name: String = self.root_project().as_ref().borrow().project_name_for_error_messages().to_string();
+              let root_project_debug_name: String = self.root_project().as_ref().borrow().project_debug_name().to_string();
               return Err(format!(
                 "Error while trying to resolve namespace '{}' ({}::) in [{}]:\n\t'{}' points to a valid predefined dependency project of the project root [{}], however the search is currently limited to outputs of [{}] (not dependencies).",
                 namespace_ident,
                 LinkSpecifier::join_some_namespace_queue(whole_link_spec.get_namespace_queue()),
-                self.project_name_for_error_messages(),
+                self.project_debug_name(),
                 namespace_ident,
                 &root_project_debug_name,
                 &root_project_debug_name
@@ -1919,23 +2007,19 @@ impl<'a> DependencyGraph<'a> {
               "Error while trying to resolve namespace '{}' ({}::) in [{}]:\n\t- '{}' doesn't point to any existing subproject, test project, or dependency.",
               namespace_ident,
               LinkSpecifier::join_some_namespace_queue(whole_link_spec.get_namespace_queue()),
-              self.project_name_for_error_messages(),
+              self.project_debug_name(),
               namespace_ident
             ));
           };
 
-          next_project_checking.as_ref().borrow().find_targets_using_link_spec_helper(
+          return next_project_checking.as_ref().borrow().basic_namespace_resolve(
             in_current_project_only,
-            search_results,
             namespace_queue,
-            target_list,
             whole_link_spec
-          )?;
+          );
         }
       }
     }
-    
-    Ok(())
   }
 
   fn get_target_in_current_namespace(&self, target_name: &str) -> Option<Rc<RefCell<TargetNode<'a>>>> {
@@ -1962,8 +2046,65 @@ impl<'a> DependencyGraph<'a> {
     None
   }
 
+  fn get_project_in_current_namespace(
+    &self,
+    project_name: &str,
+    is_finding_initial_namespace: bool
+  ) -> Result<Option<Rc<RefCell<DependencyGraph<'a>>>>, String> {
+    if project_name == "self" {
+      return Ok(Some(Weak::upgrade(&self.current_graph_ref).unwrap()));
+    }
+
+    if is_finding_initial_namespace {
+      match project_name {
+        namespace_ident @ ("super" | "parent") => match &self.parent {
+          None => return Err(format!(
+            "Error resolving initial project '{}' in [{}]: [{}] doesn't have a parent project.",
+            namespace_ident,
+            self.project_debug_name(),
+            self.project_base_name()
+          )),
+          Some(parent_graph) => return Ok(Some(Weak::upgrade(parent_graph).unwrap()))
+        },
+        "root" => {
+          return Ok(Some(self.root_project()))
+        },
+        _ => ()
+      }
+    }
+
+    for (_, subproject_graph) in &self.subprojects {
+      let search_result = subproject_graph.as_ref().borrow().get_project_in_current_namespace(project_name, false)?;
+      if let Some(matching_project) = search_result {
+        return Ok(Some(matching_project));
+      }
+    }
+
+    for (_, test_project_graph) in &self.test_projects {
+      let search_result = test_project_graph.as_ref().borrow().get_project_in_current_namespace(project_name, false)?;
+      if let Some(matching_project) = search_result {
+        return Ok(Some(matching_project));
+      }
+    }
+
+    if is_finding_initial_namespace {
+      // Dependencies are only stored in the project root.
+      let project_root_rc = self.root_project();
+      let project_root = project_root_rc.as_ref().borrow();
+
+      if let Some(matching_project) = project_root.predefined_deps.get(project_name) {
+        return Ok(Some(Rc::clone(matching_project)));
+      }
+      else if let Some(matching_project) = project_root.gcmake_deps.get(project_name) {
+        return Ok(Some(Rc::clone(matching_project)));
+      }
+    }
+
+    Ok(None)
+  }
+
   pub fn find_using_project_data(&self, project_data: &Rc<FinalProjectData>) -> Option<Rc<RefCell<DependencyGraph<'a>>>> {
-    if let Some(normal_project) = self.project_wrapper().clone().maybe_normal_project() {
+    if let Some(normal_project) = self.project_wrapper().maybe_normal_project() {
       if normal_project.get_absolute_project_root() == project_data.get_absolute_project_root() {
         return Some(Weak::upgrade(&self.current_graph_ref).unwrap());
       }

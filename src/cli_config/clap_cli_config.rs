@@ -41,7 +41,8 @@ pub enum SubCommandStruct {
   UseFile(UseFilesCommand),
 
   /// Select and print information about project outputs and pre-build script.
-  TargetInfo(TargetInfoCommand)
+  TargetInfo(TargetInfoCommand),
+  ProjectInfo(ProjectInfoCommand)
 }
 
 #[derive(Subcommand)]
@@ -193,11 +194,30 @@ pub struct UseFilesCommand {
 #[derive(Args)]
 #[clap(setting = AppSettings::ColoredHelp)]
 pub struct TargetInfoCommand {
-  /// The file to copy, without the leading '.'
+  /// Select which targets to print info for. Can be in namespace format 'self::the-target'
+  /// 'some-project::{ first-target, second-target }', or just a lone target name
+  /// 'the-target'. Lone target names only select from targets in the project tree,
+  /// but namespaces are able to select dependency targets as well.
   #[clap(required = true)]
   pub selectors: Vec<String>,
 
   /// Print the include path of the auto-generated export header
   #[clap(short = 'e')]
   pub export_header: bool
+}
+
+#[derive(Args)]
+#[clap(setting = AppSettings::ColoredHelp)]
+pub struct ProjectInfoCommand {
+  /// Select which projects to print info for 
+  #[clap(required = false)]
+  pub selectors: Vec<String>,
+
+  /// Print the project's full include prefix
+  #[clap(short = 'i')]
+  pub show_include_prefix: bool,
+
+  /// List immediate subprojects
+  #[clap(short = 's')]
+  pub show_subprojects: bool,
 }

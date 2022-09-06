@@ -28,7 +28,7 @@ pub fn load_graph(
           "Link specifier '{}' from target '{}' in project '{}' points to an invalid or nonexistent project.",
           link_spec.get_spec_string(),
           borrowed_target.get_name(),
-          borrow_project(&project).project_name_for_error_messages()
+          borrow_project(&project).project_debug_name()
         ));
       },
       GraphLoadFailureReason::LinkNestedNamespaceInOtherProjectContext { target, project, link_spec } => {
@@ -38,7 +38,7 @@ pub fn load_graph(
           "Link specifier '{}' from target '{}' in project '{}' tries to access nested namespaces in a dependency project, which is forbidden.",
           link_spec.get_spec_string(),
           borrowed_target.get_name(),
-          borrow_project(&project).project_name_for_error_messages()
+          borrow_project(&project).project_debug_name()
         ));
       },
       GraphLoadFailureReason::LinkTargetNotFound { target, target_container_project, looking_in_project, link_spec, name_searching } => {
@@ -47,10 +47,10 @@ pub fn load_graph(
         return wrap_error_msg(format!(
           "Unable to find target '{}' in project '{}'.\n\tUsing link specifier '{}' from target '{}' in project '{}'.",
           name_searching,
-          borrow_project(&looking_in_project).project_name_for_error_messages(),
+          borrow_project(&looking_in_project).project_debug_name(),
           link_spec.get_spec_string(),
           borrowed_target.get_name(),
-          borrow_project(&target_container_project).project_name_for_error_messages()
+          borrow_project(&target_container_project).project_debug_name()
         ));
       },
       GraphLoadFailureReason::DependencyCycle(mut cycle_vec) => {
@@ -65,7 +65,7 @@ pub fn load_graph(
           .iter()
           .map(|cycle| format!(
             "{}::{}",
-            borrow_project(&cycle.project).project_name_for_error_messages(),
+            borrow_project(&cycle.project).project_debug_name(),
             borrow_target(&cycle.target).get_name()
           ))
           .collect::<Vec<String>>()
@@ -80,7 +80,7 @@ pub fn load_graph(
         return wrap_error_msg(format!(
           "Target '{}' in project '{}' tries to link to itself.",
           target_name,
-          borrow_project(&project).project_name_for_error_messages()
+          borrow_project(&project).project_debug_name()
         ));
       },
       GraphLoadFailureReason::AccessNotAllowed {
@@ -96,9 +96,9 @@ pub fn load_graph(
           "Link specifier '{}' from target '{}' in project '{}' points points to a target '{}' which exists in project '{}', but cannot be linked to. The target is either an executable or an internally created target.",
           link_spec.get_spec_string(),
           borrow_target(link_spec_container_target).get_name(),
-          borrow_project(&link_spec_container_project).project_name_for_error_messages(),
+          borrow_project(&link_spec_container_project).project_debug_name(),
           borrow_target(target).get_name(),
-          borrow_project(&target_project).project_name_for_error_messages()
+          borrow_project(&target_project).project_debug_name()
         ));
       },
       GraphLoadFailureReason::WrongUserGivenPredefLinkMode {
@@ -112,10 +112,10 @@ pub fn load_graph(
         return wrap_error_msg(format!(
           "In target '{}' in project '{}':\n A {} link is specified to target '{}' in project '{}', however it should be linked as {}.",
           borrow_target(target).get_name(),
-          borrow_project(&target_project).project_name_for_error_messages(),
+          borrow_project(&target_project).project_debug_name(),
           current_link_mode.to_str(),
           borrow_target(dependency).get_name(),
-          borrow_project(&dependency_project).project_name_for_error_messages(),
+          borrow_project(&dependency_project).project_debug_name(),
           needed_link_mode.to_str()
         ));
       },
@@ -130,11 +130,11 @@ pub fn load_graph(
         return wrap_error_msg(format!(
           "Target '{}' in project '{}' specifies both a {} and {} link to target '{}' in project '{}'. Links to a target should only be specified in one category.",
           link_receiver_name,
-          borrow_project(&link_receiver_project).project_name_for_error_messages(),
+          borrow_project(&link_receiver_project).project_debug_name(),
           current_link_mode.to_str(),
           attempted_link_mode.to_str(),
           link_giver_name,
-          borrow_project(&link_giver_project).project_name_for_error_messages()
+          borrow_project(&link_giver_project).project_debug_name()
         ));
       },
       GraphLoadFailureReason::ComplexTargetRequirementNotSatisfied {
@@ -147,7 +147,7 @@ pub fn load_graph(
         let base_message: String = format!(
           "Target '{}' in project '{}' failed to satisfy a requirement of its linked dependency target '{}':\n\t",
           borrow_target(target).get_name(),
-          borrow_project(target_project).project_name_for_error_messages(),
+          borrow_project(target_project).project_debug_name(),
           borrow_target(dependency).get_yaml_namespaced_target_name()
         );
 
@@ -166,7 +166,7 @@ pub fn load_graph(
             format!(
               "The target must link to one of: ({}) from '{}'",
               target_list_str,
-              borrow_project(dependency_project).project_name_for_error_messages()
+              borrow_project(dependency_project).project_debug_name()
             )
           },
           OwningComplexTargetRequirement::ExclusiveFrom(excluded_target) => {
@@ -174,7 +174,7 @@ pub fn load_graph(
               "The target links to both '{}' and '{}' from '{}', but '{}' and '{}' are mutually exclusive. You can link to one or the other, but not both at once.",
               borrow_target(dependency).get_name(),
               borrow_target(excluded_target).get_name(),
-              borrow_project(dependency_project).project_name_for_error_messages(),
+              borrow_project(dependency_project).project_debug_name(),
               borrow_target(dependency).get_yaml_namespaced_target_name(),
               borrow_target(excluded_target).get_yaml_namespaced_target_name()
             )
@@ -192,7 +192,7 @@ pub fn load_graph(
         return wrap_error_msg(format!(
           "Target '{}' from project '{}' specifies multiple links to '{}'. Please remove any duplicate links.",
           borrow_target(link_spec_container_target).get_name(),
-          borrow_project(dependency_project).project_name_for_error_messages(),
+          borrow_project(dependency_project).project_debug_name(),
           borrow_target(dependency).get_yaml_namespaced_target_name(),
         ));
       },
@@ -231,7 +231,7 @@ pub fn load_graph(
         return wrap_error_msg(format!(
           "Target '{}' in project '{}' links to dependency '{}' on {}{}{}, but '{}' is only supported on {}.",
           borrow_target(link_spec_container_target).get_name(),
-          borrow_project(link_spec_container_project).project_name_for_error_messages(),
+          borrow_project(link_spec_container_project).project_debug_name(),
           borrowed_dependency.get_yaml_namespaced_target_name(),
           systems_string(&link_target_spec_info),
           link_spec_str,
@@ -250,7 +250,7 @@ pub fn load_graph(
           "Target '{}' on {} in project '{}' links on {} to dependency '{}', which is available on {}. This association is impossible.",
           borrow_target(target).get_name(),
           systems_string(borrow_target(target).get_system_spec_info()),
-          borrow_project(target_container_project).project_name_for_error_messages(),
+          borrow_project(target_container_project).project_debug_name(),
           systems_string(link_system_spec_info),
           borrow_target(dependency).get_yaml_namespaced_target_name(),
           systems_string(borrow_target(dependency).get_system_spec_info())
@@ -264,10 +264,10 @@ pub fn load_graph(
       } => {
         return wrap_error_msg(format!(
           "Duplicate CMake identifiers detected:\n\t[{}::{}] == \"{}\"\n\t[{}::{}] == \"{}\"",
-          borrow_project(target1_project).project_name_for_error_messages(),
+          borrow_project(target1_project).project_debug_name(),
           borrow_target(target1).get_name(),
           borrow_target(target1).get_cmake_target_base_name(),
-          borrow_project(target2_project).project_name_for_error_messages(),
+          borrow_project(target2_project).project_debug_name(),
           borrow_target(target2).get_name(),
           borrow_target(target2).get_cmake_target_base_name(),
         ))
@@ -280,10 +280,10 @@ pub fn load_graph(
       } => {
         return wrap_error_msg(format!(
           "Duplicate config identifiers detected:\n\t[{}::{}] == \"{}\"\n\t[{}::{}] == \"{}\"",
-          borrow_project(target1_project).project_name_for_error_messages(),
+          borrow_project(target1_project).project_debug_name(),
           borrow_target(target1).get_name(),
           borrow_target(target1).get_name(),
-          borrow_project(target2_project).project_name_for_error_messages(),
+          borrow_project(target2_project).project_debug_name(),
           borrow_target(target2).get_name(),
           borrow_target(target2).get_name(),
         ))
@@ -294,9 +294,9 @@ pub fn load_graph(
       } => {
         return wrap_error_msg(format!(
           "Duplicate root project names detected:\n\t[{}] == \"{}\"\n\t[{}] == \"{}\"",
-          borrow_project(project1).project_name_for_error_messages(),
+          borrow_project(project1).project_debug_name(),
           borrow_project(project1).project_base_name(),
-          borrow_project(project2).project_name_for_error_messages(),
+          borrow_project(project2).project_debug_name(),
           borrow_project(project2).project_base_name()
         ))
       },
@@ -306,9 +306,9 @@ pub fn load_graph(
       } => {
         return wrap_error_msg(format!(
           "Subproject name overlaps dependency name, which could create linking ambiguity issues.\n\tSubproject: [{}] == \"{}\"\n\tDependency: [{}] == \"{}\"",
-          borrow_project(subproject).project_name_for_error_messages(),
+          borrow_project(subproject).project_debug_name(),
           borrow_project(subproject).project_base_name(),
-          borrow_project(dependency_project).project_name_for_error_messages(),
+          borrow_project(dependency_project).project_debug_name(),
           borrow_project(dependency_project).project_base_name()
         ))
       }
