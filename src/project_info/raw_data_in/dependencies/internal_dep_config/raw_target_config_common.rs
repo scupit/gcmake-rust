@@ -18,4 +18,4 @@ pub struct RawTargetConfig {
 
 pub type RawPredefinedTargetMapIn = HashMap<String, RawTargetConfig>;
 
-pub type RawMutualExclusionSet = HashSet<String>;
+pub type RawMutualExclusionSet = Vec<HashSet<String>>;

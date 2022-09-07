@@ -150,13 +150,11 @@ pub fn make_final_target_config_map(
   }
 
   if let Some(mutual_exclusion_specs) = dep_info.maybe_mutual_exclusion_groups() {
-    for exclusion_spec in mutual_exclusion_specs {
-      let exclusion_group: HashSet<String> = parse_mutual_exclusion(exclusion_spec);
-
+    for exclusion_group in mutual_exclusion_specs {
       let maybe_err_msg: Option<String> = verify_exclusion_spec(
-        &exclusion_group,
+        exclusion_group,
         &raw_target_config_map_with_parsed_names,
-        exclusion_spec,
+        &exclusion_set_string(exclusion_group),
         dep_name
       );
 
@@ -164,10 +162,10 @@ pub fn make_final_target_config_map(
         return Err(err_msg);
       }
 
-      for lib_name in &exclusion_group {
+      for lib_name in exclusion_group {
         let target_config: &mut FinalTargetConfig = final_map.get_mut(lib_name).unwrap();
 
-        for other_lib_name in &exclusion_group {
+        for other_lib_name in exclusion_group {
           if lib_name != other_lib_name {
             target_config.requirements_set.insert(
               FinalRequirementSpecifier::new_exclusive(other_lib_name.to_string())
@@ -258,9 +256,12 @@ fn parse_specifier(spec_str: &str) -> HashSet<String> {
     .collect();
 }
 
-fn parse_mutual_exclusion(exclusion_str: &str) -> HashSet<String> {
-  return exclusion_str.split(',')
-    .map(|lib_name| lib_name.trim().to_string())
-    .filter(|lib_name| !lib_name.is_empty())
-    .collect();
+fn exclusion_set_string(exclusion_set: &HashSet<String>) -> String {
+  let name_list: String = exclusion_set
+    .iter()
+    .map(|the_str| &the_str[..])
+    .collect::<Vec<&str>>()
+    .join(", ");
+
+  return format!("[{}]", name_list);
 }
