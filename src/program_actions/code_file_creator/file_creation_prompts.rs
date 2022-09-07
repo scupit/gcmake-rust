@@ -1,12 +1,11 @@
 use std::io;
 
-use crate::common::prompt::{prompt_once, prompt_until, PromptResult};
+use crate::{common::prompt::{prompt_once, prompt_until_satisfies_or_default}, project_info::validators::is_valid_relative_code_file_path};
 
 pub fn prompt_for_initial_compiled_lib_file_pair_name(project_name: &str) -> io::Result<String> {
-  let default_value: String = format!("{}Impl", project_name);
-
-  return match prompt_once(&format!("Initial file pair name [{}]: ", default_value))? {
-    PromptResult::Custom(value) => Ok(value),
-    _ => Ok(default_value)
-  }
+  return prompt_until_satisfies_or_default(
+    "Initial file pair name",
+    is_valid_relative_code_file_path,
+    format!("{}Impl", project_name) 
+  );
 }

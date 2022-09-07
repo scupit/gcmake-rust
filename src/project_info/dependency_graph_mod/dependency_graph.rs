@@ -789,7 +789,8 @@ impl<'a> DependencyGraph<'a> {
       //   dependency.as_ref().borrow().system_specifier_info.explicit_name_list()
       // );
 
-      let target_systems: SystemSpecifierWrapper = target.as_ref().borrow().system_specifier_info.clone();
+      // NOTE: Keep this var. It will be used when system-specifier validation checks have been implemented.
+      // let target_systems: SystemSpecifierWrapper = target.as_ref().borrow().system_specifier_info.clone();
       let link_systems: SystemSpecifierWrapper = link.system_spec_info.clone();
       let dependency_systems: SystemSpecifierWrapper = dependency.as_ref().borrow().system_specifier_info.clone();
 

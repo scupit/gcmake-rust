@@ -11,6 +11,7 @@ pub mod configuration {
     Cpp
   }
 
+  #[derive(Clone)]
   pub enum OutputLibType {
     Static,
     Shared,
@@ -27,6 +28,7 @@ pub mod configuration {
     }
   }
 
+  #[derive(Clone)]
   pub enum CreationProjectOutputType {
     Library(OutputLibType),
     Executable

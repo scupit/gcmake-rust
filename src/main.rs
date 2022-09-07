@@ -74,6 +74,7 @@ fn main() {
 
           if let CreationProjectOutputType::Library(lib_type) = new_project_info.project_output_type {
             if lib_type.is_compiled_lib() {
+              println!();
               let new_file_name: String = match prompt_for_initial_compiled_lib_file_pair_name(&new_project_info.project.name) {
                 Err(io_err) => exit_error_log(io_err.to_string()),
                 Ok(relative_name) => relative_name

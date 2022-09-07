@@ -9,7 +9,7 @@ use serde::Serialize;
 
 use std::{fs::{File, remove_dir_all, create_dir_all, self}, io::{self, ErrorKind}, path::{Path, PathBuf}};
 
-use crate::{program_actions::{ProjectTypeCreating, gcmake_config_root_dir}, common::prompt::{prompt_until_boolean, PromptResult, prompt_once}, project_info::{base_include_prefix_for_test, gcmake_constants::{SRC_DIR, INCLUDE_DIR, TEMPLATE_IMPL_DIR, ASSETS_DIR, SUBPROJECTS_DIR, TESTS_DIR}}, project_generator::{project_generator_prompts::{prompt_for_project_output_type, prompt_for_language, prompt_for_vendor, prompt_for_description, prompt_for_needs_custom_main}, c_file_generation::generate_c_main, cpp_file_generation::{generate_cpp_main, TestMainInitInfo}}};
+use crate::{program_actions::{ProjectTypeCreating, gcmake_config_root_dir}, common::prompt::{prompt_until_boolean, prompt_until_satisfies_or_default}, project_info::{base_include_prefix_for_test, gcmake_constants::{SRC_DIR, INCLUDE_DIR, TEMPLATE_IMPL_DIR, ASSETS_DIR, SUBPROJECTS_DIR, TESTS_DIR}, validators::{is_valid_project_name, is_valid_base_include_prefix}}, project_generator::{project_generator_prompts::{prompt_for_project_output_type, prompt_for_language, prompt_for_vendor, prompt_for_description, prompt_for_needs_custom_main}, c_file_generation::generate_c_main, cpp_file_generation::{generate_cpp_main, TestMainInitInfo}}};
 
 pub struct GeneralNewProjectInfo {
   pub project: CreatedProject,
@@ -38,7 +38,7 @@ pub fn create_project_at(
   let mut should_create_project: bool = true;
 
   if project_root.is_dir() {
-    let prompt = format!("Directory {} already exists. Overwrite it? (y or n): ", new_project_root);
+    let prompt = format!("Directory {} already exists. Overwrite it?", new_project_root);
 
     if prompt_until_boolean(&prompt)? {
       remove_dir_all(project_root)?;
@@ -70,9 +70,11 @@ pub fn create_project_at(
       .to_uppercase()
       .replace("-", "_");
 
-    let include_prefix: String = prompt_once(
-      &format!("include prefix ({}): ", &default_prefix)
-    )?.unwrap_or(default_prefix);
+    let include_prefix: String = prompt_until_satisfies_or_default(
+      "Include prefix",
+      is_valid_base_include_prefix,
+      &default_prefix
+    )?;
 
     let folder_generation_include_prefix: String = match &project_type_creating {
       ProjectTypeCreating::RootProject => include_prefix.clone(),
