@@ -129,8 +129,9 @@ impl PredefinedSubdirDep {
     return Ok(
       Self {
         git_repo: FinalGitRepoDescriptor {
-          repo_url: subdir_dep.git_repo.repo_url.clone(),
-          revision_specifier
+          revision_specifier,
+          repo_url: user_given_config.repo_url.clone()
+            .unwrap_or(subdir_dep.git_repo.repo_url.clone())
         },
         installed_include_dir_name: subdir_dep.installed_include_dir_name.clone(),
         config_file_project_name: subdir_dep.config_file_project_name.clone(),

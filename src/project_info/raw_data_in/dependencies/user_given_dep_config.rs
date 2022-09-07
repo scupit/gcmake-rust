@@ -4,7 +4,8 @@ use serde::{Serialize, Deserialize};
 #[serde(deny_unknown_fields)]
 pub struct UserGivenPredefinedDependencyConfig {
   pub git_tag: Option<String>,
-  pub commit_hash: Option<String>
+  pub commit_hash: Option<String>,
+  pub repo_url: Option<String>
 }
 
 #[derive(Serialize, Deserialize, Debug)]

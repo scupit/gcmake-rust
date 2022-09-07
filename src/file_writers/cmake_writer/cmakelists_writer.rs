@@ -1,6 +1,6 @@
 use std::{collections::{HashMap, HashSet}, fs::File, io::{self, Write, ErrorKind}, path::{PathBuf, Path}, rc::Rc, cell::{RefCell, Ref}};
 
-use crate::{project_info::{final_project_data::{FinalProjectData}, path_manipulation::{cleaned_path_str, relative_to_project_root}, final_dependencies::{GitRevisionSpecifier, PredefinedCMakeComponentsModuleDep, PredefinedSubdirDep, PredefinedCMakeModuleDep, FinalPredepInfo, GCMakeDependencyStatus, FinalPredefinedDependencyConfig}, raw_data_in::{BuildType, RawBuildConfig, BuildConfigCompilerSpecifier, SpecificCompilerSpecifier, OutputItemType, LanguageConfigMap, TargetSpecificBuildType, dependencies::internal_dep_config::{CMakeModuleType}, DefaultCompiledLibType}, FinalProjectType, CompiledOutputItem, PreBuildScript, LinkMode, FinalTestFramework, dependency_graph_mod::dependency_graph::{DependencyGraph, OrderedTargetInfo, ProjectWrapper, TargetNode, SimpleNodeOutputType, Link}, SystemSpecifierWrapper, SingleSystemSpec, CompilerDefine, FinalBuildConfig, CompilerFlag, LinkerFlag}, file_writers::cmake_writer::cmake_writer_helpers::system_constraint_expression};
+use crate::{project_info::{final_project_data::{FinalProjectData}, path_manipulation::{cleaned_path_str, relative_to_project_root}, final_dependencies::{GitRevisionSpecifier, PredefinedCMakeComponentsModuleDep, PredefinedSubdirDep, PredefinedCMakeModuleDep, FinalPredepInfo, GCMakeDependencyStatus, FinalPredefinedDependencyConfig, encoded_repo_url}, raw_data_in::{BuildType, RawBuildConfig, BuildConfigCompilerSpecifier, SpecificCompilerSpecifier, OutputItemType, LanguageConfigMap, TargetSpecificBuildType, dependencies::internal_dep_config::{CMakeModuleType}, DefaultCompiledLibType}, FinalProjectType, CompiledOutputItem, PreBuildScript, LinkMode, FinalTestFramework, dependency_graph_mod::dependency_graph::{DependencyGraph, OrderedTargetInfo, ProjectWrapper, TargetNode, SimpleNodeOutputType, Link}, SystemSpecifierWrapper, SingleSystemSpec, CompilerDefine, FinalBuildConfig, CompilerFlag, LinkerFlag}, file_writers::cmake_writer::cmake_writer_helpers::system_constraint_expression};
 
 use super::cmake_utils_writer::{CMakeUtilFile, CMakeUtilWriter};
 
@@ -894,14 +894,16 @@ impl<'a> CMakeListsWriter<'a> {
       }
     };
 
+    let hashed_cache_dep_dir: String = format!("{}/{}", dep_name, encoded_repo_url(repo_url));
+
     writeln!(&self.cmakelists_file,
       "if( NOT IS_DIRECTORY \"${{GCMAKE_DEP_CACHE_DIR}}/{}\" )",
-      dep_name
+      hashed_cache_dep_dir
     )?;
     writeln!(&self.cmakelists_file,
       "\tFetchContent_Declare(\n\t\tgcmake_cached_{}\n\t\tSOURCE_DIR \"${{GCMAKE_DEP_CACHE_DIR}}/{}\"\n\t\tGIT_REPOSITORY {}\n\t\t{}\n\t\tGIT_PROGRESS TRUE\n\t\tGIT_SHALLOW FALSE\n\t\tGIT_SUBMODULES_RECURSE TRUE\n\t)",
       dep_name,
-      dep_name,
+      hashed_cache_dep_dir,
       repo_url,
       git_revision_spec
     )?;
@@ -916,7 +918,7 @@ impl<'a> CMakeListsWriter<'a> {
       "FetchContent_Declare(\n\t{}\n\tSOURCE_DIR ${{CMAKE_CURRENT_SOURCE_DIR}}/dep/{}\n\tGIT_REPOSITORY \"${{GCMAKE_DEP_CACHE_DIR}}/{}\"\n\t{}\n\tGIT_PROGRESS TRUE\n\tGIT_SUBMODULES_RECURSE TRUE\n)",
       dep_name,
       dep_name,
-      dep_name,
+      hashed_cache_dep_dir,
       git_revision_spec
     )?;
     

@@ -7,6 +7,7 @@ mod final_target_map_common;
 
 use std::{rc::Rc, collections::HashSet};
 
+use base64ct::{Base64Url, Encoding};
 pub use final_predefined_subdir_dep::*;
 pub use final_predefined_cmake_components_module_dep::*;
 pub use final_gcmake_project_dep::*;
@@ -16,6 +17,10 @@ pub use final_target_map_common::FinalRequirementSpecifier;
 use self::{predep_module_common::PredefinedDepFunctionality, final_target_map_common::FinalTargetConfigMap};
 
 use super::raw_data_in::dependencies::{internal_dep_config::{AllRawPredefinedDependencies, RawPredefinedDependencyInfo, PredefinedCMakeDepHookFile, RawSubdirectoryDependency}, user_given_dep_config::UserGivenPredefinedDependencyConfig};
+
+pub fn encoded_repo_url(repo_url: &str) -> String{
+  return Base64Url::encode_string(repo_url.as_bytes());
+}
 
 type HookScriptContainer = Option<Rc<PredefinedCMakeDepHookFile>>;
 
