@@ -56,4 +56,8 @@ impl RawPredepCommon for RawComponentsModuleDep {
   fn raw_target_map_in(&self) -> &RawPredefinedTargetMapIn {
     &self.components
   }
+
+  fn repo_url(&self) -> Option<&str> {
+    None
+  }
 }

@@ -12,7 +12,7 @@ pub struct NamespaceConfig {
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct GitRepoConfig {
+pub struct RawSubdirDepGitRepoConfig {
   pub repo_url: String
 }
 
@@ -31,7 +31,7 @@ pub struct RawSubdirectoryDependency {
   // Name of the directory the project is installed to. The directory name should be the name
   // of the project the 
   pub config_file_project_name: Option<String>,
-  pub git_repo: GitRepoConfig,
+  pub git_repo: RawSubdirDepGitRepoConfig,
   pub target_configs: RawPredefinedTargetMapIn,
   pub mutually_exclusive: Option<RawMutualExclusionSet>,
 
@@ -53,5 +53,9 @@ impl RawPredepCommon for RawSubdirectoryDependency {
 
   fn raw_target_map_in(&self) -> &RawPredefinedTargetMapIn {
     &self.target_configs
+  }
+
+  fn repo_url(&self) -> Option<&str> {
+    Some(&self.git_repo.repo_url)
   }
 }

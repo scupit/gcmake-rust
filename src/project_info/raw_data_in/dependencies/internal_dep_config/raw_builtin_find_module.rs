@@ -38,4 +38,8 @@ impl RawPredepCommon for RawModuleDep {
   fn raw_target_map_in(&self) -> &RawPredefinedTargetMapIn {
     &self.targets
   }
+
+  fn repo_url(&self) -> Option<&str> {
+    None
+  }
 }

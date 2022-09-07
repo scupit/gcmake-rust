@@ -241,5 +241,9 @@ pub struct PredepInfoCommand {
 
   /// List out all the dependency's available targets
   #[clap(short = 't')]
-  pub show_targets: bool
+  pub show_targets: bool,
+
+  /// Print the dependency's git repository URL, if applicable
+  #[clap(short = 'r')]
+  pub show_repository_url: bool
 }
