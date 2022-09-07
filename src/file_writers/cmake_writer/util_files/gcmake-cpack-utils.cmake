@@ -6,7 +6,8 @@ function( gcmake_configure_cpack )
   include( ProcessorCount )
   ProcessorCount( num_cpu_cores )
 
-  if( num_cpu_cores EQUAL 0 )
+  # 0 when cannot determine
+  if( NOT num_cpu_cores )
     set( num_cpu_cores 1 )
   endif()
 
