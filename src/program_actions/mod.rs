@@ -1,18 +1,16 @@
 mod create_project;
 mod code_file_creator;
 mod manage_dependencies;
-mod target_info_print_funcs;
-mod project_info_print_funcs;
-mod predef_dep_info_print_funcs;
+mod info_printers;
 
 pub use create_project::*;
 pub use code_file_creator::*;
 pub use manage_dependencies::*;
-use std::{io, path::PathBuf, fs, cell::RefCell, rc::Rc, borrow::Borrow, process::exit};
+use std::{io, path::PathBuf, fs, cell::RefCell, rc::Rc};
 
-use crate::{cli_config::{clap_cli_config::{UseFilesCommand, CreateFilesCommand, UpdateDependencyConfigsCommand, TargetInfoCommand, ProjectInfoCommand, PredepInfoCommand}, CLIProjectGenerationInfo, CLIProjectTypeGenerating}, common::{prompt::prompt_until_boolean, self}, logger::exit_error_log, project_info::{raw_data_in::dependencies::internal_dep_config::AllRawPredefinedDependencies, final_project_data::{UseableFinalProjectDataGroup, ProjectLoadFailureReason, FinalProjectData, ProjectConstructorConfig}, path_manipulation::absolute_path, dep_graph_loader::load_graph, dependency_graph_mod::dependency_graph::{DependencyGraphInfoWrapper, DependencyGraph, TargetNode, BasicTargetSearchResult, DependencyGraphWarningMode, BasicProjectSearchResult}, LinkSpecifier, validators::{is_valid_target_name, is_valid_project_name}}, file_writers::write_configurations, project_generator::GeneralNewProjectInfo, program_actions::project_info_print_funcs::{print_project_header, print_project_include_prefix, print_immediate_subprojects}};
+use crate::{cli_config::{clap_cli_config::{UseFilesCommand, CreateFilesCommand, UpdateDependencyConfigsCommand, TargetInfoCommand, ProjectInfoCommand, PredepInfoCommand}, CLIProjectGenerationInfo, CLIProjectTypeGenerating}, common::{prompt::prompt_until_boolean}, logger::exit_error_log, project_info::{raw_data_in::dependencies::internal_dep_config::AllRawPredefinedDependencies, final_project_data::{UseableFinalProjectDataGroup, ProjectLoadFailureReason, FinalProjectData, ProjectConstructorConfig}, path_manipulation::absolute_path, dep_graph_loader::load_graph, dependency_graph_mod::dependency_graph::{DependencyGraphInfoWrapper, DependencyGraph, TargetNode, BasicTargetSearchResult, DependencyGraphWarningMode, BasicProjectSearchResult}, LinkSpecifier, validators::{is_valid_target_name, is_valid_project_name}}, file_writers::write_configurations, project_generator::GeneralNewProjectInfo, program_actions::info_printers::{target_info_print_funcs::{print_target_header, print_export_header_include_path}, project_info_print_funcs::{print_project_header, print_project_include_prefix, print_immediate_subprojects, print_project_repo_url}}};
 
-use self::{target_info_print_funcs::{print_target_header, print_export_header_include_path}, predef_dep_info_print_funcs::{print_predef_dep_header, print_predep_targets}};
+use self::info_printers::predef_dep_info_print_funcs::{print_predef_dep_header, print_predep_targets};
 
 fn parse_project_info(
   project_root_dir: &str,
@@ -209,6 +207,10 @@ pub fn print_project_info(
 
           if command.show_subprojects {
             print_immediate_subprojects(project_graph);
+          }
+
+          if command.show_repo_url {
+            print_project_repo_url(project_graph);
           }
         }
       }

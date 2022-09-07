@@ -225,6 +225,10 @@ pub struct ProjectInfoCommand {
   /// List immediate subprojects
   #[clap(short = 's')]
   pub show_subprojects: bool,
+
+  /// Print repository URL
+  #[clap(short = 'r')]
+  pub show_repo_url: bool
 }
 
 #[derive(Args)]
