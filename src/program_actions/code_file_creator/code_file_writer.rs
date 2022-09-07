@@ -79,6 +79,7 @@ fn ensure_directory_structure(
   Ok(cleaned_pathbuf(the_buf))
 }
 
+#[derive(Clone)]
 pub enum CodeFileType {
   Header(FileCreationLang),
   Source(FileCreationLang),

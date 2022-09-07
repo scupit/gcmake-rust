@@ -1,5 +1,8 @@
 use crate::{project_info::path_manipulation::{relative_to_project_root, cleaned_path_str}, cli_config::clap_cli_config::FileCreationLang};
 
+use super::code_file_writer::CodeFileType;
+
+#[derive(Clone)]
 pub struct FileTypeGeneratingInfo {
   pub generating_header: bool,
   pub generating_source: bool,
@@ -29,16 +32,24 @@ impl FileTypeGeneratingInfo {
     return Ok(info);
   }
 
-  pub fn only_generating_template_impl(&self) -> bool {
-    self.generating_template_impl && !(
-      self.generating_header || self.generating_source
-    )
+  pub fn will_generate_at_least_one(&self) -> bool {
+    return self.generating_header || self.generating_source || self.generating_template_impl;
   }
 
-  pub fn only_generating_source(&self) -> bool {
-    self.generating_source && !(
-      self.generating_template_impl || self.generating_header
-    )
+  pub fn set_is_generating(&mut self, code_file_type: CodeFileType, should_generate: bool) {
+    match code_file_type {
+      CodeFileType::Header(_) => self.generating_header = should_generate,
+      CodeFileType::Source(_) => self.generating_source = should_generate,
+      CodeFileType::TemplateImpl(_) => self.generating_template_impl = should_generate
+    }
+  }
+
+  pub fn get_is_generating(&self, code_file_type: CodeFileType) -> bool {
+    match code_file_type {
+      CodeFileType::Header(_) => self.generating_header,
+      CodeFileType::Source(_) => self.generating_source,
+      CodeFileType::TemplateImpl(_) => self.generating_template_impl
+    }
   }
 }
 
@@ -84,13 +95,6 @@ pub fn validate_which_generating(
   lang: &FileCreationLang,
   which_generating: &FileTypeGeneratingInfo
 ) -> Result<(), String> {
-  if which_generating.only_generating_source() {
-    return Err(String::from("Error: For now, generating only the source file is not supported."));
-  }
-  else if which_generating.only_generating_template_impl() {
-    return Err(String::from("Error: For now, generating only the template-implementation file is not supported."));
-  }
-
   match *lang {
     FileCreationLang::C => {
       if which_generating.generating_template_impl {
