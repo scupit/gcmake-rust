@@ -54,16 +54,13 @@ pub enum FinalProjectType {
 }
 
 pub struct FinalShortcutConfig {
-  pub shortcut_name: String,
-  pub windows_icon_relative_path: Option<PathBuf>
+  pub shortcut_name: String
 }
 
 impl From<RawShortcutConfig> for FinalShortcutConfig {
   fn from(raw_config: RawShortcutConfig) -> Self {
     Self {
-      shortcut_name: raw_config.name,
-      windows_icon_relative_path: raw_config.windows_icon
-        .map(PathBuf::from)
+      shortcut_name: raw_config.name
     }
   }
 }
@@ -126,6 +123,9 @@ pub struct CompiledOutputItem {
   pub output_type: OutputItemType,
   pub entry_file: String,
   pub links: OutputItemLinks,
+  // NOTE: This is a relative path which references a file RELATIVE TO THE ROOT PROJECT'S ROOT DIRECTORY.
+  // That directory is not always the same as the project which directly contains the output item.
+  pub windows_icon_relative_to_root_project: Option<PathBuf>,
   pub build_config: Option<FinalTargetBuildConfigMap>,
   pub requires_custom_main: bool
 }
@@ -200,7 +200,8 @@ impl CompiledOutputItem {
       output_type: raw_output_item.output_type,
       entry_file: String::from(&raw_output_item.entry_file),
       links: OutputItemLinks::new_empty(),
-      // build_config: raw_output_item.build_config.clone(),
+      windows_icon_relative_to_root_project: raw_output_item.windows_icon.clone()
+        .map(PathBuf::from),
       build_config: make_final_target_build_config(raw_output_item.build_config.as_ref())?,
       requires_custom_main: raw_output_item.requires_custom_main.unwrap_or(false)
     };

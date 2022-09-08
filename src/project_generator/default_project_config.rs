@@ -89,6 +89,7 @@ pub fn get_default_project_config(
             OutputLibType::HeaderOnly => OutputItemType::HeaderOnlyLib
           }
         },
+        windows_icon: None,
         link: None,
         build_config: None,
         requires_custom_main

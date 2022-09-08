@@ -47,8 +47,7 @@ impl RawTestFramework {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(deny_unknown_fields)]
 pub struct RawShortcutConfig {
-  pub name: String,
-  pub windows_icon: Option<String>
+  pub name: String
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -313,6 +312,7 @@ pub struct RawCompiledItem {
   pub requires_custom_main: Option<bool>, // Used for tests executables only
   pub output_type: OutputItemType,
   pub entry_file: String,
+  pub windows_icon: Option<String>,
   pub link: Option<LinkSection>,
   pub build_config: Option<TargetBuildConfigMap>
 }

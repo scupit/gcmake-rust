@@ -57,6 +57,7 @@ fn resolve_prebuild_script(project_root: &str, pre_build_config: &PreBuildConfig
         PreBuildScript::Exe(CompiledOutputItem {
           output_type: OutputItemType::Executable,
           entry_file: relative_to_project_root(project_root, entry_file_pathbuf),
+          windows_icon_relative_to_root_project: None,
           links: match &pre_build_config.link {
             Some(raw_links) => CompiledOutputItem::make_link_map(
               &format!("Pre-build script"),
@@ -889,6 +890,12 @@ impl FinalProjectData {
         output_item.get_build_config_map(),
         false
       )?;
+
+      self.ensure_valid_icon_config(
+        output_name,
+        output_item,
+        false
+      )?;
     }
 
     if let Some(existing_script) = &self.prebuild_script {
@@ -908,6 +915,11 @@ impl FinalProjectData {
             true
           )?;
 
+          self.ensure_valid_icon_config(
+            &the_item_name,
+            script_exe_config,
+            true
+          )?;
         },
         PreBuildScript::Python(_) => ()
       }
@@ -918,22 +930,29 @@ impl FinalProjectData {
     Ok(())
   }
 
+  fn ensure_valid_icon_config(
+    &self,
+    item_name: &str,
+    target: &CompiledOutputItem,
+    is_prebuild_script: bool
+  ) -> Result<(), String> {
+    let item_string: String = if is_prebuild_script
+      { String::from("prebuild script") }
+      else { format!("output item '{}'", item_name )};
+
+    if !target.is_executable_type() && target.windows_icon_relative_to_root_project.is_some() {
+      return Err(format!(
+        "{} is not an executable, but specifies a windows_icon '{}'. Windows icons can only be specified for executables.",
+        item_name,
+        target.windows_icon_relative_to_root_project.as_ref().unwrap().to_str().unwrap()
+      ));
+    }
+
+    Ok(())
+  }
+
   fn validate_installer_config(&self) -> Result<(), String> {
     for (output_name, shortcut_config) in &self.installer_config.shortcuts {
-      if let Some(windows_icon_relative_path) = &shortcut_config.windows_icon_relative_path {
-        let icon_absolute_path: PathBuf = Path::new(self.get_absolute_project_root())
-          .join(windows_icon_relative_path);
-
-        if !icon_absolute_path.is_file() {
-          return Err(format!(
-            "The installer shortcut for '{}' specifies a relative windows icon path '{}', but the file doesn't exist.\nMake sure the icon file is located at {}",
-            output_name,
-            windows_icon_relative_path.to_str().unwrap(),
-            icon_absolute_path.to_str().unwrap()
-          ));
-        }
-      }
-
       match self.find_output_in_whole_tree(output_name) {
         None => return Err(format!(
           "The installer config in project [{}] tries to create a shortcut for executable output '{}', but the project doesn't have an executable output named '{}'.",

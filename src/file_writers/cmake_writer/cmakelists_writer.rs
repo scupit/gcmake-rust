@@ -502,7 +502,7 @@ impl<'a> CMakeListsWriter<'a> {
     self.set_basic_var(
       "",
       "TOPLEVEL_PROJECT_DIR",
-      "${CMAKE_CURRENT_SOURCE_DIR}"
+      "\"${CMAKE_CURRENT_SOURCE_DIR}\""
     )?;
     self.write_newline()?;
 
@@ -1961,6 +1961,14 @@ impl<'a> CMakeListsWriter<'a> {
     }
     self.write_newline()?;
 
+    if let Some(windows_icon_relative_path) = &output_data.windows_icon_relative_to_root_project {
+      writeln!(&self.cmakelists_file,
+        "generate_rc_file_for_windows_exe( {}\n\tICON_PATH \"${{TOPLEVEL_PROJECT_DIR}}/{}\"\n)",
+        borrowed_node.get_cmake_namespaced_target_name(),
+        windows_icon_relative_path.to_str().unwrap()
+      )?;
+    }
+
     if !is_pre_build_script {
       writeln!(&self.cmakelists_file,
         "exe_add_lib_relative_install_rpath( {} )",
@@ -2117,22 +2125,6 @@ impl<'a> CMakeListsWriter<'a> {
     writeln!(&self.cmakelists_file,
       "if( GCMAKE_INSTALL AND \"${{CMAKE_SOURCE_DIR}}\" STREQUAL \"${{CMAKE_CURRENT_SOURCE_DIR}}\" )"
     )?;
-
-    for (exe_name, shortcut_config) in self.project_data.get_installer_shortcuts_config() {
-      if let Some(windows_icon_relative_path) = &shortcut_config.windows_icon_relative_path {
-        // TODO: Generate a windows rc file and apply the icon to it.
-        let referenced_output = self.dep_graph_ref()
-          .find_single_target_by_name(exe_name)
-          .target
-          .unwrap();
-
-        writeln!(&self.cmakelists_file,
-          "\tgenerate_rc_file_for_windows_exe( {}\n\t\tICON_PATH \"${{CMAKE_CURRENT_SOURCE_DIR}}/{}\"\n\t)",
-          referenced_output.as_ref().borrow().get_cmake_namespaced_target_name(),
-          windows_icon_relative_path.to_str().unwrap()
-        )?;
-      }
-    }
 
     let joined_shortcut_map: String = self.project_data.get_installer_shortcuts_config()
       .iter()

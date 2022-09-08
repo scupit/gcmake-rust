@@ -1,4 +1,4 @@
-use std::{cell::{RefCell}, rc::{Rc, Weak}, hash::{Hash, Hasher}, collections::{HashMap, HashSet, VecDeque}, borrow::Borrow};
+use std::{cell::{RefCell}, rc::{Rc, Weak}, hash::{Hash, Hasher}, collections::{HashMap, HashSet, VecDeque}, borrow::Borrow, path::{Path, PathBuf}};
 
 use crate::project_info::{LinkMode, CompiledOutputItem, PreBuildScript, OutputItemLinks, final_project_data::FinalProjectData, final_dependencies::{FinalGCMakeDependency, FinalPredefinedDependencyConfig, GCMakeDependencyStatus, FinalRequirementSpecifier}, LinkSpecifier, FinalProjectType, parsers::{link_spec_parser::{LinkAccessMode, LinkSpecTargetList, LinkSpecifierTarget}, system_spec::platform_spec_parser::SystemSpecifierWrapper}};
 
@@ -48,7 +48,19 @@ impl<'a> CycleNode<'a> {
   }
 }
 
+pub enum AdditionalConfigValidationFailureReason<'a> {
+  WindowsIconPathPointsToNonexistent {
+    target: Rc<RefCell<TargetNode<'a>>>,
+    absolute_path_to_icon: PathBuf,
+    given_relative_path: PathBuf
+  }
+}
+
 pub enum GraphLoadFailureReason<'a> {
+  FailedAdditionalProjectValidation {
+    project: Rc<RefCell<DependencyGraph<'a>>>,
+    failure_reason: AdditionalConfigValidationFailureReason<'a>
+  },
   SubprojectNameOverlapsDependency {
     subproject: Rc<RefCell<DependencyGraph<'a>>>,
     dependency_project: Rc<RefCell<DependencyGraph<'a>>>
@@ -625,6 +637,7 @@ impl<'a> DependencyGraph<'a> {
       borrowed_graph.ensure_proper_predefined_dep_links()?;
       borrowed_graph.ensure_valid_system_spec_links(&warning_mode)?;
       borrowed_graph.ensure_no_duplicate_identifiers()?;
+      borrowed_graph.do_additional_project_checks()?;
     }
 
     let all_used_targets: HashSet<RcRefcHashWrapper<TargetNode>> = match full_graph.as_ref().borrow().find_cycle() {
@@ -844,6 +857,64 @@ impl<'a> DependencyGraph<'a> {
       //     dependency
       //   });
       // }
+    }
+
+    Ok(())
+  }
+
+  fn do_additional_project_checks(&self) -> Result<(), GraphLoadFailureReason<'a>> {
+    if let Some(root_project) = self.root_project().as_ref().borrow().project_wrapper().maybe_normal_project() {
+      let absolute_project_root: &Path = Path::new(root_project.get_absolute_project_root());
+
+      for (_, target_rc) in self.targets.borrow().iter() {
+        let target: &TargetNode = &target_rc.as_ref().borrow();
+
+        let maybe_windows_icon_relative_path: Option<&Path> = match &target.contained_item {
+          ContainedItem::PredefinedLibrary(_) => None,
+          ContainedItem::PreBuild(pre_build) => match pre_build {
+            PreBuildScript::Exe(pre_build_exe) => {
+              pre_build_exe.windows_icon_relative_to_root_project.as_ref().map(Path::new)
+            },
+            _ => None
+          }
+          ContainedItem::CompiledOutput(output) => {
+            if !output.is_executable_type() {
+              None
+            }
+            else {
+              output.windows_icon_relative_to_root_project.as_ref().map(Path::new)
+            }
+          },
+        };
+
+        if let Some(windows_icon_relative_path) = maybe_windows_icon_relative_path {
+          let absolute_path_to_icon: PathBuf = absolute_project_root.join(windows_icon_relative_path);
+
+          // TODO: Make sure the final icon path (after normalization) is inside the project root.
+          if !absolute_path_to_icon.is_file() {
+            return Err(GraphLoadFailureReason::FailedAdditionalProjectValidation {
+              project: Weak::upgrade(&self.current_graph_ref).unwrap(),
+              failure_reason: AdditionalConfigValidationFailureReason::WindowsIconPathPointsToNonexistent {
+                target: Rc::clone(target_rc),
+                absolute_path_to_icon,
+                given_relative_path: windows_icon_relative_path.to_path_buf()
+              }
+            });
+          }
+        }
+      }
+    }
+
+    for (_, subproject) in &self.subprojects {
+      subproject.as_ref().borrow().do_additional_project_checks()?;
+    }
+
+    for (_, test_project) in &self.test_projects {
+      test_project.as_ref().borrow().do_additional_project_checks()?;
+    }
+
+    for (_, gcmake_dep) in &self.gcmake_deps {
+      gcmake_dep.as_ref().borrow().do_additional_project_checks()?;
     }
 
     Ok(())
