@@ -2113,12 +2113,21 @@ impl<'a> CMakeListsWriter<'a> {
       "if( GCMAKE_INSTALL AND \"${{CMAKE_SOURCE_DIR}}\" STREQUAL \"${{CMAKE_CURRENT_SOURCE_DIR}}\" )"
     )?;
 
+    let joined_shortcut_map: String = self.project_data.get_installer_shortcuts_config()
+      .iter()
+      .map(|(exe_name, shortcut_config)| {
+        format!("{};{}", exe_name, quote_escaped_string(&shortcut_config.shortcut_name))
+      })
+      .collect::<Vec<String>>()
+      .join(";");
+
     writeln!(&self.cmakelists_file,
-      "\tgcmake_configure_cpack(\n\t\tVENDOR \"{}\"\n\t\tPROJECT_COMPONENT ${{LOCAL_PROJECT_COMPONENT_NAME}}\n\t\tINSTALLER_TITLE \"{}\"\n\t\tINSTALLER_DESCRIPTION \"{}\"\n\t\tINSTALLER_EXE_PREFIX \"{}\"\n\t)",
+      "\tgcmake_configure_cpack(\n\t\tVENDOR \"{}\"\n\t\tPROJECT_COMPONENT ${{LOCAL_PROJECT_COMPONENT_NAME}}\n\t\tINSTALLER_TITLE \"{}\"\n\t\tINSTALLER_DESCRIPTION \"{}\"\n\t\tINSTALLER_EXE_PREFIX \"{}\"\n\t\tSHORTCUT_MAP \"{}\"\n\t)",
       self.project_data.get_vendor(),
       self.project_data.get_installer_title(),
       self.project_data.get_installer_description(),
-      self.project_data.get_installer_name_prefix()
+      self.project_data.get_installer_name_prefix(),
+      joined_shortcut_map
     )?;
 
     writeln!(&self.cmakelists_file, "endif()")?;

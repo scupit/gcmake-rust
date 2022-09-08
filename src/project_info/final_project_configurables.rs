@@ -1,6 +1,6 @@
 use std::{rc::Rc, collections::{HashMap, HashSet}};
 
-use super::{raw_data_in::{OutputItemType, RawCompiledItem, TargetBuildConfigMap, LinkSection, BuildConfigCompilerSpecifier, BuildType, TargetSpecificBuildType, RawBuildConfig, BuildTypeOptionMap, BuildConfigMap, RawGlobalPropertyConfig, DefaultCompiledLibType}, final_dependencies::FinalPredefinedDependencyConfig, LinkSpecifier, parsers::{link_spec_parser::LinkAccessMode, general_parser::ParseSuccess}, SystemSpecifierWrapper, platform_spec_parser::parse_leading_system_spec};
+use super::{raw_data_in::{OutputItemType, RawCompiledItem, TargetBuildConfigMap, LinkSection, BuildConfigCompilerSpecifier, BuildType, TargetSpecificBuildType, RawBuildConfig, BuildTypeOptionMap, BuildConfigMap, RawGlobalPropertyConfig, DefaultCompiledLibType, RawShortcutConfig}, final_dependencies::FinalPredefinedDependencyConfig, LinkSpecifier, parsers::{link_spec_parser::LinkAccessMode, general_parser::ParseSuccess}, SystemSpecifierWrapper, platform_spec_parser::parse_leading_system_spec};
 
 #[derive(Clone)]
 pub enum FinalTestFramework {
@@ -53,10 +53,23 @@ pub enum FinalProjectType {
   }
 }
 
+pub struct FinalShortcutConfig {
+  pub shortcut_name: String
+}
+
+impl From<RawShortcutConfig> for FinalShortcutConfig {
+  fn from(raw_config: RawShortcutConfig) -> Self {
+    Self {
+      shortcut_name: raw_config.name
+    }
+  }
+}
+
 pub struct FinalInstallerConfig {
   pub title: String,
   pub description: String,
-  pub name_prefix: String
+  pub name_prefix: String,
+  pub shortcuts: HashMap<String, FinalShortcutConfig>
 }
 
 pub enum PreBuildScript {

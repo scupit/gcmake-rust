@@ -2,7 +2,7 @@ use std::{collections::{HashMap, HashSet}, path::{Path, PathBuf}, io, rc::Rc, fs
 
 use crate::project_info::path_manipulation::cleaned_pathbuf;
 
-use super::{path_manipulation::{cleaned_path_str, relative_to_project_root, absolute_path}, final_dependencies::{FinalGCMakeDependency, FinalPredefinedDependencyConfig, GCMakeDependencyStatus}, raw_data_in::{RawProject, dependencies::internal_dep_config::AllRawPredefinedDependencies, BuildConfigMap, BuildType, LanguageConfigMap, OutputItemType, PreBuildConfigIn, SpecificCompilerSpecifier, BuildConfigCompilerSpecifier, TargetBuildConfigMap, TargetSpecificBuildType, LinkSection, RawTestFramework, RawInstallerConfig, DefaultCompiledLibType}, final_project_configurables::{FinalProjectType}, CompiledOutputItem, helpers::{parse_subproject_data, parse_root_project_data, populate_files, find_prebuild_script, PrebuildScriptFile, validate_raw_project_outputs, ProjectOutputType, RetrievedCodeFileType, retrieve_file_type, parse_test_project_data}, PreBuildScript, OutputItemLinks, FinalTestFramework, base_include_prefix_for_test, gcmake_constants::{SRC_DIR, INCLUDE_DIR, TEMPLATE_IMPL_DIR, TESTS_DIR, SUBPROJECTS_DIR}, FinalInstallerConfig, CompilerDefine, FinalBuildConfigMap, make_final_target_build_config, make_final_build_config_map, FinalTargetBuildConfigMap, FinalGlobalProperties};
+use super::{path_manipulation::{cleaned_path_str, relative_to_project_root, absolute_path}, final_dependencies::{FinalGCMakeDependency, FinalPredefinedDependencyConfig, GCMakeDependencyStatus}, raw_data_in::{RawProject, dependencies::internal_dep_config::AllRawPredefinedDependencies, BuildConfigMap, BuildType, LanguageConfigMap, OutputItemType, PreBuildConfigIn, SpecificCompilerSpecifier, BuildConfigCompilerSpecifier, TargetBuildConfigMap, TargetSpecificBuildType, LinkSection, RawTestFramework, RawInstallerConfig, DefaultCompiledLibType}, final_project_configurables::{FinalProjectType}, CompiledOutputItem, helpers::{parse_subproject_data, parse_root_project_data, populate_files, find_prebuild_script, PrebuildScriptFile, validate_raw_project_outputs, ProjectOutputType, RetrievedCodeFileType, retrieve_file_type, parse_test_project_data}, PreBuildScript, OutputItemLinks, FinalTestFramework, base_include_prefix_for_test, gcmake_constants::{SRC_DIR, INCLUDE_DIR, TEMPLATE_IMPL_DIR, TESTS_DIR, SUBPROJECTS_DIR}, FinalInstallerConfig, CompilerDefine, FinalBuildConfigMap, make_final_target_build_config, make_final_build_config_map, FinalTargetBuildConfigMap, FinalGlobalProperties, FinalShortcutConfig};
 
 const SUBPROJECT_JOIN_STR: &'static str = "_S_";
 const TEST_PROJECT_JOIN_STR: &'static str = "_TP_";
@@ -666,11 +666,19 @@ impl FinalProjectData {
         title: raw_project.name.clone(),
         description: raw_project.description.clone(),
         name_prefix: raw_project.name.clone(),
+        shortcuts: HashMap::new()
       },
-      Some(RawInstallerConfig { title, description, name_prefix }) => FinalInstallerConfig {
-        title: title.clone().unwrap_or(raw_project.name.clone()),
-        description: description.clone().unwrap_or(raw_project.description.clone()),
-        name_prefix: name_prefix.clone().unwrap_or(raw_project.name.clone())
+      Some(raw_inst_config) => FinalInstallerConfig {
+        title: raw_inst_config.title.clone().unwrap_or(raw_project.name.clone()),
+        description: raw_inst_config.description.clone().unwrap_or(raw_project.description.clone()),
+        name_prefix: raw_inst_config.name_prefix.clone().unwrap_or(raw_project.name.clone()),
+        shortcuts: raw_inst_config.shortcuts.clone()
+          .unwrap_or(HashMap::new())
+          .into_iter()
+          .map(|(target_name, raw_shortcut_config)|
+            (target_name, FinalShortcutConfig::from(raw_shortcut_config))
+          )
+          .collect()
       }
     };
 
@@ -905,7 +913,47 @@ impl FinalProjectData {
       }
     }
 
+    self.validate_installer_config()?;
+
     Ok(())
+  }
+
+  fn validate_installer_config(&self) -> Result<(), String> {
+    for (output_name, _) in &self.installer_config.shortcuts {
+      match self.find_output_in_whole_tree(output_name) {
+        None => return Err(format!(
+          "The installer config in project [{}] tries to create a shortcut for executable output '{}', but the project doesn't have an executable output named '{}'.",
+          self.get_name_for_error_messages(),
+          output_name,
+          output_name
+        )),
+        Some(matching_output) => {
+          if !matching_output.is_executable_type() {
+            return Err(format!(
+              "The installer config in project [{}] tries to create a shortcut for output item '{}', but '{}' is not an executable. Installer shortcuts can only be created for executables.",
+              self.get_name_for_error_messages(),
+              output_name,
+              output_name
+            ));
+          }
+        }
+      }
+    }
+
+    Ok(())
+  }
+
+  fn find_output_in_whole_tree(&self, target_name: &str) -> Option<&CompiledOutputItem> {
+    if let Some(found_target) = self.output.get(target_name) {
+      return Some(found_target);
+    }
+
+    for (_, subproject) in &self.subprojects {
+      if let Some(found_target) = subproject.find_output_in_whole_tree(target_name) {
+        return Some(found_target);
+      }
+    }
+    return None;
   }
 
   fn validate_entry_file_type(
@@ -1161,6 +1209,10 @@ impl FinalProjectData {
 
   pub fn get_installer_title(&self) -> &str {
     &self.installer_config.title
+  }
+
+  pub fn get_installer_shortcuts_config(&self) -> &HashMap<String, FinalShortcutConfig> {
+    &self.installer_config.shortcuts
   }
 
   pub fn get_installer_description(&self) -> &str {

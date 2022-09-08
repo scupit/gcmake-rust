@@ -44,12 +44,19 @@ impl RawTestFramework {
   }
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(deny_unknown_fields)]
+pub struct RawShortcutConfig {
+  pub name: String
+}
+
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(deny_unknown_fields)]
 pub struct RawInstallerConfig {
   pub title: Option<String>,
   pub description: Option<String>,
-  pub name_prefix: Option<String>
+  pub name_prefix: Option<String>,
+  pub shortcuts: Option<HashMap<String, RawShortcutConfig>>
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
