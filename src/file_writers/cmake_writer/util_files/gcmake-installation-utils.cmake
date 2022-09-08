@@ -36,23 +36,39 @@ function( configure_installation
     message( FATAL_ERROR "ERROR: This project (${PROJECT_NAME}) doesn't install any targets." )
   endif()
 
-  install( TARGETS ${targets_installing}
-    EXPORT ${PROJECT_NAME}Targets
-    RUNTIME 
-      DESTINATION bin
-      PERMISSIONS
-        OWNER_READ OWNER_WRITE OWNER_EXECUTE 
-        GROUP_READ GROUP_EXECUTE
-        WORLD_READ
-    LIBRARY
-      DESTINATION lib
-    ARCHIVE
-      DESTINATION lib
-      # DESTINATION lib/static
-    COMPONENT ${project_component_name}
-    FILE_SET HEADERS
-      DESTINATION "include/${PROJECT_INCLUDE_PREFIX}"
-  )
+  foreach( project_output_to_install IN LISTS targets_installing )
+    get_target_property( target_type ${project_output_to_install} TYPE )
+
+    if( target_type STREQUAL "EXECUTABLE" )
+      install( TARGETS ${project_output_to_install}
+        EXPORT ${PROJECT_NAME}Targets
+        RUNTIME 
+          DESTINATION bin
+          PERMISSIONS
+            OWNER_READ OWNER_WRITE OWNER_EXECUTE 
+            GROUP_READ GROUP_EXECUTE
+            WORLD_READ
+        LIBRARY
+          DESTINATION lib
+        ARCHIVE
+          DESTINATION lib
+        COMPONENT ${project_component_name}
+      )
+    else()
+      install( TARGETS ${project_output_to_install}
+        EXPORT ${PROJECT_NAME}Targets
+        RUNTIME 
+          DESTINATION bin
+        LIBRARY
+          DESTINATION lib
+        ARCHIVE
+          DESTINATION lib
+        COMPONENT ${project_component_name}
+        FILE_SET HEADERS
+          DESTINATION "include/${PROJECT_INCLUDE_PREFIX}"
+      )
+    endif()
+  endforeach()
 
   if( has_files_to_install )
     install( FILES ${bin_files_installing}
