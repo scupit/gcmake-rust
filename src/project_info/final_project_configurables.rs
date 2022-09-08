@@ -1,4 +1,4 @@
-use std::{rc::Rc, collections::{HashMap, HashSet}};
+use std::{rc::Rc, collections::{HashMap, HashSet}, path::PathBuf};
 
 use super::{raw_data_in::{OutputItemType, RawCompiledItem, TargetBuildConfigMap, LinkSection, BuildConfigCompilerSpecifier, BuildType, TargetSpecificBuildType, RawBuildConfig, BuildTypeOptionMap, BuildConfigMap, RawGlobalPropertyConfig, DefaultCompiledLibType, RawShortcutConfig}, final_dependencies::FinalPredefinedDependencyConfig, LinkSpecifier, parsers::{link_spec_parser::LinkAccessMode, general_parser::ParseSuccess}, SystemSpecifierWrapper, platform_spec_parser::parse_leading_system_spec};
 
@@ -54,13 +54,16 @@ pub enum FinalProjectType {
 }
 
 pub struct FinalShortcutConfig {
-  pub shortcut_name: String
+  pub shortcut_name: String,
+  pub windows_icon_relative_path: Option<PathBuf>
 }
 
 impl From<RawShortcutConfig> for FinalShortcutConfig {
   fn from(raw_config: RawShortcutConfig) -> Self {
     Self {
-      shortcut_name: raw_config.name
+      shortcut_name: raw_config.name,
+      windows_icon_relative_path: raw_config.windows_icon
+        .map(PathBuf::from)
     }
   }
 }

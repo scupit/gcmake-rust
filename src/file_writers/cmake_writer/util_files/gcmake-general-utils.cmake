@@ -266,3 +266,16 @@ function( initialize_lib_type_options
   option( BUILD_SHARED_LIBS "${LOCAL_BUILD_SHARED_LIBS_DOC_STRING}" ${SHOULD_DEFAULT_TO_SHARED} )
   option( BUILD_STATIC_LIBS "${LOCAL_BUILD_STATIC_LIBS_DOC_STRING}" ${SHOULD_DEFAULT_TO_STATIC} )
 endfunction()
+
+function( unaliased_target_name
+  target_name
+  out_var
+)
+  get_target_property( unaliased_lib_name ${target_name} ALIASED_TARGET )
+
+  if( NOT unaliased_lib_name )
+    set( unaliased_lib_name ${target_name} )
+  endif()
+
+  set( ${out_var} ${unaliased_lib_name} PARENT_SCOPE )
+endfunction()

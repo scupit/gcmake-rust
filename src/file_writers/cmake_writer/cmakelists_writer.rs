@@ -1,4 +1,4 @@
-use std::{collections::{HashMap, HashSet}, fs::File, io::{self, Write, ErrorKind}, path::{PathBuf, Path}, rc::Rc, cell::{RefCell, Ref}};
+use std::{collections::{HashMap, HashSet}, fs::File, io::{self, Write, ErrorKind}, path::{PathBuf, Path}, rc::Rc, cell::{RefCell, Ref}, borrow::Borrow};
 
 use crate::{project_info::{final_project_data::{FinalProjectData}, path_manipulation::{cleaned_path_str, relative_to_project_root}, final_dependencies::{GitRevisionSpecifier, PredefinedCMakeComponentsModuleDep, PredefinedSubdirDep, PredefinedCMakeModuleDep, FinalPredepInfo, GCMakeDependencyStatus, FinalPredefinedDependencyConfig, encoded_repo_url}, raw_data_in::{BuildType, RawBuildConfig, BuildConfigCompilerSpecifier, SpecificCompilerSpecifier, OutputItemType, LanguageConfigMap, TargetSpecificBuildType, dependencies::internal_dep_config::{CMakeModuleType}, DefaultCompiledLibType}, FinalProjectType, CompiledOutputItem, PreBuildScript, LinkMode, FinalTestFramework, dependency_graph_mod::dependency_graph::{DependencyGraph, OrderedTargetInfo, ProjectWrapper, TargetNode, SimpleNodeOutputType, Link}, SystemSpecifierWrapper, SingleSystemSpec, CompilerDefine, FinalBuildConfig, CompilerFlag, LinkerFlag}, file_writers::cmake_writer::cmake_writer_helpers::system_constraint_expression};
 
@@ -1862,7 +1862,6 @@ impl<'a> CMakeListsWriter<'a> {
     )?;
     self.write_newline()?;
 
-
     if output_data.is_compiled_library_type() {
       writeln!(&self.cmakelists_file,
         "generate_and_install_export_header( {} )",
@@ -1951,6 +1950,12 @@ impl<'a> CMakeListsWriter<'a> {
     else {
       writeln!(&self.cmakelists_file,
         "add_executable( {} )",
+        target_name
+      )?;
+
+      writeln!(&self.cmakelists_file,
+        "add_executable( {} ALIAS {} )",
+        borrowed_node.get_cmake_namespaced_target_name(),
         target_name
       )?;
     }
@@ -2112,6 +2117,22 @@ impl<'a> CMakeListsWriter<'a> {
     writeln!(&self.cmakelists_file,
       "if( GCMAKE_INSTALL AND \"${{CMAKE_SOURCE_DIR}}\" STREQUAL \"${{CMAKE_CURRENT_SOURCE_DIR}}\" )"
     )?;
+
+    for (exe_name, shortcut_config) in self.project_data.get_installer_shortcuts_config() {
+      if let Some(windows_icon_relative_path) = &shortcut_config.windows_icon_relative_path {
+        // TODO: Generate a windows rc file and apply the icon to it.
+        let referenced_output = self.dep_graph_ref()
+          .find_single_target_by_name(exe_name)
+          .target
+          .unwrap();
+
+        writeln!(&self.cmakelists_file,
+          "\tgenerate_rc_file_for_windows_exe( {}\n\t\tICON_PATH \"${{CMAKE_CURRENT_SOURCE_DIR}}/{}\"\n\t)",
+          referenced_output.as_ref().borrow().get_cmake_namespaced_target_name(),
+          windows_icon_relative_path.to_str().unwrap()
+        )?;
+      }
+    }
 
     let joined_shortcut_map: String = self.project_data.get_installer_shortcuts_config()
       .iter()

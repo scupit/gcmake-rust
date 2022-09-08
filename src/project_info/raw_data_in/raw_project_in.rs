@@ -47,7 +47,8 @@ impl RawTestFramework {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(deny_unknown_fields)]
 pub struct RawShortcutConfig {
-  pub name: String
+  pub name: String,
+  pub windows_icon: Option<String>
 }
 
 #[derive(Serialize, Deserialize, Debug)]

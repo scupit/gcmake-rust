@@ -919,7 +919,21 @@ impl FinalProjectData {
   }
 
   fn validate_installer_config(&self) -> Result<(), String> {
-    for (output_name, _) in &self.installer_config.shortcuts {
+    for (output_name, shortcut_config) in &self.installer_config.shortcuts {
+      if let Some(windows_icon_relative_path) = &shortcut_config.windows_icon_relative_path {
+        let icon_absolute_path: PathBuf = Path::new(self.get_absolute_project_root())
+          .join(windows_icon_relative_path);
+
+        if !icon_absolute_path.is_file() {
+          return Err(format!(
+            "The installer shortcut for '{}' specifies a relative windows icon path '{}', but the file doesn't exist.\nMake sure the icon file is located at {}",
+            output_name,
+            windows_icon_relative_path.to_str().unwrap(),
+            icon_absolute_path.to_str().unwrap()
+          ));
+        }
+      }
+
       match self.find_output_in_whole_tree(output_name) {
         None => return Err(format!(
           "The installer config in project [{}] tries to create a shortcut for executable output '{}', but the project doesn't have an executable output named '{}'.",

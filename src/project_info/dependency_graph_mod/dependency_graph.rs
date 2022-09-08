@@ -1778,19 +1778,21 @@ impl<'a> DependencyGraph<'a> {
     return Ok(None);
   }
 
+  pub fn find_single_target_by_name(&self, target_name: impl AsRef<str>) -> BasicTargetSearchResult<'a> {
+    return BasicTargetSearchResult {
+      target: self.get_target_in_current_namespace(target_name.as_ref()),
+      searched_project: Weak::upgrade(&self.current_graph_ref).unwrap(),
+      searched_with: target_name.as_ref().to_string(),
+      target_name_searched: target_name.as_ref().to_string()
+    };
+  }
+
   pub fn find_targets_using_name_list(
     &self,
     target_list: &Vec<impl AsRef<str>>
   ) -> Vec<BasicTargetSearchResult<'a>> {
     return target_list.iter()
-      .map(|target_name|
-        BasicTargetSearchResult {
-          target: self.get_target_in_current_namespace(target_name.as_ref()),
-          searched_project: Weak::upgrade(&self.current_graph_ref).unwrap(),
-          searched_with: target_name.as_ref().to_string(),
-          target_name_searched: target_name.as_ref().to_string()
-        }
-      )
+      .map(|target_name| self.find_single_target_by_name(target_name))
       .collect();
   }
 
