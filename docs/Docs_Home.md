@@ -10,6 +10,7 @@ configuration work together.
 ## Table of Contents
 
 1. [Project Overview](overview.md)
+<!-- TODO: Distribute this information to properties_list.md and the project-type-specific docs. -->
 2. [cmake_data.yaml Configuration](cmake_data.md)
 3. [Additional Linking Explanation](linking_information.md)
 4. [Predefined Dependency Compatibility Layer](predefined_dependency_doc.md)

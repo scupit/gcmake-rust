@@ -18,8 +18,9 @@ function( gcmake_configure_cpack )
   set( CPACK_THREADS ${CPACK_NUM_PACKAGER_THREADS} )
   set( CPACK_ARCHIVE_THREADS ${CPACK_NUM_PACKAGER_THREADS} )
 
-  set( requiredOneValueArgs VENDOR INSTALLER_TITLE INSTALLER_DESCRIPTION INSTALLER_EXE_PREFIX PROJECT_COMPONENT SHORTCUT_MAP )
-  cmake_parse_arguments( PARSE_ARGV 0 INSTALLER_CONFIG "" "${requiredOneValueArgs}" "" )
+  set( requiredOneValueArgs VENDOR INSTALLER_TITLE INSTALLER_DESCRIPTION INSTALLER_EXE_PREFIX PROJECT_COMPONENT )
+  set( optionalOneValueArgs SHORTCUT_MAP )
+  cmake_parse_arguments( PARSE_ARGV 0 INSTALLER_CONFIG "" "${requiredOneValueArgs};${optionalOneValueArgs}" "" )
 
   foreach( required_arg IN LISTS requiredOneValueArgs )
     if( NOT INSTALLER_CONFIG_${required_arg} )
@@ -28,20 +29,23 @@ function( gcmake_configure_cpack )
   endforeach()
 
   option( CPACK_STRIP_FILES "Whether to strip symbols from installed binaries" ON )
-  set( CPACK_PACKAGE_EXECUTABLES ${INSTALLER_CONFIG_SHORTCUT_MAP} )
-  set( CPACK_CREATE_DESKTOP_LINKS )
-  set( temp_should_add TRUE )
 
-  foreach( item IN LISTS CPACK_PACKAGE_EXECUTABLES )
-    if( temp_should_add )
-      # The shortcuts are specified in a flat list formatted as target1;shortcut-name1;target2;shortcut-name2.
-      # this extracts and adds only the target names to CPACK_CREATE_DESKTOP_LINKS.
-      list( APPEND CPACK_CREATE_DESKTOP_LINKS ${item} )
-      set( temp_should_add FALSE )
-    else()
-      set( temp_should_add TRUE )
-    endif()
-  endforeach()
+  if( INSTALLER_CONFIG_SHORTCUT_MAP )
+    set( CPACK_PACKAGE_EXECUTABLES ${INSTALLER_CONFIG_SHORTCUT_MAP} )
+    set( CPACK_CREATE_DESKTOP_LINKS )
+    set( temp_should_add TRUE )
+
+    foreach( item IN LISTS CPACK_PACKAGE_EXECUTABLES )
+      if( temp_should_add )
+        # The shortcuts are specified in a flat list formatted as target1;shortcut-name1;target2;shortcut-name2.
+        # this extracts and adds only the target names to CPACK_CREATE_DESKTOP_LINKS.
+        list( APPEND CPACK_CREATE_DESKTOP_LINKS ${item} )
+        set( temp_should_add FALSE )
+      else()
+        set( temp_should_add TRUE )
+      endif()
+    endforeach()
+  endif()
 
   get_installer_compatible_license( license_file )
 

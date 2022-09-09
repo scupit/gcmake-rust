@@ -9,7 +9,7 @@ use serde::Serialize;
 
 use std::{fs::{File, remove_dir_all, create_dir_all, self}, io::{self, ErrorKind}, path::{Path, PathBuf}};
 
-use crate::{program_actions::{ProjectTypeCreating, gcmake_config_root_dir}, common::prompt::{prompt_until_boolean, prompt_until_satisfies_or_default}, project_info::{base_include_prefix_for_test, gcmake_constants::{SRC_DIR, INCLUDE_DIR, TEMPLATE_IMPL_DIR, ASSETS_DIR, SUBPROJECTS_DIR, TESTS_DIR}, validators::{is_valid_project_name, is_valid_base_include_prefix}}, project_generator::{project_generator_prompts::{prompt_for_project_output_type, prompt_for_language, prompt_for_vendor, prompt_for_description, prompt_for_needs_custom_main}, c_file_generation::generate_c_main, cpp_file_generation::{generate_cpp_main, TestMainInitInfo}}};
+use crate::{program_actions::{ProjectTypeCreating, gcmake_config_root_dir}, common::prompt::{prompt_until_boolean, prompt_until_satisfies_or_default}, project_info::{base_include_prefix_for_test, gcmake_constants::{SRC_DIR, INCLUDE_DIR, TEMPLATE_IMPL_DIR, ASSETS_DIR, SUBPROJECTS_DIR, TESTS_DIR}, validators::{is_valid_project_name, is_valid_base_include_prefix}, FinalTestFramework}, project_generator::{project_generator_prompts::{prompt_for_project_output_type, prompt_for_language, prompt_for_vendor, prompt_for_description, prompt_for_needs_custom_main}, c_file_generation::generate_c_main, cpp_file_generation::{generate_cpp_main, TestMainInitInfo}}};
 
 pub struct GeneralNewProjectInfo {
   pub project: CreatedProject,
@@ -38,7 +38,7 @@ pub fn create_project_at(
   let mut should_create_project: bool = true;
 
   if project_root.is_dir() {
-    let prompt = format!("Directory {} already exists. Overwrite it?", new_project_root);
+    let prompt: String = format!("Directory {} already exists. Overwrite it?", new_project_root);
 
     if prompt_until_boolean(&prompt)? {
       remove_dir_all(project_root)?;
@@ -50,21 +50,20 @@ pub fn create_project_at(
   }
 
   if should_create_project {
-    create_dir_all(project_root)?;
-
-    for nested_dir in [SRC_DIR, INCLUDE_DIR, TEMPLATE_IMPL_DIR, ASSETS_DIR] {
-      let mut extended_path = project_root.to_path_buf();
-      extended_path.push(nested_dir);
-      create_dir_all(extended_path)?;
-    }
-
-    if !project_type_creating.is_test() {
-      for nested_dir in [SUBPROJECTS_DIR, TESTS_DIR] {
-        let mut extended_path = project_root.to_path_buf();
-        extended_path.push(nested_dir);
-        create_dir_all(extended_path)?;
+    if let ProjectTypeCreating::Test { parent_project } = &project_type_creating {
+      if parent_project.get_test_framework().is_none() {
+        return Err(io::Error::new(
+          io::ErrorKind::Other,
+          format!(
+            "Tried to create a test project, however the root project doesn't specify a test framework. Please specify a test framework in the root project before generating a test."
+          )
+        ));
       }
     }
+
+    // ----------------------------------------
+    // Info collection section
+    // ----------------------------------------
 
     let default_prefix = project_name
       .to_uppercase()
@@ -85,13 +84,6 @@ pub fn create_project_at(
         parent_project.nested_include_prefix(&base_include_prefix_for_test(&include_prefix))
       }
     };
-
-    for dir_requiring_include_suffix in [SRC_DIR, INCLUDE_DIR, TEMPLATE_IMPL_DIR, ASSETS_DIR] {
-      let mut extended_path = project_root.to_path_buf();
-      extended_path.push(dir_requiring_include_suffix);
-      extended_path.push(&folder_generation_include_prefix);
-      create_dir_all(extended_path)?;
-    }
 
     let output_type_selection: CreationProjectOutputType = match project_output_type {
       Some(out_type) => out_type,
@@ -133,6 +125,13 @@ pub fn create_project_at(
 
     println!("");
 
+    // ----------------------------------------
+    // Folder and file generation section
+    // ----------------------------------------
+    // This section comes after all info is collected because the user should
+    // be able to cancel during any project generation phase without a half-made
+    // project being generated.
+
     match &project_info {
       DefaultProjectInfo::RootProject(project_info) => 
         write_cmake_yaml(&cmake_data_file, project_info)?,
@@ -142,35 +141,50 @@ pub fn create_project_at(
         write_cmake_yaml(&cmake_data_file, test_project_info)?
     }
 
+    create_dir_all(project_root)?;
+
+    for nested_dir in [SRC_DIR, INCLUDE_DIR, TEMPLATE_IMPL_DIR, ASSETS_DIR] {
+      let mut extended_path = project_root.to_path_buf();
+      extended_path.push(nested_dir);
+      create_dir_all(extended_path)?;
+    }
+
+    if !project_type_creating.is_test() {
+      for nested_dir in [SUBPROJECTS_DIR, TESTS_DIR] {
+        let mut extended_path = project_root.to_path_buf();
+        extended_path.push(nested_dir);
+        create_dir_all(extended_path)?;
+      }
+    }
+
+    for dir_requiring_include_suffix in [SRC_DIR, INCLUDE_DIR, TEMPLATE_IMPL_DIR, ASSETS_DIR] {
+      let mut extended_path = project_root.to_path_buf();
+      extended_path.push(dir_requiring_include_suffix);
+      extended_path.push(&folder_generation_include_prefix);
+      create_dir_all(extended_path)?;
+    }
+
     let mut main_file_path = project_root.to_owned();
     main_file_path.push(main_file_name(project_name, &lang_selection, &output_type_selection));
 
-    if let ProjectTypeCreating::Test { parent_project } = &project_type_creating {
-      match parent_project.get_test_framework() {
-        Some(test_framework) => {
-          generate_cpp_main(
-            main_file_path,
-            &output_type_selection,
-            Some(TestMainInitInfo {
-              test_framework,
-              requires_custom_main: requires_custom_main.unwrap()
-            })
-          )?;
-        },
-        None => {
-          return Err(io::Error::new(
-            io::ErrorKind::Other,
-            format!(
-              "Tried to create a test project, however the root project doesn't specify a test framework. Please specify a test framework in the root project before generating a test."
-            )
-          ));
+    match &project_type_creating {
+      ProjectTypeCreating::Test { parent_project } => {
+        let test_framework: &FinalTestFramework = parent_project.get_test_framework().as_ref().unwrap();
+
+        generate_cpp_main(
+          main_file_path,
+          &output_type_selection,
+          Some(TestMainInitInfo {
+            test_framework,
+            requires_custom_main: requires_custom_main.unwrap()
+          })
+        )?;
+      },
+      _ => {
+        match lang_selection {
+          MainFileLanguage::C => generate_c_main(main_file_path, &output_type_selection)?,
+          MainFileLanguage::Cpp => generate_cpp_main(main_file_path, &output_type_selection, None)?
         }
-      }
-    }
-    else {
-      match lang_selection {
-        MainFileLanguage::C => generate_c_main(main_file_path, &output_type_selection)?,
-        MainFileLanguage::Cpp => generate_cpp_main(main_file_path, &output_type_selection, None)?
       }
     }
 

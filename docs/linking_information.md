@@ -1,5 +1,8 @@
 # Linking
 
+> **TODO:** Update this page. Need to explain the dependency graph, and how it allows
+> projects to be linked in either direction now.
+
 > This documentation page contains explanations for several important linking concepts relevant to gcmake.
 
 If you're looking for how to specify links in [cmake_data.yaml](cmake_data.md), check out

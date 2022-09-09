@@ -6,6 +6,7 @@ It's here to explain the basic functionality of this project and describe its co
 ## Requirements
 
 - [Git](https://git-scm.com/) must be installed on the system
+- [CMake 3.24](https://cmake.org/download/) or higher
 
 ## About gcmake-rust
 
@@ -17,7 +18,7 @@ most general and common use cases.
 1. Create new full C/C++ projects and subprojects.
 2. Generate header, source, and template-impl files in-tree.
 3. Generate a full working CMake configuration for an entire project tree, including dependencies
-and subprojects.
+and subprojects configured using the same tool.
 
 ## Example Project
 

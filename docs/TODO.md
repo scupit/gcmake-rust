@@ -36,18 +36,18 @@ There are a whole bunch of things which need doing. This is the place to list th
 
 [CPack Docs Page](https://cmake.org/cmake/help/latest/module/CPack.html#variable:CPACK_PACKAGE_DESCRIPTION_SUMMARY)
 
-- [ ] CTest tests and *\<project name\>_BUILD_TESTS* variable. Tests should be in *tests/* directory,
+- [x] CTest tests and *\<project name\>_BUILD_TESTS* variable. Tests should be in *tests/* directory,
         Each test should have its own directory.
 - [x] Generate a placeholder header and source file when creating a new compiled library. Currently,
         the intial CMakeLists generation step for the new compiled library project fails because the
         project doesn't contain any source files; just the 'entry point' header.
-- [ ] Separate the `new` command into `project` and `subproject`. This opens the door for adding other
+- [x] Separate the `new` command into `project` and `subproject`. This opens the door for adding other
         things, such as `new test`.
 -  Improvements to installers, such as:
-  - [ ] Ability to specify an installer icon (where applicable)
-  - [ ] Name the uninstaller `Uninstall_<project name>` (where applicable)
+  - [x] Ability to specify an installer icon (where applicable)
+  - [x] Name the uninstaller `Uninstall_<project name>` (where applicable)
 - [ ] Expose system endianness to the project using `CMAKE_<LANG>_BYTE_ORDER`.
-- [ ] Figure out cross-compiling
+- [x] Figure out cross-compiling
 - [x] Cache dependencies in *~/.gcmake/dep-cache*. It's a pain to clone dependencies over wi-fi every
         time they are needed.
 - [ ] Add CLI commands for cleaning and updating the dep-cache. Not exactly sure how updating should work yet.
@@ -93,7 +93,7 @@ project, organized as *components*. See [SFML](https://github.com/SFML/SFML) for
 
 ### Testing
 
-- [ ] Add support for automated testing with CMake's built-in ctest.
+- [x] Add support for automated testing with CMake's built-in ctest.
 
 ### Installation
 
@@ -104,7 +104,7 @@ project, organized as *components*. See [SFML](https://github.com/SFML/SFML) for
 ### Generation TODO
 
 - [x] Add ability to generate header, source, and template-impl files. Must support C and C++.
-- [ ] Generate *.gitignore* file if it doesn't exist. Ignore:
+- [x] Generate *.gitignore* file if it doesn't exist. Ignore:
   - .vscode/
   - build/
 - [x] Ability to specify linked dependencies as a map of project names, each with its own dependency list.
@@ -113,7 +113,7 @@ project, organized as *components*. See [SFML](https://github.com/SFML/SFML) for
 Support for:
 
 - [x] `.clang-format`
-- [ ] `.clang-tidy`
+- [x] `.clang-tidy`
 - [ ] valgrind? (not sure if this needs a configuration file or not, needs research)
 - [x] CPack installer generation
 
@@ -159,7 +159,7 @@ The command set for viewing project metadata.
 
 #### new
 
-- [ ] `new clang-format` command which generates a default .clang-format if it doesn't exist.
+- [x] `new clang-format` command which generates a default .clang-format if it doesn't exist.
 
 ### External libraries TODO
 
@@ -218,12 +218,19 @@ Other CMake projects:
 - [ ] [TensorFlow](https://www.tensorflow.org/)
 - [ ] [imgui](https://github.com/ocornut/imgui)
 - [x] [GLM (OpenGL Mathematics)](https://github.com/g-truc/glm)
+- [ ] [notcurses](https://github.com/dankamongmen/notcurses)
+- [ ] [cxxopts](https://github.com/jarro2783/cxxopts)
+
+Support when FetchContent ready:
+
+- [ ] [GLM (The actual repo, not a fork)](https://github.com/g-truc/glm)
+- [ ] [CLI11](https://github.com/CLIUtils/CLI11)
 
 Testing Frameworks:
 
-- [ ] [Catch2](https://github.com/catchorg/Catch2)
-- [ ] [doctest](https://github.com/doctest/doctest)
-- [ ] [GoogleTest](https://github.com/google/googletest)
+- [x] [Catch2](https://github.com/catchorg/Catch2)
+- [x] [doctest](https://github.com/doctest/doctest)
+- [x] [GoogleTest](https://github.com/google/googletest)
 
 Other projects:
 
