@@ -27,6 +27,7 @@ function( gcmake_configure_cpack )
     endif()
   endforeach()
 
+  option( CPACK_STRIP_FILES "Whether to strip symbols from installed binaries" ON )
   set( CPACK_PACKAGE_EXECUTABLES ${INSTALLER_CONFIG_SHORTCUT_MAP} )
   set( CPACK_CREATE_DESKTOP_LINKS )
   set( temp_should_add TRUE )
@@ -50,11 +51,6 @@ function( gcmake_configure_cpack )
   else()
     message( STATUS "No license file found for ${LOCAL_TOPLEVEL_PROJECT_NAME}" )
   endif()
-
-  # TODO: Allow a {welcome|Welcome|WELCOME}.txt which is embedded into the installer.
-  # if( welcome_file )
-  #   set( CPACK_RESOURCE_FILE_WELCOME "${welcome_file}" )
-  # endif()
 
   get_cmake_property( LIST_OF_COMPONENTS COMPONENTS )
   # message( "components: ${LIST_OF_COMPONENTS}" )
