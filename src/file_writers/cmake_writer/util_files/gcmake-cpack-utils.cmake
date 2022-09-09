@@ -1,6 +1,8 @@
 # Should only be called from the root project, and only from the toplevel project being built.
 # if( "${CMAKE_SOURCE_DIR}" STREQUAL "${CMAKE_CURRENT_SOURCE_DIR}" )
 
+# This file should be included after installation utils and variable-utils.
+
 function( gcmake_configure_cpack )
   include( CPackComponent )
   include( ProcessorCount )
@@ -40,6 +42,20 @@ function( gcmake_configure_cpack )
     endif()
   endforeach()
 
+  get_installer_compatible_license( license_file )
+
+  if( license_file )
+    message( STATUS "Found valid license file" )
+    set( CPACK_RESOURCE_FILE_LICENSE "${license_file}" )
+  else()
+    message( STATUS "No license file found for ${LOCAL_TOPLEVEL_PROJECT_NAME}" )
+  endif()
+
+  # TODO: Allow a {welcome|Welcome|WELCOME}.txt which is embedded into the installer.
+  # if( welcome_file )
+  #   set( CPACK_RESOURCE_FILE_WELCOME "${welcome_file}" )
+  # endif()
+
   get_cmake_property( LIST_OF_COMPONENTS COMPONENTS )
   # message( "components: ${LIST_OF_COMPONENTS}" )
 
@@ -62,15 +78,56 @@ function( gcmake_configure_cpack )
     )
   endforeach()
 
+  set( CPACK_GENERATOR )
+  set( CPACK_SOURCE_GENERATOR )
+
+  locate_7zip_exe( exe_7zip )
+
+  if( exe_7zip )
+    set( ENABLE_7ZIP_DEFAULT ON )
+  else()
+    set( ENABLE_7ZIP_DEFAULT OFF )
+  endif()
+
+  option( CPACK_7Z_ENABLED "Enable .7z package generator" ${ENABLE_7ZIP_DEFAULT} )
+
+  # The 7Z CPACK_GENERATOR will be enabled for windows only. However, it's fine to create
+  # a .7z source package from any system.
+  if( CPACK_7Z_ENABLED )
+    list( APPEND CPACK_SOURCE_GENERATOR "7Z" )
+  endif()
+
   # Currently don't support Apple because I have no way to test it.
   if( CURRENT_SYSTEM_IS_WINDOWS )
-    option( CPACK_WIX_ENABLED "Generate installer using WiX" ON )
-    option( CPACK_NSIS_ENABLED "Generate installer using NSIS" OFF )
+    locate_wix_candle_exe( wix_candle_exe )
+    if( wix_candle_exe )
+      set( WIX_ENABLED_BY_DEFAULT ON )
+    else()
+      set( WIX_ENABLED_BY_DEFAULT OFF )
+    endif()
 
-    set( CPACK_GENERATOR "7Z" "ZIP" )
-    set( CPACK_SOURCE_GENERATOR "ZIP" "7Z" )
+    option( CPACK_WIX_ENABLED "Generate installer using WiX" ${WIX_ENABLED_BY_DEFAULT} )
 
-    # TODO: Installer icons
+    locate_nsis_makensis_exe( nsis_makensis_exe )
+    if( nsis_makensis_exe)
+      set( NSIS_ENABLED_BY_DEFAULT ON )
+    else()
+      set( NSIS_ENABLED_BY_DEFAULT OFF )
+    endif()
+
+    option( CPACK_NSIS_ENABLED "Generate installer using NSIS" ${NSIS_ENABLED_BY_DEFAULT} )
+    option( CPACK_ZIP_ENABLED "Enable .zip package generator" ON )
+
+    if( CPACK_7Z_ENABLED )
+      list( APPEND CPACK_GENERATOR "7Z" )
+    endif()
+
+    if( CPACK_ZIP_ENABLED )
+      list( APPEND CPACK_GENERATOR "ZIP" )
+      list( APPEND CPACK_SOURCE_GENERATOR "ZIP" )
+    endif()
+
+    # TODO: Icons and banners in the installers themselves
     if( CPACK_WIX_ENABLED )
       list( APPEND CPACK_GENERATOR "WIX" )
       set( CPACK_WIX_ROOT_FEATURE_TITLE "${INSTALLER_CONFIG_INSTALLER_TITLE}" )
@@ -87,11 +144,28 @@ function( gcmake_configure_cpack )
       set( CPACK_NSIS_UNINSTALL_NAME "Uninstall ${INSTALLER_CONFIG_INSTALLER_TITLE}" )
     endif()
   elseif( CURRENT_SYSTEM_IS_LINUX )
-    option( CPACK_DEB_ENABLED "Generate DEB installer" OFF )
+    locate_dpkg_exe( dpkg_exe )
+    if( dpkg_exe )
+      set( DEB_ENABLED_BY_DEFAULT ON )
+    else()
+      set( DEB_ENABLED_BY_DEFAULT OFF )
+    endif()
+
+    option( CPACK_DEB_ENABLED "Generate DEB installer" ${DEB_ENABLED_BY_DEFAULT} )
     option( CPACK_RPM_ENABLED "Generate RPM installer" OFF )
+    option( CPACK_TGZ_ENABLED "Enable tar.gz package generator" ON )
+    option( CPACK_TXZ_ENABLED "Enable tar.xz package generator" ON )
     option( CPACK_FreeBSD_ENABLED "Generate FreeBSD installer" OFF )
 
-    set( CPACK_GENERATOR "TGZ" "TXZ" )
+    if( CPACK_TGZ_ENABLED )
+      list( APPEND CPACK_GENERATOR "TGZ" )
+      list( APPEND CPACK_SOURCE_GENERATOR "TGZ" )
+    endif()
+
+    if( CPACK_TXZ_ENABLED )
+      list( APPEND CPACK_GENERATOR "TXZ" )
+      list( APPEND CPACK_SOURCE_GENERATOR "TXZ" )
+    endif()
 
     if( CPACK_DEB_ENABLED )
       list( APPEND CPACK_GENERATOR "DEB" )
@@ -105,8 +179,6 @@ function( gcmake_configure_cpack )
     if( CPACK_FreeBSD_ENABLED )
       list( APPEND CPACK_GENERATOR "FreeBSD" )
     endif()
-
-    set( CPACK_SOURCE_GENERATOR "TGZ" "TXZ" "ZIP" "7Z" )
   endif()
 
   set( CPACK_PACKAGE_VENDOR "${INSTALLER_CONFIG_VENDOR}" )
@@ -123,4 +195,122 @@ function( gcmake_configure_cpack )
   set( CPACK_PACKAGE_CHECKSUM ${CPACK_USING_CHECKSUM_ALGORITHM} )
 
   include( CPack )
+endfunction()
+
+function( find_license_and_readme_files
+  license_file_out
+  readme_file_out
+)
+  set( license_names )
+  set( readme_names )
+
+  foreach( readme_prefix IN ITEMS "readme" "README" "Readme" )
+    foreach( readme_extension IN ITEMS ".md" ".txt")
+      list( APPEND readme_names "${readme_prefix}${readme_extension}")
+    endforeach()
+  endforeach()
+
+  foreach( license_prefix IN ITEMS "LICENSE" "license" "License" )
+    foreach( license_extension IN ITEMS "" ".md" ".txt")
+      list( APPEND license_names "${license_prefix}${license_extension}")
+    endforeach()
+  endforeach()
+
+  find_file( GCMAKE_license_file
+    NAMES ${license_names}
+    PATHS "${TOPLEVEL_PROJECT_DIR}"
+    NO_CMAKE_ENVIRONMENT_PATH
+    NO_CMAKE_FIND_ROOT_PATH
+    NO_CMAKE_PATH
+    NO_CMAKE_SYSTEM_PATH
+    NO_DEFAULT_PATH
+    NO_SYSTEM_ENVIRONMENT_PATH
+    NO_PACKAGE_ROOT_PATH
+  )
+
+  find_file( GCMAKE_readme_file
+    NAMES ${readme_names}
+    PATHS "${TOPLEVEL_PROJECT_DIR}"
+    NO_CMAKE_ENVIRONMENT_PATH
+    NO_CMAKE_FIND_ROOT_PATH
+    NO_CMAKE_PATH
+    NO_CMAKE_SYSTEM_PATH
+    NO_DEFAULT_PATH
+    NO_SYSTEM_ENVIRONMENT_PATH
+    NO_PACKAGE_ROOT_PATH
+  )
+
+  set( ${license_file_out} "${GCMAKE_license_file}" PARENT_SCOPE )
+  set( ${readme_file_out} "${GCMAKE_readme_file}" PARENT_SCOPE )
+endfunction()
+
+function( get_installer_compatible_license
+  license_file_out
+)
+  find_license_and_readme_files(
+    license_file
+    _readme_file
+  )
+  set( ${license_file_out} "${license_file}" PARENT_SCOPE )
+
+  if( license_file )
+    cmake_path( GET license_file EXTENSION LAST_ONLY license_file_extension )
+    if( "${license_file_extension}" STREQUAL ".md" )
+      cmake_path( GET license_file STEM LAST_ONLY license_stem )
+
+      set( usable_license_file_name "${license_stem}.txt")
+      set( license_file_dir "${CMAKE_BINARY_DIR}/license_files/${LOCAL_TOPLEVEL_PROJECT_NAME}" )
+      set( license_file_generated_path "${license_file_dir}/${usable_license_file_name}" )
+      
+      # This copy has to be done at configure time because the existence of the file is checked by
+      # cpack at configure time.
+      file( MAKE_DIRECTORY "${license_file_dir}" )
+      file( COPY_FILE "${license_file}" "${license_file_generated_path}" ONLY_IF_DIFFERENT )
+
+      set( ${license_file_out} "${license_file_generated_path}" PARENT_SCOPE )
+    endif()
+  endif()
+endfunction()
+
+function( locate_7zip_exe
+  out_var
+)
+  find_program( exe_7zip
+    NAMES "7z" "7z.exe"
+    PATH_SUFFIXES "7-Zip"
+  )
+
+  set( ${out_var} "${exe_7zip}" PARENT_SCOPE )
+endfunction()
+
+function( locate_wix_candle_exe
+  out_var
+)
+  find_program( wix_candle_exe
+    NAMES "candle.exe"
+    PATH_SUFFIXES "wix311-binaries"
+  )
+
+  set( ${out_var} "${wix_candle_exe}" PARENT_SCOPE )
+endfunction()
+
+function( locate_nsis_makensis_exe
+  out_var
+)
+  find_program( nsis_makensis_exe
+    NAMES "makensis.exe"
+    PATH_SUFFIXES "NSIS"
+  )
+
+  set( ${out_var} "${nsis_makensis_exe}" PARENT_SCOPE )
+endfunction()
+
+function( locate_dpkg_exe
+  out_var
+)
+  find_program( dpkg_exe
+    NAMES "dpkg"
+  )
+
+  set( ${out_var} "${dpkg_exe}" PARENT_SCOPE )
 endfunction()

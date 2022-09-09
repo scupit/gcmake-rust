@@ -1,5 +1,6 @@
 if( NOT GCMAKE_PRE_BUILD_UTIL_HAS_BEEN_INCLUDED )
-  add_custom_target( run-pre-build
+  set( GCMAKE_GLOBAL_PRE_BUILD_TARGET run-pre-build )
+  add_custom_target( ${GCMAKE_GLOBAL_PRE_BUILD_TARGET}
     ALL
     COMMENT "Running all pre-build scripts in the entire GCMake project tree, including GCMake dependencies"
   )
