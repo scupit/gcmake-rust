@@ -181,7 +181,11 @@ Types of libraries which need support, from easiest to hardest:
 
 ### Libraries I want to explicitly support for convenience
 
-Pre-written CMake find modules:
+- Ideally anything listed in the [awesome-cpp repository](https://github.com/fffaraz/awesome-cpp) which either
+  supports cross-platform CMake builds out of the box or is fairly easy to add. That repository is a fantastic
+  list.
+
+#### Pre-written CMake find modules
 
 - [ ] Boost
 - [ ] BZip2
@@ -192,19 +196,19 @@ Pre-written CMake find modules:
 - [x] GLEW
 - [ ] LibLZMA
 - [ ] OpenAL-soft
-- [X] OpenGL
+- [x] OpenGL
 - [ ] OpenSceneGraph (maybe) (NOTE: has cmake package config file)
 - [ ] OpenSSL
 - [ ] PNG
-- [X] SDL2
+- [x] SDL2
 - [ ] SQLite (3)
-- [X] Threads
+- [x] Threads
 - [ ] TIFF
 - [x] wxWidgets
 - [ ] Vulkan
 - [ ] ZLIB
 
-Other CMake projects:
+#### Other CMake projects
 
 - [ ] [Qt6](https://www.qt.io/product/qt6)
 - [x] [nlohmann json](https://github.com/nlohmann/json)
@@ -218,19 +222,26 @@ Other CMake projects:
 - [ ] [TensorFlow](https://www.tensorflow.org/)
 - [ ] [imgui](https://github.com/ocornut/imgui)
 - [x] [GLM (OpenGL Mathematics)](https://github.com/g-truc/glm)
-- [ ] [cxxopts](https://github.com/jarro2783/cxxopts)
+- [x] [cxxopts](https://github.com/jarro2783/cxxopts)
+- [x] [CLI11](https://github.com/CLIUtils/CLI11)
+- [x] [ftxui](https://github.com/ArthurSonzogni/FTXUI)
+- [x] [pugixml](https://github.com/zeux/pugixml)
 
-Support when FetchContent ready:
+#### Support when FetchContent ready
 
 - [ ] [GLM (The actual repo, not a fork)](https://github.com/g-truc/glm)
-- [ ] [CLI11](https://github.com/CLIUtils/CLI11)
 
-Testing Frameworks:
+#### Testing Frameworks
 
 - [x] [Catch2](https://github.com/catchorg/Catch2)
 - [x] [doctest](https://github.com/doctest/doctest)
 - [x] [GoogleTest](https://github.com/google/googletest)
 
-Other projects:
+#### Cryptography libraries
+
+- [ ] [botan](https://github.com/randombit/botan)
+- [ ] [crpytopp](https://github.com/weidai11/cryptopp)
+
+#### Other projects
 
 - [x] [stb](https://github.com/nothings/stb)
