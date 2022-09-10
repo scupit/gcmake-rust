@@ -118,19 +118,21 @@ pub fn create_project_at(
       requires_custom_main
     );
 
-    let cmake_data_file = File::create(
-      format!("{}/cmake_data.yaml",
-      project_root.to_str().unwrap())
-    )?;
-
-    println!("");
-
     // ----------------------------------------
     // Folder and file generation section
     // ----------------------------------------
     // This section comes after all info is collected because the user should
     // be able to cancel during any project generation phase without a half-made
     // project being generated.
+
+    create_dir_all(project_root)?;
+
+    let cmake_data_file = File::create(
+      format!("{}/cmake_data.yaml",
+      project_root.to_str().unwrap())
+    )?;
+
+    println!("");
 
     match &project_info {
       DefaultProjectInfo::RootProject(project_info) => 
@@ -140,8 +142,6 @@ pub fn create_project_at(
       DefaultProjectInfo::TestProject(test_project_info) =>
         write_cmake_yaml(&cmake_data_file, test_project_info)?
     }
-
-    create_dir_all(project_root)?;
 
     for nested_dir in [SRC_DIR, INCLUDE_DIR, TEMPLATE_IMPL_DIR, ASSETS_DIR] {
       let mut extended_path = project_root.to_path_buf();

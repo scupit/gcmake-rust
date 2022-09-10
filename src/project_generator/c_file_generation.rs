@@ -7,7 +7,7 @@ use super::configuration::OutputLibType;
 const C_EXE_MAIN: &'static str =
 "#include <stdio.h>
 
-int main(int argc, const char** argv) {
+int main(int argc, char** argv) {
 \tprintf(\"Hello World!\");
 \treturn 0;
 }

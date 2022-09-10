@@ -7,7 +7,7 @@ use super::{configuration::OutputLibType, cpp_test_mains::test_mains};
 const CPP_EXE_MAIN: &'static str =
 "#include <iostream>
 
-int main(int argc, const char** argv) {
+int main(int argc, char** argv) {
 \tstd::cout << \"Hello World\" << std::endl;
 \treturn EXIT_SUCCESS;
 }

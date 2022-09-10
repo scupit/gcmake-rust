@@ -218,7 +218,6 @@ Other CMake projects:
 - [ ] [TensorFlow](https://www.tensorflow.org/)
 - [ ] [imgui](https://github.com/ocornut/imgui)
 - [x] [GLM (OpenGL Mathematics)](https://github.com/g-truc/glm)
-- [ ] [notcurses](https://github.com/dankamongmen/notcurses)
 - [ ] [cxxopts](https://github.com/jarro2783/cxxopts)
 
 Support when FetchContent ready:
