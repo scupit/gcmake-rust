@@ -7,9 +7,19 @@ pub fn gcmake_config_root_dir() -> PathBuf {
     { "USERPROFILE" }
     else { "HOME" };
 
+  // Make sure this is keps in sync with the GCMAKE_CONFIG_DIR variable defined in
+  // the gcmake-variables.cmake util file.
   let mut home_path = PathBuf::from(env::var(user_home_var_name).unwrap());
   home_path.push(".gcmake");
   return home_path;
+}
+
+pub fn gcmake_dep_cache_dir() -> PathBuf {
+  let mut the_dir: PathBuf = gcmake_config_root_dir();
+  // Make sure this is keps in sync with the GCMAKE_DEP_CACHE_DIR variable defined in
+  // the gcmake-variables.cmake util file.
+  the_dir.push("dep-cache");
+  return the_dir;
 }
 
 fn get_repo_name() -> &'static str {
@@ -20,7 +30,7 @@ fn get_repo_name() -> &'static str {
   return &without_prefix[first_name_index..];
 }
 
-pub fn local_dep_config_repo_location() -> PathBuf {
+pub fn gcmake_dep_config_dir() -> PathBuf {
   gcmake_config_root_dir().join(get_repo_name())
 }
 
@@ -76,7 +86,7 @@ pub enum DepConfigUpdateResult {
 }
 
 pub fn update_dependency_config_repo(maybe_branch_name: &Option<String>) -> io::Result<DepConfigUpdateResult> {
-  let local_repo_location: PathBuf = local_dep_config_repo_location();
+  let local_repo_location: PathBuf = gcmake_dep_config_dir();
 
   if local_repo_location.is_dir() {
     if let Some(branch_name) = maybe_branch_name {

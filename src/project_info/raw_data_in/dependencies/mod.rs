@@ -3,7 +3,7 @@ pub mod user_given_dep_config;
 
 use std::{path::PathBuf, fs::{DirEntry, self}, rc::Rc};
 
-use crate::program_actions::local_dep_config_repo_location;
+use crate::program_actions::gcmake_dep_config_dir;
 
 use self::internal_dep_config::{AllRawPredefinedDependencies, SingleRawPredefinedDependencyConfigGroup, RawPredefinedDependencyInfo, PredefinedCMakeDepHookFile};
 
@@ -25,7 +25,7 @@ pub fn all_raw_supported_dependency_configs() -> Result<AllRawPredefinedDependen
           I'm not sure if this is needed or not, so this is more of a quality-of-life convenience step.
   */
 
-  let dep_config_repo: PathBuf = local_dep_config_repo_location();
+  let dep_config_repo: PathBuf = gcmake_dep_config_dir();
 
   if !dep_config_repo.is_dir() {
     return Err(format!(

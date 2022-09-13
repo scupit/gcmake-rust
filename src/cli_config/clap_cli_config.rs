@@ -258,7 +258,15 @@ pub struct PredepInfoCommand {
 #[derive(Args)]
 #[clap(setting = AppSettings::ColoredHelp)]
 pub struct ToolInfoCommand {
-  /// Print repository URL
-  #[clap(short = 'c', long = "config-dir")]
-  pub show_config_dir: bool
+  /// Print the global GCMake configuration directory
+  #[clap(long = "global-config")]
+  pub show_config_dir: bool,
+
+  /// Print the dependency cache directory
+  #[clap(long = "dep-cache")]
+  pub show_dep_cache_dir: bool,
+
+  /// Print the dependency config dir
+  #[clap(long = "dep-config")]
+  pub show_dep_config_dir: bool
 }

@@ -224,6 +224,14 @@ pub fn print_tool_info(
   if command.show_config_dir {
     println!("{}", gcmake_config_root_dir().to_str().unwrap());
   }
+
+  if command.show_dep_cache_dir {
+    println!("{}", gcmake_dep_cache_dir().to_str().unwrap());
+  }
+
+  if command.show_dep_config_dir {
+    println!("{}", gcmake_dep_config_dir().to_str().unwrap());
+  }
 }
 
 pub fn print_predep_info(
