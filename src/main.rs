@@ -154,6 +154,11 @@ fn main() {
           None
         );
       },
+      SubCommandStruct::ToolInfo(command) => {
+        should_generate_cmakelists = false;
+
+        print_tool_info(command);
+      },
       SubCommandStruct::DepConfig(_) => {
         unreachable!();
       }

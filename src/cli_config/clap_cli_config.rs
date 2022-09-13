@@ -47,7 +47,10 @@ pub enum SubCommandStruct {
   ProjectInfo(ProjectInfoCommand),
 
   /// Select and print information about predefined dependencies
-  PredepInfo(PredepInfoCommand)
+  PredepInfo(PredepInfoCommand),
+
+  /// Print information about the GCMake tool itself
+  ToolInfo(ToolInfoCommand)
 }
 
 #[derive(Subcommand)]
@@ -250,4 +253,12 @@ pub struct PredepInfoCommand {
   /// Print the dependency's GitHub page URL, if applicable
   #[clap(short = 'g')]
   pub show_github_url: bool
+}
+
+#[derive(Args)]
+#[clap(setting = AppSettings::ColoredHelp)]
+pub struct ToolInfoCommand {
+  /// Print repository URL
+  #[clap(short = 'c', long = "config-dir")]
+  pub show_config_dir: bool
 }
