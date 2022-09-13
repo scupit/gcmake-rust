@@ -24,6 +24,13 @@ pub struct FinalGitRepoDescriptor {
 }
 
 #[derive(Clone)]
+pub struct SubdirDepInstallationConfig {
+  pub var_name: String,
+  pub is_inverse: bool,
+  pub should_install_by_default: bool
+}
+
+#[derive(Clone)]
 pub struct PredefinedSubdirDep {
   git_repo: FinalGitRepoDescriptor,
   installed_include_dir_name: Option<String>,
@@ -36,12 +43,17 @@ pub struct PredefinedSubdirDep {
   cmake_namespaced_target_map: HashMap<String, String>,
   yaml_namespaced_target_map: HashMap<String, String>,
   requires_custom_populate: bool,
+  installation_details: Option<SubdirDepInstallationConfig>,
   _can_cross_compile: bool
 }
 
 impl PredefinedSubdirDep {
   pub fn get_target_config_map(&self) -> &FinalTargetConfigMap {
     &self.target_map
+  }
+
+  pub fn get_installation_details(&self) -> &Option<SubdirDepInstallationConfig> {
+    &self.installation_details
   }
 
   pub fn custom_relative_include_dir_name(&self) -> &Option<String> {
@@ -126,6 +138,26 @@ impl PredefinedSubdirDep {
       );
     }
 
+    let should_install_by_default: bool = subdir_dep.install_by_default.unwrap_or(true);
+
+    let installation_details: Option<SubdirDepInstallationConfig> = match (&subdir_dep.install_var, &subdir_dep.inverse_install_var) {
+      (Some(install_var), _) => {
+        Some(SubdirDepInstallationConfig {
+          var_name: install_var.clone(),
+          is_inverse: false,
+          should_install_by_default
+        })
+      },
+      (_, Some(inverse_install_var)) => {
+        Some(SubdirDepInstallationConfig {
+          var_name: inverse_install_var.clone(),
+          is_inverse: true,
+          should_install_by_default
+        })
+      },
+      _ => None
+    };
+
     return Ok(
       Self {
         git_repo: FinalGitRepoDescriptor {
@@ -139,6 +171,7 @@ impl PredefinedSubdirDep {
         cmake_namespaced_target_map,
         yaml_namespaced_target_map,
         requires_custom_populate: subdir_dep.requires_custom_fetchcontent_populate,
+        installation_details,
         _can_cross_compile: subdir_dep.can_cross_compile()
       }
     )

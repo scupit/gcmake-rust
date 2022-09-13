@@ -66,6 +66,12 @@ fn quote_escaped_string(some_str: &str) -> String {
   some_str.replace('"', "\\\"")
 }
 
+fn on_or_off_str(value: bool) -> &'static str {
+  return if value
+    { "ON" }
+    else { "OFF" };
+}
+
 fn flattened_defines_list_string(spacer: &str, defines: &Vec<CompilerDefine>) -> String {
   defines.iter()
     .map(|CompilerDefine { system_spec, def_string }| {
@@ -942,6 +948,48 @@ impl<'a> CMakeListsWriter<'a> {
         dep_info.custom_relative_include_dir_name()
           .as_ref()
           .map_or(dep_name, |dep_name_string| dep_name_string.as_str())
+      )?;
+    }
+
+    /* For now, install subdirectory dependencies by default unless the configuration file
+        specifies otherwise.
+      Subdirectory dependencies need to be installed in two scenarios:
+        1. The dependency is built as a shared library, and a project output depends on that shared
+            library.
+        2. The library headers need to be installed because one of our project output libraries
+            lists the dependency as a PUBLIC dependency (meaning the need for the dependency's
+            headers (and library binaries, in some cases) are transitive.)
+
+      #2 will be semi-solved once more libraries migrate to using CMake's FILE_SET HEADERS. However,
+      FILE_SET was just added in CMake 3.23 (current version is 3.24.1 as of September 12th 2022), so
+      it will be a while before that happens. Also, there are at least three or four different ways
+      that different libraries use to implement header installation at the moment due to legacy
+      CMake support (and the fact that several methods work well).
+
+      #1 isn't something I can reliably solve at the moment either. There are so many ways to select
+      either a static or shared version of a library in CMake, and so many libraries implement that
+      differently. Sometimes a library target might hide the static/shared library behind and INTERFACE
+      target, or more commonly an ALIAS target. Some are suffixed with '-shared' or '-static'. Some
+      depend on the value of CMake's built-in BUILD_SHARED_LIBS and BUILD_STATIC_LIBS variables.
+
+      For the above reasons, most libraries will be set to install by default. This means that a project
+      installation should work out of the box even when it contains dependencies, because all dependencies
+      will be included by default. However, this means that the default installation is likely to contain
+      more headers (and possibly library files) than needed. For a minimal installation, just manually
+      turn off any unneeded installation steps (if possible. Some libraries don't allow this.).
+    */
+    if let Some(installation_details) = dep_info.get_installation_details() {
+      let mut default_value: bool = installation_details.should_install_by_default;
+
+      if installation_details.is_inverse {
+        default_value = !default_value;
+      }
+
+      self.set_basic_option(
+        "",
+        &installation_details.var_name,
+        on_or_off_str(default_value),
+        &format!("Whether to install {}. GCMake sets this to {} by default.", dep_name, on_or_off_str(default_value))
       )?;
     }
 

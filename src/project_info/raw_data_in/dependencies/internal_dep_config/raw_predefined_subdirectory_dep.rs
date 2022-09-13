@@ -37,9 +37,24 @@ pub struct RawSubdirectoryDependency {
 
   #[serde(default = "default_requires_custom_populate")]
   pub requires_custom_fetchcontent_populate: bool,
+
+  // CMake variable used for installation
+  pub install_var: Option<String>,
+  pub inverse_install_var: Option<String>,
+  pub install_by_default: Option<bool>,
   
   #[serde(rename = "can_cross_compile")]
   _can_cross_compile: bool
+}
+
+impl RawSubdirectoryDependency {
+  pub fn has_installation_details(&self) -> bool {
+    return match (&self.install_var, &self.inverse_install_var) {
+      (Some(_), _) => true,
+      (_, Some(_)) => true,
+      _ => false
+    }
+  }
 }
 
 impl RawPredepCommon for RawSubdirectoryDependency {
