@@ -245,5 +245,9 @@ pub struct PredepInfoCommand {
 
   /// Print the dependency's git repository URL, if applicable
   #[clap(short = 'r')]
-  pub show_repository_url: bool
+  pub show_repository_url: bool,
+
+  /// Print the dependency's GitHub page URL, if applicable
+  #[clap(short = 'g')]
+  pub show_github_url: bool
 }

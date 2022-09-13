@@ -20,9 +20,16 @@ pub fn print_predep_targets(dep_name: &str, common_info: &dyn RawPredepCommon) {
   println!("}}");
 }
 
-pub fn print_predep_url(common_info: &dyn RawPredepCommon) {
+pub fn print_predep_repo_url(common_info: &dyn RawPredepCommon) {
   match common_info.repo_url() {
     Some(repo_url) => println!("Repo URL:\n\t{}", repo_url),
     None => println!("No repo URL")
+  }
+}
+
+pub fn print_predep_github_url(common_info: &dyn RawPredepCommon) {
+  match common_info.github_url() {
+    Some(github_url) => println!("Github URL:\n\t{}", github_url),
+    None => println!("No GitHub URL")
   }
 }

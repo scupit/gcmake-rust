@@ -5,6 +5,19 @@ use crate::project_info::{raw_data_in::dependencies::{internal_dep_config::{RawS
 use super::{predep_module_common::PredefinedDepFunctionality, final_target_map_common::{FinalTargetConfigMap, make_final_target_config_map}};
 
 #[derive(Clone)]
+pub struct FinalSubdirDepLinks {
+  github: Option<String>
+}
+
+impl FinalSubdirDepLinks {
+  pub fn new_empty() -> Self {
+    Self {
+      github: None
+    }
+  }
+}
+
+#[derive(Clone)]
 pub enum GitRevisionSpecifier {
   Tag(String),
   CommitHash(String)
@@ -44,6 +57,7 @@ pub struct PredefinedSubdirDep {
   yaml_namespaced_target_map: HashMap<String, String>,
   requires_custom_populate: bool,
   installation_details: Option<SubdirDepInstallationConfig>,
+  url_links: FinalSubdirDepLinks,
   _can_cross_compile: bool
 }
 
@@ -84,6 +98,10 @@ impl PredefinedSubdirDep {
 
   pub fn repo_url(&self) -> &str {
     &self.git_repo.repo_url
+  }
+
+  pub fn get_url_links(&self) -> &FinalSubdirDepLinks {
+    &self.url_links
   }
 
   pub fn revision(&self) -> &GitRevisionSpecifier {
@@ -158,8 +176,18 @@ impl PredefinedSubdirDep {
       _ => None
     };
 
+    let links_config: FinalSubdirDepLinks = match &subdir_dep.links {
+      None => FinalSubdirDepLinks::new_empty(),
+      Some(raw_links_config) => {
+        FinalSubdirDepLinks {
+          github: raw_links_config.github.clone()
+        }
+      }
+    };
+
     return Ok(
       Self {
+        url_links: links_config,
         git_repo: FinalGitRepoDescriptor {
           revision_specifier,
           repo_url: user_given_config.repo_url.clone()

@@ -60,4 +60,8 @@ impl RawPredepCommon for RawComponentsModuleDep {
   fn repo_url(&self) -> Option<&str> {
     None
   }
+
+  fn github_url(&self) -> Option<&str> {
+    None
+  }
 }

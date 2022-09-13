@@ -6,4 +6,5 @@ pub trait RawPredepCommon {
   fn maybe_mutual_exclusion_groups(&self) -> &Option<RawMutualExclusionSet>;
   fn raw_target_map_in(&self) -> &RawPredefinedTargetMapIn;
   fn repo_url(&self) -> Option<&str>;
+  fn github_url(&self) -> Option<&str>;
 }

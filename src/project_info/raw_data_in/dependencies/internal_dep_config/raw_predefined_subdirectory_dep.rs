@@ -6,6 +6,12 @@ use super::{raw_target_config_common::RawPredefinedTargetMapIn, RawMutualExclusi
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
+pub struct RawSubdirDepLinks {
+  pub github: Option<String>
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct NamespaceConfig {
   pub cmakelists_linking: String
 }
@@ -31,6 +37,7 @@ pub struct RawSubdirectoryDependency {
   // Name of the directory the project is installed to. The directory name should be the name
   // of the project the 
   pub config_file_project_name: Option<String>,
+  pub links: Option<RawSubdirDepLinks>,
   pub git_repo: RawSubdirDepGitRepoConfig,
   pub target_configs: RawPredefinedTargetMapIn,
   pub mutually_exclusive: Option<RawMutualExclusionSet>,
@@ -45,16 +52,6 @@ pub struct RawSubdirectoryDependency {
   
   #[serde(rename = "can_cross_compile")]
   _can_cross_compile: bool
-}
-
-impl RawSubdirectoryDependency {
-  pub fn has_installation_details(&self) -> bool {
-    return match (&self.install_var, &self.inverse_install_var) {
-      (Some(_), _) => true,
-      (_, Some(_)) => true,
-      _ => false
-    }
-  }
 }
 
 impl RawPredepCommon for RawSubdirectoryDependency {
@@ -72,5 +69,12 @@ impl RawPredepCommon for RawSubdirectoryDependency {
 
   fn repo_url(&self) -> Option<&str> {
     Some(&self.git_repo.repo_url)
+  }
+
+  fn github_url(&self) -> Option<&str> {
+    match &self.links {
+      None => None,
+      Some(links) => links.github.as_ref().map(|github_link| &github_link[..])
+    }
   }
 }
