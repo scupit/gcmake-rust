@@ -6,6 +6,7 @@ use self::{file_creation_info::{FileTypeGeneratingInfo, validate_which_generatin
 mod code_file_writer;
 mod file_creation_info;
 mod file_creation_prompts;
+use colored::*;
 
 pub use file_creation_prompts::prompt_for_initial_compiled_lib_file_pair_name;
 
@@ -20,7 +21,7 @@ enum FileCollisionHandleOption {
 pub fn handle_create_files(
   project_data: &Rc<FinalProjectData>,
   command: &CreateFilesCommand
-) -> Result<(), String> {
+) -> Result<bool, String> {
   let which_generating: FileTypeGeneratingInfo = FileTypeGeneratingInfo::new(&command.which)?;
   validate_which_generating(&command.language, &which_generating)?;
 
@@ -36,12 +37,15 @@ pub fn handle_create_files(
     )?;
 
     if let FileCollisionHandleOption::CancelRest = &global_file_collision_option {
-      println!("\nCancelled creating the rest of the code files. No more will be created.\n");
-      break;
+      println!(
+        "{}",
+        "\nCancelled creating the rest of the code files. No more will be created.\n".green()
+      );
+      return Ok(true);
     }
   }
 
-  Ok(())
+  Ok(false)
 }
 
 fn create_single_file_set(
@@ -151,7 +155,7 @@ fn create_single_file_set(
         for file_path in created_files {
           println!(
             "Created: {}",
-            relative_to_project_root(&project_data.get_project_root(), file_path)
+            relative_to_project_root(&project_data.get_project_root(), file_path).cyan()
           );
         }
       }

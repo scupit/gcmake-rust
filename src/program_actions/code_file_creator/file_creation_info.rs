@@ -1,6 +1,7 @@
 use crate::{project_info::path_manipulation::{relative_to_project_root, cleaned_path_str}, cli_config::clap_cli_config::FileCreationLang};
 
 use super::code_file_writer::CodeFileType;
+use colored::*;
 
 #[derive(Clone)]
 pub struct FileTypeGeneratingInfo {
@@ -98,7 +99,10 @@ pub fn validate_which_generating(
   match *lang {
     FileCreationLang::C => {
       if which_generating.generating_template_impl {
-        return Err(String::from("Error: Cannot generate a template implementation file (.tpp) for the C language. Please remove 't' from the file types specifier."));
+        return Err(format!(
+          "{}Cannot generate a template implementation file (.tpp) for the C language. Please remove 't' from the file types specifier.",
+          "Error: ".red()
+        ));
       }
     }
     FileCreationLang::Cpp => { }

@@ -11,6 +11,7 @@ use std::{io, path::PathBuf, fs, cell::RefCell, rc::Rc};
 use crate::{cli_config::{clap_cli_config::{UseFilesCommand, CreateFilesCommand, UpdateDependencyConfigsCommand, TargetInfoCommand, ProjectInfoCommand, PredepInfoCommand, ToolInfoCommand}, CLIProjectGenerationInfo, CLIProjectTypeGenerating}, common::{prompt::prompt_until_boolean}, logger::exit_error_log, project_info::{raw_data_in::dependencies::internal_dep_config::AllRawPredefinedDependencies, final_project_data::{UseableFinalProjectDataGroup, ProjectLoadFailureReason, FinalProjectData, ProjectConstructorConfig}, path_manipulation::absolute_path, dep_graph_loader::load_graph, dependency_graph_mod::dependency_graph::{DependencyGraphInfoWrapper, DependencyGraph, TargetNode, BasicTargetSearchResult, DependencyGraphWarningMode, BasicProjectSearchResult}, LinkSpecifier, validators::{is_valid_target_name, is_valid_project_name}}, file_writers::write_configurations, project_generator::GeneralNewProjectInfo, program_actions::info_printers::{target_info_print_funcs::{print_target_header, print_export_header_include_path}, project_info_print_funcs::{print_project_header, print_project_include_prefix, print_immediate_subprojects, print_project_repo_url}}};
 
 use self::info_printers::predef_dep_info_print_funcs::{print_predef_dep_header, print_predep_targets, print_predep_repo_url, print_predep_github_url};
+use colored::*;
 
 fn parse_project_info(
   project_root_dir: &str,
@@ -26,7 +27,8 @@ fn parse_project_info(
   )
     .map_err(|failure_reason| failure_reason.map_message(|err_message|{
       format!(
-        "When loading project using path '{}':\n\n{}",
+        "{} loading project using path '{}':\n\n{}",
+        "Error".red(),
         absolute_path(project_root_dir).unwrap().to_str().unwrap(),
         err_message
       )
@@ -364,11 +366,17 @@ pub fn do_generate_project_configs(
 
   let config_write_result: io::Result<()> = write_configurations(
     &graph_info_wrapper,
-    |config_name| println!("\nBeginning {} configuration step...", config_name),
+    |config_name| println!("\nBeginning {} configuration step...", config_name.green()),
     |(config_name, config_result)| match config_result {
-      Ok(_) => println!("{} configuration written successfully!", config_name),
+      Ok(_) => println!("{} configuration written successfully!", config_name.green()),
       Err(err) => {
-        println!("Writing {} configuration failed with error:", config_name);
+        println!(
+          "{}",
+          format!(
+            "Writing {} configuration failed with error:",
+            config_name
+          ).red()
+        );
         println!("{:?}", err)
       }
     }
@@ -395,7 +403,9 @@ pub fn do_new_files_subcommand(
   }
 
   match handle_create_files(&project_data_group.operating_on.unwrap(), &command) {
-    Ok(_) => println!("Files written successfully!"),
+    Ok(_) => {
+      // Nothing needs to happen here, since a creation message is printed for every file that is created.
+    },
     Err(error_message) => exit_error_log(&error_message)
   }
 }
@@ -427,7 +437,14 @@ pub fn do_new_project_subcommand(
 }
 
 pub fn do_dependency_config_update_subcommand(command: UpdateDependencyConfigsCommand) {
+  println!("{}", "Beginning dependency config repo update...".green());
+
   match update_dependency_config_repo(&command.branch) {
+    Err(err) => exit_error_log(format!(
+      "{}\n\t{}",
+      "Failed to update dependency config repo: ".red(),
+      err.to_string()
+    )),
     Ok(status) => match status {
       DepConfigUpdateResult::SubprocessError(git_subprocess_err_msg) => {
         exit_error_log(git_subprocess_err_msg);
@@ -448,12 +465,14 @@ pub fn do_dependency_config_update_subcommand(command: UpdateDependencyConfigsCo
             );
           },
           None => {
-            println!("Successfully updated dependency config repo");
+            println!(
+              "Successfully {}",
+              "updated dependency config repo".green()
+            );
           }
         }
       }
-    },
-    Err(err) => exit_error_log(err.to_string())
+    }
   }
 }
 

@@ -10,6 +10,7 @@ use serde::Serialize;
 use std::{fs::{File, remove_dir_all, create_dir_all, self}, io::{self, ErrorKind}, path::{Path, PathBuf}};
 
 use crate::{program_actions::{ProjectTypeCreating, gcmake_config_root_dir}, common::prompt::{prompt_until_boolean, prompt_until_satisfies_or_default}, project_info::{base_include_prefix_for_test, gcmake_constants::{SRC_DIR, INCLUDE_DIR, TEMPLATE_IMPL_DIR, ASSETS_DIR, SUBPROJECTS_DIR, TESTS_DIR}, validators::{is_valid_project_name, is_valid_base_include_prefix}, FinalTestFramework}, project_generator::{project_generator_prompts::{prompt_for_project_output_type, prompt_for_language, prompt_for_vendor, prompt_for_description, prompt_for_needs_custom_main}, c_file_generation::generate_c_main, cpp_file_generation::{generate_cpp_main, TestMainInitInfo}}};
+use colored::*;
 
 pub struct GeneralNewProjectInfo {
   pub project: CreatedProject,
@@ -188,7 +189,14 @@ pub fn create_project_at(
       }
     }
 
-    println!("Generated {}", main_file_name(project_name, &lang_selection, &output_type_selection));
+    println!(
+      "{}",
+      format!(
+        "Generated {}",
+        main_file_name(project_name, &lang_selection, &output_type_selection)
+      ).cyan()
+    );
+
     if let ProjectTypeCreating::RootProject = &project_type_creating {
       for default_file in [ ".clang-format", ".gitignore", ".clang-tidy" ] {
         println!("\nChecking for default {}...", default_file);
@@ -217,7 +225,7 @@ pub fn create_project_at(
               the_err
             })?;
 
-          println!("Default {} successfully copied into project.", default_file);
+          println!("Default {} successfully copied into project.", default_file.cyan());
         }
         else {
           println!(
@@ -303,7 +311,7 @@ fn write_cmake_yaml<T: Serialize>(
 ) -> io::Result<()> {
   match serde_yaml::to_writer(cmake_data_file, project_info) {
     Ok(_) => {
-      println!("Successfully wrote cmake_data.yaml");
+      println!("{}", "Successfully wrote cmake_data.yaml".cyan());
       Ok(())
     },
     Err(err) => return Err(io::Error::new(ErrorKind::Other, err))

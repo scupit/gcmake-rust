@@ -1,13 +1,14 @@
 use crate::project_info::{dependency_graph_mod::dependency_graph::{DependencyGraph, ProjectWrapper}, final_dependencies::FinalPredepInfo};
+use colored::*;
 
 pub fn print_project_header(project: &DependencyGraph) {
-  println!("\n========== {} ==========", project.project_debug_name());
+  println!("\n========== {} ==========", project.project_debug_name().green());
 }
 
 pub fn print_project_include_prefix(project_graph: &DependencyGraph) {
   match project_graph.project_wrapper().maybe_normal_project() {
     Some(normal_project) => {
-      println!("Include prefix:\n\t{}", normal_project.get_full_include_prefix())
+      println!("Include prefix: {}", normal_project.get_full_include_prefix())
     },
     None => println!("Cannot determine include prefix.")
   }

@@ -1,5 +1,6 @@
 use std::{rc::Rc};
 use crate::{cli_config::{CLIProjectGenerationInfo, CLIProjectTypeGenerating}, project_info::{path_manipulation::cleaned_path_str, final_project_data::{FinalProjectData}}, logger::exit_error_log, project_generator::{GeneralNewProjectInfo, create_project_at}};
+use colored::*;
 
 pub enum ProjectTypeCreating {
   RootProject,
@@ -113,11 +114,14 @@ pub fn handle_create_project(
   ) {
     Ok(maybe_project) => match maybe_project {
       Some(general_new_project_info) => {
-        println!("{} created successfully", &general_new_project_info.project.name);
+        println!("Project {} created successfully", &general_new_project_info.project.name.cyan());
         return Some(general_new_project_info);
       },
       None => {
-        println!("Project not created. Skipping CMakeLists generation.");
+        println!(
+          "Project not created. {}",
+          "Skipping CMakeLists generation.".green()
+        );
         *should_generate_cmakelists = false;
       }
     },

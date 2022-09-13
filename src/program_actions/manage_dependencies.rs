@@ -1,4 +1,5 @@
 use std::{env, path::{PathBuf, Path}, process::{self, Output, Stdio}, io, fs};
+use colored::*;
 
 const GCMAKE_DEP_CONFIG_REPO_SSH_URL: &'static str = "git@github.com:scupit/gcmake-dependency-configs.git";
 
@@ -45,7 +46,8 @@ fn command_error_string(
   println!("stderr length: {}", output.stderr.len());
   println!("is empty?: {}", output.stderr.is_empty());
   return format!(
-    "Error when running '{}': {}",
+    "{}'{}': {}",
+    "Error when running ".red(),
     command_run.as_ref(),
     String::from_utf8(output.stderr.clone()).unwrap()
   );

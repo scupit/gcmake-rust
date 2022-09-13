@@ -6,6 +6,7 @@ use std::{path::PathBuf, fs::{DirEntry, self}, rc::Rc};
 use crate::program_actions::gcmake_dep_config_dir;
 
 use self::internal_dep_config::{AllRawPredefinedDependencies, SingleRawPredefinedDependencyConfigGroup, RawPredefinedDependencyInfo, PredefinedCMakeDepHookFile};
+use colored::*;
 
 pub fn all_raw_supported_dependency_configs() -> Result<AllRawPredefinedDependencies, String> {
   /*
@@ -55,19 +56,39 @@ pub fn all_raw_supported_dependency_configs() -> Result<AllRawPredefinedDependen
         .map_err(|err| err.to_string())?;
 
       let dep_configs: SingleRawPredefinedDependencyConfigGroup = serde_yaml::from_str(&config_file_contents)
-        .map_err(|err| err.to_string())?;
+        .map_err(|err| format!(
+          "{} loading dependency config info for predefined dependency {}:\n\t{}",
+          "Error".red(),
+          dep_dir_name.green(),
+          err.to_string()
+        ))?;
 
       let dep_config_container = RawPredefinedDependencyInfo {
         dep_configs,
         // TODO: Refactor this
         pre_load: PredefinedCMakeDepHookFile::new(entry_path.join("pre_load.cmake"))
-          .map_err(|err| err.to_string())?
+          .map_err(|err| format!(
+            "{} loading pre_load.cmake hook file for predefined dependency {}: {}",
+            "Error".red(),
+            dep_dir_name,
+            err.to_string()
+          ))?
           .map(|hook_file| Rc::new(hook_file)),
         post_load: PredefinedCMakeDepHookFile::new(entry_path.join("post_load.cmake"))
-          .map_err(|err| err.to_string())?
+          .map_err(|err| format!(
+            "{} loading post_load.cmake hook file for predefined dependency {}: {}",
+            "Error".red(),
+            dep_dir_name,
+            err.to_string()
+          ))?
           .map(|hook_file| Rc::new(hook_file)),
         custom_populate: PredefinedCMakeDepHookFile::new(entry_path.join("custom_populate.cmake"))
-          .map_err(|err| err.to_string())?
+          .map_err(|err|  format!(
+            "{} loading custom_populate.cmake hook file for predefined dependency {}: {}",
+            "Error".red(),
+            dep_dir_name,
+            err.to_string()
+          ))?
           .map(|hook_file| Rc::new(hook_file))
       };
 

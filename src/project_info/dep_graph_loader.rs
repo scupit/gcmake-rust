@@ -1,6 +1,7 @@
 use std::{rc::Rc, cell::{RefCell, Ref}};
 
 use super::{final_project_data::{UseableFinalProjectDataGroup}, dependency_graph_mod::dependency_graph::{DependencyGraphInfoWrapper, DependencyGraph, GraphLoadFailureReason, TargetNode, OwningComplexTargetRequirement, DependencyGraphWarningMode, AdditionalConfigValidationFailureReason}, SystemSpecifierWrapper};
+use colored::*;
 
 fn borrow_target<'a, 'b>(target_node: &'b Rc<RefCell<TargetNode<'a>>>) -> Ref<'b, TargetNode<'a>> {
   return target_node.as_ref().borrow();
@@ -321,8 +322,8 @@ pub fn load_graph(
           return wrap_error_msg(format!(
             "Executable target '{}' in project [{}] specifies a windows icon path \"{}\", however that path doesn't point to an existing icon file. NOTE that the windows icon file path is resolved relative to the root project. Final path: {}",
             borrow_target(target).get_name(),
-            borrow_project(project).project_debug_name(),
-            given_relative_path.to_str().unwrap(),
+            borrow_project(project).project_debug_name().yellow(),
+            given_relative_path.to_str().unwrap().purple(),
             absolute_path_to_icon.to_str().unwrap()
           ))
         }
@@ -333,7 +334,11 @@ pub fn load_graph(
 
 fn wrap_error_msg<T>(msg: impl AsRef<str>) -> Result<T, String> {
   return Err(
-    format!("\nError: {}", msg.as_ref().to_string())
+    format!(
+      "\n{}{}",
+      "Error loading project graph: ".red(),
+      msg.as_ref().to_string()
+    )
   );
 }
 

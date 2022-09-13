@@ -3,6 +3,7 @@ use std::{cell::{RefCell}, rc::{Rc, Weak}, hash::{Hash, Hasher}, collections::{H
 use crate::project_info::{LinkMode, CompiledOutputItem, PreBuildScript, OutputItemLinks, final_project_data::FinalProjectData, final_dependencies::{FinalGCMakeDependency, FinalPredefinedDependencyConfig, GCMakeDependencyStatus, FinalRequirementSpecifier}, LinkSpecifier, FinalProjectType, parsers::{link_spec_parser::{LinkAccessMode, LinkSpecTargetList, LinkSpecifierTarget}, system_spec::platform_spec_parser::SystemSpecifierWrapper}};
 
 use super::hash_wrapper::RcRefcHashWrapper;
+use colored::*;
 
 pub struct BasicTargetSearchResult<'a> {
   pub searched_with: String,
@@ -815,7 +816,11 @@ impl<'a> DependencyGraph<'a> {
         };
 
         if let DependencyGraphWarningMode::All = warning_mode {
-          println!("\nWarning: Platform-specific subset validation at GCMake configuration time has not been implemented yet. However, the correct CMake generator expressions will still be written.");
+          println!(
+            "\n{}Platform-specific subset validation at GCMake configuration time has not been implemented yet. However, the correct CMake generator expressions will still be written.",
+            "Warning: ".yellow()
+          );
+
           println!(
             "-- target '{}' in project '{}' links to '{}', which has a platform specifier '{}'. Please make sure the link to {} is prefixed with a platform specifier that is a subset of {}. {}",
             target.as_ref().borrow().get_name(),

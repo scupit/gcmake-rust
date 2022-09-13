@@ -3,6 +3,7 @@ use std::{collections::{HashMap, HashSet}, path::{Path, PathBuf}, io, rc::Rc, fs
 use crate::project_info::path_manipulation::cleaned_pathbuf;
 
 use super::{path_manipulation::{cleaned_path_str, relative_to_project_root, absolute_path}, final_dependencies::{FinalGCMakeDependency, FinalPredefinedDependencyConfig, GCMakeDependencyStatus}, raw_data_in::{RawProject, dependencies::internal_dep_config::AllRawPredefinedDependencies, BuildConfigMap, BuildType, LanguageConfigMap, OutputItemType, PreBuildConfigIn, SpecificCompilerSpecifier, BuildConfigCompilerSpecifier, TargetBuildConfigMap, TargetSpecificBuildType, LinkSection, RawTestFramework, RawInstallerConfig, DefaultCompiledLibType}, final_project_configurables::{FinalProjectType}, CompiledOutputItem, helpers::{parse_subproject_data, parse_root_project_data, populate_files, find_prebuild_script, PrebuildScriptFile, validate_raw_project_outputs, ProjectOutputType, RetrievedCodeFileType, retrieve_file_type, parse_test_project_data}, PreBuildScript, OutputItemLinks, FinalTestFramework, base_include_prefix_for_test, gcmake_constants::{SRC_DIR, INCLUDE_DIR, TEMPLATE_IMPL_DIR, TESTS_DIR, SUBPROJECTS_DIR}, FinalInstallerConfig, CompilerDefine, FinalBuildConfigMap, make_final_target_build_config, make_final_build_config_map, FinalTargetBuildConfigMap, FinalGlobalProperties, FinalShortcutConfig};
+use colored::*;
 
 const SUBPROJECT_JOIN_STR: &'static str = "_S_";
 const TEST_PROJECT_JOIN_STR: &'static str = "_TP_";
@@ -100,7 +101,7 @@ fn project_levels_below_root(clean_path_root: &str) -> io::Result<Option<usize>>
 
   path_using.pop();
 
-  while path_using.exists() {
+  while path_using.try_exists()? {
     path_using.push("cmake_data.yaml");
     path_using = cleaned_pathbuf(path_using);
 
@@ -233,8 +234,9 @@ impl FinalProjectData {
       Ok(maybe_level) => match maybe_level {
         Some(value) => value,
         None => return Err(ProjectLoadFailureReason::MissingYaml(format!(
-          "Failed to determine project level using '{}'",
-          &cleaned_given_root
+          "The directory \"{}\" does not contain a {} file, so the project level could not be determined.",
+          &cleaned_given_root.yellow(),
+          "cmake_data.yaml".yellow()
         )))
       }
     };
