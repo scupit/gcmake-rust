@@ -1,13 +1,14 @@
 # cmake_data Configuration Home
 
-`cmake_data.yaml` is the GCMake project configuration file. It is used to describe
-configuration elements and project metadata which cannot be inferred from the
-project structure itself.
+> `cmake_data.yaml` is the configuration file used for all GCMake projects.
+>
+> It is used to describe configuration elements and project metadata which cannot be inferred from the
+> project structure itself.
 
-Each GCMake project should have a `cmake_data.yaml` in
-its root directory. This includes subprojects and test projects.
+Each GCMake project (including subprojects and test projects) should have a `cmake_data.yaml` in
+its root directory.
 
-[Generate a new project](overview.md#common-uses) using the tool itself for a quick working example.
+For a quick working example, see [generating a new project](overview.md#common-uses).
 Alternatively, a complex working example exists in the
 [GCMake Test Project repository](https://github.com/scupit/gcmake-test-project).
 

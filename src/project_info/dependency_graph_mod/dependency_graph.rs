@@ -693,6 +693,10 @@ impl<'a> DependencyGraph<'a> {
     &self.test_projects
   }
 
+  pub fn get_gcmake_dependencies(&self) -> &HashMap<String, Rc<RefCell<DependencyGraph<'a>>>> {
+    &self.gcmake_deps
+  }
+
   pub fn get_subprojects(&self) -> &HashMap<String, Rc<RefCell<DependencyGraph<'a>>>> {
     &self.subprojects
   }

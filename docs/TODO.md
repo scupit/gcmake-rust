@@ -226,6 +226,9 @@ Types of libraries which need support, from easiest to hardest:
 - [x] [CLI11](https://github.com/CLIUtils/CLI11)
 - [x] [ftxui](https://github.com/ArthurSonzogni/FTXUI)
 - [x] [pugixml](https://github.com/zeux/pugixml)
+- [ ] [mimalloc](https://github.com/microsoft/mimalloc)
+- [ ] [magic_enum](https://github.com/Neargye/magic_enum)
+- [ ] [argparse](https://github.com/p-ranav/argparse)
 
 #### Support when FetchContent ready
 

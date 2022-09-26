@@ -9,6 +9,16 @@ configuration work together.
 
 ## Table of Contents
 
+> **TODO:** Create a page explaining the project structure. Include topics such as "include prefix
+> accumulation", the *resources/* directory, installation and installer config, etc.
+>
+> **TODO:** Common issues and pitfalls page. For example: When MinGW installation is added to path
+> on Windows, doing a global installation of Strawberry perl will cause GCC/DLL conflicts due to
+> Strawberry perl containing its own GCC distribution and adding it to System PATH automatically.
+>
+> **TODO:** Add a document on pre-build scripts and link it to the
+> [prebuild_config](cmake_data_config/properties/properties_list.md#prebuildconfig) property page.
+
 1. [Project Overview](overview.md)
 <!-- TODO: Distribute this information to properties_list.md and the project-type-specific docs. -->
 2. [cmake_data.yaml Configuration](cmake_data.md)

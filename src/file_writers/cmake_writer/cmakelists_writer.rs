@@ -12,6 +12,11 @@ pub fn configure_cmake_helper<'a>(
   sorted_target_info: &'a OrderedTargetInfo<'a>
 ) -> io::Result<()> {
   let borrowed_graph = dep_graph.as_ref().borrow();
+
+  for(_, gcmake_dep) in borrowed_graph.get_gcmake_dependencies() {
+    configure_cmake_helper(gcmake_dep, sorted_target_info)?;
+  }
+
   for (_, test_project_graph) in borrowed_graph.get_test_projects() {
     configure_cmake_helper(test_project_graph, sorted_target_info)?;
   }
@@ -20,9 +25,7 @@ pub fn configure_cmake_helper<'a>(
     configure_cmake_helper(subproject_graph, sorted_target_info)?;
   }
 
-  // TODO: Should we write available GCMake dependency CMakeLists as well?
-
-  if let ProjectWrapper::NormalProject(project_data) = borrowed_graph.project_wrapper() {
+  if let Some(project_data) = borrowed_graph.project_wrapper().maybe_normal_project() {
     let cmake_util_path = Path::new(project_data.get_project_root()).join("cmake");
     let maybe_util_writer: Option<CMakeUtilWriter> = if project_data.is_root_project()
       { Some(CMakeUtilWriter::new(cmake_util_path)) }
@@ -43,12 +46,6 @@ pub fn configure_cmake_helper<'a>(
     if project_data.is_root_project() {
       cmake_configurer.write_cmake_config_in()?;
     }
-  }
-  else {
-    assert!(
-      false,
-      "For now, only normal projects (not including gcmake dependencies) should be configured."
-    );
   }
 
   Ok(())

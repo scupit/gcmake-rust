@@ -1,57 +1,46 @@
 # gcmake-rust
 
-`gcmake-rust` is a C/C++ project management and configuration tool.
+`gcmake-rust` is a C/C++ project configuration tool which acts as an abstraction layer over CMake.
 
 ## Documentation
 
-Documentation for this project is found in [docs/Docs_Home.md](docs/Docs_Home.md).
+Documentation is found in [docs/Docs_Home.md](docs/Docs_Home.md).
 
 ## About
 
-`gcmake-rust` aims to be an intuitive, opinionated C/C++ project configuration tool which covers
-most general and common use cases.
+Among other things, this tool is able to:
 
-`gcmake-rust` currently provides the ability to:
+- Generate full CMake configurations for an entire project tree.
+- Generate new C/C++ projects, subprojects, and test projects.
+- Generate header, source, and template-impl files in-tree.
 
-1. Create new full C/C++ projects and subprojects.
-2. Generate header, source, and template-impl files in-tree.
-3. Generate a full working CMake configuration for an entire project tree, including dependencies
-and subprojects.
+## Build Requirements
 
-## Requirements
+- A [Rust toolchain](https://www.rust-lang.org/tools/install)
 
-- [Git](https://git-scm.com/) must be installed on the system
-- [CMake 3.24](https://cmake.org/download/) or higher
+## Usage Requirements
 
-## Installation/Getting Started
+- [Git](https://git-scm.com/) **1.6.5 or higher** must be installed on the system
+- [CMake](https://cmake.org/download/) **3.24** or higher
+
+
+## Installation
+
+For common use cases, see the [project overview](docs/overview.md) docs page.
 
 1. Clone the repository: `git clone --recurse-submodules git@github.com:scupit/gcmake-rust.git`
 2. `cd` into the cloned repository.
-3. Switch to the master branch with `git checkout master`.
-4. Create an optimized build using `cargo build --release`.
-5. The resulting executable will be located at *target/release/gcmake-rust.exe*.
-    Make it available on your [system PATH](https://en.wikipedia.org/wiki/PATH_(variable)).
-6. Optionally, alias `gcmake-rust` to just `gcmake`.
-7. Run `gcmake-rust dep-config update` to install the
+3. Switch to the desired branch or release tag: `git checkout v1.4.0`.
+4. Run `cargo install --path .` to create an optimized build and install the resulting gcmake-rust executable
+  to `$HOME/.cargo/bin` (or `%USERPROFILE%\.cargo\bin` on Windows).
+5. Optionally, alias `gcmake-rust` to just `gcmake`.
+6. Run the executable: `gcmake-rust dep-config update` to install the
 [external dependency compatibility configuration repository](docs/predefined_dependency_doc.md)
-8. Create a new project with `gcmake-rust new 'your-project-name-here'`. After stepping through the
-    initializer, you now have a fully functioning gcmake (and CMake) project!
 
-## Common Uses
+The tool is now fully installed and ready to go.
 
-> This section assumes the `gcmake-rust` executable is aliased to `gcmake`.
-
-`gcmake --help` shows toplevel help info.
-
-`gcmake <command> --help` for command-specific info.
-
-`gcmake [path-to-project]` configures the project in the given path and writes CMake configurations for the entire
-project tree (excluding subdirectories).  If no path is provided, the current working directory is used.
-
-`gcmake new <project-name>` steps you through the project initializer prompts and creates a new C/C++ project.
-
-`gcmake new --subproject <project-name>` checks if the current working directory is a GCMake-rust project. If it is, then runs the same
-project configuration process as above and creates the project in *subprojects/\<project-name\>*.
+To get started, try creating a new project with `gcmake-rust new 'your-project-name'`.
+After stepping through the initializer, you will have a fully functioning CMake-compatible project.
 
 ## GCMake Repository Links
 

@@ -130,8 +130,16 @@ function( gcmake_configure_cpack )
     # TODO: Icons and banners in the installers themselves
     if( CPACK_WIX_ENABLED )
       list( APPEND CPACK_GENERATOR "WIX" )
+
       set( CPACK_WIX_ROOT_FEATURE_TITLE "${INSTALLER_CONFIG_INSTALLER_TITLE}" )
       set( CPACK_WIX_ROOT_FEATURE_DESCRIPTION "${INSTALLER_CONFIG_INSTALLER_DESCRIPTION}" )
+
+      configure_custom_wix_template(
+        "${INSTALLER_CONFIG_INSTALLER_TITLE}"
+        wix_custom_template_file
+      )
+
+      set( CPACK_WIX_TEMPLATE "${wix_custom_template_file}" )
     endif()
 
     if( CPACK_NSIS_ENABLED )
@@ -313,4 +321,71 @@ function( locate_dpkg_exe
   )
 
   set( ${out_var} "${dpkg_exe}" PARENT_SCOPE )
+endfunction()
+
+# Creates a very slightly modified version of CMake's wix template:
+# https://github.com/Kitware/CMake/blob/master/Utilities/Release/WiX/WIX.template.in
+# where the installer title can be configured.
+function( configure_custom_wix_template
+  installer_title
+  template_file_out
+)
+  set( CUSTOM_TEMPLATE_FILE_OUT "${CMAKE_BINARY_DIR}/WIX-CUSTOM.template" )
+
+  # https://wixtoolset.org/documentation/manual/v3/xsd/wix/product.html
+  file( WRITE "${CUSTOM_TEMPLATE_FILE_OUT}"
+    "<?xml version=\"1.0\" encoding=\"UTF-8\"?>
+
+    <?include \"cpack_variables.wxi\"?>
+
+    <Wix xmlns=\"http://schemas.microsoft.com/wix/2006/wi\"
+        RequiredVersion=\"3.6.3303.0\">
+
+        <Product Id=\"$(var.CPACK_WIX_PRODUCT_GUID)\"
+            Name=\"${installer_title}\"
+            Language=\"1033\"
+            Version=\"$(var.CPACK_PACKAGE_VERSION)\"
+            Manufacturer=\"$(var.CPACK_PACKAGE_VENDOR)\"
+            UpgradeCode=\"$(var.CPACK_WIX_UPGRADE_GUID)\">
+
+            <Package
+              InstallerVersion=\"301\"
+              Compressed=\"yes\"
+            />
+
+            <Media Id=\"1\" Cabinet=\"media1.cab\" EmbedCab=\"yes\"/>
+
+            <MajorUpgrade
+                Schedule=\"afterInstallInitialize\"
+                AllowSameVersionUpgrades=\"yes\"
+                DowngradeErrorMessage=\"A later version of [ProductName] is already installed. Setup will now exit.\"/>
+
+            <WixVariable Id=\"WixUILicenseRtf\" Value=\"$(var.CPACK_WIX_LICENSE_RTF)\"/>
+            <Property Id=\"WIXUI_INSTALLDIR\" Value=\"INSTALL_ROOT\"/>
+
+            <?ifdef CPACK_WIX_PRODUCT_ICON?>
+            <Property Id=\"ARPPRODUCTICON\">ProductIcon.ico</Property>
+            <Icon Id=\"ProductIcon.ico\" SourceFile=\"$(var.CPACK_WIX_PRODUCT_ICON)\"/>
+            <?endif?>
+
+            <?ifdef CPACK_WIX_UI_BANNER?>
+            <WixVariable Id=\"WixUIBannerBmp\" Value=\"$(var.CPACK_WIX_UI_BANNER)\"/>
+            <?endif?>
+
+            <?ifdef CPACK_WIX_UI_DIALOG?>
+            <WixVariable Id=\"WixUIDialogBmp\" Value=\"$(var.CPACK_WIX_UI_DIALOG)\"/>
+            <?endif?>
+
+            <FeatureRef Id=\"ProductFeature\"/>
+
+            <UIRef Id=\"$(var.CPACK_WIX_UI_REF)\" />
+
+            <?include \"properties.wxi\"?>
+            <?include \"product_fragment.wxi\"?>
+        </Product>
+    </Wix>
+    "
+  )
+
+  set( ${template_file_out} ${CUSTOM_TEMPLATE_FILE_OUT} PARENT_SCOPE )
 endfunction()
