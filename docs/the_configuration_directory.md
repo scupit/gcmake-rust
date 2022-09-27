@@ -27,3 +27,5 @@ These files have special effects when placed in the root of `~/.gcmake`:
 | Item | Effect |
 | --- | --- |
 | `.clang-format` | When a new **root project** is created, this is copied over and used as the default clang format file. |
+| `.clang-tidy` | When a new **root project** is created, this is copied over and used as the default Clang Tidy file. |
+| `.gitignore` | When a new **root project** is created, this is copied over and used as the default gitignore file. |

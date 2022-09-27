@@ -8,6 +8,7 @@
 - [description](properties/properties_list.md#description)
 - [version](properties/properties_list.md#version)
 - [output](properties/properties_list.md#output)
+- [prebuild_config](properties/properties_list.md#prebuildconfig)
 
 ## Include Prefix Accumulation
 

@@ -17,12 +17,10 @@ Alternatively, a complex working example exists in the
 Configuration is done slightly differenty dependening on whether the project is a root project, subproject, or
 test project. There are also several nuances to keep in mind for each type.
 
-> **TODO:** Write these documents.
-
 - [Root project](root_project_config.md)
 - [Subproject](subproject_config.md)
 - [Test project](test_project_config.md)
 
-## Available properties
+## All Available properties
 
 See [properties_list.md](properties/properties_list.md) for a list of properties supported by `cmake_data.yaml`.

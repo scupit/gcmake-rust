@@ -3,31 +3,31 @@
 This "project overview" page is essentially the same as the [README](/README.md).
 It's here to explain the basic functionality of this project and describe its common uses.
 
-## Requirements
+## Build Requirements
 
-- [Git](https://git-scm.com/) must be installed on the system
-- [CMake 3.24](https://cmake.org/download/) or higher
+- A [Rust toolchain](https://www.rust-lang.org/tools/install)
+
+## Usage Requirements
+
+- [Git](https://git-scm.com/) **1.6.5 or higher** must be installed on the system
+- [CMake](https://cmake.org/download/) **3.24** or higher
 
 ## About gcmake-rust
 
-`gcmake-rust` aims to be an intuitive, opinionated C/C++ project configuration tool which covers
-most general and common use cases.
+Among other things, this tool is able to:
 
-`gcmake-rust` currently provides the ability to:
-
-1. Create new full C/C++ projects and subprojects.
-2. Generate header, source, and template-impl files in-tree.
-3. Generate a full working CMake configuration for an entire project tree, including dependencies
-and subprojects configured using the same tool.
+- Generate full CMake configurations for an entire project tree.
+- Generate new C/C++ projects, subprojects, and test projects.
+- Generate header, source, and template-impl files in-tree.
 
 ## Example Project
 
-See the [gcmake-test-project](https://github.com/scupit/gcmake-test-project) for a full example
+See the [gcmake-test-project](/gcmake-test-project/) for a full example
 of a working gcmake project.
 
 ## Suggestions
 
-See [the README](/README.md) for [build/installation information](/README.md#getting-started) and
+See [the README](/README.md) for [build/installation information](/README.md#installation) and
 help [getting started](/README.md#getting-started).
 
 See [the documentation](Docs_Home.md) for in-depth information about this tool.

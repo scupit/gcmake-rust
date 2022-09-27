@@ -14,6 +14,10 @@ Among other things, this tool is able to:
 - Generate new C/C++ projects, subprojects, and test projects.
 - Generate header, source, and template-impl files in-tree.
 
+## Project Overview
+
+The project overview is part of the documentation, and is found in [docs/overview.md](docs/overview.md).
+
 ## Build Requirements
 
 - A [Rust toolchain](https://www.rust-lang.org/tools/install)
@@ -22,7 +26,6 @@ Among other things, this tool is able to:
 
 - [Git](https://git-scm.com/) **1.6.5 or higher** must be installed on the system
 - [CMake](https://cmake.org/download/) **3.24** or higher
-
 
 ## Installation
 
@@ -39,8 +42,17 @@ For common use cases, see the [project overview](docs/overview.md) docs page.
 
 The tool is now fully installed and ready to go.
 
-To get started, try creating a new project with `gcmake-rust new 'your-project-name'`.
+To get started, try creating a new project with `gcmake-rust new root-project 'your-project-name'`.
 After stepping through the initializer, you will have a fully functioning CMake-compatible project.
+
+## Getting Started
+
+After [building and installing GCMake](#installation), step through the project initializer with
+`gcmake-rust new root-project 'your-project-name'`.
+Once it finishes, you'll have a fully working, fully CMake compatible project.
+
+After making any change to *cmake_data.yaml* in your project, run `gcmake-rust` to regenerate
+the *CMakeLists.txt* and *Config.cmake.in* files and re-run all validation checks.
 
 ## GCMake Repository Links
 

@@ -48,7 +48,7 @@ pub enum PrebuildScriptFile {
 }
 
 pub fn find_prebuild_script(project_root: &str) -> Option<PrebuildScriptFile> {
-  let pre_build_file_base_name: &str = "pre-build";
+  let pre_build_file_base_name: &str = "pre_build";
 
   for possible_exe_file in file_variants(project_root, pre_build_file_base_name, vec!["c", "cxx", "cpp"]) {
     if Path::exists(possible_exe_file.as_path()) {
