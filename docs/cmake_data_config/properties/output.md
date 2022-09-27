@@ -35,7 +35,7 @@ Executables build by test projects have a few additional properties:
 | [output_type](#outputtype) | **Required** | [Output Item Type](#outputtype) | Dictates the output item's type (executable vs library, and which library type) |
 | [entry_file](#entryfile) | **Required** | Relative file name | Sets the output item's entry point. |
 | [windows_icon](#entryfile) | *Optional* | Relative file name | Sets the output item's entry point. |
-| [link](#link) | *Optional* | `List<LinkSpecifier>` | This section is used to link libraries to your output. |
+| [link](#link) | *Optional* | `List<`[LinkSpecifier](../data_formats.md#link-specifier)`>` | This section is used to link libraries to your output. |
 | [build_config](#buildconfig) | *Optional* | Define additional build configuration which is specific to the output item only. |
 | [requires_custom_main](#requirescustommain) | *Optional* | boolean | **Applies to test executables only.** Dictates whether or not the test executable must provide its own main function. |
 
@@ -87,7 +87,7 @@ output:
     # output_type: HeaderOnlyLib
     # output_type: StaticLib
     # output_type: SharedLib
-    entry_file: main.hpp
+    entry_file: my-lib.hpp
 ```
 
 ### windows_icon
@@ -117,11 +117,11 @@ in the root project or a subproject.
 
 ### link
 
-> **TODO:** link to 'Link Specifier' section once it's written. (Also update in the table)
->
-> *Optional* `List<LinkSpecifier>`
+> *Optional* `List<`[LinkSpecifier](../data_formats.md#link-specifier)`>`
 
 This section is used to link libraries to your outputs and pre-build script.
+
+For a full explanation of how linking works in GCMake, see [linking.md](../linking.md).
 
 Dependencies are consumed differently by each output type. These tables give a basic explanation
 of how dependencies are consumed and propagated depending on the output type. In this scenario,
@@ -167,7 +167,7 @@ predefined_dependencies:
 output:
   my-headeronly-lib:
     output_type: HeaderOnlyLib
-    entry_file: main.hpp
+    entry_file: my-headeronly-lib.hpp
     link:
       - fmt::fmt
 ```
@@ -187,7 +187,7 @@ output:
     output_type: CompiledLib
     # output_type: StaticLib
     # output_type: SharedLib
-    entry_file: main.hpp
+    entry_file: my-compiled-lib.hpp
     link:
       public:
         - fmt::fmt
