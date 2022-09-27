@@ -12,26 +12,30 @@ supported for a specific project type.
 
 ### Properties supported by all project types
 
-- [include_prefix](#includeprefix)
-- [description](#description)
-- [version](#version)
-- [output](#output)
+| Property | Description |
+| -------- | ----------- |
+| [include_prefix](#includeprefix) | Sets the project's base include prefix. This affects the project directory names. |
+| [description](#description) | A short description of the project |
+| [version](#version) | Three-part project version, optionally prefixed with a *v* |
+| [output](#output) | Defines what the project actually builds |
 
 ### Root project only properties
 
-- [name](#name)
-- [vendor](#vendor)
-- [supported_compilers](#supportedcompilers)
-- [languages](#languages)
-- [default_build_type](#defaultbuildtype)
-- [predefined_dependencies](#predefineddependencies)
-- [gcmake_dependencies](#gcmakedependencies)
-- [prebuild_config](#prebuildconfig)
-- [test_framework](#testframework)
-- [global_defines](#globaldefines)
-- [global_properties](#globalproperties)
-- [installer_config](#installerconfig)
-- [build_configs]
+| Property | Description |
+| -------- | ----------- |
+| [name](#name) | The project's name identifier, no whitespace. |
+| [vendor](#vendor) | The project's vendor. Usually your name or organization. |
+| [supported_compilers](#supportedcompilers) | A list of compilers which are known to successfully compile the project |
+| [languages](#languages) | Configuration metadata (such as language standard) for the C and C++ languages |
+| [default_build_type](#defaultbuildtype) | Selects the project's default build configuration |
+| [predefined_dependencies](#predefineddependencies) | Imports a non-GCMake dependency into the project. Only [pre-configured dependencies](../../predefined_dependency_doc.md) with a directory in the [predefined dependency configuration repository](/gcmake-dependency-configs/) are supported. |
+| [gcmake_dependencies](#gcmakedependencies) | Imports other GCMake projects as dependencies into the build. |
+| [prebuild_config](#prebuildconfig) | Configuration for executable (non-Python) pre-build scripts. |
+| [test_framework](#testframework) | Sets the test framework to be used for all the project's tests |
+| [global_defines](#globaldefines) | A set of compiler defines which are always added to the project's build. |
+| [global_properties](#globalproperties) | Miscellaneous configurable project properties which don't really have their own category |
+| [installer_config](#installerconfig) | Additional configuration for installer and shortcut generation |
+| [build_configs](#buildconfigs) | The set of build configurations for the project. This includes compiler flags, linker flags, and defines. |
 
 ## Information by Property
 
