@@ -175,7 +175,7 @@ build_configs:
 
 ### linker_flags
 
-> *Optional* `List<LinkerFlagString>`
+> *Optional* `List<`[LinkerFlagString](../data_formats.md#linker-flags)`>`
 
 The list of flags to be passed to the linker for the selection configuration.
 
@@ -183,7 +183,7 @@ Linker flags should be written exactly as you would pass them on the command lin
 However, don't include flags like `-Xlinker` which compilers use to pass flags on to the linker.
 CMake will facilitate that automatically.
 They may also be prefixed with a [system specifier](../data_formats.md#system-specifier).
-Further formatting information is detailed in [data_formats.md](../data_formats.md#compiler-flags).
+Further formatting information is detailed in [data_formats.md](../data_formats.md#linker-flags).
 
 ``` yaml
 supported_compilers:
