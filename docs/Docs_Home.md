@@ -9,47 +9,37 @@ configuration work together.
 
 ## Table of Contents
 
-> **TODO:** Create a page explaining the project structure. Include topics such as "include prefix
-> accumulation", the *resources/* directory, installation and installer config, etc.
->
-> **TODO:** Common issues and pitfalls page. For example: When MinGW installation is added to path
-> on Windows, doing a global installation of Strawberry perl will cause GCC/DLL conflicts due to
-> Strawberry perl containing its own GCC distribution and adding it to System PATH automatically.
->
-> **TODO:** Add a document on pre-build scripts and link it to the
-> [prebuild_config](cmake_data_config/properties/properties_list.md#prebuildconfig) property page.
-
 1. [Project Overview](overview.md)
-<!-- TODO: Distribute this information to properties_list.md and the project-type-specific docs. -->
-2. [cmake_data.yaml Configuration](cmake_data.md)
-3. [Additional Linking Explanation](linking_information.md)
+2. [Project Structure](project_structure.md)
+3. [cmake_data.yaml Configuration](cmake_data_config/cmake_data.md)
 4. [Predefined Dependency Compatibility Layer](predefined_dependency_doc.md)
 5. [The Configuration Directory](tool_configuration_directory.md)
 6. [Project TODOs/Roadmap](TODO.md)
+7. [Compiler pitfalls](pitfall_list.md)
 
 ## Important Concepts
 
-- ["Include prefix" accumulation](cmake_data.md#prefix-accumulation): How project hierarchy
-    affects each subproject's file inclusion prefix.
-- [Output item rules and constraints](cmake_data.md#output-rules-and-constraints): Rules dictating
-    output type and quantity per project instance.
-- [Link section format](cmake_data.md#linksection): Links are specified differently for compiled libraries
-    than for other output types. 
-- [Using other gcmake-rust projects as dependencies](cmake_data.md#gcmake-dependencies): Requires some
-    extra steps at the moment.
+- ["Include prefix" accumulation](cmake_data_config/subproject_config.md#include-prefix-accumulation):
+  How project hierarchy affects each subproject's file inclusion prefix.
+- [Output item rules and constraints](cmake_data_config/properties/output.md#general-output-rules):
+  Rules dictating output type and quantity per project instance.
+- [Linking](cmake_data_config/linking.md): How linking works in GCMake
+- [Consuming other GCMake projects](cmake_data_config/properties/properties_list.md#gcmakedependencies)
+- [Non-GCMake dependency consumption](cmake_data_config/properties/properties_list.md#predefineddependencies)
+- [Auto-generated export header](cmake_data_config/auto_generated_export_macro_header.md)
+- [Making use of pre-build scripts](pre_build_scripts.md)
 
 ## Quick Links
 
-- [Getting started](/README.md#getting-started)
+- [Getting started](overview.md#suggestions)
 - [Creating a new project](overview.md#common-uses)
-- [gcmake-test-project: an example project](https://github.com/scupit/gcmake-test-project)
-- [Configuring project compilation flags and defines](cmake_data.md#build-configuration)
-- [Linking to an output](cmake_data.md#output-link)
-- [Configuring additional flags and defines per output item](cmake_data.md#output-buildconfig)
-- [Adding a pre-build script](cmake_data.md#pre-build-script)
-- [Managing dependencies](cmake_data.md#using-dependencies)
-- [Subprojects (nested projects)](cmake_data.md#subprojects)
-- [Using a default .clang-format](the_configuration_directory.md#manual-configuration)
+- [gcmake-test-project: an example project](/gcmake-test-project/)
+- [Configuring project compilation flags and defines](cmake_data_config/properties/build_configs.md)
+- [Linking to an output](cmake_data_config/properties/output.md#link)
+- [Configuring additional flags and defines per output item](cmake_data_config/properties/output.md#buildconfig)
+- [Adding a pre-build script](cmake_data_config/properties/properties_list.md#prebuildconfig)
+- [Managing dependencies](cmake_data_config/properties/properties_list.md#predefineddependencies)
+- [Default config files](the_configuration_directory.md#manual-configuration) such as .gitignore, .clang-format, and .clang-tidy
 
 ## GCMake Repository Links
 
