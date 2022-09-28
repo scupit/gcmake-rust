@@ -53,7 +53,7 @@ void MY_LIB_EXPORT some_public_function() {
 Windows requires DLLs to explicitly mark functions as part of the library's public interface using
 `__declspec(dllexport)` when building, and as `__declspec(dllexport)` when being consumed. This
 "export macro header" automatically creates the macro for you, and CMake facilitates the proper
-defines behind the scenes automatically as well. 
+defines behind the scenes automatically as well.
 
 Marking functions and classes using the export macro isn't required for static libraries, however
 it is recommended. If you ever wanted to also build the static library as a Shared library, you'd
@@ -61,4 +61,4 @@ have to go back through and annotate every function and class by hand... doesn't
 
 CMake does have the ability to facilitate
 [exporting all symbols by default](https://cmake.org/cmake/help/latest/variable/CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS.html#variable:CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS),
-however that tends to cause issues. 
+however that tends to cause issues.

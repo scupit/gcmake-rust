@@ -37,8 +37,8 @@ when using a compiler other than MinGW.
 
 ### System Specifier Use Case
 
-System specifiers can currently be used on [compiler_flags](properties/build_configs.md#compilerflags),
-[linker_flags](properties/build_configs.md#linkerflags), [defines](properties/build_configs.md#defines),
+System specifiers can currently be used on [compiler_flags](properties/build_configs.md#compiler_flags),
+[linker_flags](properties/build_configs.md#linker_flags), [defines](properties/build_configs.md#defines),
 and [link specifiers](linking.md#formats). You probably won't have to use them much, but they can sometimes
 be useful.
 
@@ -72,8 +72,8 @@ Compiler flags should be written exactly as if you were passing them to your com
 They can optionally be prefixed with a [system specifier](#system-specifier).
 
 To specify compiler flags for a specific output or build configuration, see the
-[build_configs project property](properties/properties_list.md#buildconfigs) and the
-[compiler_flags](properties/build_configs.md#compilerflags) section of build configuration.
+[build_configs project property](properties/properties_list.md#build_configs) and the
+[compiler_flags](properties/build_configs.md#compiler_flags) section of build configuration.
 
 ``` yaml
 supported_compilers: [ GCC, MSVC ]
@@ -97,8 +97,8 @@ CMake will facilitate that automatically.
 They can optionally be prefixed with a [system specifier](#system-specifier).
 
 To specify linker flags for a specific output or build configuration, see the
-[build_configs project property](properties/properties_list.md#buildconfigs) and the
-[linker_flags](properties/build_configs.md#linkerflags) section of build configuration.
+[build_configs project property](properties/properties_list.md#build_configs) and the
+[linker_flags](properties/build_configs.md#linker_flags) section of build configuration.
 
 ``` yaml
 supported_compilers:
@@ -117,9 +117,9 @@ just without the leading `-D` or `/D`. They can optionally be prefixed with a
 [system specifier](#system-specifier).
 
 To specify global compiler defines for your project, see the
-[global_defines property](properties/properties_list.md#globaldefines). To specify compiler defines
+[global_defines property](properties/properties_list.md#global_defines). To specify compiler defines
 for a specific output or biuld configuration, see the
-[build_configs project property](properties/properties_list.md#buildconfigs) and the
+[build_configs project property](properties/properties_list.md#build_configs) and the
 [defines](properties/build_configs.md#defines) section of build configuration.
 
 ``` yaml

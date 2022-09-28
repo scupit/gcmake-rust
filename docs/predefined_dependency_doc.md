@@ -56,14 +56,14 @@ Each configuration directory can be configured using these files:
 ## dep_config.yaml
 
 *dep_config.yaml* is the collection of metadata which makes non-gcmake projects compatible with the
-gcmake tool. Essentially, this file contains project-specific information which allows 
+gcmake tool.
 
 A *dep_config.yaml* is split into sections, where each root object key begins the section for the
 specified dependency type to be configured. These dependency type sections are supported:
 
-- [`as_subdirectory`](#assubdirectory)
-- [`cmake_module`](#cmakemodule)
-- [`cmake_components_module`](#cmakecomponentsmodule)
+- [`as_subdirectory`](#as_subdirectory)
+- [`cmake_module`](#cmake_module)
+- [`cmake_components_module`](#cmake_components_module)
 
 However, **only one dependency type/section is required to be specified and configured**.
 
@@ -104,7 +104,7 @@ you have installed on your system (WxWidgets, GLEW, etc.). These translate to a
 
 ### cmake_components_module
 
-This is very similar to [normal cmake module configs](#cmakemodule), except
+This is very similar to [normal cmake module configs](#cmake_module), except
 the library being imported is composed of several components which may be optionally imported. See
 the sample usage example in
 [CMake's FindwxWidgets module page](https://cmake.org/cmake/help/latest/module/FindwxWidgets.html)

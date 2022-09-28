@@ -32,12 +32,12 @@ Executables build by test projects have a few additional properties:
 
 | Property | Is required | Type | Description |
 | -------- | ----------- | ---- | ----------- |
-| [output_type](#outputtype) | **Required** | [Output Item Type](#outputtype) | Dictates the output item's type (executable vs library, and which library type) |
-| [entry_file](#entryfile) | **Required** | Relative file name | Sets the output item's entry point. |
-| [windows_icon](#entryfile) | *Optional* | Relative file name | Sets the output item's entry point. |
+| [output_type](#output_type) | **Required** | [Output Item Type](#output_type) | Dictates the output item's type (executable vs library, and which library type) |
+| [entry_file](#entry_file) | **Required** | Relative file name | Sets the output item's entry point. |
+| [windows_icon](#windows_icon) | *Optional* | Relative file name | Sets the output item's entry point. |
 | [link](#link) | *Optional* | `List<`[LinkSpecifier](../data_formats.md#link-specifier)`>` | This section is used to link libraries to your output. |
-| [build_config](#buildconfig) | *Optional* | Define additional build configuration which is specific to the output item only. |
-| [requires_custom_main](#requirescustommain) | *Optional* | boolean | **Applies to test executables only.** Dictates whether or not the test executable must provide its own main function. |
+| [build_config](#build_config) | *Optional* | Define additional build configuration which is specific to the output item only. |
+| [requires_custom_main](#requires_custom_main) | *Optional* | boolean | **Applies to test executables only.** Dictates whether or not the test executable must provide its own main function. |
 
 ### output_type
 
@@ -206,7 +206,7 @@ will still be built and installed because they might be needed (if built as shar
 
 This property is used to define additional build configuration specifically for an output item.
 
-This is configured the same way as the [project build_configs property](properties_list.md#buildconfigs),
+This is configured the same way as the [project build_configs property](properties_list.md#build_configs),
 except for these two details:
 
 1. Configurations can only be specified for build types already explicitly defined in the project-level
@@ -250,7 +250,7 @@ build_configs:
 Dictates whether the test executable must provide its own main function and facilitate its own test
 argument parsing. **NOTE:** This property applies to test executables only.
 
-All three [test frameworks](properties_list.md#testframework) supported by GCMake have two modes:
+All three [test frameworks](properties_list.md#test_framework) supported by GCMake have two modes:
 
 1. The test framework automatically generates a main function and initializes itself. This is the
   most commonly used mode.

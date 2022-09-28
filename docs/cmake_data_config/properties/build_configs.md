@@ -1,6 +1,6 @@
 # build_configs
 
-> This page describes the [project-level build_configs property](properties_list.md#buildconfigs), which is
+> This page describes the [project-level build_configs property](properties_list.md#build_configs), which is
 > used to define build configuration info for the project.
 
 ## Format
@@ -27,7 +27,7 @@ build_configs:
 ### Per-compiler Configuration
 
 Flags and defines can be configured for every compiler supported by the
-[supported_compilers](properties_list.md#supportedcompilers) property. However, **the project is only allowed**
+[supported_compilers](properties_list.md#supported_compilers) property. However, **the project is only allowed**
 **to define configurations for compilers which are explicitly listed in the project's**
 **`supported_compilers` list**.
 
@@ -116,8 +116,8 @@ build_configs:
 | Property | Description |
 | -------- | ----------- |
 | [defines](#defines) | Section for specifying compiler defines |
-| [compiler_flags](#compilerflags) | Section for specifying compiler flags |
-| [linker flags](#linkerflags) | Section for specifying linker flags |
+| [compiler_flags](#compiler_flags) | Section for specifying compiler flags |
+| [linker flags](#linker_flags) | Section for specifying linker flags |
 
 ### defines
 

@@ -54,6 +54,6 @@ If it is, then the subproject configuration process runs and creates the subproj
 *subprojects/\<project-name\>* if successful.
 
 `gcmake new test <project-name>` checks if the current working directory is a GCMake-rust project, and that
-the existing project defines a [test_framework](cmake_data_config/properties/properties_list.md#testframework).
+the existing project defines a [test_framework](cmake_data_config/properties/properties_list.md#test_framework).
 If both are true, then the test project configuration process runs and creates the test project in
 *tests/\<project-name\>* if successful.

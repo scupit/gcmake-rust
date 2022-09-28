@@ -1,4 +1,4 @@
-# cmake_data.yaml Properties List 
+# cmake_data.yaml Properties List
 
 > This page describes the full list of toplevel properties available to GCMake projects.
 
@@ -14,10 +14,11 @@ supported for a specific project type.
 
 | Property | Description |
 | -------- | ----------- |
-| [include_prefix](#includeprefix) | Sets the project's base include prefix. This affects the project directory names. |
+| [include_prefix](#include_prefix) | Sets the project's base include prefix. This affects the project directory names. |
 | [description](#description) | A short description of the project |
 | [version](#version) | Three-part project version, optionally prefixed with a *v* |
 | [output](#output) | Defines what the project actually builds |
+| [prebuild_config](#prebuild_config) | Configuration for executable (non-Python) pre-build scripts. |
 
 ### Root project only properties
 
@@ -25,17 +26,16 @@ supported for a specific project type.
 | -------- | ----------- |
 | [name](#name) | The project's name identifier, no whitespace. |
 | [vendor](#vendor) | The project's vendor. Usually your name or organization. |
-| [supported_compilers](#supportedcompilers) | A list of compilers which are known to successfully compile the project |
+| [supported_compilers](#supported_compilers) | A list of compilers which are known to successfully compile the project |
 | [languages](#languages) | Configuration metadata (such as language standard) for the C and C++ languages |
-| [default_build_type](#defaultbuildtype) | Selects the project's default build configuration |
-| [predefined_dependencies](#predefineddependencies) | Imports a non-GCMake dependency into the project. Only [pre-configured dependencies](../../predefined_dependency_doc.md) with a directory in the [predefined dependency configuration repository](/gcmake-dependency-configs/) are supported. |
-| [gcmake_dependencies](#gcmakedependencies) | Imports other GCMake projects as dependencies into the build. |
-| [prebuild_config](#prebuildconfig) | Configuration for executable (non-Python) pre-build scripts. |
-| [test_framework](#testframework) | Sets the test framework to be used for all the project's tests |
-| [global_defines](#globaldefines) | A set of compiler defines which are always added to the project's build. |
-| [global_properties](#globalproperties) | Miscellaneous configurable project properties which don't really have their own category |
-| [installer_config](#installerconfig) | Additional configuration for installer and shortcut generation |
-| [build_configs](#buildconfigs) | The set of build configurations for the project. This includes compiler flags, linker flags, and defines. |
+| [default_build_type](#default_build_type) | Selects the project's default build configuration |
+| [predefined_dependencies](#predefined_dependencies) | Imports a non-GCMake dependency into the project. Only [pre-configured dependencies](../../predefined_dependency_doc.md) with a directory in the [predefined dependency configuration repository](/gcmake-dependency-configs/) are supported. |
+| [gcmake_dependencies](#gcmake_dependencies) | Imports other GCMake projects as dependencies into the build. |
+| [test_framework](#test_framework) | Sets the test framework to be used for all the project's tests |
+| [global_defines](#global_defines) | A set of compiler defines which are always added to the project's build. |
+| [global_properties](#global_properties) | Miscellaneous configurable project properties which don't really have their own category |
+| [installer_config](#installer_config) | Additional configuration for installer and shortcut generation |
+| [build_configs](#build_configs) | The set of build configurations for the project. This includes compiler flags, linker flags, and defines. |
 
 ## Information by Property
 
@@ -112,7 +112,7 @@ The project version, provided as a three part string. The version can optionally
 version: "1.4.0"
 ```
 
-or 
+or
 
 ``` yaml
 version: v1.4.0
@@ -221,7 +221,6 @@ that can be configured for each language.
 | --------- | --- | ---- |
 | `standard` | `90` \| `99` \| `11` \| `17` \| `23` | `98` \| `11` \| `14` \| `17` \| `20` \| `23` |
 
-
 ``` yaml
 languages:
   C:
@@ -237,7 +236,7 @@ languages:
 > **REQUIRED** `BuildTypeString`
 
 Selects the default configuration used to build the project from any configuration already defined in
-the project's [build_configs](#buildconfigs) section. That means this value can be one of `Debug`, `Release`,
+the project's [build_configs](#build_configs) section. That means this value can be one of `Debug`, `Release`,
 `MinSizeRel`, or `RelWithDebInfo`. However, specifying a build configuration which wasn't used in the
 build_config section will result in an error.
 
@@ -264,7 +263,7 @@ build_configs:
 
 This is the section where non-GCMake dependencies are imported into the build.
 To consume other GCMake projects, to add GCMake projects to the build, use the
-[gcmake_dependencies](#gcmakedependencies) property instead.
+[gcmake_dependencies](#gcmake_dependencies) property instead.
 
 In the map, each dependency name must have a matching configuration directory in the
 [predefined dependency configuration repository](/gcmake-dependency-configs/).
@@ -297,7 +296,7 @@ predefined_dependencies:
 | Option | Example value | Description |
 | ------ | ------------- | ----------- |
 | `git_tag` | `"2.5.1"` or `master` | The tag or branch to be checked out after the repo is cloned. This is essentially how the project "version" is specified. If this property is not specified, then `commit_hash` must be specified. |
-| `commit_hash` | ` "2f11710abc5aa478503a7ff3f9e654bd2078ebab"` | The commit to be checked out after the repo is cloned. If this property is not specified, then `git_tag` must be specified. |
+| `commit_hash` | `"2f11710abc5aa478503a7ff3f9e654bd2078ebab"` | The commit to be checked out after the repo is cloned. If this property is not specified, then `git_tag` must be specified. |
 | `repo_url` | `git@github.com:scupit/gcmake-rust.git` | **Optional** alternate repository URL. Each predefined subdirectory dependency already has a default git URL. This property just overrides it. |
 
 Any dependency added to the project can then be linked to any output or executable pre-build script
@@ -420,7 +419,7 @@ test_framework:
     git_tag: v1.12.2
 ```
 
-doctest example: 
+doctest example:
 
 ``` yaml
 test_framework:

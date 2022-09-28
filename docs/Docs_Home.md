@@ -13,7 +13,7 @@ configuration work together.
 2. [Project Structure](project_structure.md)
 3. [cmake_data.yaml Configuration](cmake_data_config/cmake_data.md)
 4. [Predefined Dependency Compatibility Layer](predefined_dependency_doc.md)
-5. [The Configuration Directory](tool_configuration_directory.md)
+5. [The Configuration Directory](the_configuration_directory.md)
 6. [Cross Compilation](cross_compilation.md)
 7. [Compiler pitfalls](pitfall_list.md)
 8. [Project TODOs/Roadmap](TODO.md)
@@ -25,8 +25,8 @@ configuration work together.
 - [Output item rules and constraints](cmake_data_config/properties/output.md#general-output-rules):
   Rules dictating output type and quantity per project instance.
 - [Linking](cmake_data_config/linking.md): How linking works in GCMake
-- [Consuming other GCMake projects](cmake_data_config/properties/properties_list.md#gcmakedependencies)
-- [Non-GCMake dependency consumption](cmake_data_config/properties/properties_list.md#predefineddependencies)
+- [Consuming other GCMake projects](cmake_data_config/properties/properties_list.md#gcmake_dependencies)
+- [Non-GCMake dependency consumption](cmake_data_config/properties/properties_list.md#predefined_dependencies)
 - [Auto-generated export header](cmake_data_config/auto_generated_export_macro_header.md)
 - [Making use of pre-build scripts](pre_build_scripts.md)
 
@@ -37,9 +37,9 @@ configuration work together.
 - [gcmake-test-project: an example project](/gcmake-test-project/)
 - [Configuring project compilation flags and defines](cmake_data_config/properties/build_configs.md)
 - [Linking to an output](cmake_data_config/properties/output.md#link)
-- [Configuring additional flags and defines per output item](cmake_data_config/properties/output.md#buildconfig)
-- [Adding a pre-build script](cmake_data_config/properties/properties_list.md#prebuildconfig)
-- [Managing dependencies](cmake_data_config/properties/properties_list.md#predefineddependencies)
+- [Configuring additional flags and defines per output item](cmake_data_config/properties/output.md#build_config)
+- [Adding a pre-build script](cmake_data_config/properties/properties_list.md#prebuild_config)
+- [Managing dependencies](cmake_data_config/properties/properties_list.md#predefined_dependencies)
 - [Default config files](the_configuration_directory.md#manual-configuration) such as .gitignore, .clang-format, and .clang-tidy
 - [Compiling using Zig](compile_using_zig.md)
 

@@ -4,22 +4,22 @@
 
 ## Supported Property Subset
 
-- [include_prefix](properties/properties_list.md#includeprefix)
+- [include_prefix](properties/properties_list.md#include_prefix)
 - [description](properties/properties_list.md#description)
 - [version](properties/properties_list.md#version)
 - [output](properties/properties_list.md#output)
-- [prebuild_config](properties/properties_list.md#prebuildconfig)
+- [prebuild_config](properties/properties_list.md#prebuild_config)
 
 ## Nuances
 
-1. The root project must specify a [test_framework](properties/properties_list.md#testframework),
+1. The root project must specify a [test_framework](properties/properties_list.md#test_framework),
   otherwise an error will be thrown when trying to generate or configure a test project.
 2. Test projects cannot have subprojects.
 3. Test projects can only build executables. No sense building a test that can't be run.
 4. Each test executable automatically has access to both the specified test framework
   and all code used to build the library or executables in the current project (same level only).
   See [output.md](properties/output.md) for some additional info.
-5. The [output.requires_custom_main](properties/output.md#requirescustommain) property only affects
+5. The [output.requires_custom_main](properties/output.md#requires_custom_main) property only affects
   test project executables.
 
 ## Include Prefix Accumulation

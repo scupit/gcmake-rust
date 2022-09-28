@@ -24,10 +24,10 @@ Pre-build scripts can be written in `Python` (just make sure you have a
 1. Executable pre-build scripts can link to the project's dependencies or libraries built elsewhere in the
   project tree, but not to the library built by the immediate project tree.
 2. Configuration is done using the
-  [prebuild_config project property](cmake_data_config/properties/properties_list.md#prebuildconfig)
+  [prebuild_config project property](cmake_data_config/properties/properties_list.md#prebuild_config)
 3. The pre-build script inherits all of the project's
-  [build_configs](cmake_data_config/properties/properties_list.md#buildconfigs) and
-  [global_defines](cmake_data_config/properties/properties_list.md#globaldefines) the same as an output
+  [build_configs](cmake_data_config/properties/properties_list.md#build_configs) and
+  [global_defines](cmake_data_config/properties/properties_list.md#global_defines) the same as an output
   executable would.
 4. These will be built into the same build directory as everything else, but are not included in installations.
 
@@ -54,7 +54,7 @@ level as *cmake_data.yaml*):
 | File | Description |
 | ---- | ----------- |
 | `pre_build.py` | `Python` pre-build script. This is recommended if your project is going to be cross-compiled. |
-| `pre_build.c` | `C` pre-build script. CMake will build and run an executable using the source file as an entry point. Can be configured with the [prebuild_config](cmake_data_config/properties/properties_list.md#prebuildconfig) property. |
-| `pre_build.cpp` or `pre_build.cxx` | `C++` pre-build script. CMake will build and run an executable using the source file as an entry point. Can be configured with the [prebuild_config](cmake_data_config/properties/properties_list.md#prebuildconfig) property. |
+| `pre_build.c` | `C` pre-build script. CMake will build and run an executable using the source file as an entry point. Can be configured with the [prebuild_config](cmake_data_config/properties/properties_list.md#prebuild_config) property. |
+| `pre_build.cpp` or `pre_build.cxx` | `C++` pre-build script. CMake will build and run an executable using the source file as an entry point. Can be configured with the [prebuild_config](cmake_data_config/properties/properties_list.md#prebuild_config) property. |
 
 After adding the file, re-run `gcmake-rust` to regenerate the CMake configuration and you're good to go!

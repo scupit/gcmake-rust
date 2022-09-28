@@ -4,11 +4,11 @@
 
 ## Supported Property Subset
 
-- [include_prefix](properties/properties_list.md#includeprefix)
+- [include_prefix](properties/properties_list.md#include_prefix)
 - [description](properties/properties_list.md#description)
 - [version](properties/properties_list.md#version)
 - [output](properties/properties_list.md#output)
-- [prebuild_config](properties/properties_list.md#prebuildconfig)
+- [prebuild_config](properties/properties_list.md#prebuild_config)
 
 ## Include Prefix Accumulation
 
