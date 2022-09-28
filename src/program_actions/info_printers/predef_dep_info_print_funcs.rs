@@ -34,3 +34,7 @@ pub fn print_predep_github_url(common_info: &dyn RawPredepCommon) {
     None => println!("No GitHub URL")
   }
 }
+
+pub fn print_predep_can_cross_compile(common_info: &dyn RawPredepCommon) {
+  println!("Can trivially cross-compile: {}", common_info.can_trivially_cross_compile());
+}

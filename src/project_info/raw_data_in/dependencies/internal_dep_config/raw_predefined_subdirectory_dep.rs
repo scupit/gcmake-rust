@@ -55,7 +55,7 @@ pub struct RawSubdirectoryDependency {
 }
 
 impl RawPredepCommon for RawSubdirectoryDependency {
-  fn can_cross_compile(&self) -> bool {
+  fn can_trivially_cross_compile(&self) -> bool {
     self._can_cross_compile
   }
 

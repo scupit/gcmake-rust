@@ -100,7 +100,7 @@ impl PredefinedCMakeComponentsModuleDep {
       yaml_namespaced_target_map,
       lib_link_mode: components_dep.cmakelists_usage.link_format.clone(),
       raw_dep: components_dep.clone(),
-      _can_cross_compile: components_dep.can_cross_compile()
+      _can_cross_compile: components_dep.can_trivially_cross_compile()
     });
   }
 }

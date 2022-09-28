@@ -456,7 +456,7 @@ impl<'a> CMakeListsWriter<'a> {
   fn write_toplevel_tweaks(&self) -> io::Result<()> {
     writeln!(&self.cmakelists_file, "ensure_gcmake_config_dirs_exist()")?;
 
-    if !self.project_data.can_cross_compile() {
+    if !self.project_data.can_trivially_cross_compile() {
       self.set_basic_option(
         "",
         "GCMAKE_OVERRIDE_CROSS_COMPILATION",

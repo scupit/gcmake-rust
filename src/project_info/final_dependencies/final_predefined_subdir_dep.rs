@@ -200,7 +200,7 @@ impl PredefinedSubdirDep {
         yaml_namespaced_target_map,
         requires_custom_populate: subdir_dep.requires_custom_fetchcontent_populate,
         installation_details,
-        _can_cross_compile: subdir_dep.can_cross_compile()
+        _can_cross_compile: subdir_dep.can_trivially_cross_compile()
       }
     )
   }

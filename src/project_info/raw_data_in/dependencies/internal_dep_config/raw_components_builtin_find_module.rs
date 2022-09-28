@@ -45,7 +45,7 @@ pub struct RawComponentsModuleDep {
 }
 
 impl RawPredepCommon for RawComponentsModuleDep {
-  fn can_cross_compile(&self) -> bool {
+  fn can_trivially_cross_compile(&self) -> bool {
     false
   }
 

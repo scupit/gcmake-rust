@@ -83,7 +83,7 @@ impl PredefinedCMakeModuleDep {
       target_map,
       cmake_namespaced_target_map,
       yaml_namespaced_target_map,
-      _can_cross_compile: dep.can_cross_compile()
+      _can_cross_compile: dep.can_trivially_cross_compile()
     });
   }
 }

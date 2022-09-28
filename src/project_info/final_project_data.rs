@@ -1336,29 +1336,22 @@ impl FinalProjectData {
     &self.gcmake_dependency_projects
   }
 
-  pub fn can_cross_compile(&self) -> bool {
+  pub fn can_trivially_cross_compile(&self) -> bool {
     for (_, subproject) in &self.subprojects {
-      if !subproject.can_cross_compile() {
+      if !subproject.can_trivially_cross_compile() {
         return false;
       }
     }
 
     for (_, predef_dep) in &self.predefined_dependencies {
-      if !predef_dep.can_cross_compile() {
+      if !predef_dep.can_trivially_cross_compile() {
         return false;
       }
     }
 
     for (_, gcmake_dep) in &self.gcmake_dependency_projects {
-      match gcmake_dep.project_status() {
-        GCMakeDependencyStatus::Available(available_gcmake_dep) => {
-          if !available_gcmake_dep.can_cross_compile() {
-            return false
-          }
-        },
-        // Use the least permissive mode until the actual state is known. This is kind of a hard
-        // edge, and would be fixed if GCMake had some sort of package registry.
-        GCMakeDependencyStatus::NotDownloaded(_) => return false
+      if !gcmake_dep.can_trivially_cross_compile() {
+        return false;
       }
     }
 

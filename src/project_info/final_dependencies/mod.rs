@@ -100,7 +100,7 @@ impl FinalPredefinedDependencyConfig {
     });
   }
 
-  pub fn can_cross_compile(&self) -> bool {
+  pub fn can_trivially_cross_compile(&self) -> bool {
     self.predep_info.can_cross_compile()
   }
 

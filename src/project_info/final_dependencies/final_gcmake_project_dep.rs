@@ -62,6 +62,22 @@ impl FinalGCMakeDependency {
     &self.dep_project_status
   }
 
+  pub fn is_available(&self) -> bool {
+    return match self.project_status() {
+      GCMakeDependencyStatus::Available(_) => true,
+      _ => false
+    }
+  }
+
+  pub fn can_trivially_cross_compile(&self) -> bool {
+    return match self.project_status() {
+      // Use the least permissive mode until the actual state is known. This is kind of a hard
+      // edge, and would be fixed if GCMake had some sort of package registry.
+      GCMakeDependencyStatus::NotDownloaded(_) => false,
+      GCMakeDependencyStatus::Available(available_gcmake_dep) => available_gcmake_dep.can_trivially_cross_compile()
+    }
+  }
+
   pub fn get_linkable_target_name(&self, base_name: &str) -> String {
     match self.project_status() {
       GCMakeDependencyStatus::NotDownloaded(placeholder_prefix) => {

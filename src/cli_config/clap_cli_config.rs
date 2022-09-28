@@ -222,16 +222,20 @@ pub struct ProjectInfoCommand {
   pub selectors: Vec<String>,
 
   /// Print the project's full include prefix
-  #[clap(short = 'i')]
+  #[clap(short = 'i', long = "include-prefix")]
   pub show_include_prefix: bool,
 
   /// List immediate subprojects
-  #[clap(short = 's')]
+  #[clap(short = 's', long = "subprojects")]
   pub show_subprojects: bool,
 
   /// Print repository URL
-  #[clap(short = 'r')]
-  pub show_repo_url: bool
+  #[clap(short = 'r', long = "repo-url")]
+  pub show_repo_url: bool,
+
+  /// Prints whether the project can be trivially cross compiled
+  #[clap(short = 'c', long = "can-cross-compile")]
+  pub show_can_trivially_cross_compile: bool
 }
 
 #[derive(Args)]
@@ -243,16 +247,21 @@ pub struct PredepInfoCommand {
   pub selectors: Vec<String>,
 
   /// List out all the dependency's available targets
-  #[clap(short = 't')]
+  #[clap(short = 't', long = "target-list")]
   pub show_targets: bool,
 
   /// Print the dependency's git repository URL, if applicable
-  #[clap(short = 'r')]
+  #[clap(short = 'r', long = "repo-url")]
   pub show_repository_url: bool,
 
   /// Print the dependency's GitHub page URL, if applicable
-  #[clap(short = 'g')]
-  pub show_github_url: bool
+  #[clap(short = 'g', long = "github-url")]
+  pub show_github_url: bool,
+
+
+  /// Prints whether the dependency can be trivially cross-compiled
+  #[clap(short = 'c', long = "can-cross-compile")]
+  pub show_can_trivially_cross_compile: bool
 }
 
 #[derive(Args)]

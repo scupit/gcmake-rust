@@ -2134,7 +2134,7 @@ impl<'a> DependencyGraph<'a> {
     project_name: &str,
     is_finding_initial_namespace: bool
   ) -> Result<Option<Rc<RefCell<DependencyGraph<'a>>>>, String> {
-    if project_name == "self" {
+    if project_name == "self" || project_name == self.project_base_name() {
       return Ok(Some(Weak::upgrade(&self.current_graph_ref).unwrap()));
     }
 

@@ -65,3 +65,27 @@ pub fn print_project_repo_url(project_graph: &DependencyGraph) {
     Err(reason_missing) => println!("{}", reason_missing)
   }
 }
+
+pub fn print_project_can_cross_compile(project_graph: &DependencyGraph) {
+  let mut project_is_available: bool = true;
+
+  // TODO: Have a second bool (or maybe a list of projects) denoting which projects
+  // are not available.
+  let can_cross_compile: bool = match project_graph.project_wrapper() {
+    ProjectWrapper::GCMakeDependencyRoot(gcmake_dep) => {
+      project_is_available = gcmake_dep.is_available();
+      gcmake_dep.can_trivially_cross_compile()
+    },
+    ProjectWrapper::NormalProject(project_info) => project_info.can_trivially_cross_compile(),
+    ProjectWrapper::PredefinedDependency(predef_dep) => predef_dep.can_trivially_cross_compile()
+  };
+
+  print!("Can trivially cross-compile: {}", can_cross_compile);
+
+  if project_is_available {
+    println!();
+  }
+  else {
+    println!(" (Can't accurately determine, since the project hasn't been downloaded yet)");
+  }
+}
