@@ -178,13 +178,30 @@ pub fn create_project_at(
           Some(TestMainInitInfo {
             test_framework,
             requires_custom_main: requires_custom_main.unwrap()
-          })
+          }),
+          &folder_generation_include_prefix,
+          project_name
         )?;
       },
       _ => {
         match lang_selection {
-          MainFileLanguage::C => generate_c_main(main_file_path, &output_type_selection)?,
-          MainFileLanguage::Cpp => generate_cpp_main(main_file_path, &output_type_selection, None)?
+          MainFileLanguage::C => {
+            generate_c_main(
+              main_file_path,
+              &output_type_selection,
+              &folder_generation_include_prefix,
+              project_name
+            )?
+          },
+          MainFileLanguage::Cpp => {
+            generate_cpp_main(
+              main_file_path,
+              &output_type_selection,
+              None,
+              &folder_generation_include_prefix,
+              project_name
+            )?
+          }
         }
       }
     }

@@ -131,6 +131,24 @@ pub struct CompiledOutputItem {
 }
 
 impl CompiledOutputItem {
+  pub fn export_macro_header_include_path(
+    full_include_prefix: &str,
+    target_name: &str
+  ) -> String {
+    return format!(
+      "{}/{}_export.h",
+      full_include_prefix,
+      target_name
+    );
+  }
+
+  pub fn str_export_macro(target_name: &str) -> String {
+    return format!("{}_EXPORT", target_name)
+      .to_uppercase()
+      .replace(" ", "_")
+      .replace("-", "_");
+  }
+
   pub fn make_link_map(
     _output_name: &str,
     output_type: &OutputItemType,

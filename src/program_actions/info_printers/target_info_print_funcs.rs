@@ -1,4 +1,4 @@
-use crate::project_info::dependency_graph_mod::dependency_graph::{TargetNode, ContainedItem};
+use crate::project_info::{dependency_graph_mod::dependency_graph::{TargetNode, ContainedItem}, CompiledOutputItem};
 use colored::*;
 
 
@@ -9,11 +9,16 @@ pub fn print_target_header(target: &TargetNode) {
 pub fn print_export_header_include_path(target: &TargetNode) {
   match target.get_contained_item() {
     ContainedItem::CompiledOutput(output) if output.is_compiled_library_type() => {
+      let full_include_prefix: String = target
+        .container_project().as_ref().borrow()
+        .project_wrapper().clone()
+        .unwrap_normal_project()
+        .get_full_include_prefix().to_string();
+
       println!(
-        "\"{}/{}_export.h\"",
-        target.container_project().as_ref().borrow().project_wrapper().clone().unwrap_normal_project().get_full_include_prefix(),
-        target.get_name()
-      )
+        "{}",
+        CompiledOutputItem::export_macro_header_include_path(&full_include_prefix, target.get_name())
+      );
     },
     _ => println!("No export header")
   }

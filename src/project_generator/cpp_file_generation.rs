@@ -1,6 +1,6 @@
 use std::{fs::File, io::{self, Write}, path::{Path}};
 
-use crate::{project_generator::configuration::CreationProjectOutputType, project_info::FinalTestFramework};
+use crate::{project_generator::configuration::CreationProjectOutputType, project_info::{FinalTestFramework, CompiledOutputItem}, common::{make_c_identifier, basic_configure_replace}};
 
 use super::{configuration::OutputLibType, cpp_test_mains::test_mains};
 
@@ -14,10 +14,34 @@ int main(int argc, char** argv) {
 ";
 
 const CPP_COMPILED_LIB_MAIN: &'static str =
-"// #include \"Your lib files\"";
+"#ifndef @TARGET_NAME@_HPP
+#define @TARGET_NAME@_HPP
+
+// #include \"Your lib files\" here
+
+#include \"@EXPORT_HEADER@\"
+
+class @EXPORT_MACRO@ PlaceholderClass
+{
+
+};
+
+#endif
+";
 
 const CPP_HEADER_ONLY_MAIN: &'static str =
-"// Write your code here and/or #include \"Your library files\"";
+"#ifndef @TARGET_NAME@_HPP
+#define @TARGET_NAME@_HPP
+
+// Write your code here and/or #include \"Your library files\"
+
+class PlacholderClass
+{
+
+};
+
+#endif
+";
 
 pub struct TestMainInitInfo<'a> {
   pub test_framework: &'a FinalTestFramework,
@@ -27,14 +51,21 @@ pub struct TestMainInitInfo<'a> {
 pub fn generate_cpp_main<'a, T: AsRef<Path>>(
   file_path: T,
   project_output_type: &CreationProjectOutputType,
-  test_init_info: Option<TestMainInitInfo<'a>>
+  test_init_info: Option<TestMainInitInfo<'a>>,
+  full_include_prefix: &str,
+  target_name: &str
 ) -> io::Result<()> {
   let main_file = File::create(file_path)?;
 
   write!(
     &main_file,
     "{}",
-    get_cpp_main_file_contents(project_output_type, test_init_info)
+    get_cpp_main_file_contents(
+      project_output_type,
+      test_init_info,
+      full_include_prefix,
+      target_name
+    )
   )?;
   
   Ok(())
@@ -42,41 +73,61 @@ pub fn generate_cpp_main<'a, T: AsRef<Path>>(
 
 fn get_cpp_main_file_contents<'a>(
   project_output_type: &CreationProjectOutputType,
-  test_init_info: Option<TestMainInitInfo<'a>>
-) -> &'static str {
+  test_init_info: Option<TestMainInitInfo<'a>>,
+  full_include_prefix: &str,
+  target_name: &str
+) -> String {
   return match test_init_info {
     Some(TestMainInitInfo { test_framework, requires_custom_main }) => match test_framework {
       FinalTestFramework::Catch2(_) => {
         if requires_custom_main {
-          test_mains::CATCH2_CUSTOM_MAIN
+          String::from(test_mains::CATCH2_CUSTOM_MAIN)
         }
         else {
-          test_mains::CATCH2_AUTO_MAIN
+          String::from(test_mains::CATCH2_AUTO_MAIN)
         }
       },
       FinalTestFramework::DocTest(_) => {
         if requires_custom_main {
-          test_mains::DOCTEST_CUSTOM_MAIN
+          String::from(test_mains::DOCTEST_CUSTOM_MAIN)
         }
         else {
-          test_mains::DOCTEST_AUTO_MAIN
+          String::from(test_mains::DOCTEST_AUTO_MAIN)
         }
       },
       FinalTestFramework::GoogleTest(_) => {
         if requires_custom_main {
-          test_mains::GOOGLETEST_CUSTOM_MAIN
+          String::from(test_mains::GOOGLETEST_CUSTOM_MAIN)
         }
         else {
-          test_mains::GOOGLETEST_AUTO_MAIN
+          String::from(test_mains::GOOGLETEST_AUTO_MAIN)
         }
       }
     },
     None => {
+      let target_ident_upper: String = make_c_identifier(target_name).to_uppercase();
+
       match project_output_type {
-        CreationProjectOutputType::Executable => CPP_EXE_MAIN,
+        CreationProjectOutputType::Executable => String::from(CPP_EXE_MAIN),
         CreationProjectOutputType::Library(lib_type) => match lib_type {
-          OutputLibType::HeaderOnly => CPP_HEADER_ONLY_MAIN,
-          _ => CPP_COMPILED_LIB_MAIN
+          OutputLibType::HeaderOnly => {
+            basic_configure_replace(
+              CPP_HEADER_ONLY_MAIN,
+              [
+                ("TARGET_NAME", target_ident_upper)
+              ]
+            )
+          }
+          _ => {
+            basic_configure_replace(
+              CPP_COMPILED_LIB_MAIN,
+              [
+                ("EXPORT_HEADER", CompiledOutputItem::export_macro_header_include_path(full_include_prefix, target_name)),
+                ("EXPORT_MACRO", CompiledOutputItem::str_export_macro(target_name)),
+                ("TARGET_NAME", target_ident_upper)
+              ]
+            )
+          }
         }
       }
     }

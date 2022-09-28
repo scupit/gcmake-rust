@@ -1,4 +1,4 @@
-use crate::{project_info::{final_project_data::FinalProjectData, path_manipulation::cleaned_pathbuf}, cli_config::clap_cli_config::FileCreationLang};
+use crate::{project_info::{final_project_data::FinalProjectData, path_manipulation::cleaned_pathbuf, ProjectOutputType, CompiledOutputItem}, cli_config::clap_cli_config::FileCreationLang};
 
 use super::file_creation_info::{FileTypeGeneratingInfo, SharedFileInfo, FileGuardStyle};
 use std::{io::{self, Write}, path::{PathBuf, Path}, fs::{self, File}};
@@ -125,7 +125,7 @@ fn write_header(
     extension_for(CodeFileType::Header(language.clone()))
   )?;
 
-  let header_file = File::create(&file_path)?;
+  let mut header_file: File = File::create(&file_path)?;
 
   match file_guard {
     FileGuardStyle::IncludeGuard(specifier) => {
@@ -141,12 +141,39 @@ fn write_header(
     }
   }
 
-  writeln!(&header_file, "\n\n")?;
+  writeln!(&header_file, "")?;
+
+  match project_info.get_project_output_type() {
+    ProjectOutputType::CompiledLibProject => {
+      write_compiled_lib_header_section(
+        project_info,
+        file_info,
+        language,
+        &mut header_file
+      )?;
+    },
+    ProjectOutputType::ExeProject | ProjectOutputType::HeaderOnlyLibProject => match language {
+      FileCreationLang::C => {
+        writeln!(
+          header_file,
+          "\nint placeholder_{}(void);\n",
+          &file_info.shared_name_c_ident
+        )?;
+      },
+      FileCreationLang::Cpp => {
+        writeln!(
+          header_file,
+          "\nclass {}\n{{\n\n}};\n",
+          &file_info.shared_name_c_ident
+        )?;
+      }
+    }
+  }
 
   if let Some(template_impl_file) = maybe_template_impl {
     writeln!(
       &header_file,
-      "#include \"{}\"",
+      "#include \"{}\"\n",
       to_file_include_path(project_info, template_impl_file)
     )?;
   }
@@ -156,6 +183,48 @@ fn write_header(
   }
 
   Ok(file_path)
+}
+
+fn write_compiled_lib_header_section(
+  project_info: &FinalProjectData,
+  file_info: &SharedFileInfo,
+  language: &FileCreationLang,
+  header_file: &mut File
+) -> io::Result<()> {
+  // This is guaranteed to work because library projects can only build one library.
+  let (output_name, _) = project_info.get_outputs().iter().nth(0).unwrap();
+
+  writeln!(
+    header_file,
+    "\n#include \"{}\"",
+    CompiledOutputItem::export_macro_header_include_path(
+      project_info.get_full_include_prefix(),
+      output_name
+    )
+  )?;
+
+  let export_macro: String = CompiledOutputItem::str_export_macro(output_name);
+
+  match language {
+    FileCreationLang::C => {
+      writeln!(
+        header_file,
+        "\nint {} placeholder_{}(void);\n",
+        export_macro,
+        &file_info.shared_name_c_ident
+      )?;
+    },
+    FileCreationLang::Cpp => {
+      writeln!(
+        header_file,
+        "\nclass {} {}\n{{\n\n}};\n",
+        export_macro,
+        &file_info.shared_name_c_ident
+      )?;
+    }
+  }
+
+  Ok(())
 }
 
 fn write_source(

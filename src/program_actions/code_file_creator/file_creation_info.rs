@@ -61,6 +61,7 @@ pub enum FileGuardStyle {
 
 pub struct SharedFileInfo {
   pub shared_name: String,
+  pub shared_name_c_ident: String,
   pub leading_dir_path: String,
   pub cleaned_given_path: String
 }
@@ -76,15 +77,27 @@ impl SharedFileInfo {
     );
 
     return if let Some(last_slash_index) = cleaned_given_path.rfind('/') {
+      let shared_name: String = String::from(&cleaned_given_path[last_slash_index + 1..]); 
+      let shared_name_c_ident: String = shared_name
+        .replace(" ", "_")
+        .replace("-", "_");
+
       Self {
-        shared_name: String::from(&cleaned_given_path[last_slash_index + 1..]),
+        shared_name,
+        shared_name_c_ident,
         leading_dir_path: String::from(&cleaned_given_path[0..last_slash_index]),
         cleaned_given_path
       }
     }
     else {
+      let shared_name: String = cleaned_given_path.clone();
+      let shared_name_c_ident: String = shared_name
+        .replace(" ", "_")
+        .replace("-", "_");
+
       Self {
-        shared_name: cleaned_given_path.clone(),
+        shared_name,
+        shared_name_c_ident,
         cleaned_given_path,
         leading_dir_path: String::from("."),
       }
