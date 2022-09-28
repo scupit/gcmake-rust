@@ -38,17 +38,22 @@ See [the documentation](Docs_Home.md) for in-depth information about this tool.
 
 > **NOTE:** This section assumes the `gcmake-rust` executable is aliased to `gcmake`.
 
+`gcmake [path-to-project]` configures the project in the given path and writes CMake configurations for the entire
+project tree (excluding subdirectories). **If no path is provided, the current working directory is used.**
+
 `gcmake --help` shows toplevel help info.
 
 `gcmake <command> --help` for command-specific info.
 
 `gcmake dep-config update [--branch <branch>]` to download/update the dependency configuration repository.
 
-`gcmake [path-to-project]` configures the project in the given path and writes CMake configurations for the entire
-project tree (excluding subdirectories).  If no path is provided, the current working directory is used.
+`gcmake new root-project <project-name>` steps you through the project initializer prompts and creates a new C/C++ project.
 
-`gcmake new <project-name>` steps you through the project initializer prompts and creates a new C/C++ project.
+`gcmake new subproject <project-name>` checks if the current working directory is a GCMake-rust project.
+If it is, then the subproject configuration process runs and creates the subproject in
+*subprojects/\<project-name\>* if successful.
 
-`gcmake new --subproject <project-name>` checks if the current working directory is a GCMake-rust project.
-If it is, then runs the same project configuration process as above and creates the project in
-*subprojects/\<project-name\>*.
+`gcmake new test <project-name>` checks if the current working directory is a GCMake-rust project, and that
+the existing project defines a [test_framework](cmake_data_config/properties/properties_list.md#testframework).
+If both are true, then the test project configuration process runs and creates the test project in
+*tests/\<project-name\>* if successful.
