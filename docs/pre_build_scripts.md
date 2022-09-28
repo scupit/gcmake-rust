@@ -33,6 +33,8 @@ Pre-build scripts can be written in `Python` (just make sure you have a
 
 ## Running only the pre-build scripts
 
+See [cross-compilation caveats](cross_compilation.md#caveats) for an example of why you would want to do this.
+
 GCMake will create a CMake target called `run-pre-build` which can be used to run only the pre-build
 steps on some generators.
 

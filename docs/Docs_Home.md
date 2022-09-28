@@ -14,8 +14,9 @@ configuration work together.
 3. [cmake_data.yaml Configuration](cmake_data_config/cmake_data.md)
 4. [Predefined Dependency Compatibility Layer](predefined_dependency_doc.md)
 5. [The Configuration Directory](tool_configuration_directory.md)
-6. [Project TODOs/Roadmap](TODO.md)
+6. [Cross Compilation](cross_compilation.md)
 7. [Compiler pitfalls](pitfall_list.md)
+8. [Project TODOs/Roadmap](TODO.md)
 
 ## Important Concepts
 
@@ -40,6 +41,7 @@ configuration work together.
 - [Adding a pre-build script](cmake_data_config/properties/properties_list.md#prebuildconfig)
 - [Managing dependencies](cmake_data_config/properties/properties_list.md#predefineddependencies)
 - [Default config files](the_configuration_directory.md#manual-configuration) such as .gitignore, .clang-format, and .clang-tidy
+- [Compiling using Zig](compile_using_zig.md)
 
 ## GCMake Repository Links
 
