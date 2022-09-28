@@ -6,50 +6,11 @@ There are a whole bunch of things which need doing. This is the place to list th
   but can be configured to work with gcmake by providing a 'yaml dependency glue' config. Those glue configs
   should be contained in a separate repository, should function as a sort of "registry" updateable by the
   gcmake tool.
-- [x] Set fetchcontent_quiet to true after first config if all subprojects/dependencies are cloned correctly.
-  That way git info doesn't clog up the output prompt each configure.
 
 ## Priorities
 
-- [x] For compiled libraries (`StaticLib`, `SharedLib`, and `CompiledLib`), links must be explicitly
-        categorized as 'public' or 'private'. Add a section in the docs to explain this. See
-        [this great StackOverflow answer](https://stackoverflow.com/questions/26037954/cmake-target-link-libraries-interface-dependencies)
-        for the difference between PUBLIC, PRIVATE, and, INTERFACE in CMake.
-- [x] Header-only library support. `HeaderOnly`
-- [x] When generating CMakeLists.txt, make sure to use correct access specifiers.
-        Headers should be PRIVATE for executables, INTERFACE for header-only libraries, and
-        PUBLIC for compiled libraries. Links should be PRIVATE for executables, INTERFACE for
-        header-only libraries, and PUBLIC or PRIVATE for compiled libraries (see above).
-- [x] Change `Library` output type to `CompiledLib` or `BinaryLib`, so it won't be confused with
-        header-only libraries.
-- [x] When generating a library project, name the entry_file the same as the project name.
-- [x] Add a separate docs page explaining the linking system, and how links are inherited from
-        compiled libraries.
-- [ ] **Propagate DLL copies from installed gcmake projects on Windows**. *Projects just*
-        *using CMake should be able to find_package a gcmake project and have the proper DLLs be copied*
-        *to a build directory automatically*. DLL installation can't be guaranteed in this instance.
-        However, DLL installation is already guaranteed for gcmake projects, since dependencies which
-        are gcmake projects are required to be built as subproject dependencies.
-- [x] CPack installer generation
-
-[Available CPack Generators](https://cmake.org/cmake/help/latest/cpack_gen/archive.html)
-
-[CPack Docs Page](https://cmake.org/cmake/help/latest/module/CPack.html#variable:CPACK_PACKAGE_DESCRIPTION_SUMMARY)
-
-- [x] CTest tests and *\<project name\>_BUILD_TESTS* variable. Tests should be in *tests/* directory,
-        Each test should have its own directory.
-- [x] Generate a placeholder header and source file when creating a new compiled library. Currently,
-        the intial CMakeLists generation step for the new compiled library project fails because the
-        project doesn't contain any source files; just the 'entry point' header.
-- [x] Separate the `new` command into `project` and `subproject`. This opens the door for adding other
-        things, such as `new test`.
--  Improvements to installers, such as:
-  - [x] Ability to specify an installer icon (where applicable)
-  - [x] Name the uninstaller `Uninstall_<project name>` (where applicable)
-- [ ] Expose system endianness to the project using `CMAKE_<LANG>_BYTE_ORDER`.
-- [x] Figure out cross-compiling
-- [x] Cache dependencies in *~/.gcmake/dep-cache*. It's a pain to clone dependencies over wi-fi every
-        time they are needed.
+- [ ] Automatically include the export header in generated compiled library files.
+- [ ] Add a flag which prints whether a dependency or project can be trivially cross-compiled.
 - [ ] Add CLI commands for cleaning and updating the dep-cache. Not exactly sure how updating should work yet.
 
 ## Configuration TODO
@@ -67,55 +28,10 @@ Support for:
 
 - [ ] Add "library group" project type which allows building multiple libraries in the same
 project, organized as *components*. See [SFML](https://github.com/SFML/SFML) for a good example of this.
-- [x] Separate *flags* build config option into *compiler_flags* and *linker_flags*.
 
 ### Quality of Life
 
 - [ ] Add color printing. This will make output so much nicer to read.
-
-### Refactoring
-
-- [x] Unify file path cleaning, so that paths are always relative to the project root, in the project root,
-      and have no leading slashes. Ex: `pre-build.cpp` instead of `/pre-build.cpp`
-
-### Pre-build script
-
-- [x] Add support for a pre-build C++, C, or Python 3 script. The script should be automatically built and
-      run before each recompilation.
-- [x] `resources` directory in each project root is copied into the build tree before the actual build.
-      **TODO: need to be 100% sure this runs after the pre-build scripts somehow. Maybe run it as POST_BUILD on the pre-build target.**
-
-### Targets
-
-- [x] **Namespaced output targets**
-- [x] Support for header-only libraries.
-- [x] Defines and flags per target.
-
-### Testing
-
-- [x] Add support for automated testing with CMake's built-in ctest.
-
-### Installation
-
-- [x] Configure installation
-- [x] Export configuration (figure out how this is different from installation)
-- [x] Automatically create a CMake package config file (\<projectName>Config.cmake)
-
-### Generation TODO
-
-- [x] Add ability to generate header, source, and template-impl files. Must support C and C++.
-- [x] Generate *.gitignore* file if it doesn't exist. Ignore:
-  - .vscode/
-  - build/
-- [x] Ability to specify linked dependencies as a map of project names, each with its own dependency list.
-- [ ] (MAYBE) Add all warning flags to Release builds as well.
-
-Support for:
-
-- [x] `.clang-format`
-- [x] `.clang-tidy`
-- [ ] valgrind? (not sure if this needs a configuration file or not, needs research)
-- [x] CPack installer generation
 
 ### Compiler Cheat Sheet
 
@@ -156,28 +72,6 @@ The command set for viewing project metadata.
 - [ ] `check config` displays whether the cmake_data.yaml is correct and works with the current project.
 - [ ] `check cmake-version` gets the current CMake version and the required CMake version, and whether
         the current CMake version is new enough.
-
-#### new
-
-- [x] `new clang-format` command which generates a default .clang-format if it doesn't exist.
-
-### External libraries TODO
-
-- [x] Remove default `latest_stable_release_tag` in dependency yaml configuration. This project shouldn't manage default lib versions.
-- [x] Add support for bringing external libraries into the project.
-
-### IMPORTANT NOTE
-
-**Currently, supported external libraries can only be linked statically. Need to add support for**
-**copying shared libraries to the correct location.**
-
-Types of libraries which need support, from easiest to hardest:
-
-  1. Another gcmake (this project) project
-  2. Project which already has a [pre-written cmake find module](https://cmake.org/cmake/help/v3.22/manual/cmake-modules.7.html#find-modules)
-  3. CMake project which can be added using *add_subdirectory*
-  4. CMake project which can't use add_subdirectory (must be built and installed on the system separately)
-  5. Non-CMake projects which can be downloaded
 
 ### Libraries I want to explicitly support for convenience
 
