@@ -114,6 +114,12 @@ function( apply_exe_files
   endif()
 endfunction()
 
+function( get_entry_file_alias_dir
+  out_var
+)
+  set( ${out_var} "${CMAKE_BINARY_DIR}/aliased_entry_files/include" PARENT_SCOPE )
+endfunction()
+
 function( apply_lib_files
   lib_target
   lib_type_spec
@@ -141,6 +147,15 @@ function( apply_lib_files
     endif()
   endif()
 
+  cmake_path( GET entry_file FILENAME entry_file_name )
+
+  # Want to make sure entry files can be included with "TOPLEVEL_INCLUDE_PREFIX/entry_file_name.extension"
+  # Both when building and after installation in order to eliminate possible include issues.
+  get_entry_file_alias_dir( entry_file_alias_dir )
+  set( aliased_entry_file_path "${entry_file_alias_dir}/${TOPLEVEL_INCLUDE_PREFIX}/${entry_file_name}" )
+  file( MAKE_DIRECTORY "${entry_file_alias_dir}/${TOPLEVEL_INCLUDE_PREFIX}" )
+  file( CREATE_LINK "${entry_file}" "${aliased_entry_file_path}" COPY_ON_ERROR )
+
   set( all_headers "${entry_file};${headers};${template_impls}" )
   clean_list( "${all_headers}" all_headers )
 
@@ -167,7 +182,8 @@ function( apply_include_dirs
   project_include_dir
 )
   if( "${target_type}" STREQUAL "COMPILED_LIB" OR "${target_type}" STREQUAL "HEADER_ONLY_LIB" )
-    set( BUILD_INTERFACE_INCLUDE_DIRS "${CMAKE_CURRENT_SOURCE_DIR};${project_include_dir}")
+    get_entry_file_alias_dir( entry_file_alias_dir )
+    set( BUILD_INTERFACE_INCLUDE_DIRS "${entry_file_alias_dir};${project_include_dir}")
   elseif( "${target_type}" STREQUAL "EXE_RECEIVER" OR "${target_type}")
     set( BUILD_INTERFACE_INCLUDE_DIRS "${project_include_dir}")
   else()
