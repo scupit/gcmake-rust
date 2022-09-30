@@ -1,6 +1,6 @@
 use serde::{Deserialize};
 
-use super::{ComponentsFindModuleLinks, raw_target_config_common::RawPredefinedTargetMapIn, RawMutualExclusionSet, raw_dep_common::RawPredepCommon};
+use super::{ComponentsFindModuleLinks, raw_target_config_common::RawPredefinedTargetMapIn, RawMutualExclusionSet, raw_dep_common::{RawPredepCommon, RawEmscriptenConfig}};
 
 #[derive(Deserialize, Clone)]
 #[serde(deny_unknown_fields)]
@@ -23,6 +23,7 @@ pub struct RawModuleDep {
   pub links: ComponentsFindModuleLinks,
   pub namespace_config: BuiltinFindModuleNamespaceConfig,
   pub mutually_exclusive: Option<RawMutualExclusionSet>,
+  pub emscripten_config: Option<RawEmscriptenConfig>,
   pub targets: RawPredefinedTargetMapIn
 }
 
@@ -45,5 +46,13 @@ impl RawPredepCommon for RawModuleDep {
 
   fn github_url(&self) -> Option<&str> {
     None
+  }
+
+  fn get_emscripten_config(&self) -> Option<&RawEmscriptenConfig> {
+    self.emscripten_config.as_ref()
+  }
+
+  fn supports_emscripten(&self) -> bool {
+    self.emscripten_config.is_some()
   }
 }

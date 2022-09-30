@@ -4,6 +4,16 @@ if( NOT GCMAKE_PRE_BUILD_UTIL_HAS_BEEN_INCLUDED )
     ALL
     COMMENT "Running all pre-build scripts in the entire GCMake project tree, including GCMake dependencies"
   )
+
+  if( USING_EMSCRIPTEN )
+    find_program( GCMAKE_NODEJS_EXECUTABLE
+      NAMES "node" "nodejs"
+    )
+
+    if( NOT GCMAKE_NODEJS_EXECUTABLE )
+      message( WARNING "GCMake Warning: Unable to find a NodeJS executable on your system. Any executable pre-build scripts built by your project will not be run.")
+    endif()
+  endif()
   
   set( GCMAKE_PRE_BUILD_UTIL_HAS_BEEN_INCLUDED TRUE )
 endif()
@@ -14,25 +24,47 @@ function( initialize_prebuild_step
   set( PRE_BUILD_TARGET_NAME ${pre_build_name}_PRE_BUILD_STEP )
   set( PRE_BUILD_TARGET_NAME ${PRE_BUILD_TARGET_NAME} PARENT_SCOPE )
   add_custom_target( ${PRE_BUILD_TARGET_NAME}
-    ALL
+    # ALL
     COMMENT "Beginning pre-build processing"
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
   )
-  add_dependencies( run-pre-build ${PRE_BUILD_TARGET_NAME} )
+  add_dependencies( ${GCMAKE_GLOBAL_PRE_BUILD_TARGET} ${PRE_BUILD_TARGET_NAME} )
 endfunction()
 
 function( use_executable_prebuild_script
   pre_build_executable_target
 )
-  if( NOT CMAKE_CROSSCOMPILING )
-    add_custom_command(
-      TARGET ${PRE_BUILD_TARGET_NAME}
-      PRE_BUILD
-      COMMAND ${pre_build_executable_target}
-      COMMENT "Running ${PROJECT_NAME} pre-build executable script"
-      WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-    )
+  if( USING_EMSCRIPTEN AND EMSCRIPTEN_MODE STREQUAL "Browser" AND GCMAKE_NODEJS_EXECUTABLE )
+    # The Browser "executable" output file is a .html file. A runnable .js file is also guaranteed to
+    # be produced, so we need to make sure to run that instead of attempting to run the .html file with
+    # Node.
+    set( runnable_command ${GCMAKE_NODEJS_EXECUTABLE} "${MY_RUNTIME_OUTPUT_DIR}/${pre_build_executable_target}.js" )
+  else()
+    set( runnable_command ${pre_build_executable_target} )
   endif()
+
+  # https://cmake.org/cmake/help/latest/command/add_custom_command.html
+  # According to CMake's add_custom_command(...) docs, a COMMAND which
+  # is a target will not be run when CMAKE_CROSSCOMPILING, unless a
+  # CMAKE_CROSSCOMPILING_EMULATOR is specified. 
+  # Therefore we don't have to guard this with a conditional, since CMake
+  # already does that for us.
+  add_dependencies( ${PRE_BUILD_TARGET_NAME} ${pre_build_executable_target} )
+  add_custom_command(
+    TARGET ${PRE_BUILD_TARGET_NAME}
+    PRE_BUILD
+    COMMAND ${runnable_command}
+    COMMENT "Running ${PROJECT_NAME} pre-build executable script"
+    # FIXME: Need to somehow run the node script in the CWD. Running
+    # it while it's in the binary dir results in an error.
+    # package error: [Error: ENOENT: no such file or directory, open 'D:\temp-builds\emscripten-basic\PRE_BUILD_SCRIPT_emscripten-basic.data'] {
+    # errno: -4058,
+    # code: 'ENOENT',
+    # syscall: 'open',
+    # path: 'D:\\temp-builds\\emscripten-basic\\PRE_BUILD_SCRIPT_emscripten-basic.data'
+}
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+  )
 endfunction()
 
 function( use_python_prebuild_script

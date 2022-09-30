@@ -1,6 +1,6 @@
 use std::{cell::{RefCell}, rc::{Rc, Weak}, hash::{Hash, Hasher}, collections::{HashMap, HashSet, VecDeque}, borrow::Borrow, path::{Path, PathBuf}};
 
-use crate::project_info::{LinkMode, CompiledOutputItem, PreBuildScript, OutputItemLinks, final_project_data::FinalProjectData, final_dependencies::{FinalGCMakeDependency, FinalPredefinedDependencyConfig, GCMakeDependencyStatus, FinalRequirementSpecifier}, LinkSpecifier, FinalProjectType, parsers::{link_spec_parser::{LinkAccessMode, LinkSpecTargetList, LinkSpecifierTarget}, system_spec::platform_spec_parser::SystemSpecifierWrapper}};
+use crate::project_info::{LinkMode, CompiledOutputItem, PreBuildScript, OutputItemLinks, final_project_data::FinalProjectData, final_dependencies::{FinalGCMakeDependency, FinalPredefinedDependencyConfig, GCMakeDependencyStatus, FinalRequirementSpecifier}, LinkSpecifier, FinalProjectType, parsers::{link_spec_parser::{LinkAccessMode, LinkSpecTargetList, LinkSpecifierTarget}, system_spec::platform_spec_parser::SystemSpecifierWrapper}, raw_data_in::dependencies::internal_dep_config::raw_dep_common::RawEmscriptenConfig};
 
 use super::hash_wrapper::RcRefcHashWrapper;
 use colored::*;
@@ -424,6 +424,12 @@ impl<'a> TargetNode<'a> {
     &self.system_specifier_info
   }
 
+  pub fn emscripten_link_flag(&self) -> Option<String> {
+    self.container_project().as_ref().borrow().project_wrapper().emscripten_config()
+      .map(|config| config.link_flag.clone())
+      .flatten()
+  }
+
   pub fn has_links(&self) -> bool {
     let num_regular_links: usize = self.depends_on.iter()
       .filter(|(_, link)| Weak::upgrade(&link.target).unwrap().as_ref().borrow().is_regular_node())
@@ -550,6 +556,13 @@ impl ProjectWrapper {
         GCMakeDependencyStatus::Available(project_info) => Some(project_info),
         GCMakeDependencyStatus::NotDownloaded(_) => None
       }
+      _ => None
+    }
+  }
+
+  pub fn emscripten_config(&self) -> Option<&RawEmscriptenConfig> {
+    return match self {
+      Self::PredefinedDependency(predef_dep) => predef_dep.emscripten_config(),
       _ => None
     }
   }

@@ -13,10 +13,20 @@ macro( initialize_uncached_dep_list )
   set( UNCACHED_DEP_LIST "" )
 endmacro()
 
+macro( initialize_actual_dep_list )
+  set( ACTUAL_DEP_LIST "" )
+endmacro()
+
 macro( append_to_uncached_dep_list
   dep_name
 )
   list( APPEND UNCACHED_DEP_LIST ${dep_name} )
+endmacro()
+
+macro( append_to_actual_dep_list
+  dep_name
+)
+  list( APPEND ACTUAL_DEP_LIST ${dep_name} )
 endmacro()
 
 function( expose_uncached_deps )

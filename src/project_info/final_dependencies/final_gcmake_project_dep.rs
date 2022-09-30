@@ -1,6 +1,6 @@
 use std::rc::Rc;
 
-use crate::project_info::{final_project_data::FinalProjectData, raw_data_in::dependencies::user_given_dep_config::UserGivenGCMakeProjectDependency};
+use crate::project_info::{final_project_data::FinalProjectData, raw_data_in::dependencies::{user_given_dep_config::UserGivenGCMakeProjectDependency, internal_dep_config::raw_dep_common::RawEmscriptenConfig}};
 
 use super::{FinalGitRepoDescriptor, GitRevisionSpecifier};
 
@@ -75,6 +75,16 @@ impl FinalGCMakeDependency {
       // edge, and would be fixed if GCMake had some sort of package registry.
       GCMakeDependencyStatus::NotDownloaded(_) => false,
       GCMakeDependencyStatus::Available(available_gcmake_dep) => available_gcmake_dep.can_trivially_cross_compile()
+    }
+  }
+
+  pub fn supports_emscripten(&self) -> bool {
+    return match self.project_status() {
+      // GCMake will fail with an error if Emscripten is listed in a project's supported compilers but the
+      // project itself doesn't support Emscripten. Since the actual Emscripten support status is unknown
+      // for a not-yet-downloaded dependency, return true so that the error is not thrown incorrectly.
+      GCMakeDependencyStatus::NotDownloaded(_) => true,
+      GCMakeDependencyStatus::Available(available_gcmake_dep) => available_gcmake_dep.supports_emscripten()
     }
   }
 

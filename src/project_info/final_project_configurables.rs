@@ -370,6 +370,7 @@ pub type LinkerFlag = CompilerFlag;
 
 pub struct FinalBuildConfig {
   pub compiler_flags: Vec<CompilerFlag>,
+  pub link_time_flags: Vec<CompilerFlag>,
   pub linker_flags: Vec<LinkerFlag>,
   pub defines: Vec<CompilerDefine>
 }
@@ -378,6 +379,7 @@ impl FinalBuildConfig {
   pub fn make_from(raw_build_config: &RawBuildConfig) -> Result<Self, String> {
     Ok(Self {
       compiler_flags: CompilerFlag::make_list_from_maybe(raw_build_config.compiler_flags.as_ref())?,
+      link_time_flags: CompilerFlag::make_list_from_maybe(raw_build_config.link_time_flags.as_ref())?,
       linker_flags: LinkerFlag::make_list_from_maybe(raw_build_config.linker_flags.as_ref())?,
       defines: CompilerDefine::make_list_from_maybe(raw_build_config.defines.as_ref())?
     })
@@ -389,6 +391,10 @@ impl FinalBuildConfig {
 
   pub fn has_linker_flags(&self) -> bool {
     !self.linker_flags.is_empty()
+  }
+
+  pub fn has_link_time_flags(&self) -> bool {
+    !self.link_time_flags.is_empty()
   }
 
   pub fn has_compiler_defines(&self) -> bool {

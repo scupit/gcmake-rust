@@ -1,6 +1,6 @@
 use std::{collections::{HashMap, HashSet}, fs::File, io::{self, Write, ErrorKind}, path::{PathBuf, Path}, rc::Rc, cell::{RefCell, Ref}, borrow::Borrow};
 
-use crate::{project_info::{final_project_data::{FinalProjectData}, path_manipulation::{cleaned_path_str, relative_to_project_root}, final_dependencies::{GitRevisionSpecifier, PredefinedCMakeComponentsModuleDep, PredefinedSubdirDep, PredefinedCMakeModuleDep, FinalPredepInfo, GCMakeDependencyStatus, FinalPredefinedDependencyConfig, encoded_repo_url}, raw_data_in::{BuildType, RawBuildConfig, BuildConfigCompilerSpecifier, SpecificCompilerSpecifier, OutputItemType, LanguageConfigMap, TargetSpecificBuildType, dependencies::internal_dep_config::{CMakeModuleType}, DefaultCompiledLibType}, FinalProjectType, CompiledOutputItem, PreBuildScript, LinkMode, FinalTestFramework, dependency_graph_mod::dependency_graph::{DependencyGraph, OrderedTargetInfo, ProjectWrapper, TargetNode, SimpleNodeOutputType, Link}, SystemSpecifierWrapper, SingleSystemSpec, CompilerDefine, FinalBuildConfig, CompilerFlag, LinkerFlag, gcmake_constants::{SRC_DIR, INCLUDE_DIR, TEMPLATE_IMPL_DIR}}, file_writers::cmake_writer::cmake_writer_helpers::system_constraint_expression};
+use crate::{project_info::{final_project_data::{FinalProjectData}, path_manipulation::{cleaned_path_str, relative_to_project_root}, final_dependencies::{GitRevisionSpecifier, PredefinedCMakeComponentsModuleDep, PredefinedSubdirDep, PredefinedCMakeModuleDep, FinalPredepInfo, GCMakeDependencyStatus, FinalPredefinedDependencyConfig, encoded_repo_url, PredefinedDepFunctionality}, raw_data_in::{BuildType, RawBuildConfig, BuildConfigCompilerSpecifier, SpecificCompilerSpecifier, OutputItemType, LanguageConfigMap, TargetSpecificBuildType, dependencies::internal_dep_config::{CMakeModuleType}, DefaultCompiledLibType}, FinalProjectType, CompiledOutputItem, PreBuildScript, LinkMode, FinalTestFramework, dependency_graph_mod::dependency_graph::{DependencyGraph, OrderedTargetInfo, ProjectWrapper, TargetNode, SimpleNodeOutputType, Link}, SystemSpecifierWrapper, SingleSystemSpec, CompilerDefine, FinalBuildConfig, CompilerFlag, LinkerFlag, gcmake_constants::{SRC_DIR, INCLUDE_DIR, TEMPLATE_IMPL_DIR}, platform_spec_parser::parse_leading_system_spec}, file_writers::cmake_writer::cmake_writer_helpers::system_constraint_expression};
 
 use super::cmake_utils_writer::{CMakeUtilFile, CMakeUtilWriter};
 
@@ -55,7 +55,8 @@ fn compiler_matcher_string(compiler_specifier: &SpecificCompilerSpecifier) -> &s
   match compiler_specifier {
     SpecificCompilerSpecifier::GCC => "USING_GCC",
     SpecificCompilerSpecifier::Clang => "USING_CLANG",
-    SpecificCompilerSpecifier::MSVC => "USING_MSVC"
+    SpecificCompilerSpecifier::MSVC => "USING_MSVC",
+    SpecificCompilerSpecifier::Emscripten => "USING_EMSCRIPTEN"
   }
 }
 
@@ -456,6 +457,27 @@ impl<'a> CMakeListsWriter<'a> {
   fn write_toplevel_tweaks(&self) -> io::Result<()> {
     writeln!(&self.cmakelists_file, "ensure_gcmake_config_dirs_exist()")?;
 
+    let project_supports_emscripten: bool = self.project_data.supports_emscripten();
+    
+    writeln!(&self.cmakelists_file, "if( USING_EMSCRIPTEN )")?;
+    writeln!(&self.cmakelists_file,
+      "\tconfigure_emscripten_mode( Browser )"
+    )?;
+    writeln!(&self.cmakelists_file, "endif()")?;
+
+    if !self.project_data.supports_emscripten() {
+      self.set_basic_option(
+        "",
+        "GCMAKE_OVERRIDE_EMSCRIPTEN_COMPILATION",
+        "OFF",
+        "When ON, force-allows Emscripten compilation for projects which don't obviously support copmilation with Emscripten."
+      )?;
+
+      writeln!(&self.cmakelists_file,
+        "err_if_using_emscripten( GCMAKE_OVERRIDE_EMSCRIPTEN_COMPILATION )"
+      )?;
+    }
+
     if !self.project_data.can_trivially_cross_compile() {
       self.set_basic_option(
         "",
@@ -464,9 +486,17 @@ impl<'a> CMakeListsWriter<'a> {
         "When ON, force-allows cross compilation for projects which don't support trivial cross-compilation."
       )?;
 
+      if project_supports_emscripten {
+        write!(&self.cmakelists_file, "if( NOT USING_EMSCRIPTEN )\n\t")?;
+      }
+
       writeln!(&self.cmakelists_file,
         "err_if_cross_compiling( GCMAKE_OVERRIDE_CROSS_COMPILATION )"
       )?;
+
+      if project_supports_emscripten {
+        writeln!(&self.cmakelists_file, "endif()")?;
+      }
     }
 
     self.write_newline()?;
@@ -642,6 +672,7 @@ impl<'a> CMakeListsWriter<'a> {
     
     if self.project_data.is_root_project() {
       writeln!(&self.cmakelists_file, "initialize_uncached_dep_list()")?;
+      writeln!(&self.cmakelists_file, "initialize_actual_dep_list()")?;
     }
 
     Ok(())
@@ -800,7 +831,11 @@ impl<'a> CMakeListsWriter<'a> {
           )?;
         },
         FinalPredepInfo::Subdirectory(subdir_dep) => {
-          self.write_predefined_subdirectory_dependency(dep_name, subdir_dep)?;
+          self.write_predefined_subdirectory_dependency(
+            dep_name,
+            subdir_dep,
+            dep_info.is_auto_fetchcontent_ready()
+          )?;
         }
       }
     }
@@ -885,8 +920,10 @@ impl<'a> CMakeListsWriter<'a> {
   fn write_dep_clone_code(
     &self,
     dep_name: &str,
+    uses_emscripten_link_flag: bool,
     git_revison: &GitRevisionSpecifier,
-    repo_url: &str
+    repo_url: &str,
+    is_auto_fetchcontent_ready: bool
   ) -> io::Result<()> {
     let git_revision_spec: String = match git_revison {
       GitRevisionSpecifier::Tag(tag_string) => {
@@ -910,10 +947,24 @@ impl<'a> CMakeListsWriter<'a> {
       repo_url,
       git_revision_spec
     )?;
+
+    if uses_emscripten_link_flag {
+      write!(&self.cmakelists_file,
+        "\tif( NOT USING_EMSCRIPTEN )\n\t"
+      )?;
+    }
+
     writeln!(&self.cmakelists_file,
       "\tappend_to_uncached_dep_list( gcmake_cached_{} )",
       dep_name
     )?;
+
+    if uses_emscripten_link_flag {
+      writeln!(&self.cmakelists_file,
+        "\tendif()"
+      )?;
+    }
+
     writeln!(&self.cmakelists_file, "endif()")?;
     self.write_newline()?;
 
@@ -924,14 +975,34 @@ impl<'a> CMakeListsWriter<'a> {
       hashed_cache_dep_dir,
       git_revision_spec
     )?;
-    
+
+    if is_auto_fetchcontent_ready {
+      if uses_emscripten_link_flag {
+        write!(&self.cmakelists_file,
+          "if( NOT USING_EMSCRIPTEN )\n\t"
+        )?;
+      }
+
+      writeln!(&self.cmakelists_file,
+        "append_to_actual_dep_list( {} )",
+        dep_name
+      )?;
+
+      if uses_emscripten_link_flag {
+        writeln!(&self.cmakelists_file,
+          "endif()"
+        )?;
+      }
+    }
+
     Ok(())
   }
 
   fn write_predefined_subdirectory_dependency(
     &self,
     dep_name: &str,
-    dep_info: &PredefinedSubdirDep
+    dep_info: &PredefinedSubdirDep,
+    is_auto_fetchcontent_ready: bool
   ) -> io::Result<()> {
     // Subdir dependencies which have this 'custom import' script
     // might be installed in a weird way due to how CMake's FILE_SET
@@ -992,8 +1063,10 @@ impl<'a> CMakeListsWriter<'a> {
 
     self.write_dep_clone_code(
       dep_name,
+      dep_info.uses_emscripten_link_flag(),
       dep_info.revision(),
-      dep_info.repo_url()
+      dep_info.repo_url(),
+      is_auto_fetchcontent_ready
     )?;
     Ok(())
   }
@@ -1008,8 +1081,12 @@ impl<'a> CMakeListsWriter<'a> {
 
       self.write_dep_clone_code(
         dep_name,
+        // GCMake projects just link using their targets as usual, since Emscripten
+        // doesn't explicitly specify support for projects we just made ourselves. Makes sense.
+        false,
         dep_info.revision(),
-        dep_info.repo_url()
+        dep_info.repo_url(),
+        true // All GCMake projects are FetchContent-ready.
       )?;
     }
 
@@ -1020,15 +1097,7 @@ impl<'a> CMakeListsWriter<'a> {
     writeln!(&self.cmakelists_file, "expose_uncached_deps()")?;
 
     if self.project_data.has_any_fetchcontent_ready_dependencies() {
-      writeln!(&self.cmakelists_file, "\nFetchContent_MakeAvailable(")?;
-
-      for dep_name in self.project_data.fetchcontent_dep_names() {
-        writeln!(&self.cmakelists_file,
-          "\t{}",
-          dep_name
-        )?;
-      }
-      writeln!(&self.cmakelists_file, ")")?;
+      writeln!(&self.cmakelists_file, "\nFetchContent_MakeAvailable( ${{ACTUAL_DEP_LIST}} )")?;
     }
 
     for (dep_name, combined_dep_info) in self.project_data.get_predefined_dependencies() {
@@ -1108,6 +1177,7 @@ impl<'a> CMakeListsWriter<'a> {
           BuildConfigCompilerSpecifier::GCC => SpecificCompilerSpecifier::GCC,
           BuildConfigCompilerSpecifier::Clang => SpecificCompilerSpecifier::Clang,
           BuildConfigCompilerSpecifier::MSVC => SpecificCompilerSpecifier::MSVC,
+          BuildConfigCompilerSpecifier::Emscripten => SpecificCompilerSpecifier::Emscripten,
           BuildConfigCompilerSpecifier::AllCompilers => continue
         };
 
@@ -1140,26 +1210,34 @@ impl<'a> CMakeListsWriter<'a> {
           // Write compiler flags per compiler for each config.
           if build_config.has_compiler_flags() {
             writeln!(&self.cmakelists_file,
-              "\tset( {}_LOCAL_COMPILER_FLAGS ${{GCMAKE_SANITIZER_FLAGS}};${{GCMAKE_ADDITIONAL_COMPILER_FLAGS}} )",
-              &uppercase_config_name
-            )?;
-
-            writeln!(&self.cmakelists_file,
               "\tlist( APPEND {}_LOCAL_COMPILER_FLAGS\n\t\t{}\n\t)",
               &uppercase_config_name,
               &flattened_compiler_flags_string("\t\t", &build_config.compiler_flags)
+            )?;
+
+            if let SpecificCompilerSpecifier::Emscripten = compiler {
+              // Same as in the write_flags_and_define_vars_for_output(...) function,
+              // an optimal Emscripten build specifies compiler flags during the link step as well.
+              writeln!(&self.cmakelists_file,
+                "\tlist( APPEND {}_LOCAL_LINK_FLAGS\n\t\t{}\n\t)",
+                &uppercase_config_name,
+                &flattened_compiler_flags_string("\t\t", &build_config.compiler_flags)
+              )?;
+            }
+          }
+
+          if build_config.has_link_time_flags() {
+            writeln!(&self.cmakelists_file,
+              "\tlist( APPEND {}_LOCAL_LINK_FLAGS\n\t\t{}\n\t)",
+              &uppercase_config_name,
+              &flattened_compiler_flags_string("\t\t", &build_config.link_time_flags)
             )?;
           }
 
           // Write linker flags per "compiler" for each config
           if build_config.has_linker_flags() {
             writeln!(&self.cmakelists_file,
-              "\tset( {}_LOCAL_LINKER_FLAGS ${{GCMAKE_SANITIZER_FLAGS}};${{GCMAKE_ADDITIONAL_LINKER_FLAGS}} )",
-              uppercase_config_name,
-            )?;
-
-            writeln!(&self.cmakelists_file,
-              "\tlist( APPEND {}_LOCAL_LINKER_FLAGS\n\t\t{}\n\t)",
+              "\tlist( APPEND {}_LOCAL_LINK_FLAGS\n\t\t{}\n\t)",
               uppercase_config_name,
               &flattened_linker_flags_string(&build_config.linker_flags)
             )?;
@@ -1358,23 +1436,50 @@ impl<'a> CMakeListsWriter<'a> {
     spacer: &str,
     output_name: &str,
     build_type: &BuildType,
-    build_config: &FinalBuildConfig
+    build_config: &FinalBuildConfig,
+    compiler: Option<SpecificCompilerSpecifier>
   ) -> io::Result<()> {
     let build_type_name_upper: String = build_type.name_str().to_uppercase();
 
     if build_config.has_compiler_flags() {
+      let flattened_flags_list: String = flattened_compiler_flags_string("\t", &build_config.compiler_flags);
       writeln!(&self.cmakelists_file,
         "{}list( APPEND {}_{}_OWN_COMPILER_FLAGS {} )",
         spacer,
         output_name,
         &build_type_name_upper,
-        flattened_compiler_flags_string("\t", &build_config.compiler_flags)
+        &flattened_flags_list
+      )?;
+
+      if let Some(SpecificCompilerSpecifier::Emscripten) = compiler {
+        // According to this doc link:
+        // https://emscripten.org/docs/compiling/Building-Projects.html#building-projects-with-optimizations
+        // An optimal emscripten build needs to pass the same flags during both the compilation and link
+        // phase.
+        writeln!(&self.cmakelists_file,
+          "{}list( APPEND {}_{}_OWN_LINK_FLAGS {} )",
+          spacer,
+          output_name,
+          &build_type_name_upper,
+          &flattened_flags_list
+          // &flattened_linker_flags_string(&build_config.compiler_flags)
+        )?;
+      }
+    }
+
+    if build_config.has_link_time_flags() {
+      writeln!(&self.cmakelists_file,
+        "{}list( APPEND {}_{}_OWN_LINK_FLAGS {} )",
+        spacer,
+        output_name,
+        &build_type_name_upper,
+        flattened_linker_flags_string(&build_config.link_time_flags)
       )?;
     }
 
     if build_config.has_linker_flags() {
       writeln!(&self.cmakelists_file,
-        "{}list( APPEND {}_{}_OWN_LINKER_FLAGS {} )",
+        "{}list( APPEND {}_{}_OWN_LINK_FLAGS {} )",
         spacer,
         output_name,
         &build_type_name_upper,
@@ -1415,13 +1520,13 @@ impl<'a> CMakeListsWriter<'a> {
         inherited_compiler_flags = String::from("");
       }
       else {
-        inherited_linker_flags = format!("\"${{{}_LOCAL_LINKER_FLAGS}}\"", &build_type_name_upper);
+        inherited_linker_flags = format!("\"${{{}_LOCAL_LINK_FLAGS}}\"", &build_type_name_upper);
         inherited_compiler_flags = format!("\"${{{}_LOCAL_COMPILER_FLAGS}}\"", &build_type_name_upper);
       }
 
       self.set_basic_var(
         "",
-        &format!("{}_{}_OWN_LINKER_FLAGS", variable_base_name, &build_type_name_upper),
+        &format!("{}_{}_OWN_LINK_FLAGS", variable_base_name, &build_type_name_upper),
         &inherited_linker_flags
       )?;
 
@@ -1449,7 +1554,8 @@ impl<'a> CMakeListsWriter<'a> {
                 "",
                 variable_base_name,
                 build_type,
-                always_applicable_config
+                always_applicable_config,
+                None
               )?;
             }
           }
@@ -1489,7 +1595,8 @@ impl<'a> CMakeListsWriter<'a> {
             "",
             variable_base_name,
             build_type,
-            config_for_any_compiler
+            config_for_any_compiler,
+            None
           )?;
         }
 
@@ -1517,7 +1624,8 @@ impl<'a> CMakeListsWriter<'a> {
                   "\t",
                   variable_base_name,
                   build_type,
-                  build_config
+                  build_config,
+                  Some(specific_compiler)
                 )?;
               }
             }
@@ -1527,7 +1635,8 @@ impl<'a> CMakeListsWriter<'a> {
                 "\t",
                 variable_base_name,
                 &given_build_type.to_general_build_type().unwrap(),
-                build_config
+                build_config,
+                Some(specific_compiler)
               )?;
             }
           }
@@ -1545,7 +1654,8 @@ impl<'a> CMakeListsWriter<'a> {
             "",
             variable_base_name,
             build_type,
-            build_config
+            build_config,
+            None
           )?;
         }
       }
@@ -1615,7 +1725,7 @@ impl<'a> CMakeListsWriter<'a> {
 
     for (config, _) in self.project_data.get_build_configs() {
       writeln!(&self.cmakelists_file,
-        "\t\t\"$<$<CONFIG:{}>:${{{}_{}_OWN_LINKER_FLAGS}}>\"",
+        "\t\t\"$<$<CONFIG:{}>:${{{}_{}_OWN_LINK_FLAGS}}>\"",
         config.name_str(),
         variable_base_name,
         config.name_str().to_uppercase()
@@ -1738,15 +1848,43 @@ impl<'a> CMakeListsWriter<'a> {
               .get_link_by_id(borrowed_node.unique_target_id())
               .unwrap();
 
+            let mut normal_link_constraint: SystemSpecifierWrapper = matching_link.get_system_spec_info().clone();
+
+            if borrowed_node.emscripten_link_flag().is_some() {
+              normal_link_constraint = normal_link_constraint.intersection(
+                &parse_leading_system_spec("((not emscripten))")
+                  .unwrap()
+                  .unwrap()
+                  .value
+              );
+            }
+
             writeln!(&self.cmakelists_file,
               "\t\t{}",
               system_constraint_expression(
-                matching_link.get_system_spec_info(),
+                &normal_link_constraint,
                 linkable_target_name
               )
             )?;
 
             already_written.insert(String::from(linkable_target_name));
+          }
+
+          if let Some(emscripten_link_flag) = borrowed_node.emscripten_link_flag() {
+            if !already_written.contains(&emscripten_link_flag) {
+              let emscripten_constraint: SystemSpecifierWrapper = parse_leading_system_spec("((emscripten))")
+                .unwrap()
+                .unwrap()
+                .value;
+
+              writeln!(&self.cmakelists_file,
+                "\t\t{}",
+                system_constraint_expression(
+                  &emscripten_constraint,
+                  &emscripten_link_flag
+                )
+              )?;
+            }
           }
         }
       }
@@ -1907,6 +2045,14 @@ impl<'a> CMakeListsWriter<'a> {
     )?;
     self.write_newline()?;
 
+    writeln!(&self.cmakelists_file, "if( USING_EMSCRIPTEN )")?;
+    writeln!(&self.cmakelists_file,
+      "\tapply_emscripten_specifics( {} {} )",
+      target_name,
+      target_name
+    )?;
+    writeln!(&self.cmakelists_file, "endif()")?;
+
     if output_data.is_compiled_library_type() {
       writeln!(&self.cmakelists_file,
         "generate_and_install_export_header( {} )",
@@ -2005,6 +2151,14 @@ impl<'a> CMakeListsWriter<'a> {
       )?;
     }
     self.write_newline()?;
+
+    writeln!(&self.cmakelists_file, "if( USING_EMSCRIPTEN )")?;
+    writeln!(&self.cmakelists_file,
+      "\tapply_emscripten_specifics( {} {} )",
+      receiver_lib_name,
+      target_name
+    )?;
+    writeln!(&self.cmakelists_file, "endif()")?;
 
     if let Some(windows_icon_relative_path) = &output_data.windows_icon_relative_to_root_project {
       writeln!(&self.cmakelists_file,

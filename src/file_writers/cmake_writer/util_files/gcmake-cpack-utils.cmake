@@ -81,9 +81,9 @@ function( gcmake_configure_cpack )
   set( CPACK_GENERATOR )
   set( CPACK_SOURCE_GENERATOR )
 
-  locate_7zip_exe( exe_7zip )
+  locate_7zip_exe( GCMAKE_exe_7zip )
 
-  if( exe_7zip )
+  if( GCMAKE_exe_7zip )
     set( ENABLE_7ZIP_DEFAULT ON )
   else()
     set( ENABLE_7ZIP_DEFAULT OFF )
@@ -99,8 +99,8 @@ function( gcmake_configure_cpack )
 
   # Currently don't support Apple because I have no way to test it.
   if( CURRENT_SYSTEM_IS_WINDOWS )
-    locate_wix_candle_exe( wix_candle_exe )
-    if( wix_candle_exe )
+    locate_wix_candle_exe( GCMAKE_wix_candle_exe )
+    if( GCMAKE_wix_candle_exe )
       set( WIX_ENABLED_BY_DEFAULT ON )
     else()
       set( WIX_ENABLED_BY_DEFAULT OFF )
@@ -108,8 +108,8 @@ function( gcmake_configure_cpack )
 
     option( CPACK_WIX_ENABLED "Generate installer using WiX" ${WIX_ENABLED_BY_DEFAULT} )
 
-    locate_nsis_makensis_exe( nsis_makensis_exe )
-    if( nsis_makensis_exe)
+    locate_nsis_makensis_exe( GCMAKE_nsis_makensis_exe )
+    if( GCMAKE_nsis_makensis_exe )
       set( NSIS_ENABLED_BY_DEFAULT ON )
     else()
       set( NSIS_ENABLED_BY_DEFAULT OFF )
@@ -152,8 +152,8 @@ function( gcmake_configure_cpack )
       set( CPACK_NSIS_UNINSTALL_NAME "Uninstall ${INSTALLER_CONFIG_INSTALLER_TITLE}" )
     endif()
   elseif( CURRENT_SYSTEM_IS_LINUX )
-    locate_dpkg_exe( dpkg_exe )
-    if( dpkg_exe )
+    locate_dpkg_exe( GCMAKE_dpkg_exe )
+    if( GCMAKE_dpkg_exe )
       set( DEB_ENABLED_BY_DEFAULT ON )
     else()
       set( DEB_ENABLED_BY_DEFAULT OFF )
@@ -283,44 +283,44 @@ endfunction()
 function( locate_7zip_exe
   out_var
 )
-  find_program( exe_7zip
+  find_program( GCMAKE_exe_7zip
     NAMES "7z" "7z.exe"
     PATH_SUFFIXES "7-Zip"
   )
 
-  set( ${out_var} "${exe_7zip}" PARENT_SCOPE )
+  set( ${out_var} "${GCMAKE_exe_7zip}" PARENT_SCOPE )
 endfunction()
 
 function( locate_wix_candle_exe
   out_var
 )
-  find_program( wix_candle_exe
+  find_program( GCMAKE_wix_candle_exe
     NAMES "candle.exe"
     PATH_SUFFIXES "wix311-binaries"
   )
 
-  set( ${out_var} "${wix_candle_exe}" PARENT_SCOPE )
+  set( ${out_var} "${GCMAKE_wix_candle_exe}" PARENT_SCOPE )
 endfunction()
 
 function( locate_nsis_makensis_exe
   out_var
 )
-  find_program( nsis_makensis_exe
+  find_program( GCMAKE_nsis_makensis_exe
     NAMES "makensis.exe"
     PATH_SUFFIXES "NSIS"
   )
 
-  set( ${out_var} "${nsis_makensis_exe}" PARENT_SCOPE )
+  set( ${out_var} "${GCMAKE_nsis_makensis_exe}" PARENT_SCOPE )
 endfunction()
 
 function( locate_dpkg_exe
   out_var
 )
-  find_program( dpkg_exe
+  find_program( GCMAKE_dpkg_exe
     NAMES "dpkg"
   )
 
-  set( ${out_var} "${dpkg_exe}" PARENT_SCOPE )
+  set( ${out_var} "${GCMAKE_dpkg_exe}" PARENT_SCOPE )
 endfunction()
 
 # Creates a very slightly modified version of CMake's wix template:

@@ -18,7 +18,8 @@ pub enum SingleSystemSpec {
   MinGW,
   GCC,
   Clang,
-  MSVC
+  MSVC,
+  Emscripten
 }
 
 impl SingleSystemSpec {
@@ -38,6 +39,7 @@ impl SingleSystemSpec {
       "gcc" => Self::GCC,
       "clang" => Self::Clang,
       "msvc" => Self::MSVC,
+      "emscripten" => Self::Emscripten,
       _ => return None
     };
 
@@ -55,7 +57,8 @@ impl SingleSystemSpec {
       Self::MinGW => "mingw",
       Self::GCC => "gcc",
       Self::Clang => "clang",
-      Self::MSVC => "msvc"
+      Self::MSVC => "msvc",
+      Self::Emscripten => "emscripten"
     }
   }
 }

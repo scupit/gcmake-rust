@@ -859,6 +859,12 @@ impl FinalProjectData {
       ));
     }
 
+    if self.supported_compilers.contains(&SpecificCompilerSpecifier::Emscripten) && !self.supports_emscripten() {
+      return Err(format!(
+        "Emscripten is listed as a supported compiler, but the project's contains dependencies which do not support compilation with Emscripten."
+      ))
+    }
+
     for (_, test_project) in &self.tests {
       if let ProjectOutputType::ExeProject = &test_project.project_output_type {
         test_project.validate_correctness()?;
@@ -1158,17 +1164,6 @@ impl FinalProjectData {
     self.has_gcmake_dependencies() || self.has_predefined_fetchcontent_ready_dependencies()
   }
 
-  pub fn fetchcontent_dep_names(&self) -> impl Iterator<Item = &String> {
-    return self.predefined_dependencies
-      .iter()
-      .filter_map(|(dep_name, dep_info)| {
-        if dep_info.is_auto_fetchcontent_ready()
-          { Some(dep_name) }
-          else { None }
-      })
-      .chain(self.gcmake_dependency_projects.keys());
-  }
-
   pub fn full_test_name(
     &self,
     test_target_name: &str
@@ -1334,6 +1329,28 @@ impl FinalProjectData {
 
   pub fn get_gcmake_dependencies(&self) -> &HashMap<String, Rc<FinalGCMakeDependency>> {
     &self.gcmake_dependency_projects
+  }
+
+  pub fn supports_emscripten(&self) -> bool {
+    for (_, subproject) in &self.subprojects {
+      if !subproject.supports_emscripten() {
+        return false;
+      }
+    }
+
+    for (_, predef_dep) in &self.predefined_dependencies {
+      if !predef_dep.supports_emscripten() {
+        return false;
+      }
+    }
+
+    for (_, gcmake_dep) in &self.gcmake_dependency_projects {
+      if !gcmake_dep.supports_emscripten() {
+        return false;
+      }
+    }
+
+    return true;
   }
 
   pub fn can_trivially_cross_compile(&self) -> bool {

@@ -101,16 +101,19 @@ pub fn get_default_project_config(
       (BuildType::Debug, HashMap::from_iter([
         (BuildConfigCompilerSpecifier::GCC, RawBuildConfig {
           compiler_flags: Some(create_string_set([ "-Og", "-g", "-Wall", "-Wextra", "-Wconversion", "-Wuninitialized", "-pedantic", "-pedantic-errors"])),
+          link_time_flags: None,
           linker_flags: None,
           defines: None
         }),
         (BuildConfigCompilerSpecifier::Clang, RawBuildConfig {
           compiler_flags: Some(create_string_set([ "-Og", "-g", "-Wall", "-Wextra", "-Wconversion", "-Wuninitialized", "-pedantic", "-pedantic-errors"])),
+          link_time_flags: None,
           linker_flags: None,
           defines: None
         }),
         (BuildConfigCompilerSpecifier::MSVC, RawBuildConfig {
           compiler_flags: Some(create_string_set([ "/Od", "/W4", "/DEBUG" ])),
+          link_time_flags: None,
           linker_flags: None,
           defines: None
         })
@@ -118,21 +121,25 @@ pub fn get_default_project_config(
       (BuildType::Release, HashMap::from_iter([
         (BuildConfigCompilerSpecifier::AllCompilers, RawBuildConfig {
           compiler_flags: None,
+          link_time_flags: None,
           linker_flags: None,
           defines: Some(create_string_set(["NDEBUG"]))
         }),
         (BuildConfigCompilerSpecifier::GCC, RawBuildConfig {
           compiler_flags: Some(create_string_set([ "-O3" ])),
+          link_time_flags: None,
           linker_flags: Some(create_string_set([ "-s" ])),
           defines: None
         }),
         (BuildConfigCompilerSpecifier::Clang, RawBuildConfig {
           compiler_flags: Some(create_string_set([ "-O3" ])),
+          link_time_flags: None,
           linker_flags: Some(create_string_set([ "-s" ])),
           defines: None
         }),
         (BuildConfigCompilerSpecifier::MSVC, RawBuildConfig {
           compiler_flags: Some(create_string_set([ "/O2", "/GL" ])),
+          link_time_flags: None,
           linker_flags: None,
           defines: None
         })
@@ -140,21 +147,25 @@ pub fn get_default_project_config(
       (BuildType::MinSizeRel, HashMap::from_iter([
         (BuildConfigCompilerSpecifier::AllCompilers, RawBuildConfig {
           compiler_flags: None,
+          link_time_flags: None,
           linker_flags: None,
           defines: Some(create_string_set(["NDEBUG"]))
         }),
         (BuildConfigCompilerSpecifier::GCC, RawBuildConfig {
           compiler_flags: Some(create_string_set([ "-Os" ])),
+          link_time_flags: None,
           linker_flags: Some(create_string_set([ "-s" ])),
           defines: None
         }),
         (BuildConfigCompilerSpecifier::Clang, RawBuildConfig {
           compiler_flags: Some(create_string_set([ "-Os" ])),
+          link_time_flags: None,
           linker_flags: Some(create_string_set([ "-s" ])),
           defines: None
         }),
         (BuildConfigCompilerSpecifier::MSVC, RawBuildConfig {
           compiler_flags: Some(create_string_set([ "/O1", "/GL" ])),
+          link_time_flags: None,
           linker_flags: None,
           defines: None
         })
@@ -162,21 +173,25 @@ pub fn get_default_project_config(
       (BuildType::RelWithDebInfo, HashMap::from_iter([
         (BuildConfigCompilerSpecifier::AllCompilers, RawBuildConfig {
           compiler_flags: None,
+          link_time_flags: None,
           linker_flags: None,
           defines: Some(create_string_set(["NDEBUG"]))
         }),
         (BuildConfigCompilerSpecifier::GCC, RawBuildConfig {
           compiler_flags: Some(create_string_set([ "-O2", "-g" ])),
+          link_time_flags: None,
           linker_flags: None,
           defines: None
         }),
         (BuildConfigCompilerSpecifier::Clang, RawBuildConfig {
           compiler_flags: Some(create_string_set([ "-O2", "-g" ])),
+          link_time_flags: None,
           linker_flags: None,
           defines: None
         }),
         (BuildConfigCompilerSpecifier::MSVC, RawBuildConfig {
           compiler_flags: Some(create_string_set([ "/O2", "/DEBUG" ])),
+          link_time_flags: None,
           linker_flags: None,
           defines: None
         })

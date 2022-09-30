@@ -5,7 +5,7 @@ mod final_predefined_cmake_module_dep;
 mod predep_module_common;
 mod final_target_map_common;
 
-use std::{rc::Rc, collections::HashSet};
+use std::{rc::Rc};
 
 use base64ct::{Base64Url, Encoding};
 pub use final_predefined_subdir_dep::*;
@@ -13,10 +13,11 @@ pub use final_predefined_cmake_components_module_dep::*;
 pub use final_gcmake_project_dep::*;
 pub use final_predefined_cmake_module_dep::*;
 pub use final_target_map_common::FinalRequirementSpecifier;
+pub use predep_module_common::PredefinedDepFunctionality;
 
-use self::{predep_module_common::PredefinedDepFunctionality, final_target_map_common::FinalTargetConfigMap};
+use self::{final_target_map_common::FinalTargetConfigMap};
 
-use super::raw_data_in::dependencies::{internal_dep_config::{AllRawPredefinedDependencies, RawPredefinedDependencyInfo, PredefinedCMakeDepHookFile, RawSubdirectoryDependency}, user_given_dep_config::UserGivenPredefinedDependencyConfig};
+use super::raw_data_in::dependencies::{internal_dep_config::{AllRawPredefinedDependencies, RawPredefinedDependencyInfo, PredefinedCMakeDepHookFile, RawSubdirectoryDependency, raw_dep_common::RawEmscriptenConfig}, user_given_dep_config::UserGivenPredefinedDependencyConfig};
 
 pub fn encoded_repo_url(repo_url: &str) -> String{
   return Base64Url::encode_string(repo_url.as_bytes());
@@ -38,6 +39,23 @@ impl FinalPredepInfo {
       Self::CMakeComponentsModule(components_dep) => components_dep.can_cross_compile(),
       Self::CMakeModule(module_dep) => module_dep.can_cross_compile()
     }
+  }
+
+  pub fn supports_emscripten(&self) -> bool {
+    match self {
+      Self::Subdirectory(subdir_dep) => subdir_dep.supports_emscripten(),
+      Self::CMakeComponentsModule(components_dep) => components_dep.supports_emscripten(),
+      Self::CMakeModule(module_dep) => module_dep.supports_emscripten()
+    }
+  }
+
+  pub fn emscripten_config(&self) -> Option<&RawEmscriptenConfig> {
+    match self {
+      Self::Subdirectory(subdir_dep) => subdir_dep.raw_emscripten_config(),
+      Self::CMakeComponentsModule(components_dep) => components_dep.raw_emscripten_config(),
+      Self::CMakeModule(module_dep) => module_dep.raw_emscripten_config()
+    }
+
   }
 }
 
@@ -102,6 +120,14 @@ impl FinalPredefinedDependencyConfig {
 
   pub fn can_trivially_cross_compile(&self) -> bool {
     self.predep_info.can_cross_compile()
+  }
+
+  pub fn supports_emscripten(&self) -> bool {
+    self.predep_info.supports_emscripten()
+  }
+
+  pub fn emscripten_config(&self) -> Option<&RawEmscriptenConfig> {
+    self.predep_info.emscripten_config()
   }
 
   pub fn get_name(&self) -> &str {

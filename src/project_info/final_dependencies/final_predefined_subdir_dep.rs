@@ -1,6 +1,6 @@
 use std::{collections::{HashMap, HashSet}};
 
-use crate::project_info::{raw_data_in::dependencies::{internal_dep_config::{RawSubdirectoryDependency, raw_dep_common::RawPredepCommon}, user_given_dep_config::{UserGivenPredefinedDependencyConfig}}};
+use crate::project_info::{raw_data_in::dependencies::{internal_dep_config::{RawSubdirectoryDependency, raw_dep_common::{RawPredepCommon, RawEmscriptenConfig}}, user_given_dep_config::{UserGivenPredefinedDependencyConfig}}};
 
 use super::{predep_module_common::PredefinedDepFunctionality, final_target_map_common::{FinalTargetConfigMap, make_final_target_config_map}};
 
@@ -58,7 +58,9 @@ pub struct PredefinedSubdirDep {
   requires_custom_populate: bool,
   installation_details: Option<SubdirDepInstallationConfig>,
   url_links: FinalSubdirDepLinks,
-  _can_cross_compile: bool
+  _can_cross_compile: bool,
+  _supports_emscripten: bool,
+  _enscripten_config: Option<RawEmscriptenConfig>
 }
 
 impl PredefinedSubdirDep {
@@ -200,7 +202,9 @@ impl PredefinedSubdirDep {
         yaml_namespaced_target_map,
         requires_custom_populate: subdir_dep.requires_custom_fetchcontent_populate,
         installation_details,
-        _can_cross_compile: subdir_dep.can_trivially_cross_compile()
+        _can_cross_compile: subdir_dep.can_trivially_cross_compile(),
+        _supports_emscripten: subdir_dep.supports_emscripten(),
+        _enscripten_config: subdir_dep.get_emscripten_config().cloned()
       }
     )
   }
@@ -219,5 +223,20 @@ impl PredefinedDepFunctionality for PredefinedSubdirDep {
     self.target_map.keys()
       .map(|k| k.to_string())
       .collect()
+  }
+
+  fn supports_emscripten(&self) -> bool {
+    self._supports_emscripten
+  }
+
+  fn raw_emscripten_config(&self) -> Option<&RawEmscriptenConfig> {
+    self._enscripten_config.as_ref()
+  }
+
+  fn uses_emscripten_link_flag(&self) -> bool {
+    match self.raw_emscripten_config() {
+      None => false,
+      Some(config) => config.link_flag.is_some()
+    }
   }
 }

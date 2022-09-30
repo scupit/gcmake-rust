@@ -1,8 +1,6 @@
-use std::collections::{HashMap, HashSet};
-
 use serde::{Deserialize};
 
-use super::{raw_target_config_common::RawPredefinedTargetMapIn, RawMutualExclusionSet, raw_dep_common::RawPredepCommon};
+use super::{raw_target_config_common::RawPredefinedTargetMapIn, RawMutualExclusionSet, raw_dep_common::{RawPredepCommon, RawEmscriptenConfig}};
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -41,6 +39,7 @@ pub struct RawSubdirectoryDependency {
   pub git_repo: RawSubdirDepGitRepoConfig,
   pub target_configs: RawPredefinedTargetMapIn,
   pub mutually_exclusive: Option<RawMutualExclusionSet>,
+  pub emscripten_config: Option<RawEmscriptenConfig>,
 
   #[serde(default = "default_requires_custom_populate")]
   pub requires_custom_fetchcontent_populate: bool,
@@ -76,5 +75,13 @@ impl RawPredepCommon for RawSubdirectoryDependency {
       None => None,
       Some(links) => links.github.as_ref().map(|github_link| &github_link[..])
     }
+  }
+
+  fn get_emscripten_config(&self) -> Option<&RawEmscriptenConfig> {
+    self.emscripten_config.as_ref()
+  }
+
+  fn supports_emscripten(&self) -> bool {
+    self.can_trivially_cross_compile() || self.emscripten_config.is_some()
   }
 }

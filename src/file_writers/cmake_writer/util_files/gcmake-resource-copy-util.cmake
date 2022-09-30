@@ -5,7 +5,7 @@ function( copy_resource_dir_if_exists
   if( EXISTS ${resources_dir} )
     add_custom_command(
       TARGET ${PRE_BUILD_TARGET_NAME}
-      PRE_BUILD
+      POST_BUILD
       COMMAND ${CMAKE_COMMAND}
         -E copy_directory ${resources_dir} ${build_time_resource_dir_location}
       COMMENT "Copying ${PROJECT_NAME} resources"

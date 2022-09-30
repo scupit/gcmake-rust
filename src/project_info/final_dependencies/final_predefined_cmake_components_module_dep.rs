@@ -1,6 +1,6 @@
 use std::collections::{HashSet, HashMap};
 
-use crate::project_info::raw_data_in::dependencies::{internal_dep_config::{RawComponentsModuleDep, ComponentsFindModuleLinks, UsageMode, CMakeModuleType, raw_dep_common::RawPredepCommon}, user_given_dep_config::{UserGivenPredefinedDependencyConfig}};
+use crate::project_info::raw_data_in::dependencies::{internal_dep_config::{RawComponentsModuleDep, ComponentsFindModuleLinks, UsageMode, CMakeModuleType, raw_dep_common::{RawPredepCommon, RawEmscriptenConfig}}, user_given_dep_config::{UserGivenPredefinedDependencyConfig}};
 
 use super::{predep_module_common::PredefinedDepFunctionality, final_target_map_common::{FinalTargetConfigMap, make_final_target_config_map}};
 
@@ -118,5 +118,20 @@ impl PredefinedDepFunctionality for PredefinedCMakeComponentsModuleDep {
     return self.components.keys()
       .map(|key_string| key_string.clone())
       .collect()
+  }
+
+  fn supports_emscripten(&self) -> bool {
+    self.raw_dep.supports_emscripten()
+  }
+
+  fn raw_emscripten_config(&self) -> Option<&RawEmscriptenConfig> {
+    self.raw_dep.get_emscripten_config()
+  }
+
+  fn uses_emscripten_link_flag(&self) -> bool {
+    match self.raw_emscripten_config() {
+      None => false,
+      Some(config) => config.link_flag.is_some()
+    }
   }
 }

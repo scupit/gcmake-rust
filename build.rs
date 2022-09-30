@@ -4,6 +4,7 @@ fn main() {
   let ordered_cmake_util_names: Vec<&str> = vec![
     "gcmake-variables",
     "gcmake-cross-compilation-utils",
+    "gcmake-emscripten-utils",
     "gcmake-dir-config",
     "gcmake-toggle-lib-util",
     "gcmake-pre-build-configuration-utils",

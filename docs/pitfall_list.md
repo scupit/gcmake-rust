@@ -3,6 +3,12 @@
 > As I discover more compilation pitfalls and issues with the GCMake tool, I will list them
 > here.
 
+## Windows Symlinks
+
+By default, Windows requires administrator permissions to create symlinks. This is annoying.
+Turning Windows Developer mode on will allow you (and CMake) to create symlinks without
+requiring developer permissions.
+
 ## Global Strawberry Perl Install while MinGW is in system PATH
 
 If your MinGW bin directory is path of your system PATH on Windows, globally installing

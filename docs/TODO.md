@@ -114,15 +114,15 @@ The command set for viewing project metadata.
 - [ ] [OpenCV](https://opencv.org/)
 - [ ] [ffmpeg](https://www.ffmpeg.org/)
 - [ ] [TensorFlow](https://www.tensorflow.org/)
-- [ ] [imgui](https://github.com/ocornut/imgui)
+- [x] [imgui](https://github.com/ocornut/imgui)
 - [x] [GLM (OpenGL Mathematics)](https://github.com/g-truc/glm)
 - [x] [cxxopts](https://github.com/jarro2783/cxxopts)
 - [x] [CLI11](https://github.com/CLIUtils/CLI11)
 - [x] [ftxui](https://github.com/ArthurSonzogni/FTXUI)
 - [x] [pugixml](https://github.com/zeux/pugixml)
 - [ ] [mimalloc](https://github.com/microsoft/mimalloc)
-- [ ] [magic_enum](https://github.com/Neargye/magic_enum)
-- [ ] [argparse](https://github.com/p-ranav/argparse)
+- [x] [magic_enum](https://github.com/Neargye/magic_enum)
+- [x] [argparse](https://github.com/p-ranav/argparse)
 
 #### Support when FetchContent ready
 

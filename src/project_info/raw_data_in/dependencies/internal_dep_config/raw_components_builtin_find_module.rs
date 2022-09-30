@@ -1,8 +1,6 @@
-use std::collections::HashSet;
+use serde::{Deserialize};
 
-use serde::{Serialize, Deserialize};
-
-use super::{CMakeModuleType, raw_target_config_common::RawPredefinedTargetMapIn, RawMutualExclusionSet, raw_dep_common::RawPredepCommon};
+use super::{CMakeModuleType, raw_target_config_common::RawPredefinedTargetMapIn, RawMutualExclusionSet, raw_dep_common::{RawPredepCommon, RawEmscriptenConfig}};
 
 #[derive(Deserialize, Clone)]
 #[serde(deny_unknown_fields)]
@@ -62,6 +60,14 @@ impl RawPredepCommon for RawComponentsModuleDep {
   }
 
   fn github_url(&self) -> Option<&str> {
+    None
+  }
+  
+  fn supports_emscripten(&self) -> bool {
+    false
+  }
+
+  fn get_emscripten_config(&self) -> Option<&RawEmscriptenConfig> {
     None
   }
 }

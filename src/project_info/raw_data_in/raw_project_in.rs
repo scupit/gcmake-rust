@@ -185,7 +185,8 @@ pub enum BuildConfigCompilerSpecifier {
   AllCompilers,
   GCC,
   MSVC,
-  Clang
+  Clang,
+  Emscripten
 }
 
 impl BuildConfigCompilerSpecifier {
@@ -194,7 +195,8 @@ impl BuildConfigCompilerSpecifier {
       Self::AllCompilers => None,
       Self::GCC => Some(SpecificCompilerSpecifier::GCC),
       Self::Clang => Some(SpecificCompilerSpecifier::Clang),
-      Self::MSVC => Some(SpecificCompilerSpecifier::MSVC)
+      Self::MSVC => Some(SpecificCompilerSpecifier::MSVC),
+      Self::Emscripten => Some(SpecificCompilerSpecifier::Emscripten)
     }
   }
 }
@@ -204,6 +206,7 @@ impl BuildConfigCompilerSpecifier {
 #[serde(deny_unknown_fields)]
 pub struct RawBuildConfig {
   pub compiler_flags: Option<Vec<String>>,
+  pub link_time_flags: Option<Vec<String>>,
   pub linker_flags: Option<Vec<String>>,
   pub defines: Option<Vec<String>>
 }
@@ -235,7 +238,8 @@ impl OutputItemType {
 pub enum SpecificCompilerSpecifier {
   GCC,
   MSVC,
-  Clang
+  Clang,
+  Emscripten
 }
 
 impl SpecificCompilerSpecifier {
@@ -243,7 +247,8 @@ impl SpecificCompilerSpecifier {
     return match *self {
       Self::GCC => "GCC",
       Self::Clang => "Clang",
-      Self::MSVC => "MSVC"
+      Self::MSVC => "MSVC",
+      Self::Emscripten => "Emscripten"
     }
   }
 }
