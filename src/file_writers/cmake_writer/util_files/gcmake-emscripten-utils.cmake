@@ -7,7 +7,6 @@ function( apply_emscripten_specifics
 
     file( GLOB_RECURSE all_resource_file_paths CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/resources/**" )
     list( LENGTH all_resource_file_paths all_resources_count )
-    message( "resource count: ${all_resources_count}" )
 
     if( all_resources_count GREATER 0 )
       get_target_property( target_type ${preload_flags_receiver} TYPE )
