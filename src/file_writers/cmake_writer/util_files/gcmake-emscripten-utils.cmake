@@ -83,20 +83,23 @@ endfunction()
 macro( configure_emscripten_mode
   default_mode
 )
-  # Browser
-  # NodeJS
-  set( EMSCRIPTEN_MODE ${default_mode} CACHE STRING "'Browser' builds an html file and js/wasm runnable in a web browser. 'NodeJS' omits the html file and just creates a js file runnable by NodeJS." )
+  if( NOT ALREADY_CONFIGURED_EMSCRIPTEN_MODE )
+    # Browser
+    # NodeJS
+    set( EMSCRIPTEN_MODE ${default_mode} CACHE STRING "'Browser' builds an html file and js/wasm runnable in a web browser. 'NodeJS' omits the html file and just creates a js file runnable by NodeJS." )
 
-  set( valid_emscripten_modes "Browser" "NodeJS" )
-	set_property( CACHE EMSCRIPTEN_MODE PROPERTY STRINGS ${valid_emscripten_modes} )
+    set( valid_emscripten_modes "Browser" "NodeJS" )
+    set_property( CACHE EMSCRIPTEN_MODE PROPERTY STRINGS ${valid_emscripten_modes} )
 
-  if( EMSCRIPTEN_MODE STREQUAL "Browser" )
-    set( CMAKE_EXECUTABLE_SUFFIX ".html" )
-  elseif( EMSCRIPTEN_MODE STREQUAL "NodeJS" )
-    set( CMAKE_EXECUTABLE_SUFFIX ".js" )
-  else()
-    message( FATAL_ERROR "Given EMCRIPTEN_MODE '${EMSCRIPTEN_MODE}' is invalid. Must be one of: ${valid_emscripten_modes}" )
+    if( EMSCRIPTEN_MODE STREQUAL "Browser" )
+      set( CMAKE_EXECUTABLE_SUFFIX ".html" )
+    elseif( EMSCRIPTEN_MODE STREQUAL "NodeJS" )
+      set( CMAKE_EXECUTABLE_SUFFIX ".js" )
+    else()
+      message( FATAL_ERROR "Given EMCRIPTEN_MODE '${EMSCRIPTEN_MODE}' is invalid. Must be one of: ${valid_emscripten_modes}" )
+    endif()
+
+    message( "Using Emscripten mode: ${EMSCRIPTEN_MODE}" )
+    set( ALREADY_CONFIGURED_EMSCRIPTEN_MODE TRUE )
   endif()
-
-  message( "Using Emscripten mode: ${EMSCRIPTEN_MODE}" )
 endmacro()

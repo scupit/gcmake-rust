@@ -221,7 +221,14 @@ function( initialize_build_config_vars )
 
   foreach( config_name IN ITEMS "Debug" "Release" "MinSizeRel" "RelWithDebInfo" )
     set( ${config_name}_LOCAL_COMPILER_FLAGS ${GCMAKE_SANITIZER_FLAGS} ${GCMAKE_ADDITIONAL_COMPILER_FLAGS} )
-    set( ${config_name}_LOCAL_LINK_FLAGS ${GCMAKE_SANITIZER_FLAGS} ${GCMAKE_ADDITIONAL_LINKER_FLAGS} )
+
+    string( REPLACE ";" "," GCMAKE_ADDITIONAL_LINKER_FLAGS "${GCMAKE_ADDITIONAL_LINKER_FLAGS}" )
+    set( ${config_name}_LOCAL_LINK_FLAGS
+      ${GCMAKE_SANITIZER_FLAGS}
+      "LINKER:${GCMAKE_ADDITIONAL_LINKER_FLAGS}"
+      ${GCMAKE_ADDITIONAL_LINK_TIME_FLAGS}
+    )
+
     set( ${config_name}_LOCAL_DEFINES )
   endforeach()
 endfunction()

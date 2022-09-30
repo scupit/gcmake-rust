@@ -1957,7 +1957,7 @@ impl<'a> CMakeListsWriter<'a> {
     };
 
     writeln!(&self.cmakelists_file,
-      "add_library( {} {} )",
+      "make_normal_lib( {} {} )",
       output_name,
       lib_type_string
     )?;
