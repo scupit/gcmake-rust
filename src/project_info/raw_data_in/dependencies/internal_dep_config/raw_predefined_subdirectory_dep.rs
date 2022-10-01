@@ -2,19 +2,19 @@ use serde::{Deserialize};
 
 use super::{raw_target_config_common::RawPredefinedTargetMapIn, RawMutualExclusionSet, raw_dep_common::{RawPredepCommon, RawEmscriptenConfig}};
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone)]
 #[serde(deny_unknown_fields)]
 pub struct RawSubdirDepLinks {
   pub github: Option<String>
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone)]
 #[serde(deny_unknown_fields)]
 pub struct NamespaceConfig {
   pub cmakelists_linking: String
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone)]
 #[serde(deny_unknown_fields)]
 pub struct RawSubdirDepGitRepoConfig {
   pub repo_url: String
@@ -24,7 +24,7 @@ fn default_requires_custom_populate() -> bool { false }
 
 // A predefined dependency which exists within the project build tree.
 // These should always be inside the dep/ folder.
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone)]
 #[serde(deny_unknown_fields)]
 pub struct RawSubdirectoryDependency {
   pub namespace_config: NamespaceConfig,
@@ -83,5 +83,16 @@ impl RawPredepCommon for RawSubdirectoryDependency {
 
   fn supports_emscripten(&self) -> bool {
     self.can_trivially_cross_compile() || self.emscripten_config.is_some()
+  }
+
+  fn is_internally_supported_by_emscripten(&self) -> bool {
+    return match &self.emscripten_config {
+      None => false,
+      Some(config) => match (&config.is_internally_supported, &config.link_flag) {
+        (Some(true), _) => true,
+        (_, Some(_)) => true,
+        _ => false
+      }
+    }
   }
 }

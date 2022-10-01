@@ -511,6 +511,10 @@ impl<'a> CMakeListsWriter<'a> {
     )?;
 
     writeln!(&self.cmakelists_file,
+      "set( GCMAKE_ADDITIONAL_LINK_TIME_FLAGS \"\" CACHE STRING \"SEMICOLON SEPARATED list of additional link-time flags to build the project with\" )"
+    )?;
+
+    writeln!(&self.cmakelists_file,
       "set( GCMAKE_ADDITIONAL_LINKER_FLAGS \"\" CACHE STRING \"SEMICOLON SEPARATED list of additional linker flags to build the project with\" )"
     )?;
 
@@ -641,7 +645,7 @@ impl<'a> CMakeListsWriter<'a> {
   fn include_utils(&self) -> io::Result<()> {
     self.write_newline()?;
 
-    if self.project_data.has_any_fetchcontent_ready_dependencies() {
+    if self.project_data.needs_fetchcontent() {
       writeln!(&self.cmakelists_file,
         "if( NOT DEFINED FETCHCONTENT_QUIET )"
       )?;
@@ -854,18 +858,39 @@ impl<'a> CMakeListsWriter<'a> {
       CMakeModuleType::ConfigFile => "CONFIG"
     };
 
+    let is_dep_internally_supported_by_emscripten: bool = dep_info.is_internally_supported_by_emscripten();
+
+    let indent: &str;
+
+    if is_dep_internally_supported_by_emscripten {
+      writeln!(&self.cmakelists_file, "if( NOT USING_EMSCRIPTEN )\n")?;
+      indent = "\t";
+    }
+    else {
+      indent = "";
+    }
+
     writeln!(&self.cmakelists_file,
-      "find_package( {} {} REQUIRED )",
+      "{}find_package( {} {} REQUIRED )",
+      indent,
       dep_name,
       search_type_spec
     )?;
 
     writeln!(&self.cmakelists_file,
-      "if( NOT {} )\n\tmessage( FATAL_ERROR \"{}\")\nendif()",
+      "{}if( NOT {} )\n\t{}{}message( FATAL_ERROR \"{}\")\n{}endif()",
+      indent,
       dep_info.found_varname(),
+      indent,
+      indent,
       // TODO: Make a better error message. Include links to relevant pages if possible.
-      format!("Dependency '{}' was not found on the system. Please make sure the library is installed on the system.", dep_name)
+      format!("Dependency '{}' was not found on the system. Please make sure the library is installed on the system.", dep_name),
+      indent
     )?;
+
+    if is_dep_internally_supported_by_emscripten {
+      writeln!(&self.cmakelists_file, "endif()")?;
+    }
 
     Ok(())
   }
@@ -1096,7 +1121,7 @@ impl<'a> CMakeListsWriter<'a> {
   fn write_apply_dependencies(&self) -> io::Result<()> {
     writeln!(&self.cmakelists_file, "expose_uncached_deps()")?;
 
-    if self.project_data.has_any_fetchcontent_ready_dependencies() {
+    if self.project_data.needs_fetchcontent() {
       writeln!(&self.cmakelists_file, "\nFetchContent_MakeAvailable( ${{ACTUAL_DEP_LIST}} )")?;
     }
 
@@ -1804,6 +1829,8 @@ impl<'a> CMakeListsWriter<'a> {
       // dependency. Therefore this set is used to ensure that variable is not written multiple times.
       let mut already_written: HashSet<String> = HashSet::new();
 
+      let mut emscripten_link_flags_to_apply: HashMap<String, Vec<String>> = HashMap::new();
+
       writeln!(&self.cmakelists_file,
         "target_link_libraries( {} ",
         output_name
@@ -1850,7 +1877,7 @@ impl<'a> CMakeListsWriter<'a> {
 
             let mut normal_link_constraint: SystemSpecifierWrapper = matching_link.get_system_spec_info().clone();
 
-            if borrowed_node.emscripten_link_flag().is_some() {
+            if borrowed_node.is_internally_supported_by_emscripten() {
               normal_link_constraint = normal_link_constraint.intersection(
                 &parse_leading_system_spec("((not emscripten))")
                   .unwrap()
@@ -1871,20 +1898,24 @@ impl<'a> CMakeListsWriter<'a> {
           }
 
           if let Some(emscripten_link_flag) = borrowed_node.emscripten_link_flag() {
-            if !already_written.contains(&emscripten_link_flag) {
-              let emscripten_constraint: SystemSpecifierWrapper = parse_leading_system_spec("((emscripten))")
-                .unwrap()
-                .unwrap()
-                .value;
+            let emscripten_constraint: SystemSpecifierWrapper = parse_leading_system_spec("((emscripten))")
+              .unwrap()
+              .unwrap()
+              .value;
+            
+            let full_emscripten_flag_expression: String = system_constraint_expression(
+              &emscripten_constraint,
+              &emscripten_link_flag
+            );
 
-              writeln!(&self.cmakelists_file,
-                "\t\t{}",
-                system_constraint_expression(
-                  &emscripten_constraint,
-                  &emscripten_link_flag
-                )
-              )?;
-            }
+            emscripten_link_flags_to_apply
+              .entry(inheritance_method.to_string())
+              .and_modify(|flag_list| {
+                if !flag_list.contains(&full_emscripten_flag_expression) {
+                  flag_list.push(full_emscripten_flag_expression.clone());
+                }
+              })
+              .or_insert(vec![full_emscripten_flag_expression]);
           }
         }
       }
@@ -1892,6 +1923,32 @@ impl<'a> CMakeListsWriter<'a> {
       writeln!(&self.cmakelists_file,
         ")"
       )?;
+
+      if !emscripten_link_flags_to_apply.is_empty() {
+        for flags_command in ["target_compile_options", "target_link_options"] {
+          writeln!(&self.cmakelists_file,
+            "{}( {}",
+            flags_command,
+            output_name
+          )?;
+
+          for (inheritance_method, emscripten_flag_expression_list) in &emscripten_link_flags_to_apply {
+            writeln!(&self.cmakelists_file,
+              "\t{}",
+              inheritance_method
+            )?;
+
+            for flag_expression in emscripten_flag_expression_list {
+              writeln!(&self.cmakelists_file,
+                "\t\t\"{}\"",
+                flag_expression
+              )?;
+            }
+          }
+
+          writeln!(&self.cmakelists_file, ")\n")?;
+        }
+      }
     }
 
     Ok(())

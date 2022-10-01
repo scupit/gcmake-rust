@@ -70,4 +70,8 @@ impl RawPredepCommon for RawComponentsModuleDep {
   fn get_emscripten_config(&self) -> Option<&RawEmscriptenConfig> {
     None
   }
+
+  fn is_internally_supported_by_emscripten(&self) -> bool {
+    false
+  }
 }

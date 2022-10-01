@@ -47,7 +47,7 @@ fn make_inner_system_spec_generator_expression(
         SingleSystemSpec::GCC => "USING_GCC",
         SingleSystemSpec::Clang => "USING_CLANG",
         SingleSystemSpec::MSVC => "USING_MSVC",
-        SingleSystemSpec::Emscripten => "USING_MSVC",
+        SingleSystemSpec::Emscripten => "USING_EMSCRIPTEN",
       };
 
       format!("$<BOOL:${{{}}}>", var_str)

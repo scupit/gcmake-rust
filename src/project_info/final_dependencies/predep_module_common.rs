@@ -11,4 +11,5 @@ pub trait PredefinedDepFunctionality {
   fn supports_emscripten(&self) -> bool;
   fn raw_emscripten_config(&self) -> Option<&RawEmscriptenConfig>;
   fn uses_emscripten_link_flag(&self) -> bool;
+  fn is_internally_supported_by_emscripten(&self) -> bool;
 }

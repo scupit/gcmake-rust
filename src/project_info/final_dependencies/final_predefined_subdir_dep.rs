@@ -58,9 +58,7 @@ pub struct PredefinedSubdirDep {
   requires_custom_populate: bool,
   installation_details: Option<SubdirDepInstallationConfig>,
   url_links: FinalSubdirDepLinks,
-  _can_cross_compile: bool,
-  _supports_emscripten: bool,
-  _enscripten_config: Option<RawEmscriptenConfig>
+  raw_dep: RawSubdirectoryDependency
 }
 
 impl PredefinedSubdirDep {
@@ -202,9 +200,7 @@ impl PredefinedSubdirDep {
         yaml_namespaced_target_map,
         requires_custom_populate: subdir_dep.requires_custom_fetchcontent_populate,
         installation_details,
-        _can_cross_compile: subdir_dep.can_trivially_cross_compile(),
-        _supports_emscripten: subdir_dep.supports_emscripten(),
-        _enscripten_config: subdir_dep.get_emscripten_config().cloned()
+        raw_dep: subdir_dep.clone()
       }
     )
   }
@@ -212,7 +208,7 @@ impl PredefinedSubdirDep {
 
 impl PredefinedDepFunctionality for PredefinedSubdirDep {
   fn can_cross_compile(&self) -> bool {
-    self._can_cross_compile
+    self.raw_dep.can_trivially_cross_compile()
   }
 
   fn get_target_config_map(&self) -> &FinalTargetConfigMap {
@@ -226,11 +222,11 @@ impl PredefinedDepFunctionality for PredefinedSubdirDep {
   }
 
   fn supports_emscripten(&self) -> bool {
-    self._supports_emscripten
+    self.raw_dep.supports_emscripten()
   }
 
   fn raw_emscripten_config(&self) -> Option<&RawEmscriptenConfig> {
-    self._enscripten_config.as_ref()
+    self.raw_dep.get_emscripten_config()
   }
 
   fn uses_emscripten_link_flag(&self) -> bool {
@@ -238,5 +234,9 @@ impl PredefinedDepFunctionality for PredefinedSubdirDep {
       None => false,
       Some(config) => config.link_flag.is_some()
     }
+  }
+
+  fn is_internally_supported_by_emscripten(&self) -> bool {
+    self.raw_dep.is_internally_supported_by_emscripten()
   }
 }

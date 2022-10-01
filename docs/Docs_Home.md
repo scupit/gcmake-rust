@@ -7,6 +7,11 @@ project example. To create a new working project, see the [new project command](
 These are great ways to get a feel for how the tool, project structure, and [cmake_data.yaml](cmake_data.md)
 configuration work together.
 
+> **TODO:** Create a page explaining how to use Emscripten. Also explain how debugging with source maps
+> requires hosting a server from your drive root and building on the same drive as your project for the
+> moment anyways. There has to be a better way to do it that I haven't figured out yet).
+> Also explain the quick `python -m http.server --directory D:\ --bind localhost 8080` script.
+
 ## Table of Contents
 
 1. [Project Overview](overview.md)

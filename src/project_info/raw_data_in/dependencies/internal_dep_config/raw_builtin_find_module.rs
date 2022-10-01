@@ -55,4 +55,15 @@ impl RawPredepCommon for RawModuleDep {
   fn supports_emscripten(&self) -> bool {
     self.emscripten_config.is_some()
   }
+
+  fn is_internally_supported_by_emscripten(&self) -> bool {
+    return match &self.emscripten_config {
+      None => false,
+      Some(config) => match (&config.is_internally_supported, &config.link_flag) {
+        (Some(true), _) => true,
+        (_, Some(_)) => true,
+        _ => false
+      }
+    }
+  }
 }

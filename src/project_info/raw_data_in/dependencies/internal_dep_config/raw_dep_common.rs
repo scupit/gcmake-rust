@@ -4,7 +4,8 @@ use super::{RawMutualExclusionSet, RawPredefinedTargetMapIn};
 #[derive(Deserialize, Clone)]
 #[serde(deny_unknown_fields)]
 pub struct RawEmscriptenConfig {
-  pub link_flag: Option<String>
+  pub link_flag: Option<String>,
+  pub is_internally_supported: Option<bool>
 }
 
 pub trait RawPredepCommon {
@@ -15,4 +16,5 @@ pub trait RawPredepCommon {
   fn github_url(&self) -> Option<&str>;
   fn get_emscripten_config(&self) -> Option<&RawEmscriptenConfig>;
   fn supports_emscripten(&self) -> bool;
+  fn is_internally_supported_by_emscripten(&self) -> bool;
 }

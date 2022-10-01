@@ -55,7 +55,14 @@ impl FinalPredepInfo {
       Self::CMakeComponentsModule(components_dep) => components_dep.raw_emscripten_config(),
       Self::CMakeModule(module_dep) => module_dep.raw_emscripten_config()
     }
+  }
 
+  pub fn is_internally_supported_by_emscripten(&self) -> bool {
+    match self {
+      Self::Subdirectory(subdir_dep) => subdir_dep.is_internally_supported_by_emscripten(),
+      Self::CMakeComponentsModule(components_dep) => components_dep.is_internally_supported_by_emscripten(),
+      Self::CMakeModule(module_dep) => module_dep.is_internally_supported_by_emscripten()
+    }
   }
 }
 
@@ -152,6 +159,14 @@ impl FinalPredefinedDependencyConfig {
 
   pub fn custom_populate_script(&self) -> &HookScriptContainer {
     &self.custom_populate
+  }
+
+  pub fn is_fetchcontent(&self) -> bool {
+    match &self.predep_info {
+      FinalPredepInfo::Subdirectory(_) => true,
+      FinalPredepInfo::CMakeComponentsModule(_) => false,
+      FinalPredepInfo::CMakeModule(_) => false
+    }
   }
 
   pub fn is_auto_fetchcontent_ready(&self) -> bool {

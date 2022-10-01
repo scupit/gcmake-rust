@@ -1,6 +1,6 @@
 use std::{cell::{RefCell}, rc::{Rc, Weak}, hash::{Hash, Hasher}, collections::{HashMap, HashSet, VecDeque}, borrow::Borrow, path::{Path, PathBuf}};
 
-use crate::project_info::{LinkMode, CompiledOutputItem, PreBuildScript, OutputItemLinks, final_project_data::FinalProjectData, final_dependencies::{FinalGCMakeDependency, FinalPredefinedDependencyConfig, GCMakeDependencyStatus, FinalRequirementSpecifier}, LinkSpecifier, FinalProjectType, parsers::{link_spec_parser::{LinkAccessMode, LinkSpecTargetList, LinkSpecifierTarget}, system_spec::platform_spec_parser::SystemSpecifierWrapper}, raw_data_in::dependencies::internal_dep_config::raw_dep_common::RawEmscriptenConfig};
+use crate::{project_info::{LinkMode, CompiledOutputItem, PreBuildScript, OutputItemLinks, final_project_data::FinalProjectData, final_dependencies::{FinalGCMakeDependency, FinalPredefinedDependencyConfig, GCMakeDependencyStatus, FinalRequirementSpecifier}, LinkSpecifier, FinalProjectType, parsers::{link_spec_parser::{LinkAccessMode, LinkSpecTargetList, LinkSpecifierTarget}, system_spec::platform_spec_parser::SystemSpecifierWrapper}, raw_data_in::dependencies::internal_dep_config::raw_dep_common::RawEmscriptenConfig}, project_generator::configuration};
 
 use super::hash_wrapper::RcRefcHashWrapper;
 use colored::*;
@@ -425,9 +425,18 @@ impl<'a> TargetNode<'a> {
   }
 
   pub fn emscripten_link_flag(&self) -> Option<String> {
-    self.container_project().as_ref().borrow().project_wrapper().emscripten_config()
+    return self.container_project().as_ref().borrow().project_wrapper().emscripten_config()
       .map(|config| config.link_flag.clone())
       .flatten()
+  }
+
+  pub fn is_internally_supported_by_emscripten(&self) -> bool {
+    return match self.container_project().as_ref().borrow().project_wrapper() {
+      ProjectWrapper::NormalProject(_) => false,
+      ProjectWrapper::GCMakeDependencyRoot(_) => false,
+      ProjectWrapper::PredefinedDependency(predef_dep) =>
+        predef_dep.predefined_dep_info().is_internally_supported_by_emscripten()
+    }
   }
 
   pub fn has_links(&self) -> bool {

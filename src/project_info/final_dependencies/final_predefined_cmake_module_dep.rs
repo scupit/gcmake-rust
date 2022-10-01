@@ -117,4 +117,8 @@ impl PredefinedDepFunctionality for PredefinedCMakeModuleDep {
       Some(config) => config.link_flag.is_some()
     }
   }
+
+  fn is_internally_supported_by_emscripten(&self) -> bool {
+    self.raw_dep.is_internally_supported_by_emscripten()
+  }
 }

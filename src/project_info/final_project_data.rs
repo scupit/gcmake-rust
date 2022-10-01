@@ -1146,10 +1146,10 @@ impl FinalProjectData {
     !self.predefined_dependencies.is_empty()
   }
 
-  pub fn has_predefined_fetchcontent_ready_dependencies(&self) -> bool {
+  pub fn has_any_fetchcontent_dependencies(&self) -> bool {
     let num_needing_fetch: usize = self.predefined_dependencies
       .iter()
-      .filter(|(_, dep_info)| dep_info.is_auto_fetchcontent_ready())
+      .filter(|(_, dep_info)| dep_info.is_fetchcontent())
       .collect::<HashMap<_, _>>()
       .len();
 
@@ -1160,8 +1160,8 @@ impl FinalProjectData {
     self.gcmake_dependency_projects.len() > 0
   }
 
-  pub fn has_any_fetchcontent_ready_dependencies(&self) -> bool {
-    self.has_gcmake_dependencies() || self.has_predefined_fetchcontent_ready_dependencies()
+  pub fn needs_fetchcontent(&self) -> bool {
+    self.has_gcmake_dependencies() || self.has_any_fetchcontent_dependencies()
   }
 
   pub fn full_test_name(
