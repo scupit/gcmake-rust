@@ -35,6 +35,11 @@ configuration work together.
 - [Auto-generated export header](cmake_data_config/auto_generated_export_macro_header.md)
 - [Making use of pre-build scripts](pre_build_scripts.md)
 
+## Other Points of Interest
+
+- [Compiling using Zig](compile_using_zig.md)
+- [Emscripten Usage and Caveats](./emscripten.md)
+
 ## Quick Links
 
 - [Getting started](overview.md#suggestions)
@@ -47,6 +52,7 @@ configuration work together.
 - [Managing dependencies](cmake_data_config/properties/properties_list.md#predefined_dependencies)
 - [Default config files](the_configuration_directory.md#manual-configuration) such as .gitignore, .clang-format, and .clang-tidy
 - [Compiling using Zig](compile_using_zig.md)
+- [Emscripten Usage and Caveats](./emscripten.md)
 
 ## GCMake Repository Links
 

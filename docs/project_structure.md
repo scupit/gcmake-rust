@@ -3,6 +3,7 @@
 > This page describes the GCMake project structure and explains why certain choices were made.
 >
 > **TODO:** Add more detail, such as why only one library can be built per single project.
+> Also explain some of the additonal CMake things GCMake facilitates, such as PGO and IPO.
 
 ## The Structure
 

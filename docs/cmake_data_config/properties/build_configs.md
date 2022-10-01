@@ -117,6 +117,7 @@ build_configs:
 | -------- | ----------- |
 | [defines](#defines) | Section for specifying compiler defines |
 | [compiler_flags](#compiler_flags) | Section for specifying compiler flags |
+| [linker flags](#link_time_flags) | Section for specifying linker flags |
 | [linker flags](#linker_flags) | Section for specifying linker flags |
 
 ### defines
@@ -156,6 +157,11 @@ Compiler flags should be written exactly as you would pass them on the command l
 They may also be prefixed with a [system specifier](../data_formats.md#system-specifier).
 Further formatting information is detailed in [data_formats.md](../data_formats.md#compiler-flags).
 
+**NOTE:** compile_flags passed to Emscripten will automatically also be passed at link time.
+Most Emscripten flags (especially [optimization flags](https://emscripten.org/docs/compiling/Building-Projects.html#building-projects-with-optimizations))
+passed to the compiler should also be passed at link time (but not to the linker, there's apparently a
+difference), so this is done automatically.
+
 ``` yaml
 supported_compilers:
   - GCC
@@ -171,6 +177,28 @@ build_configs:
       compiler_flags: [ -O3 ]
     MSVC:
       compiler_flags: [ /O2 ]
+```
+
+### link_time_flags
+
+> *Optional* `List<CompilerFlagString>`
+
+The list of flags to be passed at link time for the selection configuration.
+
+These flags should be written exactly as you would pass them on the command line.
+They may also be prefixed with a [system specifier](../data_formats.md#system-specifier).
+Further formatting information is detailed in [data_formats.md](../data_formats.md#compiler-flags).
+
+``` yaml
+supported_compilers:
+  - Emscripten
+build_configs:
+  Debug:
+    Emscripten:
+      link_time_flags: [ --shell-file, src/custom-shell.html ]
+  Release:
+    Emscripten:
+      link_time_flags: [ --shell-file, src/custom-shell.html ]
 ```
 
 ### linker_flags

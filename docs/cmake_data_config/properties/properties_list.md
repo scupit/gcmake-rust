@@ -195,15 +195,17 @@ defines can only be set for compilers defined in this list.
 
 Allowed values:
 
-- MSVC
 - GCC
 - Clang
+- MSVC
+- Emscripten
 
 ``` yaml
 supported_compilers:
-  - MSVC
   - GCC
   - Clang
+  - MSVC
+  - Emscripten
 ```
 
 ### languages

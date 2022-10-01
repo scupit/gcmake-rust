@@ -3,6 +3,11 @@
 > As I discover more compilation pitfalls and issues with the GCMake tool, I will list them
 > here.
 
+## Emscripten
+
+Instead of duplicating them here, see the [Emscripten doc page](./emscripten.md) for 
+Emscripten usage information and caveats.
+
 ## Windows Symlinks
 
 By default, Windows requires administrator permissions to create symlinks. This is annoying.
