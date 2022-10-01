@@ -5,7 +5,8 @@ use super::{RawMutualExclusionSet, RawPredefinedTargetMapIn};
 #[serde(deny_unknown_fields)]
 pub struct RawEmscriptenConfig {
   pub link_flag: Option<String>,
-  pub is_internally_supported: Option<bool>
+  pub is_internally_supported: Option<bool>,
+  pub is_flag_link_time_only: Option<bool>
 }
 
 pub trait RawPredepCommon {

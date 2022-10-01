@@ -1,6 +1,6 @@
 use std::{collections::{HashMap, HashSet}, fs::File, io::{self, Write, ErrorKind}, path::{PathBuf, Path}, rc::Rc, cell::{RefCell, Ref}, borrow::Borrow};
 
-use crate::{project_info::{final_project_data::{FinalProjectData}, path_manipulation::{cleaned_path_str, relative_to_project_root}, final_dependencies::{GitRevisionSpecifier, PredefinedCMakeComponentsModuleDep, PredefinedSubdirDep, PredefinedCMakeModuleDep, FinalPredepInfo, GCMakeDependencyStatus, FinalPredefinedDependencyConfig, encoded_repo_url, PredefinedDepFunctionality}, raw_data_in::{BuildType, RawBuildConfig, BuildConfigCompilerSpecifier, SpecificCompilerSpecifier, OutputItemType, LanguageConfigMap, TargetSpecificBuildType, dependencies::internal_dep_config::{CMakeModuleType}, DefaultCompiledLibType}, FinalProjectType, CompiledOutputItem, PreBuildScript, LinkMode, FinalTestFramework, dependency_graph_mod::dependency_graph::{DependencyGraph, OrderedTargetInfo, ProjectWrapper, TargetNode, SimpleNodeOutputType, Link}, SystemSpecifierWrapper, SingleSystemSpec, CompilerDefine, FinalBuildConfig, CompilerFlag, LinkerFlag, gcmake_constants::{SRC_DIR, INCLUDE_DIR, TEMPLATE_IMPL_DIR}, platform_spec_parser::parse_leading_system_spec}, file_writers::cmake_writer::cmake_writer_helpers::system_constraint_expression};
+use crate::{project_info::{final_project_data::{FinalProjectData}, path_manipulation::{cleaned_path_str, relative_to_project_root}, final_dependencies::{GitRevisionSpecifier, PredefinedCMakeComponentsModuleDep, PredefinedSubdirDep, PredefinedCMakeModuleDep, FinalPredepInfo, GCMakeDependencyStatus, FinalPredefinedDependencyConfig, encoded_repo_url, PredefinedDepFunctionality}, raw_data_in::{BuildType, RawBuildConfig, BuildConfigCompilerSpecifier, SpecificCompilerSpecifier, OutputItemType, LanguageConfigMap, TargetSpecificBuildType, dependencies::internal_dep_config::{CMakeModuleType}, DefaultCompiledLibType}, FinalProjectType, CompiledOutputItem, PreBuildScript, LinkMode, FinalTestFramework, dependency_graph_mod::dependency_graph::{DependencyGraph, OrderedTargetInfo, ProjectWrapper, TargetNode, SimpleNodeOutputType, Link, EmscriptenLinkFlagInfo}, SystemSpecifierWrapper, SingleSystemSpec, CompilerDefine, FinalBuildConfig, CompilerFlag, LinkerFlag, gcmake_constants::{SRC_DIR, INCLUDE_DIR, TEMPLATE_IMPL_DIR}, platform_spec_parser::parse_leading_system_spec}, file_writers::cmake_writer::cmake_writer_helpers::system_constraint_expression};
 
 use super::cmake_utils_writer::{CMakeUtilFile, CMakeUtilWriter};
 
@@ -1829,7 +1829,7 @@ impl<'a> CMakeListsWriter<'a> {
       // dependency. Therefore this set is used to ensure that variable is not written multiple times.
       let mut already_written: HashSet<String> = HashSet::new();
 
-      let mut emscripten_link_flags_to_apply: HashMap<String, Vec<String>> = HashMap::new();
+      let mut emscripten_link_flags_to_apply: HashMap<String, Vec<EmscriptenLinkFlagInfo>> = HashMap::new();
 
       writeln!(&self.cmakelists_file,
         "target_link_libraries( {} ",
@@ -1897,25 +1897,25 @@ impl<'a> CMakeListsWriter<'a> {
             already_written.insert(String::from(linkable_target_name));
           }
 
-          if let Some(emscripten_link_flag) = borrowed_node.emscripten_link_flag() {
+          if let Some(mut emscripten_link_flag_info) = borrowed_node.emscripten_link_flag() {
             let emscripten_constraint: SystemSpecifierWrapper = parse_leading_system_spec("((emscripten))")
               .unwrap()
               .unwrap()
               .value;
             
-            let full_emscripten_flag_expression: String = system_constraint_expression(
+            emscripten_link_flag_info.full_flag_expression = system_constraint_expression(
               &emscripten_constraint,
-              &emscripten_link_flag
+              &emscripten_link_flag_info.full_flag_expression
             );
 
             emscripten_link_flags_to_apply
               .entry(inheritance_method.to_string())
               .and_modify(|flag_list| {
-                if !flag_list.contains(&full_emscripten_flag_expression) {
-                  flag_list.push(full_emscripten_flag_expression.clone());
+                if !flag_list.contains(&emscripten_link_flag_info) {
+                  flag_list.push(emscripten_link_flag_info.clone());
                 }
               })
-              .or_insert(vec![full_emscripten_flag_expression]);
+              .or_insert(vec![emscripten_link_flag_info]);
           }
         }
       }
@@ -1925,7 +1925,12 @@ impl<'a> CMakeListsWriter<'a> {
       )?;
 
       if !emscripten_link_flags_to_apply.is_empty() {
-        for flags_command in ["target_compile_options", "target_link_options"] {
+        let cmake_commands = [
+          ("target_compile_options", false),
+          ("target_link_options", true)
+        ];
+
+        for (flags_command, is_command_link_time) in cmake_commands {
           writeln!(&self.cmakelists_file,
             "{}( {}",
             flags_command,
@@ -1938,11 +1943,13 @@ impl<'a> CMakeListsWriter<'a> {
               inheritance_method
             )?;
 
-            for flag_expression in emscripten_flag_expression_list {
-              writeln!(&self.cmakelists_file,
-                "\t\t\"{}\"",
-                flag_expression
-              )?;
+            for EmscriptenLinkFlagInfo { full_flag_expression, supports_link_time_only } in emscripten_flag_expression_list {
+              if !(*supports_link_time_only && !is_command_link_time) {
+                writeln!(&self.cmakelists_file,
+                  "\t\t\"{}\"",
+                  full_flag_expression
+                )?;
+              }
             }
           }
 

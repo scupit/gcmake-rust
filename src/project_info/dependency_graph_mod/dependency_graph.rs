@@ -244,6 +244,12 @@ impl<'a> OwningComplexTargetRequirement<'a> {
   }
 }
 
+#[derive(Clone, PartialEq, Eq)]
+pub struct EmscriptenLinkFlagInfo {
+  pub full_flag_expression: String,
+  pub supports_link_time_only: bool
+}
+
 enum NodeType {
   PreBuild,
   ProjectOutput,
@@ -424,10 +430,17 @@ impl<'a> TargetNode<'a> {
     &self.system_specifier_info
   }
 
-  pub fn emscripten_link_flag(&self) -> Option<String> {
-    return self.container_project().as_ref().borrow().project_wrapper().emscripten_config()
-      .map(|config| config.link_flag.clone())
-      .flatten()
+  pub fn emscripten_link_flag(&self) -> Option<EmscriptenLinkFlagInfo> {
+    return match self.container_project().as_ref().borrow().project_wrapper().emscripten_config() {
+      None => None,
+      Some(config) => match &config.link_flag {
+        None => None,
+        Some(link_flag_str) => Some(EmscriptenLinkFlagInfo {
+          full_flag_expression: link_flag_str.to_string(),
+          supports_link_time_only: config.is_flag_link_time_only.unwrap_or(false)
+        })
+      }
+    }
   }
 
   pub fn is_internally_supported_by_emscripten(&self) -> bool {
