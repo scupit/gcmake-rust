@@ -3,7 +3,9 @@ use crate::{cli_config::{CLIProjectGenerationInfo, CLIProjectTypeGenerating}, pr
 use colored::*;
 
 pub enum ProjectTypeCreating {
-  RootProject,
+  RootProject {
+    include_emscripten_support: bool
+  },
   Subproject {
     parent_project: Rc<FinalProjectData>
   },
@@ -27,7 +29,9 @@ impl ProjectTypeCreating {
     return match &generation_info.project_type {
       CLIProjectTypeGenerating::RootProject => {
         match project_operating_on {
-          None => ProjectTypeCreating::RootProject,
+          None => ProjectTypeCreating::RootProject {
+            include_emscripten_support: generation_info.should_include_emscripten_support
+          },
           Some(_) => {
             exit_error_log(&format!(
               "Generating a root project inside another root project is forbidden. Try generating a subproject instead."

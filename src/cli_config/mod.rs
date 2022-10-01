@@ -13,7 +13,8 @@ pub struct CLIProjectGenerationInfo {
   pub language: Option<MainFileLanguage>,
   pub project_name: String,
   pub project_type: CLIProjectTypeGenerating,
-  pub project_output_type: Option<CreationProjectOutputType>
+  pub project_output_type: Option<CreationProjectOutputType>,
+  pub should_include_emscripten_support: bool
 }
 
 impl From<NewProjectSubcommand> for CLIProjectGenerationInfo {
@@ -29,7 +30,8 @@ impl From<NewProjectSubcommand> for CLIProjectGenerationInfo {
           project_name: project_info.new_project_name,
           language,
           project_type: CLIProjectTypeGenerating::RootProject,
-          project_output_type: convert_given_project_type(&project_info.project_type)
+          project_output_type: convert_given_project_type(&project_info.project_type),
+          should_include_emscripten_support: !project_info.no_emscripten
         }
       },
       NewProjectSubcommand::Subproject(subproject_info) => {
@@ -42,7 +44,9 @@ impl From<NewProjectSubcommand> for CLIProjectGenerationInfo {
           project_name: subproject_info.new_project_name,
           language,
           project_type: CLIProjectTypeGenerating::Subproject,
-          project_output_type: convert_given_project_type(&subproject_info.subproject_type)
+          project_output_type: convert_given_project_type(&subproject_info.subproject_type),
+          // This will be ignored for subprojects
+          should_include_emscripten_support: false
         }
       },
       NewProjectSubcommand::Test(test_project_info) =>  {
@@ -50,7 +54,9 @@ impl From<NewProjectSubcommand> for CLIProjectGenerationInfo {
           project_name: test_project_info.new_project_name,
           language: Some(MainFileLanguage::Cpp),
           project_type: CLIProjectTypeGenerating::Test,
-          project_output_type: Some(CreationProjectOutputType::Executable)
+          project_output_type: Some(CreationProjectOutputType::Executable),
+          // This will be ignored for test projects
+          should_include_emscripten_support: false
         }
       }
     }

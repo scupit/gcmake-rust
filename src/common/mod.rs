@@ -1,5 +1,3 @@
-use std::mem::replace;
-
 pub mod prompt;
 
 pub fn make_c_identifier(item: impl AsRef<str>) -> String {

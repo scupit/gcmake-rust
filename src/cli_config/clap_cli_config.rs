@@ -58,7 +58,7 @@ pub enum SubCommandStruct {
 pub enum NewProjectSubcommand {
   /// Generate a new toplevel project
   #[clap()]
-  RootProject(NewProjectCommand),
+  RootProject(NewRootProjectCommand),
 
   /// Generate a new subproject
   #[clap()]
@@ -72,7 +72,7 @@ pub enum NewProjectSubcommand {
 /// Generate a new toplevel project
 #[derive(Args)]
 #[clap(setting = AppSettings::ColoredHelp)]
-pub struct NewProjectCommand {
+pub struct NewRootProjectCommand {
   /// Project name, no whitespace
   #[clap(required = true)]
   pub new_project_name: String,
@@ -85,8 +85,13 @@ pub struct NewProjectCommand {
   #[clap(long)]
   pub cpp: bool,
 
+  // Specifies the initial project's output type (executable, shared library, etc.).
   #[clap(value_enum, short, long, name = "type")]
   pub project_type: Option<CLIProjectOutputTypeIn>,
+
+  // Omits Emscripten from the list of supported compilers
+  #[clap(long)]
+  pub no_emscripten: bool
 }
 
 /// Generate a new subproject

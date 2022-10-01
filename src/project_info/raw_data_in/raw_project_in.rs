@@ -1,12 +1,12 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, BTreeSet, BTreeMap};
 use enum_iterator::Sequence;
 use serde::{Serialize, Deserialize};
 
 use super::{dependencies::user_given_dep_config::{UserGivenPredefinedDependencyConfig}, project_common_types::{PredefinedDepMap, GCMakeDepMap}};
 
-pub type BuildTypeOptionMap = HashMap<BuildConfigCompilerSpecifier, RawBuildConfig>;
-pub type BuildConfigMap = HashMap<BuildType, BuildTypeOptionMap>;
-pub type TargetBuildConfigMap = HashMap<TargetSpecificBuildType, BuildTypeOptionMap>;
+pub type BuildTypeOptionMap = BTreeMap<BuildConfigCompilerSpecifier, RawBuildConfig>;
+pub type BuildConfigMap = BTreeMap<BuildType, BuildTypeOptionMap>;
+pub type TargetBuildConfigMap = BTreeMap<TargetSpecificBuildType, BuildTypeOptionMap>;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(deny_unknown_fields)]
@@ -72,6 +72,7 @@ pub enum DefaultCompiledLibType {
 pub struct RawGlobalPropertyConfig {
   pub ipo_enabled_by_default: Option<bool>,
   pub default_compiled_lib_type: Option<DefaultCompiledLibType>
+  // TODO: Add option for setting default Emscripten mode.
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -87,7 +88,7 @@ pub struct RawProject {
   pub default_build_type: BuildType,
   pub languages: LanguageConfigMap,
   pub prebuild_config: Option<PreBuildConfigIn>,
-  pub supported_compilers: HashSet<SpecificCompilerSpecifier>,
+  pub supported_compilers: BTreeSet<SpecificCompilerSpecifier>,
   pub test_framework: Option<RawTestFramework>,
   pub output: HashMap<String, RawCompiledItem>,
   pub global_defines: Option<Vec<String>>,
@@ -179,13 +180,13 @@ impl BuildType {
   }
 }
 
-#[derive(Serialize, Deserialize, Debug, Eq, PartialEq, Hash, Clone)]
+#[derive(Serialize, Deserialize, Debug, Eq, PartialEq, Hash, Clone, PartialOrd, Ord)]
 #[serde(deny_unknown_fields)]
 pub enum BuildConfigCompilerSpecifier {
   AllCompilers,
   GCC,
-  MSVC,
   Clang,
+  MSVC,
   Emscripten
 }
 
@@ -237,8 +238,8 @@ impl OutputItemType {
 #[serde(deny_unknown_fields)]
 pub enum SpecificCompilerSpecifier {
   GCC,
-  MSVC,
   Clang,
+  MSVC,
   Emscripten
 }
 
@@ -253,7 +254,7 @@ impl SpecificCompilerSpecifier {
   }
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, Hash, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Debug, Clone, Hash, PartialEq, Eq, Ord, PartialOrd)]
 pub enum TargetSpecificBuildType {
   AllConfigs,
   Debug,
@@ -318,8 +319,8 @@ pub struct RawCompiledItem {
   pub output_type: OutputItemType,
   pub entry_file: String,
   pub windows_icon: Option<String>,
-  pub link: Option<LinkSection>,
-  pub build_config: Option<TargetBuildConfigMap>
+  pub build_config: Option<TargetBuildConfigMap>,
+  pub link: Option<LinkSection>
 }
 
 impl RawCompiledItem {

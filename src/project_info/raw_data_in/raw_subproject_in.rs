@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, BTreeSet, BTreeMap};
 use serde::{Serialize, Deserialize};
 
 use super::{raw_project_in::{RawCompiledItem, RawProject, BuildType}, PreBuildConfigIn, SingleLanguageConfig, LanguageConfigMap};
@@ -51,12 +51,12 @@ impl Into<RawProject> for RawSubproject {
       // Placeholder, no meaning
       test_framework: None,
       // Placeholder, no meaning
-      supported_compilers: HashSet::new(),
+      supported_compilers: BTreeSet::new(),
       // Placeholder, no meaning
       default_build_type: BuildType::Debug,
       prebuild_config: self.prebuild_config,
       // Build configs are also inherited from the parent project.
-      build_configs: HashMap::new(),
+      build_configs: BTreeMap::new(),
       // Placeholder, no meaning
       global_defines: None,
       global_properties: None,

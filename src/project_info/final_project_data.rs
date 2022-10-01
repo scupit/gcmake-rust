@@ -1,4 +1,4 @@
-use std::{collections::{HashMap, HashSet}, path::{Path, PathBuf}, io, rc::Rc, fs::{self}};
+use std::{collections::{HashMap, HashSet}, path::{Path, PathBuf}, io, rc::Rc, fs::{self}, iter::FromIterator};
 
 use crate::project_info::path_manipulation::cleaned_pathbuf;
 
@@ -302,7 +302,7 @@ impl FinalProjectData {
           make_final_build_config_map(&raw_project.build_configs)
             .map_err(ProjectLoadFailureReason::Other)?
         );
-        supported_compiler_set = Rc::new(raw_project.supported_compilers.clone());
+        supported_compiler_set = Rc::new(HashSet::from_iter(raw_project.supported_compilers.clone()));
         full_namespaced_project_name = raw_project.name.clone();
         project_type = FinalProjectType::Root;
         final_test_framework = match &raw_project.test_framework {

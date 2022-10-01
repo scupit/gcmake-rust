@@ -9,7 +9,7 @@ use serde::Serialize;
 
 use std::{fs::{File, remove_dir_all, create_dir_all, self}, io::{self, ErrorKind}, path::{Path, PathBuf}};
 
-use crate::{program_actions::{ProjectTypeCreating, gcmake_config_root_dir}, common::prompt::{prompt_until_boolean, prompt_until_satisfies_or_default}, project_info::{base_include_prefix_for_test, gcmake_constants::{SRC_DIR, INCLUDE_DIR, TEMPLATE_IMPL_DIR, ASSETS_DIR, SUBPROJECTS_DIR, TESTS_DIR}, validators::{is_valid_project_name, is_valid_base_include_prefix}, FinalTestFramework}, project_generator::{project_generator_prompts::{prompt_for_project_output_type, prompt_for_language, prompt_for_vendor, prompt_for_description, prompt_for_needs_custom_main}, c_file_generation::generate_c_main, cpp_file_generation::{generate_cpp_main, TestMainInitInfo}}};
+use crate::{program_actions::{ProjectTypeCreating, gcmake_config_root_dir}, common::prompt::{prompt_until_boolean, prompt_until_satisfies_or_default}, project_info::{base_include_prefix_for_test, gcmake_constants::{SRC_DIR, INCLUDE_DIR, TEMPLATE_IMPL_DIR, ASSETS_DIR, SUBPROJECTS_DIR, TESTS_DIR}, validators::{is_valid_base_include_prefix}, FinalTestFramework}, project_generator::{project_generator_prompts::{prompt_for_project_output_type, prompt_for_language, prompt_for_vendor, prompt_for_description, prompt_for_needs_custom_main}, c_file_generation::generate_c_main, cpp_file_generation::{generate_cpp_main, TestMainInitInfo}}};
 use colored::*;
 
 pub struct GeneralNewProjectInfo {
@@ -77,7 +77,7 @@ pub fn create_project_at(
     )?;
 
     let folder_generation_include_prefix: String = match &project_type_creating {
-      ProjectTypeCreating::RootProject => include_prefix.clone(),
+      ProjectTypeCreating::RootProject { .. } => include_prefix.clone(),
       ProjectTypeCreating::Subproject { parent_project } => {
         parent_project.nested_include_prefix(&include_prefix)
       },
@@ -97,7 +97,7 @@ pub fn create_project_at(
     };
 
     let project_vendor: String = match &project_type_creating {
-      ProjectTypeCreating::RootProject => prompt_for_vendor()?,
+      ProjectTypeCreating::RootProject { .. } => prompt_for_vendor()?,
       _ => String::from("THIS IS IGNORED")
     };
     
@@ -214,7 +214,7 @@ pub fn create_project_at(
       ).cyan()
     );
 
-    if let ProjectTypeCreating::RootProject = &project_type_creating {
+    if let ProjectTypeCreating::RootProject { .. } = &project_type_creating {
       for default_file in [ ".clang-format", ".gitignore", ".clang-tidy" ] {
         println!("\nChecking for default {}...", default_file);
 
@@ -279,7 +279,7 @@ fn build_default_project_info(
   requires_custom_main: Option<bool>
 ) -> DefaultProjectInfo {
   match project_type_creating {
-    ProjectTypeCreating::RootProject => {
+    ProjectTypeCreating::RootProject { .. } => {
       DefaultProjectInfo::RootProject(
         get_default_project_config(
           project_name,

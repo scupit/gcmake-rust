@@ -27,6 +27,7 @@ impl SingleSystemSpec {
     return Self::from_str(spec_str).is_some();
   }
 
+  // TODO: Refactor these somehow
   fn from_str(spec_str: &str) -> Option<Self> {
     let valid_spec: Self = match spec_str {
       "android" => Self::Android,
