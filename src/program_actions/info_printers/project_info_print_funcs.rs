@@ -89,3 +89,27 @@ pub fn print_project_can_cross_compile(project_graph: &DependencyGraph) {
     println!(" (Can't accurately determine, since the project hasn't been downloaded yet)");
   }
 }
+
+pub fn print_project_supports_emscripten(project_graph: &DependencyGraph) {
+  let mut project_is_available: bool = true;
+
+  // TODO: Have a second bool (or maybe a list of projects) denoting which projects
+  // are not available.
+  let supports_emscripten: bool = match project_graph.project_wrapper() {
+    ProjectWrapper::GCMakeDependencyRoot(gcmake_dep) => {
+      project_is_available = gcmake_dep.is_available();
+      gcmake_dep.supports_emscripten()
+    },
+    ProjectWrapper::NormalProject(project_info) => project_info.supports_emscripten(),
+    ProjectWrapper::PredefinedDependency(predef_dep) => predef_dep.supports_emscripten()
+  };
+
+  print!("Supports Emscripten: {}", supports_emscripten);
+
+  if project_is_available {
+    println!();
+  }
+  else {
+    println!(" (Can't accurately determine, since the project hasn't been downloaded yet)");
+  }
+}

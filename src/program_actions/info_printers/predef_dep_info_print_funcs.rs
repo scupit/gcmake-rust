@@ -38,3 +38,7 @@ pub fn print_predep_github_url(common_info: &dyn RawPredepCommon) {
 pub fn print_predep_can_cross_compile(common_info: &dyn RawPredepCommon) {
   println!("Can trivially cross-compile: {}", common_info.can_trivially_cross_compile());
 }
+
+pub fn print_predep_supports_emscripten(common_info: &dyn RawPredepCommon) {
+  println!("Supports Emscripten: {}", common_info.supports_emscripten());
+}

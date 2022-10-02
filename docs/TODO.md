@@ -9,39 +9,17 @@ There are a whole bunch of things which need doing. This is the place to list th
 
 ## Priorities
 
-- [ ] Automatically include the export header in generated compiled library files.
-- [ ] Add a flag which prints whether a dependency or project can be trivially cross-compiled.
+- [ ] Add a flag which prints whether a project or dependency supports compilation with Emscripten.
 - [ ] Add CLI commands for cleaning and updating the dep-cache. Not exactly sure how updating should work yet.
 
 ## Configuration TODO
 
 ### General
 
-Add way to detect when this project is being built as a subproject.
-(Maybe `CMAKE_SOURCE_DIR` !== `CMAKE_CURRENT_SOURCE_DIR`)
-
 Support for:
 
-- Intel C/C++ compiler
+- Intel C/C++ compiler?
 - NVidia CUDA compiler?
-- Emscripten?
-
-- [ ] Add "library group" project type which allows building multiple libraries in the same
-project, organized as *components*. See [SFML](https://github.com/SFML/SFML) for a good example of this.
-
-### Quality of Life
-
-- [ ] Add color printing. This will make output so much nicer to read.
-
-### Compiler Cheat Sheet
-
-- [ ] It would be great to have a cheat sheet full of per-compiler details. For each compiler this project
-supports, the cheat sheet should detail:
-  - [ ] Common and useful compiler flags, with explanations
-  - [ ] Common and useful linker flags, if necessary
-  - [ ] Commonly used defines, with explanations
-  - [ ] An example list of flags for use as a starting point, per build configuration
-  - [ ] An example list of defines for use as a starting point, per build configuration
 
 ### CLI TODO
 
@@ -86,7 +64,6 @@ The command set for viewing project metadata.
 - [ ] CURL
 - [ ] Curses (ncurses)
 - [ ] Doxygen
-- [ ] FreeType
 - [x] GLEW
 - [ ] LibLZMA
 - [ ] OpenAL-soft
@@ -114,7 +91,6 @@ The command set for viewing project metadata.
 - [ ] [OpenCV](https://opencv.org/)
 - [ ] [ffmpeg](https://www.ffmpeg.org/)
 - [ ] [TensorFlow](https://www.tensorflow.org/)
-- [x] [imgui](https://github.com/ocornut/imgui)
 - [x] [GLM (OpenGL Mathematics)](https://github.com/g-truc/glm)
 - [x] [cxxopts](https://github.com/jarro2783/cxxopts)
 - [x] [CLI11](https://github.com/CLIUtils/CLI11)
@@ -123,6 +99,7 @@ The command set for viewing project metadata.
 - [ ] [mimalloc](https://github.com/microsoft/mimalloc)
 - [x] [magic_enum](https://github.com/Neargye/magic_enum)
 - [x] [argparse](https://github.com/p-ranav/argparse)
+- [x] [FreeType](https://freetype.org/index.html)
 
 #### Support when FetchContent ready
 
@@ -142,3 +119,4 @@ The command set for viewing project metadata.
 #### Other projects
 
 - [x] [stb](https://github.com/nothings/stb)
+- [x] [imgui](https://github.com/ocornut/imgui)

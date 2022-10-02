@@ -240,7 +240,11 @@ pub struct ProjectInfoCommand {
 
   /// Prints whether the project can be trivially cross compiled
   #[clap(short = 'c', long = "can-cross-compile")]
-  pub show_can_trivially_cross_compile: bool
+  pub show_can_trivially_cross_compile: bool,
+
+  /// Prints whether the project supports compilation with Emscripten
+  #[clap(long = "supports-emscripten")]
+  pub show_supports_emscripten: bool
 }
 
 #[derive(Args)]
@@ -266,7 +270,11 @@ pub struct PredepInfoCommand {
 
   /// Prints whether the dependency can be trivially cross-compiled
   #[clap(short = 'c', long = "can-cross-compile")]
-  pub show_can_trivially_cross_compile: bool
+  pub show_can_trivially_cross_compile: bool,
+
+  /// Prints whether the dependency supports can be compiled in a project which supports Emscripten
+  #[clap(long = "supports-emscripten")]
+  pub show_supports_emscripten: bool
 }
 
 #[derive(Args)]
