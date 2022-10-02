@@ -29,6 +29,9 @@ Test project prefix accumulation works almost the same as
 The difference is that we add an additional `TEST` part before the test project's include
 prefix in order to differentiate between test code and regular project code.
 
+This rule is also explained under the
+[include_prefix property](properties/properties_list.md#include-prefix-accumulation).
+
 For example, given a test project with include_prefix `MY_TEST_PREFIX` and its
 parent project (assume this parent is the root project) with include_prefix `PARENT_PREFIX`,
 the test project's full include prefix would be `PARENT_PREFIX/TEST/MY_TEST_PREFIX`. As a result, the

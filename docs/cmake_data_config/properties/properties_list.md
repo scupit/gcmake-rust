@@ -64,6 +64,13 @@ The include prefix directly affects the file inclusion path for a project. This 
 being included from. That being said, it's a good idea to **make the include prefix similar to**
 **the project name, so that developers can easily associate the include path with your project.**
 
+#### Include Prefix Accumulation
+
+[Subprojects](../subproject_config.md#include-prefix-accumulation) and
+[test projects](../test_project_config.md#include-prefix-accumulation) both have special
+rules for how their specified base include prefix (`include_prefix`) is integrated into the
+project, and how it affects directory structure.
+
 For example, a root project which specifies
 
 ``` yaml

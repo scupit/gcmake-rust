@@ -17,6 +17,9 @@ a subproject's full include prefix is equal to the *full*  include prefix
 of its parent project plus the given include_prefix.
 **This is recursively true for nested subprojects.**
 
+This rule is also explained under the
+[include_prefix property](properties/properties_list.md#include-prefix-accumulation).
+
 For example, given a subproject with include_prefix `SUB_PREFIX` and its
 parent project (assume this parent is the root project) with include_prefix `PARENT_PREFIX`,
 the subproject's full include prefix would be `PARENT_PREFIX/SUB_PREFIX`. As a result, the

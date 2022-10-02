@@ -23,6 +23,12 @@ configuration work together.
 7. [Compiler pitfalls](pitfall_list.md)
 8. [Project TODOs/Roadmap](TODO.md)
 
+## Points of Interest
+
+- [Compiling using Zig](compile_using_zig.md)
+- [Emscripten Usage and Caveats](./emscripten.md)
+- [Using CCache](./using_ccache.md)
+
 ## Important Concepts
 
 - ["Include prefix" accumulation](cmake_data_config/subproject_config.md#include-prefix-accumulation):
@@ -34,11 +40,6 @@ configuration work together.
 - [Non-GCMake dependency consumption](cmake_data_config/properties/properties_list.md#predefined_dependencies)
 - [Auto-generated export header](cmake_data_config/auto_generated_export_macro_header.md)
 - [Making use of pre-build scripts](pre_build_scripts.md)
-
-## Other Points of Interest
-
-- [Compiling using Zig](compile_using_zig.md)
-- [Emscripten Usage and Caveats](./emscripten.md)
 
 ## Quick Links
 
