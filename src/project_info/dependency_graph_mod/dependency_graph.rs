@@ -1,6 +1,6 @@
 use std::{cell::{RefCell}, rc::{Rc, Weak}, hash::{Hash, Hasher}, collections::{HashMap, HashSet, VecDeque}, borrow::Borrow, path::{Path, PathBuf}};
 
-use crate::{project_info::{LinkMode, CompiledOutputItem, PreBuildScript, OutputItemLinks, final_project_data::FinalProjectData, final_dependencies::{FinalGCMakeDependency, FinalPredefinedDependencyConfig, GCMakeDependencyStatus, FinalRequirementSpecifier}, LinkSpecifier, FinalProjectType, parsers::{link_spec_parser::{LinkAccessMode, LinkSpecTargetList, LinkSpecifierTarget}, system_spec::platform_spec_parser::SystemSpecifierWrapper}, raw_data_in::dependencies::internal_dep_config::raw_dep_common::RawEmscriptenConfig}, project_generator::configuration};
+use crate::{project_info::{LinkMode, CompiledOutputItem, PreBuildScript, OutputItemLinks, final_project_data::FinalProjectData, final_dependencies::{FinalGCMakeDependency, FinalPredefinedDependencyConfig, GCMakeDependencyStatus, FinalRequirementSpecifier, FinalTargetConfig, FinalExternalRequirementSpecifier}, LinkSpecifier, FinalProjectType, parsers::{link_spec_parser::{LinkAccessMode, LinkSpecTargetList, LinkSpecifierTarget}, system_spec::platform_spec_parser::SystemSpecifierWrapper}, raw_data_in::dependencies::internal_dep_config::raw_dep_common::RawEmscriptenConfig}, project_generator::configuration};
 
 use super::hash_wrapper::RcRefcHashWrapper;
 use colored::*;
@@ -209,33 +209,67 @@ impl<'a> PartialEq for Link<'a> {
 
 impl<'a> Eq for Link<'a> { }
 
+#[derive(Clone)]
 pub enum ContainedItem<'a> {
   CompiledOutput(&'a CompiledOutputItem),
-  PredefinedLibrary(String),
+  PredefinedLibrary {
+    target_name: String,
+    external_requirements: Vec<FinalExternalRequirementSpecifier>
+  },
   PreBuild(&'a PreBuildScript)
+}
+
+// Target which might not have been imported into the project, but still needs to be referenced
+// in errors. For example, external_requirements of a predefined dependency's target might not
+// even be populated into the project at all even if the target is used, but we still need to know
+// which external_requirements the target would need to have. We can't just delete the requirement
+// even though the library isn't present.
+pub enum MaybePresentNonOwningTarget<'a> {
+  NotImported {
+    namespaced_yaml_name: String
+  },
+  Populated(Weak<RefCell<TargetNode<'a>>>)
 }
 
 // Weak references to existing nodes.
 enum NonOwningComplexTargetRequirement<'a> {
-  OneOf(Vec<Weak<RefCell<TargetNode<'a>>>>),
+  OneOf(Vec<MaybePresentNonOwningTarget<'a>>),
   ExclusiveFrom(Weak<RefCell<TargetNode<'a>>>)
+}
+
+pub enum MaybePresentOwningTarget<'a> {
+  NotImported {
+    namespaced_yaml_name: String
+  },
+  Populated(Rc<RefCell<TargetNode<'a>>>)
 }
 
 // Strong references to existing nodes.
 pub enum OwningComplexTargetRequirement<'a> {
-  OneOf(Vec<Rc<RefCell<TargetNode<'a>>>>),
+  OneOf(Vec<MaybePresentOwningTarget<'a>>),
   ExclusiveFrom(Rc<RefCell<TargetNode<'a>>>)
 }
 
 impl<'a> OwningComplexTargetRequirement<'a> {
+  fn make_owned_target_list(weak_target_list: &Vec<MaybePresentNonOwningTarget<'a>>) -> Vec<MaybePresentOwningTarget<'a>> {
+    return weak_target_list.iter()
+      .map(|non_owning_target| match non_owning_target {
+        MaybePresentNonOwningTarget::NotImported { namespaced_yaml_name } => {
+          MaybePresentOwningTarget::NotImported { namespaced_yaml_name: namespaced_yaml_name.clone() }
+        },
+        MaybePresentNonOwningTarget::Populated(weak_target) => {
+          MaybePresentOwningTarget::Populated(
+            Weak::upgrade(weak_target).unwrap()
+          )
+        }
+      })
+      .collect();
+  }
+
   fn new_from(weak_requirement: &NonOwningComplexTargetRequirement<'a>) -> Self {
     match weak_requirement {
       NonOwningComplexTargetRequirement::OneOf(weak_target_list) => {
-        Self::OneOf(
-          weak_target_list.iter()
-            .map(|weak_ref| Weak::upgrade(weak_ref).unwrap())
-            .collect()
-        )
+        Self::OneOf(Self::make_owned_target_list(weak_target_list))
       },
       NonOwningComplexTargetRequirement::ExclusiveFrom(target) => {
         Self::ExclusiveFrom(Weak::upgrade(target).unwrap())
@@ -314,7 +348,7 @@ impl<'a> TargetNode<'a> {
     let node_type: NodeType;
 
     match contained_item {
-      ContainedItem::PredefinedLibrary(_) => {
+      ContainedItem::PredefinedLibrary { .. } => {
         raw_link_specifiers = None;
         output_type = SimpleNodeOutputType::Library;
         node_type = NodeType::PredefinedLib;
@@ -914,7 +948,7 @@ impl<'a> DependencyGraph<'a> {
         let target: &TargetNode = &target_rc.as_ref().borrow();
 
         let maybe_windows_icon_relative_path: Option<&Path> = match &target.contained_item {
-          ContainedItem::PredefinedLibrary(_) => None,
+          ContainedItem::PredefinedLibrary { .. } => None,
           ContainedItem::PreBuild(pre_build) => match pre_build {
             PreBuildScript::Exe(pre_build_exe) => {
               pre_build_exe.windows_icon_relative_to_root_project.as_ref().map(Path::new)
@@ -1206,6 +1240,56 @@ impl<'a> DependencyGraph<'a> {
           message if this is not the case.
   */
   fn ensure_proper_predefined_dep_links(&self) -> Result<(), GraphLoadFailureReason<'a>> {
+    // "External requirements" for predefined dependencies must be loaded here because
+    // we know that all predefined dependencies used by the project have been loaded at this point.
+    for (_, predefined_dep) in &self.predefined_deps {
+      for (_, target_config) in predefined_dep.as_ref().borrow().targets.borrow().iter() {
+        let predep_target: &mut TargetNode = &mut target_config.as_ref().borrow_mut();
+
+        if let ContainedItem::PredefinedLibrary { external_requirements, .. } = predep_target.get_contained_item().clone() {
+          for external_requirement_spec in external_requirements {
+            match external_requirement_spec {
+              FinalExternalRequirementSpecifier::OneOf(link_spec_list) => {
+                let mut one_of_target_list: Vec<MaybePresentNonOwningTarget<'a>> = Vec::new();
+
+                for link_spec in link_spec_list {
+                  // Each of these link specifiers is guaranteed to have only a single non-nested namespace
+                  // and a single library name. The predefined dependency pointed to by the namespace is
+                  // guaranteed to exist, but NOT guaranteed to have been imported by the project. The
+                  // target name is also guaranteed to exist in that project, but as a result can only
+                  // be retrieved if that project has also been imported.
+                  let required_predep_name: &str = link_spec.get_namespace_queue().iter().nth(0).unwrap();
+                  let required_lib_name: &str = link_spec.get_target_list().iter().nth(0).unwrap().get_name();
+
+                  match self.predefined_deps.get(required_predep_name) {
+                    None => {
+                      one_of_target_list.push(MaybePresentNonOwningTarget::NotImported {
+                        namespaced_yaml_name: link_spec.original_spec_str().to_string()
+                      });
+                    },
+                    Some(required_predep_project) => {
+                      let matching_target = required_predep_project
+                        .as_ref().borrow()
+                        .get_target_in_current_namespace(required_lib_name)
+                        .unwrap();
+
+                      one_of_target_list.push(MaybePresentNonOwningTarget::Populated(
+                        Rc::downgrade(&matching_target)
+                      ));
+                    }
+                  }
+                }
+
+                predep_target.add_complex_requirement(
+                  NonOwningComplexTargetRequirement::OneOf(one_of_target_list)
+                );
+              }
+            }
+          }
+        }
+      }
+    }
+
     for (_, project_output_target_rc) in self.targets.borrow().iter() {
       let project_output_target: &mut TargetNode = &mut project_output_target_rc.as_ref().borrow_mut();
 
@@ -1325,9 +1409,12 @@ impl<'a> DependencyGraph<'a> {
             NonOwningComplexTargetRequirement::OneOf(target_list) => {
               let has_requirement_target: bool = target_list
                 .iter()
-                .any(|maybe_needed_target| {
-                  let id_searching: TargetId = Weak::upgrade(maybe_needed_target).unwrap().as_ref().borrow().unique_target_id();
-                  project_output_target.depends_on.contains_key(&id_searching)
+                .any(|maybe_populated_target| match maybe_populated_target {
+                  MaybePresentNonOwningTarget::NotImported { .. } => false,
+                  MaybePresentNonOwningTarget::Populated(maybe_needed_target) => {
+                    let id_searching: TargetId = Weak::upgrade(maybe_needed_target).unwrap().as_ref().borrow().unique_target_id();
+                    project_output_target.depends_on.contains_key(&id_searching)
+                  }
                 });
 
               if !has_requirement_target {
@@ -1791,7 +1878,10 @@ impl<'a> DependencyGraph<'a> {
           linkable_name,
           false,
           Weak::clone(&self.current_graph_ref),
-          ContainedItem::PredefinedLibrary(link_target_spec.get_name().to_string()),
+          ContainedItem::PredefinedLibrary {
+            target_name: link_target_spec.get_name().to_string(),
+            external_requirements: Vec::new()
+          },
           LinkAccessMode::UserFacing,
           true
         )));
@@ -2510,7 +2600,10 @@ impl<'a> DependencyGraph<'a> {
             predef_dep.get_yaml_namespaced_target_name(target_name).unwrap(),
             predef_dep.should_install_if_linked_to_output_library(),
             Rc::downgrade(&graph),
-            ContainedItem::PredefinedLibrary(target_name.clone()),
+            ContainedItem::PredefinedLibrary {
+              target_name: target_name.clone(),
+              external_requirements: target_config.external_requirements_set.clone()
+            },
             LinkAccessMode::UserFacing,
             true
           )))
@@ -2521,12 +2614,15 @@ impl<'a> DependencyGraph<'a> {
     for (target_name, target_rc) in &targets {
       let single_target: &mut TargetNode = &mut target_rc.as_ref().borrow_mut();
 
-      let requirement_specs_for_target = &predef_dep.get_target_config_map()
+      let final_target_config: &FinalTargetConfig = predef_dep.get_target_config_map()
         .get(target_name)
-        .unwrap()
-        .requirements_set;
+        .unwrap();
 
-      for requirement_spec in requirement_specs_for_target {
+      // NOTE: External requirements can't be loaded here because we can't guarantee that the needed
+      // dependencies have been loaded yet. We'll load the external requirements when ensuring
+      // links are correct, before cycle checking. That way we know that all dependencies the project
+      // uses have already been loaded.
+      for requirement_spec in &final_target_config.requirements_set {
         match requirement_spec {
           FinalRequirementSpecifier::Single(requirement_name) => {
             assert!(
@@ -2555,7 +2651,11 @@ impl<'a> DependencyGraph<'a> {
 
             single_target.add_complex_requirement(NonOwningComplexTargetRequirement::OneOf(
               req_names.iter()
-                .map(|lib_name| Rc::downgrade(targets.get(lib_name).unwrap()))
+                .map(|lib_name| 
+                  MaybePresentNonOwningTarget::Populated(
+                    Rc::downgrade(targets.get(lib_name).unwrap())
+                  )
+                )
                 .collect()
             ))
           },
@@ -2758,14 +2858,19 @@ fn make_dep_map<'a>(
         NonOwningComplexTargetRequirement::OneOf(maybe_dependency_list) => {
           // Specify each optional node as a dependency as well. This done so that requirement targets
           // show up in the inverse dep map, which is important for correct ordering.
-          for maybe_dependency in maybe_dependency_list {
-            let wrapped_maybe_dep: RcRefcHashWrapper<TargetNode> = RcRefcHashWrapper(Weak::upgrade(maybe_dependency).unwrap());
-            
-            if !visited_targets.contains(&wrapped_maybe_dep) && !unvisited_targets.contains(&wrapped_maybe_dep) {
-              unvisited_targets.push(wrapped_maybe_dep.clone());
-            }
+          for maybe_populated_dependency in maybe_dependency_list {
+            match maybe_populated_dependency {
+              MaybePresentNonOwningTarget::NotImported { .. } => (),
+              MaybePresentNonOwningTarget::Populated(maybe_used_dependency) => {
+                let wrapped_maybe_dep: RcRefcHashWrapper<TargetNode> = RcRefcHashWrapper(Weak::upgrade(maybe_used_dependency).unwrap());
+                
+                if !visited_targets.contains(&wrapped_maybe_dep) && !unvisited_targets.contains(&wrapped_maybe_dep) {
+                  unvisited_targets.push(wrapped_maybe_dep.clone());
+                }
 
-            entry.insert(wrapped_maybe_dep);
+                entry.insert(wrapped_maybe_dep);
+              }
+            }
           }
         }
       }

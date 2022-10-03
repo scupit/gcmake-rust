@@ -89,7 +89,7 @@ impl LinkSpecifier {
       .join("::");
   }
 
-  pub fn get_spec_string(&self) -> &str {
+  pub fn original_spec_str(&self) -> &str {
     &self.original_specifier_string
   }
 

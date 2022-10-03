@@ -1,6 +1,6 @@
 use std::{rc::Rc, cell::{RefCell, Ref}};
 
-use super::{final_project_data::{UseableFinalProjectDataGroup}, dependency_graph_mod::dependency_graph::{DependencyGraphInfoWrapper, DependencyGraph, GraphLoadFailureReason, TargetNode, OwningComplexTargetRequirement, DependencyGraphWarningMode, AdditionalConfigValidationFailureReason}, SystemSpecifierWrapper};
+use super::{final_project_data::{UseableFinalProjectDataGroup}, dependency_graph_mod::dependency_graph::{DependencyGraphInfoWrapper, DependencyGraph, GraphLoadFailureReason, TargetNode, OwningComplexTargetRequirement, DependencyGraphWarningMode, AdditionalConfigValidationFailureReason, MaybePresentOwningTarget}, SystemSpecifierWrapper};
 use colored::*;
 
 fn borrow_target<'a, 'b>(target_node: &'b Rc<RefCell<TargetNode<'a>>>) -> Ref<'b, TargetNode<'a>> {
@@ -27,7 +27,7 @@ pub fn load_graph(
 
         return wrap_error_msg(format!(
           "Link specifier '{}' from target '{}' in project '{}' points to an invalid or nonexistent project.",
-          link_spec.get_spec_string(),
+          link_spec.original_spec_str(),
           borrowed_target.get_name(),
           borrow_project(&project).project_debug_name()
         ));
@@ -37,7 +37,7 @@ pub fn load_graph(
 
         return wrap_error_msg(format!(
           "Link specifier '{}' from target '{}' in project '{}' tries to access nested namespaces in a dependency project, which is forbidden.",
-          link_spec.get_spec_string(),
+          link_spec.original_spec_str(),
           borrowed_target.get_name(),
           borrow_project(&project).project_debug_name()
         ));
@@ -49,7 +49,7 @@ pub fn load_graph(
           "Unable to find target '{}' in project '{}'.\n\tUsing link specifier '{}' from target '{}' in project '{}'.",
           name_searching,
           borrow_project(&looking_in_project).project_debug_name(),
-          link_spec.get_spec_string(),
+          link_spec.original_spec_str(),
           borrowed_target.get_name(),
           borrow_project(&target_container_project).project_debug_name()
         ));
@@ -95,7 +95,7 @@ pub fn load_graph(
       } => {
         return wrap_error_msg(format!(
           "Link specifier '{}' from target '{}' in project '{}' points points to a target '{}' which exists in project '{}', but cannot be linked to. The target is either an executable or an internally created target.",
-          link_spec.get_spec_string(),
+          link_spec.original_spec_str(),
           borrow_target(link_spec_container_target).get_name(),
           borrow_project(&link_spec_container_project).project_debug_name(),
           borrow_target(target).get_name(),
@@ -156,18 +156,21 @@ pub fn load_graph(
           OwningComplexTargetRequirement::OneOf(target_list) => {
             let target_list_str: String = target_list
               .iter()
-              .map(|needed_target|
-                borrow_target(needed_target)
-                  .get_yaml_namespaced_target_name()
-                  .to_string()
-              )
+              .map(|needed_target| match needed_target {
+                MaybePresentOwningTarget::NotImported { namespaced_yaml_name } => namespaced_yaml_name.to_string(),
+                MaybePresentOwningTarget::Populated(populated_target) => {
+                  borrow_target(populated_target)
+                    .get_yaml_namespaced_target_name()
+                    .to_string()
+                }
+              })
               .collect::<Vec<String>>()
-              .join(", ");
+              // .join(", ");
+              .join(" or ");
 
             format!(
-              "The target must link to one of: ({}) from '{}'",
-              target_list_str,
-              borrow_project(dependency_project).project_debug_name()
+              "The target must link to one of: ({})",
+              target_list_str
             )
           },
           OwningComplexTargetRequirement::ExclusiveFrom(excluded_target) => {
@@ -224,7 +227,7 @@ pub fn load_graph(
           Some(used_link_spec) => {
             format!(
               " using link spec '{}'",
-              used_link_spec.get_spec_string()
+              used_link_spec.original_spec_str()
             )
           }
         };

@@ -2,7 +2,9 @@ use std::collections::{HashMap, HashSet};
 use std::hash::Hash;
 use std::iter::FromIterator;
 
+use crate::project_info::LinkSpecifier;
 use crate::project_info::parsers::general_parser::ParseSuccess;
+use crate::project_info::parsers::link_spec_parser::LinkAccessMode;
 use crate::project_info::parsers::system_spec::platform_spec_parser::{SystemSpecifierWrapper, parse_leading_system_spec};
 use crate::project_info::raw_data_in::dependencies::internal_dep_config::raw_dep_common::RawPredepCommon;
 use crate::project_info::raw_data_in::dependencies::internal_dep_config::{RawPredefinedTargetMapIn, RawTargetConfig};
@@ -61,8 +63,14 @@ impl PartialEq for FinalRequirementSpecifier {
 impl Eq for FinalRequirementSpecifier { }
 
 #[derive(Clone)]
+pub enum FinalExternalRequirementSpecifier {
+  OneOf(Vec<LinkSpecifier>)
+}
+
+#[derive(Clone)]
 pub struct FinalTargetConfig {
   pub requirements_set: HashSet<FinalRequirementSpecifier>,
+  pub external_requirements_set: Vec<FinalExternalRequirementSpecifier>,
   pub system_spec_info: SystemSpecifierWrapper,
   pub cmakelists_name: String,
   pub cmake_yaml_name: String
@@ -110,9 +118,9 @@ pub fn make_final_target_config_map(
   for (target_name, (maybe_system_spec, raw_target_config)) in &raw_target_config_map_with_parsed_names {
     let mut requirements_set: HashSet<FinalRequirementSpecifier> = HashSet::new();
 
-    if let Some(interdependent_requirement_specifier) = &raw_target_config.requires {
-      for full_specifier in interdependent_requirement_specifier {
-        let given_lib_names = parse_specifier(full_specifier);
+    if let Some(interdependent_requirement_specifier_set) = &raw_target_config.requires {
+      for full_specifier in interdependent_requirement_specifier_set {
+        let given_lib_names = separate_alternate_requirement_spec(full_specifier);
 
         let maybe_err_msg: Option<String> = verify_requirement_spec(
           &given_lib_names,
@@ -135,10 +143,49 @@ pub fn make_final_target_config_map(
       }
     }
 
+    let mut external_requirements_set: Vec<FinalExternalRequirementSpecifier> = Vec::new();
+
+    if let Some(external_requirement_spec_set) = &raw_target_config.external_requires {
+      for full_specifier in external_requirement_spec_set {
+        let given_link_specs: Vec<LinkSpecifier> = separate_alternate_requirement_spec(full_specifier)
+          .iter()
+          .map(|link_spec_str| LinkSpecifier::parse_from(link_spec_str, LinkAccessMode::UserFacing))
+          .collect::<Result<_, String>>()?;
+
+        if given_link_specs.is_empty() {
+          return Err(format!(
+            "External requirement specifier \"{}\" must contain at least one link specifier, but contains none.",
+            full_specifier
+          ));
+        }
+
+        for link_spec in &given_link_specs {
+          if link_spec.get_target_list().len() > 1 {
+            return Err(format!(
+              "Each link specifier in a predefined dependency's 'external_requirements' must only contain one library, however the given specifier \"{}\" contains multiple. Specify that as a list of singles instead.",
+              link_spec.original_spec_str()
+            ));
+          }
+
+          if link_spec.get_namespace_queue().len() > 1 {
+            return Err(format!(
+              "Each link specifier in a predefined dependency's 'external_requirements' must not have nested namespaces, however the given specifier \"{}\" nests namespaces.",
+              link_spec.original_spec_str()
+            ));
+          }
+        }
+
+        // I can't check that the referenced library or target exist yet because we only have this
+        // dependency's info at this time. Those checks will be done by the dependency graph.
+        external_requirements_set.push(FinalExternalRequirementSpecifier::OneOf(given_link_specs));
+      }
+    }
+
     final_map.insert(
       target_name.to_string(),
       FinalTargetConfig {
         requirements_set,
+        external_requirements_set,
         cmake_yaml_name: target_name.to_string(),
         system_spec_info: maybe_system_spec.clone().unwrap_or_default(),
         cmakelists_name: match &raw_target_config.actual_target_name {
@@ -248,7 +295,7 @@ fn verify_exclusion_spec(
 }
 
 
-fn parse_specifier(spec_str: &str) -> HashSet<String> {
+fn separate_alternate_requirement_spec(spec_str: &str) -> HashSet<String> {
   // This is fine for now, but should be made more robust if the specifiers become more complicated.
   return spec_str.split(" or ")
     .map(|lib_name| lib_name.trim().to_string())

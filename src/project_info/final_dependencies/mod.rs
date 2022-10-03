@@ -5,15 +5,17 @@ mod final_predefined_cmake_module_dep;
 mod predep_module_common;
 mod final_target_map_common;
 
-use std::{rc::Rc};
+use std::{rc::Rc, collections::HashMap};
 
 use base64ct::{Base64Url, Encoding};
 pub use final_predefined_subdir_dep::*;
 pub use final_predefined_cmake_components_module_dep::*;
 pub use final_gcmake_project_dep::*;
 pub use final_predefined_cmake_module_dep::*;
-pub use final_target_map_common::FinalRequirementSpecifier;
+pub use final_target_map_common::{FinalRequirementSpecifier, FinalTargetConfig, FinalExternalRequirementSpecifier};
 pub use predep_module_common::PredefinedDepFunctionality;
+
+use crate::project_info::{platform_spec_parser::parse_leading_system_spec, parsers::general_parser::ParseSuccess};
 
 use self::{final_target_map_common::FinalTargetConfigMap};
 
@@ -64,6 +66,14 @@ impl FinalPredepInfo {
       Self::CMakeModule(module_dep) => module_dep.is_internally_supported_by_emscripten()
     }
   }
+
+  pub fn target_config_map(&self) -> &HashMap<String, FinalTargetConfig> {
+    match self {
+      Self::Subdirectory(subdir_dep) => subdir_dep.get_target_config_map(),
+      Self::CMakeComponentsModule(components_dep) => components_dep.get_target_config_map(),
+      Self::CMakeModule(module_dep) => module_dep.get_target_config_map()
+    }
+  }
 }
 
 #[derive(Clone)]
@@ -108,6 +118,68 @@ impl FinalPredefinedDependencyConfig {
         dep_name
       ))
     };
+
+    for (target_name, target_config) in predep_info.target_config_map() {
+      for external_requirement in &target_config.external_requirements_set {
+        match external_requirement {
+          FinalExternalRequirementSpecifier::OneOf(link_spec_list) => {
+            // Each link specifier here is guaranteed to only contain a single namespace and a single library.
+            for link_spec in link_spec_list {
+              assert!(
+                link_spec.get_target_list().len() == 1,
+                "An external link specifier should be guaranteed to only specify one library."
+              );
+
+              assert!(
+                link_spec.get_namespace_queue().len() == 1,
+                "An external link specifier should be guaranteed to have no nested namespaces."
+              );
+            
+              let the_namespace: &str = link_spec.get_namespace_queue().iter().nth(0).unwrap();
+              let required_lib_name: &str = link_spec.get_target_list().iter().nth(0).unwrap().get_name();
+
+              match all_raw_dep_configs.get(the_namespace) {
+                None => {
+                  return Err(format!(
+                    "The external dependency '{}' of target '{}' requires a library from predefined dependency '{}', however there is no predefined dependency named '{}'.",
+                    link_spec.original_spec_str(),
+                    target_name,
+                    the_namespace,
+                    the_namespace
+                  ));
+                },
+                Some(raw_predep_config) => {
+                  let mut has_matching_target_name: bool = false;
+
+                  for (unparsed_target_name, _) in raw_predep_config.dep_configs.get_common()?.raw_target_map_in() {
+                    let raw_target_name: &str = match parse_leading_system_spec(unparsed_target_name)? {
+                      None => unparsed_target_name,
+                      Some(ParseSuccess { value: _, rest }) => rest
+                    };
+
+                    if raw_target_name == required_lib_name {
+                      has_matching_target_name = true;
+                      break;
+                    }
+                  }
+
+                  if !has_matching_target_name {
+                    return Err(format!(
+                      "The external dependency '{}' of target '{}' requires a library from predefined dependency '{}', but '{}' doesn't have a target named '{}'",
+                      link_spec.original_spec_str(),
+                      target_name,
+                      the_namespace,
+                      the_namespace,
+                      required_lib_name
+                    ));
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
 
     let RawPredefinedDependencyInfo {
       pre_load,
