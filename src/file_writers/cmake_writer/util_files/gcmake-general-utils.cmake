@@ -216,7 +216,7 @@ function( initialize_build_tests_var )
   endif()
 endfunction()
 
-function( initialize_build_config_vars )
+macro( initialize_build_config_vars )
   set( ALL_CONFIGS_LOCAL_DEFINES )
 
   foreach( config_name IN ITEMS "Debug" "Release" "MinSizeRel" "RelWithDebInfo" )
@@ -231,13 +231,13 @@ function( initialize_build_config_vars )
 
     set( ${config_name}_LOCAL_DEFINES )
   endforeach()
-endfunction()
+endmacro()
 
-function( propagate_all_configs_local_defines )
+macro( propagate_all_configs_local_defines )
   foreach( config_name IN ITEMS "Debug" "Release" "MinSizeRel" "RelWithDebInfo" )
-    list( APPEND ${config_name}_LOCAL_DEFINES ${ALL_CONFIGS_LOCAL_DEFINES} )
+    list( APPEND ${config_name}_LOCAL_DEFINES "${ALL_CONFIGS_LOCAL_DEFINES}" )
   endforeach()
-endfunction()
+endmacro()
 
 macro( initialize_ipo_defaults
   ipo_on_by_default
