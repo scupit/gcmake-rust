@@ -4,16 +4,9 @@ use super::{CMakeModuleType, raw_target_config_common::RawPredefinedTargetMapIn,
 
 #[derive(Deserialize, Clone)]
 #[serde(deny_unknown_fields)]
-pub struct InstallationLinks {
-  pub prebuilt_downloads: Option<String>,
-  pub building: Option<String>
-}
-
-#[derive(Deserialize, Clone)]
-#[serde(deny_unknown_fields)]
 pub struct ComponentsFindModuleLinks {
+  pub gcmake_readme: String,
   pub cmake_find_module: String,
-  pub installation: Option<InstallationLinks>,
   pub components_doc: Option<String>
 }
 

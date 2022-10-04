@@ -15,6 +15,10 @@ pub struct PredefinedCMakeComponentsModuleDep {
 }
 
 impl PredefinedCMakeComponentsModuleDep {
+  pub fn get_gcmake_readme_link(&self) -> &str {
+    &self.raw_dep.links.gcmake_readme
+  }
+
   pub fn module_type(&self) -> &CMakeModuleType {
     &self.raw_dep.module_type
   }

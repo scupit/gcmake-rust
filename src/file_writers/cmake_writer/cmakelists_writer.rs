@@ -871,7 +871,7 @@ impl<'a> CMakeListsWriter<'a> {
     }
 
     writeln!(&self.cmakelists_file,
-      "{}find_package( {} {} REQUIRED )",
+      "{}find_package( {} {} )",
       indent,
       dep_name,
       search_type_spec
@@ -883,8 +883,11 @@ impl<'a> CMakeListsWriter<'a> {
       dep_info.found_varname(),
       indent,
       indent,
-      // TODO: Make a better error message. Include links to relevant pages if possible.
-      format!("Dependency '{}' was not found on the system. Please make sure the library is installed on the system.", dep_name),
+      format!(
+        "Dependency '{}' was not found on the system. See {} for installation instructions and common issues.",
+        dep_name,
+        dep_info.get_gcmake_readme_link()
+      ),
       indent
     )?;
 
@@ -907,7 +910,7 @@ impl<'a> CMakeListsWriter<'a> {
     };
 
     write!(&self.cmakelists_file,
-      "find_package( {} {} REQUIRED COMPONENTS ",
+      "find_package( {} {} COMPONENTS ",
       dep_name,
       search_type_spec
     )?;
@@ -924,10 +927,10 @@ impl<'a> CMakeListsWriter<'a> {
       .rev()
       .collect();
 
-    // TODO: I'm not sure if this is enforced. If it isn't, just don't write anythin for the unused library.
+    // TODO: I'm not sure if this is enforced. If it isn't, just don't write anything for the unused library.
     assert!(
       !needed_component_names.is_empty(),
-      "At least one component should be used from an imported compnent library"
+      "At least one component should be used from an imported component library"
     );
 
     for component_name in needed_component_names {
@@ -938,6 +941,16 @@ impl<'a> CMakeListsWriter<'a> {
     }
 
     writeln!(&self.cmakelists_file, ")\n")?;
+
+    writeln!(&self.cmakelists_file,
+      "if( NOT {} )\n\tmessage( FATAL_ERROR \"{}\")\nendif()",
+      dep_info.found_varname(),
+      format!(
+        "Dependency '{}' was not found on the system. See {} installation instructions and common issues.",
+        dep_name,
+        dep_info.get_gcmake_readme_link()
+      )
+    )?;
 
     Ok(())
   }

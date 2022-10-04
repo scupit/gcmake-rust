@@ -14,6 +14,10 @@ pub struct PredefinedCMakeModuleDep {
 }
 
 impl PredefinedCMakeModuleDep {
+  pub fn get_gcmake_readme_link(&self) -> &str {
+    &self.raw_dep.links.gcmake_readme
+  }
+
   pub fn get_target_config_map(&self) -> &FinalTargetConfigMap {
     &self.target_map
   }
