@@ -21,8 +21,8 @@ use self::{final_target_map_common::FinalTargetConfigMap};
 
 use super::raw_data_in::dependencies::{internal_dep_config::{AllRawPredefinedDependencies, RawPredefinedDependencyInfo, PredefinedCMakeDepHookFile, RawSubdirectoryDependency, raw_dep_common::RawEmscriptenConfig}, user_given_dep_config::UserGivenPredefinedDependencyConfig};
 
-pub fn encoded_repo_url(repo_url: &str) -> String{
-  return Base64Url::encode_string(repo_url.as_bytes());
+pub fn base64_encoded(some_url: &str) -> String{
+  return Base64Url::encode_string(some_url.as_bytes());
 }
 
 type HookScriptContainer = Option<Rc<PredefinedCMakeDepHookFile>>;

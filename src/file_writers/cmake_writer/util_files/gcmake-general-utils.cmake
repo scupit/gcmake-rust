@@ -219,7 +219,7 @@ endfunction()
 macro( initialize_build_config_vars )
   set( ALL_CONFIGS_LOCAL_DEFINES )
 
-  foreach( config_name IN ITEMS "Debug" "Release" "MinSizeRel" "RelWithDebInfo" )
+  foreach( config_name IN ITEMS "DEBUG" "RELEASE" "MINSIZEREL" "RELWITHDEBINFO" )
     set( ${config_name}_LOCAL_COMPILER_FLAGS ${GCMAKE_SANITIZER_FLAGS} ${GCMAKE_ADDITIONAL_COMPILER_FLAGS} )
 
     string( REPLACE ";" "," GCMAKE_ADDITIONAL_LINKER_FLAGS "${GCMAKE_ADDITIONAL_LINKER_FLAGS}" )
@@ -234,7 +234,7 @@ macro( initialize_build_config_vars )
 endmacro()
 
 macro( propagate_all_configs_local_defines )
-  foreach( config_name IN ITEMS "Debug" "Release" "MinSizeRel" "RelWithDebInfo" )
+  foreach( config_name IN ITEMS "DEBUG" "RELEASE" "MINSIZEREL" "RELWITHDEBINFO" )
     list( APPEND ${config_name}_LOCAL_DEFINES "${ALL_CONFIGS_LOCAL_DEFINES}" )
   endforeach()
 endmacro()

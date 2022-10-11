@@ -66,6 +66,30 @@ pub fn parse_whitespace<'a, E>(s: &'a str) -> ParseResult<'a, (), E> {
   }));
 }
 
+pub fn parse_letters<'a, E>(s: &'a str) -> ParseResult<'a, &'a str, E> {
+  for (index, some_char) in s.char_indices() {
+    match some_char {
+      'a'..='z' | 'A'..='Z' => continue,
+      _ => {
+        if index == 0 {
+          return Ok(None);
+        }
+        else {
+          return Ok(Some(ParseSuccess {
+            value: &s[..index],
+            rest: &s[index..]
+          }))
+        }
+      }
+    }
+  }
+
+  return Ok(Some(ParseSuccess {
+    value: s,
+    rest: ""
+  }));
+}
+
 pub fn parse_given_str<'a, E>(
   str_parsing_for: &'a str,
   s: &'a str
@@ -88,6 +112,59 @@ pub fn parse_given_str<'a, E>(
     value: str_parsing_for.clone(),
     rest: &s[str_parsing_for.len()..]
   }))
+}
+
+pub fn parse_next_char<'a, E>(s: &'a str) -> ParseResult<'a, char, E> {
+  if s.is_empty() {
+    return Ok(None);
+  }
+  else {
+    return Ok(Some(ParseSuccess {
+      value: s.chars().nth(0).unwrap(),
+      rest: &s[1..]
+    }))
+  }
+}
+
+pub fn parse_until_str<'a, E>(
+  stopper_str: &str,
+  s: &'a str
+) -> ParseResult<'a, &'a str, E> {
+  let mut offset: usize = 0;
+
+  while stopper_str.len() + offset <= s.len() {
+    if &s[offset..offset + stopper_str.len()] == stopper_str {
+      return Ok(Some(ParseSuccess {
+        value: &s[..offset],
+        rest: &s[offset..]
+      }));
+    }
+
+    offset += 1;
+  }
+
+  return Ok(None)
+}
+
+pub fn parse_digits<'a, E>(s: &'a str) -> ParseResult<'a, &'a str, E> {
+  let mut digit_count: usize = 0;
+
+  for maybe_digit in s.chars() {
+    match maybe_digit {
+      '0'..='9' => digit_count += 1,
+      _ => break
+    }
+  }
+
+  return if digit_count == 0 {
+    Ok(None)
+  }
+  else {
+    Ok(Some(ParseSuccess {
+      value: &s[..digit_count],
+      rest: &s[digit_count..]
+    }))
+  }
 }
 
 pub fn parse_given_str_after_whitespace<'a, E>(

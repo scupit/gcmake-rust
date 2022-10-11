@@ -9,6 +9,17 @@ pub fn cleaned_pathbuf(file_path: PathBuf) -> PathBuf {
   return PathBuf::from(replaced_path);
 }
 
+pub fn without_leading_dot(some_path_or_extension: impl AsRef<str>) -> String {
+  let the_str: &str = some_path_or_extension.as_ref();
+
+  return if the_str.starts_with('.') {
+    String::from(&the_str[1..])
+  }
+  else {
+    String::from(the_str)
+  }
+}
+
 pub fn relative_to_project_root(project_root: &str, file_path: PathBuf) -> String {
   let replacer: String = if project_root == "." {
     "./".to_owned()

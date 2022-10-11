@@ -36,7 +36,9 @@ pub fn print_immediate_subprojects(project_graph: &DependencyGraph) {
 fn extract_repo_url(project_graph: &DependencyGraph) -> Result<String, String> {
   return match project_graph.project_wrapper() {
     ProjectWrapper::PredefinedDependency(predef_def) => match predef_def.predefined_dep_info() {
-      FinalPredepInfo::Subdirectory(subdir_dep) => Ok(subdir_dep.repo_url().to_string()),
+      FinalPredepInfo::Subdirectory(subdir_dep) if subdir_dep.download_method().is_git() => {
+        Ok(subdir_dep.download_method().git_details().unwrap().repo_url.clone())
+      },
       _ => {
         Err(format!(
           "Repository information is not available for \"{}\" because it is retrieved from the system, not cloned as part of the build.",

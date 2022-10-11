@@ -20,6 +20,28 @@ pub struct RawSubdirDepGitRepoConfig {
   pub repo_url: String
 }
 
+#[derive(Deserialize, Clone)]
+#[serde(deny_unknown_fields)]
+pub struct RawExtensionsByPlatform {
+  pub windows: String,
+  pub unix: String
+}
+
+#[derive(Deserialize, Clone)]
+#[serde(deny_unknown_fields)]
+pub struct RawSubdirDepUrlDownloadConfig {
+  pub url_base: String,
+  pub version_transform: String,
+  pub extensions: RawExtensionsByPlatform
+}
+
+#[derive(Deserialize, Clone)]
+#[serde(deny_unknown_fields)]
+pub struct RawDownloadInfo {
+  pub git_method: Option<RawSubdirDepGitRepoConfig>,
+  pub url_method: Option<RawSubdirDepUrlDownloadConfig>
+}
+
 fn default_requires_custom_populate() -> bool { false }
 
 // A predefined dependency which exists within the project build tree.
@@ -36,7 +58,7 @@ pub struct RawSubdirectoryDependency {
   // of the project the 
   pub config_file_project_name: Option<String>,
   pub links: Option<RawSubdirDepLinks>,
-  pub git_repo: RawSubdirDepGitRepoConfig,
+  pub download_info: RawDownloadInfo,
   pub target_configs: RawPredefinedTargetMapIn,
   pub mutually_exclusive: Option<RawMutualExclusionSet>,
   pub emscripten_config: Option<RawEmscriptenConfig>,
@@ -53,6 +75,24 @@ pub struct RawSubdirectoryDependency {
   _can_cross_compile: bool
 }
 
+impl RawSubdirectoryDependency {
+  pub fn supports_git_download_method(&self) -> bool {
+    return self.download_info.git_method.is_some();
+  }
+
+  pub fn supports_url_download_method(&self) -> bool {
+    return self.download_info.url_method.is_some();
+  }
+
+  pub fn get_url_info(&self) -> Option<&RawSubdirDepUrlDownloadConfig> {
+    self.download_info.url_method.as_ref()
+  }
+
+  pub fn get_git_info(&self) -> Option<&RawSubdirDepGitRepoConfig> {
+    self.download_info.git_method.as_ref()
+  }
+}
+
 impl RawPredepCommon for RawSubdirectoryDependency {
   fn can_trivially_cross_compile(&self) -> bool {
     self._can_cross_compile
@@ -67,7 +107,10 @@ impl RawPredepCommon for RawSubdirectoryDependency {
   }
 
   fn repo_url(&self) -> Option<&str> {
-    Some(&self.git_repo.repo_url)
+    return match &self.download_info.git_method {
+      Some(RawSubdirDepGitRepoConfig { repo_url }) => Some(repo_url),
+      _ => None
+    }
   }
 
   fn github_url(&self) -> Option<&str> {

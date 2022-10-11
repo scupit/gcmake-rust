@@ -1,11 +1,33 @@
 use std::{collections::{HashMap, HashSet}, fs::File, io::{self, Write, ErrorKind}, path::{PathBuf, Path}, rc::Rc, cell::{RefCell, Ref}, borrow::Borrow};
 
-use crate::{project_info::{final_project_data::{FinalProjectData}, path_manipulation::{cleaned_path_str, relative_to_project_root}, final_dependencies::{GitRevisionSpecifier, PredefinedCMakeComponentsModuleDep, PredefinedSubdirDep, PredefinedCMakeModuleDep, FinalPredepInfo, GCMakeDependencyStatus, FinalPredefinedDependencyConfig, encoded_repo_url, PredefinedDepFunctionality}, raw_data_in::{BuildType, RawBuildConfig, BuildConfigCompilerSpecifier, SpecificCompilerSpecifier, OutputItemType, LanguageConfigMap, TargetSpecificBuildType, dependencies::internal_dep_config::{CMakeModuleType}, DefaultCompiledLibType}, FinalProjectType, CompiledOutputItem, PreBuildScript, LinkMode, FinalTestFramework, dependency_graph_mod::dependency_graph::{DependencyGraph, OrderedTargetInfo, ProjectWrapper, TargetNode, SimpleNodeOutputType, Link, EmscriptenLinkFlagInfo}, SystemSpecifierWrapper, SingleSystemSpec, CompilerDefine, FinalBuildConfig, CompilerFlag, LinkerFlag, gcmake_constants::{SRC_DIR, INCLUDE_DIR, TEMPLATE_IMPL_DIR}, platform_spec_parser::parse_leading_system_spec}, file_writers::cmake_writer::cmake_writer_helpers::system_constraint_expression};
+use crate::{project_info::{final_project_data::{FinalProjectData}, path_manipulation::{cleaned_path_str, relative_to_project_root}, final_dependencies::{GitRevisionSpecifier, PredefinedCMakeComponentsModuleDep, PredefinedSubdirDep, PredefinedCMakeModuleDep, FinalPredepInfo, GCMakeDependencyStatus, FinalPredefinedDependencyConfig, base64_encoded, PredefinedDepFunctionality, FinalDownloadMethod}, raw_data_in::{BuildType, RawBuildConfig, BuildConfigCompilerSpecifier, SpecificCompilerSpecifier, OutputItemType, LanguageConfigMap, TargetSpecificBuildType, dependencies::internal_dep_config::{CMakeModuleType}, DefaultCompiledLibType}, FinalProjectType, CompiledOutputItem, PreBuildScript, LinkMode, FinalTestFramework, dependency_graph_mod::dependency_graph::{DependencyGraph, OrderedTargetInfo, ProjectWrapper, TargetNode, SimpleNodeOutputType, Link, EmscriptenLinkFlagInfo}, SystemSpecifierWrapper, SingleSystemSpec, CompilerDefine, FinalBuildConfig, CompilerFlag, LinkerFlag, gcmake_constants::{SRC_DIR, INCLUDE_DIR, TEMPLATE_IMPL_DIR}, platform_spec_parser::parse_leading_system_spec}, file_writers::cmake_writer::cmake_writer_helpers::system_constraint_expression};
 
 use super::cmake_utils_writer::{CMakeUtilFile, CMakeUtilWriter};
 
 const RUNTIME_BUILD_DIR_VAR: &'static str = "${MY_RUNTIME_OUTPUT_DIR}";
 const LIB_BUILD_DIR_VAR: &'static str = "${MY_LIBRARY_OUTPUT_DIR}";
+
+enum DownloadMethodInfo {
+  GitMethod {
+    repo_url: String,
+    revision: GitRevisionSpecifier
+  },
+  UrlMethod {
+    windows_url: String,
+    unix_url: String
+  }
+}
+
+enum FullCMakeDownloadMethodInfo {
+  GitMethod {
+    repo_url: String,
+    revision_spec_str: String
+  },
+  UrlMethod {
+    windows_url: String,
+    unix_url: String
+  }
+}
 
 pub fn configure_cmake_helper<'a>(
   dep_graph: &Rc<RefCell<DependencyGraph<'a>>>,
@@ -958,46 +980,116 @@ impl<'a> CMakeListsWriter<'a> {
   fn write_dep_clone_code(
     &self,
     dep_name: &str,
-    uses_emscripten_link_flag: bool,
-    git_revison: &GitRevisionSpecifier,
-    repo_url: &str,
+    is_internally_supported_by_emscripten: bool,
+    download_method: DownloadMethodInfo,
     is_auto_fetchcontent_ready: bool
   ) -> io::Result<()> {
-    let git_revision_spec: String = match git_revison {
-      GitRevisionSpecifier::Tag(tag_string) => {
-        format!("\tGIT_TAG {}", tag_string)
+    let download_method_name: &str = match &download_method {
+      DownloadMethodInfo::GitMethod { .. } => "git",
+      DownloadMethodInfo::UrlMethod { .. } => "url",
+    };
+
+    let cached_dep_name: String = format!("_gcmake_cached_{}_{}_mode", dep_name, download_method_name);
+    let download_url_var: String = format!("{}_DOWNLOAD_URL", dep_name);
+
+    let hashed_cache_dep_dir: String = match &download_method {
+      DownloadMethodInfo::GitMethod { repo_url, .. } => {
+        format!("git_repo/{}", base64_encoded(repo_url))
       },
-      GitRevisionSpecifier::CommitHash(hash_string) => {
-        format!("\tGIT_TAG {}", hash_string)
+      DownloadMethodInfo::UrlMethod { windows_url, unix_url } => {
+        let cached_location_var: String = format!("{}_CACHE_DESTINATION_DIR", dep_name);
+
+        writeln!(&self.cmakelists_file,
+          "if( CURRENT_SYSTEM_IS_WINDOWS )"
+        )?;
+
+        self.set_basic_var(
+          "\t",
+          &download_url_var,
+          &format!("\"{}\"", windows_url)
+        )?;
+
+        self.set_basic_var(
+          "\t",
+          &cached_location_var,
+          &format!("\"archive_file/{}\"", base64_encoded(windows_url))
+        )?;
+
+        writeln!(&self.cmakelists_file, "else()")?;
+
+        self.set_basic_var(
+          "\t",
+          &download_url_var,
+          &format!("\"{}\"", unix_url)
+        )?;
+
+        self.set_basic_var(
+          "\t",
+          &cached_location_var,
+          &format!("\"archive_file/{}\"", base64_encoded(unix_url))
+        )?;
+
+        writeln!(&self.cmakelists_file, "endif()")?;
+
+        format!("${{{}}}", cached_location_var)
       }
     };
 
-    let hashed_cache_dep_dir: String = format!("{}/{}", dep_name, encoded_repo_url(repo_url));
+    let destination_cache_dir: String = format!("${{GCMAKE_DEP_CACHE_DIR}}/{}/{}", dep_name, hashed_cache_dep_dir);
+    let temp_url_download_dir: String = format!("${{GCMAKE_DEP_CACHE_DIR}}/{}/temp_url_download", dep_name);
+
+    let full_download_info: FullCMakeDownloadMethodInfo = match download_method {
+      DownloadMethodInfo::GitMethod { repo_url, revision } => FullCMakeDownloadMethodInfo::GitMethod {
+        repo_url,
+        revision_spec_str: match revision {
+          GitRevisionSpecifier::CommitHash(commit_hash) => format!("GIT_TAG \"{}\"", commit_hash),
+          GitRevisionSpecifier::Tag(tag) => format!("GIT_TAG \"{}\"", tag)
+        }
+      },
+      DownloadMethodInfo::UrlMethod { windows_url, unix_url } => FullCMakeDownloadMethodInfo::UrlMethod {
+        windows_url,
+        unix_url
+      }
+    };
 
     writeln!(&self.cmakelists_file,
-      "if( NOT IS_DIRECTORY \"${{GCMAKE_DEP_CACHE_DIR}}/{}\" )",
-      hashed_cache_dep_dir
-    )?;
-    writeln!(&self.cmakelists_file,
-      "\tFetchContent_Declare(\n\t\tgcmake_cached_{}\n\t\tSOURCE_DIR \"${{GCMAKE_DEP_CACHE_DIR}}/{}\"\n\t\tGIT_REPOSITORY {}\n\t\t{}\n\t\tGIT_PROGRESS TRUE\n\t\tGIT_SHALLOW FALSE\n\t\tGIT_SUBMODULES_RECURSE TRUE\n\t)",
-      dep_name,
-      hashed_cache_dep_dir,
-      repo_url,
-      git_revision_spec
+      "if( NOT IS_DIRECTORY \"{}\" )",
+      destination_cache_dir
     )?;
 
-    if uses_emscripten_link_flag {
+    match &full_download_info {
+      FullCMakeDownloadMethodInfo::GitMethod { repo_url, revision_spec_str, .. } => {
+        writeln!(&self.cmakelists_file,
+          "\tFetchContent_Declare(\n\t\t{}\n\t\tSOURCE_DIR \"{}\"\n\t\tGIT_REPOSITORY \"{}\"\n\t\t{}\n\t\tGIT_PROGRESS TRUE\n\t\tGIT_SHALLOW FALSE\n\t\tGIT_SUBMODULES_RECURSE TRUE\n\t)",
+          cached_dep_name,
+          destination_cache_dir,
+          repo_url,
+          revision_spec_str
+        )?;
+      },
+      FullCMakeDownloadMethodInfo::UrlMethod { .. } => {
+        writeln!(&self.cmakelists_file,
+          "\tFetchContent_Declare(\n\t\t{}\n\t\tSOURCE_DIR \"{}\"\n\t\tDOWNLOAD_DIR \"{}\"\n\t\tURL \"${{{}}}\"\n\t)",
+          cached_dep_name,
+          destination_cache_dir,
+          temp_url_download_dir,
+          download_url_var
+        )?;
+      }
+    }
+
+    if is_internally_supported_by_emscripten {
       write!(&self.cmakelists_file,
         "\tif( NOT USING_EMSCRIPTEN )\n\t"
       )?;
     }
 
     writeln!(&self.cmakelists_file,
-      "\tappend_to_uncached_dep_list( gcmake_cached_{} )",
-      dep_name
+      "\tappend_to_uncached_dep_list( {} )",
+      cached_dep_name
     )?;
 
-    if uses_emscripten_link_flag {
+    if is_internally_supported_by_emscripten {
       writeln!(&self.cmakelists_file,
         "\tendif()"
       )?;
@@ -1006,16 +1098,33 @@ impl<'a> CMakeListsWriter<'a> {
     writeln!(&self.cmakelists_file, "endif()")?;
     self.write_newline()?;
 
-    writeln!(&self.cmakelists_file,
-      "FetchContent_Declare(\n\t{}\n\tSOURCE_DIR ${{CMAKE_CURRENT_SOURCE_DIR}}/dep/{}\n\tGIT_REPOSITORY \"${{GCMAKE_DEP_CACHE_DIR}}/{}\"\n\t{}\n\tGIT_PROGRESS TRUE\n\tGIT_SUBMODULES_RECURSE TRUE\n)",
-      dep_name,
-      dep_name,
-      hashed_cache_dep_dir,
-      git_revision_spec
-    )?;
+    match &full_download_info {
+      FullCMakeDownloadMethodInfo::GitMethod { revision_spec_str, .. } => {
+        writeln!(&self.cmakelists_file,
+          "FetchContent_Declare(\n\t{}\n\tSOURCE_DIR \"${{CMAKE_CURRENT_SOURCE_DIR}}/dep/{}\"\n\tGIT_REPOSITORY \"{}\"\n\t{}\n\tGIT_PROGRESS TRUE\n\tGIT_SUBMODULES_RECURSE TRUE\n)",
+          dep_name,
+          dep_name,
+          destination_cache_dir,
+          revision_spec_str
+        )?;
+      },
+      FullCMakeDownloadMethodInfo::UrlMethod { .. } => {
+        writeln!(&self.cmakelists_file,
+          "cmake_path( GET {} FILENAME the_archive_file )",
+          download_url_var
+        )?;
+
+        writeln!(&self.cmakelists_file,
+          "FetchContent_Declare(\n\t{}\n\tSOURCE_DIR \"${{CMAKE_CURRENT_SOURCE_DIR}}/dep/{}\"\n\tURL \"{}/${{the_archive_file}}\"\n)",
+          dep_name,
+          dep_name,
+          temp_url_download_dir
+        )?;
+      }
+    }
 
     if is_auto_fetchcontent_ready {
-      if uses_emscripten_link_flag {
+      if is_internally_supported_by_emscripten {
         write!(&self.cmakelists_file,
           "if( NOT USING_EMSCRIPTEN )\n\t"
         )?;
@@ -1026,7 +1135,7 @@ impl<'a> CMakeListsWriter<'a> {
         dep_name
       )?;
 
-      if uses_emscripten_link_flag {
+      if is_internally_supported_by_emscripten {
         writeln!(&self.cmakelists_file,
           "endif()"
         )?;
@@ -1099,11 +1208,21 @@ impl<'a> CMakeListsWriter<'a> {
       )?;
     }
 
+    let download_method: DownloadMethodInfo = match dep_info.download_method() {
+      FinalDownloadMethod::GitMode(git_info) => DownloadMethodInfo::GitMethod {
+        repo_url: git_info.repo_url.clone(),
+        revision: git_info.revision_specifier.clone()
+      },
+      FinalDownloadMethod::UrlMode(url_info) => DownloadMethodInfo::UrlMethod {
+        windows_url: url_info.windows_url(),
+        unix_url: url_info.unix_url()
+      }
+    };
+
     self.write_dep_clone_code(
       dep_name,
-      dep_info.uses_emscripten_link_flag(),
-      dep_info.revision(),
-      dep_info.repo_url(),
+      dep_info.is_internally_supported_by_emscripten(),
+      download_method,
       is_auto_fetchcontent_ready
     )?;
     Ok(())
@@ -1122,8 +1241,11 @@ impl<'a> CMakeListsWriter<'a> {
         // GCMake projects just link using their targets as usual, since Emscripten
         // doesn't explicitly specify support for projects we just made ourselves. Makes sense.
         false,
-        dep_info.revision(),
-        dep_info.repo_url(),
+        // GCMake projects currently only support downloading each other using the Git method.
+        DownloadMethodInfo::GitMethod {
+          repo_url: dep_info.repo_url().to_string(),
+          revision: dep_info.revision().clone(),
+        },
         true // All GCMake projects are FetchContent-ready.
       )?;
     }
@@ -1141,6 +1263,13 @@ impl<'a> CMakeListsWriter<'a> {
     for (dep_name, combined_dep_info) in self.project_data.get_predefined_dependencies() {
       if let FinalPredepInfo::Subdirectory(dep_info) = combined_dep_info.predefined_dep_info() {
         if dep_info.requires_custom_fetchcontent_populate() {
+          let is_dep_internally_supported_by_emscripten: bool = dep_info.is_internally_supported_by_emscripten();
+          if is_dep_internally_supported_by_emscripten {
+            writeln!(&self.cmakelists_file,
+              "if( NOT USING_EMSCRIPTEN )"
+            )?;
+          }
+
           writeln!(&self.cmakelists_file,
             "\nFetchContent_GetProperties( {} )",
             dep_name
@@ -1163,6 +1292,10 @@ impl<'a> CMakeListsWriter<'a> {
           }
 
           writeln!(&self.cmakelists_file, "endif()")?;
+
+          if is_dep_internally_supported_by_emscripten {
+            writeln!(&self.cmakelists_file, "endif()")?;
+          }
         }
       }
 
