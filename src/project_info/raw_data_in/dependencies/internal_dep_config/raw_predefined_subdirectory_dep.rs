@@ -76,14 +76,6 @@ pub struct RawSubdirectoryDependency {
 }
 
 impl RawSubdirectoryDependency {
-  pub fn supports_git_download_method(&self) -> bool {
-    return self.download_info.git_method.is_some();
-  }
-
-  pub fn supports_url_download_method(&self) -> bool {
-    return self.download_info.url_method.is_some();
-  }
-
   pub fn get_url_info(&self) -> Option<&RawSubdirDepUrlDownloadConfig> {
     self.download_info.url_method.as_ref()
   }
@@ -137,5 +129,13 @@ impl RawPredepCommon for RawSubdirectoryDependency {
         _ => false
       }
     }
+  }
+
+  fn supports_git_download_method(&self) -> bool {
+    return self.download_info.git_method.is_some();
+  }
+
+  fn supports_url_download_method(&self) -> bool {
+    return self.download_info.url_method.is_some();
   }
 }

@@ -67,4 +67,12 @@ impl RawPredepCommon for RawComponentsModuleDep {
   fn is_internally_supported_by_emscripten(&self) -> bool {
     false
   }
+
+  fn supports_git_download_method(&self) -> bool {
+    false
+  }
+
+  fn supports_url_download_method(&self) -> bool {
+    false
+  }
 }

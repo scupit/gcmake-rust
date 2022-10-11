@@ -18,4 +18,7 @@ pub trait RawPredepCommon {
   fn get_emscripten_config(&self) -> Option<&RawEmscriptenConfig>;
   fn supports_emscripten(&self) -> bool;
   fn is_internally_supported_by_emscripten(&self) -> bool;
+
+  fn supports_url_download_method(&self) -> bool;
+  fn supports_git_download_method(&self) -> bool;
 }

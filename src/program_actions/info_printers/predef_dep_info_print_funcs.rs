@@ -42,3 +42,28 @@ pub fn print_predep_can_cross_compile(common_info: &dyn RawPredepCommon) {
 pub fn print_predep_supports_emscripten(common_info: &dyn RawPredepCommon) {
   println!("Supports Emscripten: {}", common_info.supports_emscripten());
 }
+
+pub fn print_predep_supported_download_methods(common_info: &dyn RawPredepCommon) {
+  let mut supported_download_methods: Vec<&str> = Vec::new();
+
+  if common_info.supports_git_download_method() {
+    supported_download_methods.push("Git");
+  }
+
+  if common_info.supports_url_download_method() {
+    supported_download_methods.push("Archive (from URL)");
+  }
+
+  if supported_download_methods.is_empty() {
+    println!("Doesn't support any download methods.");
+  }
+  else {
+    println!("Supported download methods:");
+    for download_method in supported_download_methods {
+      println!(
+        "  - {}",
+        download_method.cyan()
+      );
+    }
+  }
+}

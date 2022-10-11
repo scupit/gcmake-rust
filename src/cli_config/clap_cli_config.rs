@@ -272,9 +272,13 @@ pub struct PredepInfoCommand {
   #[clap(short = 'c', long = "can-cross-compile")]
   pub show_can_trivially_cross_compile: bool,
 
+  /// Show which download methods the dependency supports, if applicable
+  #[clap(short = 'd', long = "download-methods")]
+  pub show_supported_download_methods: bool,
+
   /// Prints whether the dependency supports can be compiled in a project which supports Emscripten
   #[clap(long = "supports-emscripten")]
-  pub show_supports_emscripten: bool
+  pub show_supports_emscripten: bool,
 }
 
 #[derive(Args)]

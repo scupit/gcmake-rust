@@ -66,4 +66,12 @@ impl RawPredepCommon for RawModuleDep {
       }
     }
   }
+
+  fn supports_git_download_method(&self) -> bool {
+    false
+  }
+
+  fn supports_url_download_method(&self) -> bool {
+    false
+  }
 }

@@ -279,7 +279,7 @@ In the map, each dependency name must have a matching configuration directory in
 
 | Dependency type | Example | Description |
 | --------------- | ------- | ----------- |
-| CMake Subdirectory | [SFML](/gcmake-dependency-configs/SFML/) | Will be cloned using Git into `YOUR_PROJECT_ROOT/dep` and built as a subdirectory of the project. |
+| CMake Subdirectory | [SFML](/gcmake-dependency-configs/SFML/) | The dependency will be copied into `YOUR_PROJECT_ROOT/dep/DEP_NAME` and built as a subdirectory of your project. The download step will be done using either Git or HTTPS, depending on the [dependency configuration options](#subdirectory-dependency-configuration-options) specified. |
 | CMake Installed Module | [SDL2](/gcmake-dependency-configs/SDL2/) | A CMake project which must be manually built and installed on the system manually before use. Internally, the project is located using CMake's [find_package](https://cmake.org/cmake/help/latest/command/find_package.html#id4) in *Config* mode. |
 | CMake Find Module | [OpenGL](/gcmake-dependency-configs/) | A library which is already installed on the system. These are usually system libraries. Currently, only a **subset of** [CMake Find Modules](https://cmake.org/cmake/help/latest/manual/cmake-modules.7.html#find-modules) are supported. In the future I'd like to be able to configure custom find modules as well, but that currently isn't supported. |
 | CMake Components Module | [wxWidgets](/gcmake-dependency-configs/wxWidgets/) | This is the same as the CMake Find Module dependency type, except that the internal CMake `find_package` call specifies `COMPONENTS`. |
@@ -295,6 +295,14 @@ predefined_dependencies:
     # git_tag: master
     git_tag: "2.5.1"
     # commit_hash: "2f11710abc5aa478503a7ff3f9e654bd2078ebab"
+  nlohmann_json:
+    # Downloads the source code as an archive (zip, tar.gz) using URL mode insted of Git.
+    # This is useful for large repositories such as nlohmann_json where the source code archive
+    # is much smaller than the repository with full git history.
+    file_version: v3.11.2
+  imgui:
+    git_tag: v1.88
+    # file_version: v1.88.0
   SDL2: { }
   OpenGL: { }
   wxWidgets: { }
@@ -302,11 +310,25 @@ predefined_dependencies:
 
 #### Subdirectory dependency configuration options
 
-| Option | Example value | Description |
-| ------ | ------------- | ----------- |
+Subdirectory dependencies can either be cloned as a Git repository, or downloaded as an archive file
+(zip, tar.gz, etc.) and unpacked. Specifying configuration options for a download mode will result in that
+download mode being used. **NOTE** that dependencies are not required to support any download methods.
+For a list of download methods available to a dependency, run `gcmake-rust predep-info -d the-dep-name`.
+For example, `gcmake-rust predep-info -d SFML nlohmann_json`
+
+> If any Git mode options are specified, then Git will be used to download the repository.
+
+| Git mode option | Example value | Description |
+| --------------- | ------------- | ----------- |
 | `git_tag` | `"2.5.1"` or `master` | The tag or branch to be checked out after the repo is cloned. This is essentially how the project "version" is specified. If this property is not specified, then `commit_hash` must be specified. |
 | `commit_hash` | `"2f11710abc5aa478503a7ff3f9e654bd2078ebab"` | The commit to be checked out after the repo is cloned. If this property is not specified, then `git_tag` must be specified. |
 | `repo_url` | `git@github.com:scupit/gcmake-rust.git` | **Optional** alternate repository URL. Each predefined subdirectory dependency already has a default git URL. This property just overrides it. |
+
+> If any URL mode options are specified, then the repository will be downloaded as an archive and unpacked.
+
+| URL mode option | Example value | Description |
+| --------------- | ------------- | ----------- |
+| `file_version` | `"2.5.1"` or `v2.5.1` | Specifies the version of the release archive file to be downloaded. **This must always be given as a three-part version, even if the repository itself doesn't use a three-part version.** The given version will be transformed behind the scenes into a valid URL pointing to an existing archive file. For example, use `1.88.0` or `v1.88.0` for the ImGUI *v1.88* release. |
 
 Any dependency added to the project can then be linked to any output or executable pre-build script
 throughout the entire project tree. See the [linking docs](../linking.md) for specifics.
