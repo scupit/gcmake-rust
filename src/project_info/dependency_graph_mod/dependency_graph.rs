@@ -590,6 +590,17 @@ impl ProjectWrapper {
     }
   }
 
+  pub fn contains_predef_dep(&self) -> bool {
+    self.maybe_predef_dep().is_some()
+  }
+
+  pub fn maybe_predef_dep(&self) -> Option<&Rc<FinalPredefinedDependencyConfig>> {
+    return match self {
+      Self::PredefinedDependency(predef_dep) => Some(predef_dep),
+      _ => None
+    }
+  }
+
   // pub fn contains_available_normal_project(&)
   pub fn unwrap_predef_dep(self) -> Rc<FinalPredefinedDependencyConfig> {
     return match self {

@@ -834,34 +834,40 @@ impl<'a> CMakeListsWriter<'a> {
   }
 
   fn write_predefined_dependencies(&self) -> io::Result<()> {
-    for (dep_name, predep_graph) in self.dep_graph_ref().get_predefined_dependencies() {
-      let dep_info: Rc<FinalPredefinedDependencyConfig> = predep_graph.as_ref().borrow().project_wrapper().clone().unwrap_predef_dep();
+    for wrapped_graph in &self.sorted_target_info.project_order {
+      let borrowed_graph = wrapped_graph.as_ref().borrow();
 
-      if let Some(pre_load) = dep_info.pre_load_script() {
-        writeln!(&self.cmakelists_file, "{}", pre_load.contents_ref())?;
-      }
+      if borrowed_graph.project_wrapper().contains_predef_dep() {
+        if let Some((dep_name, predep_graph)) = self.dep_graph_ref().get_predefined_dependencies().get_key_value(borrowed_graph.project_base_name()) {
+          let dep_info: Rc<FinalPredefinedDependencyConfig> = predep_graph.as_ref().borrow().project_wrapper().clone().unwrap_predef_dep();
 
-      match dep_info.predefined_dep_info() {
-        FinalPredepInfo::CMakeModule(find_module_dep) => {
-          self.write_predefined_cmake_module_dep(
-            dep_name,
-            predep_graph,
-            find_module_dep
-          )?;
-        },
-        FinalPredepInfo::CMakeComponentsModule(components_dep) => {
-          self.write_predefined_cmake_components_module_dep(
-            dep_name,
-            predep_graph,
-            components_dep
-          )?;
-        },
-        FinalPredepInfo::Subdirectory(subdir_dep) => {
-          self.write_predefined_subdirectory_dependency(
-            dep_name,
-            subdir_dep,
-            dep_info.is_auto_fetchcontent_ready()
-          )?;
+          if let Some(pre_load) = dep_info.pre_load_script() {
+            writeln!(&self.cmakelists_file, "{}", pre_load.contents_ref())?;
+          }
+
+          match dep_info.predefined_dep_info() {
+            FinalPredepInfo::CMakeModule(find_module_dep) => {
+              self.write_predefined_cmake_module_dep(
+                dep_name,
+                predep_graph,
+                find_module_dep
+              )?;
+            },
+            FinalPredepInfo::CMakeComponentsModule(components_dep) => {
+              self.write_predefined_cmake_components_module_dep(
+                dep_name,
+                predep_graph,
+                components_dep
+              )?;
+            },
+            FinalPredepInfo::Subdirectory(subdir_dep) => {
+              self.write_predefined_subdirectory_dependency(
+                dep_name,
+                subdir_dep,
+                dep_info.is_auto_fetchcontent_ready()
+              )?;
+            }
+          }
         }
       }
     }
