@@ -1,12 +1,32 @@
 pub mod internal_dep_config;
 pub mod user_given_dep_config;
 
-use std::{path::PathBuf, fs::{DirEntry, self}, rc::Rc};
+use std::{path::{PathBuf, Path}, fs::{DirEntry, self}, rc::Rc};
 
 use crate::program_actions::gcmake_dep_config_dir;
 
 use self::internal_dep_config::{AllRawPredefinedDependencies, SingleRawPredefinedDependencyConfigGroup, RawPredefinedDependencyInfo, PredefinedCMakeDepHookFile};
 use colored::*;
+
+fn load_hook_file(
+  entry_path: impl AsRef<Path>,
+  dep_dir_name: &str,
+  file_name: impl AsRef<str>
+) -> Result<Option<Rc<PredefinedCMakeDepHookFile>>, String> {
+  let file_name_str: &str = file_name.as_ref();
+
+  return Ok(
+    PredefinedCMakeDepHookFile::new(entry_path.as_ref().join(file_name_str))
+      .map_err(|err| format!(
+        "{} loading {} hook file for predefined dependency {}: {}",
+        "Error".red(),
+        file_name_str,
+        dep_dir_name,
+        err.to_string()
+      ))?
+      .map(|hook_file| Rc::new(hook_file))
+  );
+}
 
 pub fn all_raw_supported_dependency_configs() -> Result<AllRawPredefinedDependencies, String> {
   /*
@@ -65,31 +85,14 @@ pub fn all_raw_supported_dependency_configs() -> Result<AllRawPredefinedDependen
 
       let dep_config_container = RawPredefinedDependencyInfo {
         dep_configs,
-        // TODO: Refactor this
-        pre_load: PredefinedCMakeDepHookFile::new(entry_path.join("pre_load.cmake"))
-          .map_err(|err| format!(
-            "{} loading pre_load.cmake hook file for predefined dependency {}: {}",
-            "Error".red(),
-            dep_dir_name,
-            err.to_string()
-          ))?
-          .map(|hook_file| Rc::new(hook_file)),
-        post_load: PredefinedCMakeDepHookFile::new(entry_path.join("post_load.cmake"))
-          .map_err(|err| format!(
-            "{} loading post_load.cmake hook file for predefined dependency {}: {}",
-            "Error".red(),
-            dep_dir_name,
-            err.to_string()
-          ))?
-          .map(|hook_file| Rc::new(hook_file)),
-        custom_populate: PredefinedCMakeDepHookFile::new(entry_path.join("custom_populate.cmake"))
-          .map_err(|err|  format!(
-            "{} loading custom_populate.cmake hook file for predefined dependency {}: {}",
-            "Error".red(),
-            dep_dir_name,
-            err.to_string()
-          ))?
-          .map(|hook_file| Rc::new(hook_file))
+        pre_load: load_hook_file(&entry_path, dep_dir_name, "pre_load.cmake")?,
+        post_load: load_hook_file(&entry_path, dep_dir_name, "post_load.cmake")?,
+        custom_populate: load_hook_file(&entry_path, dep_dir_name, "custom_populate.cmake")?,
+        custom_find_module: load_hook_file(
+          &entry_path,
+          dep_dir_name,
+          format!("Find{}.cmake", dep_dir_name)
+        )?,
       };
 
       if let Some(subdir_dep) = &dep_config_container.dep_configs.as_subdirectory {

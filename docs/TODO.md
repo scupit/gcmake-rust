@@ -9,8 +9,9 @@ There are a whole bunch of things which need doing. This is the place to list th
 
 ## Priorities
 
-- [ ] Add a flag which prints whether a project or dependency supports compilation with Emscripten.
 - [ ] Add CLI commands for cleaning and updating the dep-cache. Not exactly sure how updating should work yet.
+- [ ] [Cargo-style package features](https://doc.rust-lang.org/cargo/reference/features.html)
+- [ ] 
 
 ## Configuration TODO
 
@@ -29,6 +30,7 @@ The command set for viewing dependency graph info.
 
 - [ ] `dep-graph` command which prints a dependency graph for each target in the current project.
 - [ ] `dep-graph <target>` command which prints a dependency graph for the given target.
+- [ ] Debian package dependencies for each predefined dependency (dev when transitively required, runtime when only needed at runtime)
 
 #### show
 
@@ -61,8 +63,7 @@ The command set for viewing project metadata.
 
 - [ ] Boost
 - [ ] BZip2
-- [ ] CURL
-- [ ] Curses (ncurses)
+- [x] CURL
 - [ ] Doxygen
 - [x] GLEW
 - [ ] LibLZMA
@@ -100,10 +101,20 @@ The command set for viewing project metadata.
 - [x] [magic_enum](https://github.com/Neargye/magic_enum)
 - [x] [argparse](https://github.com/p-ranav/argparse)
 - [x] [FreeType](https://freetype.org/index.html)
+- [ ] [drogon](https://github.com/drogonframework/drogon) (This looks like it might take some work)
+- [ ] [re2](https://github.com/google/re2)
 
 #### Support when FetchContent ready
 
 - [ ] [GLM (The actual repo, not a fork)](https://github.com/g-truc/glm)
+
+#### CMake Config file only
+
+- [ ] [Hyperscan](https://github.com/intel/hyperscan)
+
+#### Support after allowing custom Find Files
+
+- [ ] [zstd](https://github.com/facebook/zstd)
 
 #### Testing Frameworks
 

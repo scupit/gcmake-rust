@@ -12,7 +12,8 @@ pub struct BuiltinFindModuleNamespaceConfig {
 #[serde(deny_unknown_fields)]
 pub enum CMakeModuleType {
   ConfigFile,
-  FindModule
+  BuiltinFindModule,
+  CustomFindModule
 }
 
 #[derive(Deserialize, Clone)]

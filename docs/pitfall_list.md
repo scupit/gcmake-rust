@@ -3,6 +3,26 @@
 > As I discover more compilation pitfalls and issues with the GCMake tool, I will list them
 > here.
 
+## Interesting Errors
+
+### The procedure entry point _ZSt28__throw_bas_array_new_lengthv could not be located in the dynamic link library
+
+On Windows, this error is caused by an executable trying to load the wrong *libstdc++-6.dll*.
+
+This error usually happens when more than one *libstdc++-6.dll" is exposed by PATH.
+Possible duplicates might be found in a Neovim bin directory or a Strawberry Perl installation bin
+directory, among other places.
+**If your pre-build scripts are failing for seemingly no reason, this could be the issue.**
+
+**Solutions:**
+
+1. Make sure only the MinGW *libstdc++-6.dll* is exposed by PATH. 
+  To find all *libstdc++-6.dll" files on your system, check out the
+  fantastic [voidtools "Everything"](https://www.voidtools.com/) search tool.
+
+2. Put a copy of MinGW's *libstdc++-6.dll* in the binary directory so the executable doesn't need to
+  look in PATH for an alternative one.
+
 ## Emscripten
 
 Instead of duplicating them here, see the [Emscripten doc page](./emscripten.md) for 

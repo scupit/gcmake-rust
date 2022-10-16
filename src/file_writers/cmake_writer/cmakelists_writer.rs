@@ -199,6 +199,14 @@ impl<'a> CMakeListsWriter<'a> {
     let config_in_file: &mut File = self.cmake_config_in_file.as_mut().unwrap();
     writeln!(config_in_file, "@PACKAGE_INIT@\n")?;
 
+    writeln!(config_in_file,
+      "set( SAVED_CMAKE_MODULE_PATH ${{CMAKE_MODULE_PATH}} )"
+    )?;
+
+    writeln!(config_in_file,
+      "set( CMAKE_MODULE_PATH \"${{CMAKE_CURRENT_LIST_DIR}}/modules\" )"
+    )?;
+
     writeln!(
       config_in_file,
       "include( CMakeFindDependencyMacro )"
@@ -299,7 +307,8 @@ impl<'a> CMakeListsWriter<'a> {
 
       let module_type_string: &str = match module_type {
         CMakeModuleType::ConfigFile => "CONFIG",
-        CMakeModuleType::FindModule => "MODULE",
+        CMakeModuleType::BuiltinFindModule => "MODULE",
+        CMakeModuleType::CustomFindModule => "MODULE"
       };
 
       write!(config_in_file,
@@ -321,7 +330,8 @@ impl<'a> CMakeListsWriter<'a> {
     for (dep_name, module_type) in needed_find_modules {
       let module_type_string: &str = match module_type {
         CMakeModuleType::ConfigFile => "CONFIG",
-        CMakeModuleType::FindModule => "MODULE",
+        CMakeModuleType::BuiltinFindModule => "MODULE",
+        CMakeModuleType::CustomFindModule => "MODULE"
       };
 
       writeln!(config_in_file,
@@ -357,6 +367,11 @@ impl<'a> CMakeListsWriter<'a> {
       "include( \"${{CMAKE_CURRENT_LIST_DIR}}/{}Targets.cmake\" )",
       self.project_data.get_full_namespaced_project_name()
     )?;
+
+    writeln!(config_in_file,
+      "set( CMAKE_MODULE_PATH ${{SAVED_CMAKE_MODULE_PATH}} )"
+    )?;
+
     Ok(())
   }
 
@@ -567,6 +582,12 @@ impl<'a> CMakeListsWriter<'a> {
 
     self.set_basic_var(
       "",
+      "CMAKE_MODULE_PATH",
+      "\"${TOPLEVEL_PROJECT_DIR}/cmake/modules\""
+    )?;
+
+    self.set_basic_var(
+      "",
       "LOCAL_BUILD_SHARED_LIBS_DOC_STRING",
       "\"Build compiled libraries as SHARED when their type is not explicitly specified\""
     )?;
@@ -699,6 +720,7 @@ impl<'a> CMakeListsWriter<'a> {
     if self.project_data.is_root_project() {
       writeln!(&self.cmakelists_file, "initialize_uncached_dep_list()")?;
       writeln!(&self.cmakelists_file, "initialize_actual_dep_list()")?;
+      writeln!(&self.cmakelists_file, "initialize_custom_find_modules_list()")?;
     }
 
     Ok(())
@@ -845,6 +867,21 @@ impl<'a> CMakeListsWriter<'a> {
             writeln!(&self.cmakelists_file, "{}", pre_load.contents_ref())?;
           }
 
+          if let Some(custom_find_module) = dep_info.custom_find_module_file() {
+            assert!(
+              self.util_writer.is_some(),
+              "Utility writer must exist for project \"{}\" because it is a root project.",
+              self.project_data.get_name_for_error_messages()
+            );
+
+            self.util_writer.as_ref().unwrap().copy_custom_find_file(&custom_find_module.file_path)?;
+
+            writeln!(&self.cmakelists_file,
+              "add_to_custom_find_modules_list( {} )",
+              dep_name
+            )?;
+          }
+
           match dep_info.predefined_dep_info() {
             FinalPredepInfo::CMakeModule(find_module_dep) => {
               self.write_predefined_cmake_module_dep(
@@ -882,7 +919,8 @@ impl<'a> CMakeListsWriter<'a> {
     dep_info: &PredefinedCMakeModuleDep
   ) -> io::Result<()> {
     let search_type_spec: &str = match dep_info.module_type() {
-      CMakeModuleType::FindModule => "MODULE",
+      CMakeModuleType::BuiltinFindModule => "MODULE",
+      CMakeModuleType::CustomFindModule => "MODULE",
       CMakeModuleType::ConfigFile => "CONFIG"
     };
 
@@ -933,7 +971,8 @@ impl<'a> CMakeListsWriter<'a> {
     dep_info: &PredefinedCMakeComponentsModuleDep
   ) -> io::Result<()> {
     let search_type_spec: &str = match *dep_info.module_type() {
-      CMakeModuleType::FindModule => "MODULE",
+      CMakeModuleType::BuiltinFindModule => "MODULE",
+      CMakeModuleType::CustomFindModule => "MODULE",
       CMakeModuleType::ConfigFile => "CONFIG"
     };
 
@@ -2506,6 +2545,10 @@ impl<'a> CMakeListsWriter<'a> {
     writeln!(&self.cmakelists_file, "clean_target_list()")?;
     writeln!(&self.cmakelists_file, "clean_needed_bin_files_list()")?;
     writeln!(&self.cmakelists_file, "clean_install_list()")?;
+    
+    if self.project_data.is_root_project() {
+      writeln!(&self.cmakelists_file, "clean_custom_find_modules_list()")?;
+    }
 
     match &self.project_data.get_project_type() {
       FinalProjectType::Root => {

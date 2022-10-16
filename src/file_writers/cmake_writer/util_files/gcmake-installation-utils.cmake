@@ -22,6 +22,7 @@ function( configure_installation
   list( LENGTH additional_installs has_additional_installs )
   list( LENGTH MY_GENERATED_EXPORT_HEADERS_BUILD_INTERFACE has_generated_export_headers )
   list( LENGTH MY_GENERATED_EXPORT_HEADERS_INSTALL_INTERFACE has_generated_export_install_headers )
+  list( LENGTH MY_CUSTOM_FIND_MODULES has_custom_find_modules )
 
   if( NOT has_generated_export_headers EQUAL has_generated_export_install_headers )
     message( FATAL_ERROR "Number of generated export headers for build interface (${has_generated_export_headers}) doesn't match the number of generated export headers for install interface (${has_generated_export_install_headers})" )
@@ -73,6 +74,7 @@ function( configure_installation
   if( has_files_to_install )
     install( FILES ${bin_files_installing}
       DESTINATION bin
+      COMPONENT ${project_component_name}
     )
   endif()
 
@@ -101,6 +103,13 @@ function( configure_installation
         DESTINATION "include"
       INCLUDES DESTINATION
         ${additional_relative_dep_paths}
+    )
+  endif()
+
+  if( has_custom_find_modules )
+    install( FILES ${MY_CUSTOM_FIND_MODULES}
+      DESTINATION "lib/cmake/${PROJECT_NAME}/modules"
+      COMPONENT ${has_custom_find_modules}
     )
   endif()
 
@@ -281,6 +290,29 @@ macro( raise_needed_bin_files_list)
   set( LATEST_SUBPROJECT_NEEDED_BIN_FILES_LIST "${MY_NEEDED_BIN_FILES}" PARENT_SCOPE )
 endmacro()
 
+# ================================================================================
+# Custom Find Modules: Any custom Find<LibName>.cmake files which need to be
+# installed with the project.
+# ================================================================================
+macro( initialize_custom_find_modules_list )
+  set( MY_CUSTOM_FIND_MODULES "" )
+endmacro()
+
+macro( clean_custom_find_modules_list )
+  clean_list( "${MY_CUSTOM_FIND_MODULES}" MY_CUSTOM_FIND_MODULES )
+endmacro()
+
+macro( add_to_custom_find_modules_list
+  dep_name
+)
+  set( MY_CUSTOM_FIND_MODULES "${MY_CUSTOM_FIND_MODULES}" "${needed_file}" )
+  list( APPEND MY_CUSTOM_FIND_MODULES "${TOPLEVEL_PROJECT_DIR}/cmake/modules/Find${dep_name}.cmake" )
+endmacro()
+
+macro( raise_custom_find_modules_list )
+  set( LATEST_SUBPROJECT_CUSTOM_FIND_MODULES_LIST "${MY_CUSTOM_FIND_MODULES}" PARENT_SCOPE )
+endmacro()
+
 function( configure_subproject
   subproject_path
 )
@@ -304,6 +336,16 @@ function( configure_subproject
     endif()
 
     set( MY_NEEDED_BIN_FILES "${combined_list}" PARENT_SCOPE )
+  endif()
+
+  if( NOT "${LATEST_SUBPROJECT_CUSTOM_FIND_MODULES_LIST}" STREQUAL "" )
+    if( "${MY_CUSTOM_FIND_MODULES}" STREQUAL "" )
+      set( combined_list "${LATEST_SUBPROJECT_CUSTOM_FIND_MODULES_LIST}" )
+    else()
+      set( combined_list "${MY_CUSTOM_FIND_MODULES}" "${LATEST_SUBPROJECT_CUSTOM_FIND_MODULES_LIST}" )
+    endif()
+
+    set( MY_CUSTOM_FIND_MODULES "${combined_list}" PARENT_SCOPE )
   endif()
 
   if( NOT "${LATEST_INSTALL_LIST}" STREQUAL "" )

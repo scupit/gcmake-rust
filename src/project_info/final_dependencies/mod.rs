@@ -19,7 +19,7 @@ use crate::project_info::{platform_spec_parser::parse_leading_system_spec, parse
 
 use self::{final_target_map_common::FinalTargetConfigMap};
 
-use super::raw_data_in::dependencies::{internal_dep_config::{AllRawPredefinedDependencies, RawPredefinedDependencyInfo, PredefinedCMakeDepHookFile, RawSubdirectoryDependency, raw_dep_common::RawEmscriptenConfig}, user_given_dep_config::UserGivenPredefinedDependencyConfig};
+use super::raw_data_in::dependencies::{internal_dep_config::{AllRawPredefinedDependencies, RawPredefinedDependencyInfo, PredefinedCMakeDepHookFile, RawSubdirectoryDependency, raw_dep_common::RawEmscriptenConfig, CMakeModuleType}, user_given_dep_config::UserGivenPredefinedDependencyConfig};
 
 pub fn base64_encoded(some_url: &str) -> String{
   return Base64Url::encode_string(some_url.as_bytes());
@@ -82,7 +82,8 @@ pub struct FinalPredefinedDependencyConfig {
   predep_info: FinalPredepInfo,
   pre_load: HookScriptContainer,
   post_load: HookScriptContainer,
-  custom_populate: HookScriptContainer
+  custom_populate: HookScriptContainer,
+  custom_find_module: HookScriptContainer
 }
 
 impl FinalPredefinedDependencyConfig {
@@ -185,15 +186,38 @@ impl FinalPredefinedDependencyConfig {
       pre_load,
       post_load,
       custom_populate,
+      custom_find_module,
       ..
     } = all_raw_dep_configs.get(dep_name).unwrap(); 
+
+    match &predep_info {
+      FinalPredepInfo::CMakeModule(module_dep) => match (module_dep.module_type(), custom_find_module) {
+        (CMakeModuleType::CustomFindModule, None) => {
+          return Err(format!(
+            "Predefined dependency '{}' must have an associated custom \"Find Module\" cmake file, but one doesn't exist.",
+            dep_name
+          ));
+        },
+        (CMakeModuleType::BuiltinFindModule, Some(finder_file)) => {
+          return Err(format!(
+            "Predefined dependency '{}' has an associated custom \"Find Module\" cmake file '{}', but is configured as a \"BuildinFindModule\" dependency. To use the custom find module, change the configuration for '{}' to the \"CustomFindModule\" type.",
+            dep_name,
+            finder_file.file_path.file_name().unwrap().to_str().unwrap(),
+            dep_name
+          ));
+        },
+        _ => ()
+      },
+      _ => ()
+    }
     
     return Ok(Self {
       name: dep_name.to_string(),
       predep_info,
       pre_load: pre_load.clone(),
       post_load: post_load.clone(),
-      custom_populate: custom_populate.clone()
+      custom_populate: custom_populate.clone(),
+      custom_find_module: custom_find_module.clone()
     });
   }
 
@@ -231,6 +255,10 @@ impl FinalPredefinedDependencyConfig {
 
   pub fn custom_populate_script(&self) -> &HookScriptContainer {
     &self.custom_populate
+  }
+
+  pub fn custom_find_module_file(&self) -> &HookScriptContainer {
+    &self.custom_find_module
   }
 
   pub fn is_fetchcontent(&self) -> bool {
