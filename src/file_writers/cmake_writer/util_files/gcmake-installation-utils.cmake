@@ -290,6 +290,58 @@ macro( raise_needed_bin_files_list)
   set( LATEST_SUBPROJECT_NEEDED_BIN_FILES_LIST "${MY_NEEDED_BIN_FILES}" PARENT_SCOPE )
 endmacro()
 
+macro( initialize_mingw_dll_install_options )
+  if( NOT USING_MINGW )
+    message( FATAL_ERROR "Tried to initialize MinGW dll install options while not using a MinGW compiler. This should only be called when using MinGW." )
+  endif()
+
+  set( _MINGW_DLL_NAME
+    "LIBSTDCXX"
+    "SEH" 
+    "LIBWINPTHREAD"
+    "LIBATOMIC"
+  )
+
+  set( _CORRESPONDING_FILES
+    "libstdc++-6.dll"
+    "libgcc_s_seh-1.dll"
+    "libwinpthread-1.dll"
+    "libatomic-1.dll"
+  )
+
+  message( "compiler: ${CMAKE_C_COMPILER}")
+  cmake_path( GET CMAKE_C_COMPILER PARENT_PATH MINGW_DLL_DIR )
+
+  foreach( dll_name matching_file IN ZIP_LISTS _MINGW_DLL_NAME _CORRESPONDING_FILES )
+    set( dll_file_var GCMAKE_FILE_MINGW_${dll_name}_DLL )
+    find_file( ${dll_file_var}
+      NAMES "${matching_file}"
+      PATHS "${MINGW_DLL_DIR}"
+      NO_DEFAULT_PATH
+      NO_PACKAGE_ROOT_PATH
+      NO_CMAKE_PATH
+      NO_CMAKE_ENVIRONMENT_PATH
+      NO_SYSTEM_ENVIRONMENT_PATH
+      NO_CMAKE_SYSTEM_PATH
+      NO_CMAKE_FIND_ROOT_PATH
+    )
+
+    if( NOT ${dll_file_var} )
+      message( FATAL_ERROR "Unable to find MinGW's ${matching_file}." )
+    endif()
+
+    # These currently default to ON so that the install will work out of the box
+    # on other users' machines. Eventually I'd like to be able to determine which
+    # of these are actually needed by the installed executables and DLLS. However,
+    # that would be more effort than it's worth at the moment.
+    option( GCMAKE_MINGW_INSTALL_${dll_name} "When ON, ${matching_file} is copied to the build directory and installed with the project." ON )
+
+    if( GCMAKE_MINGW_INSTALL_${dll_name} )
+      add_to_needed_bin_files_list( "${${dll_file_var}}" )
+    endif()
+  endforeach()
+endmacro()
+
 # ================================================================================
 # Custom Find Modules: Any custom Find<LibName>.cmake files which need to be
 # installed with the project.

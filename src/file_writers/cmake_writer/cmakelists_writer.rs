@@ -500,20 +500,21 @@ impl<'a> CMakeListsWriter<'a> {
     writeln!(&self.cmakelists_file,
       "\tconfigure_emscripten_mode( Browser )"
     )?;
-    writeln!(&self.cmakelists_file, "endif()")?;
 
     if !self.project_data.supports_emscripten() {
       self.set_basic_option(
-        "",
+        "\t",
         "GCMAKE_OVERRIDE_EMSCRIPTEN_COMPILATION",
         "OFF",
         "When ON, force-allows Emscripten compilation for projects which don't obviously support copmilation with Emscripten."
       )?;
 
       writeln!(&self.cmakelists_file,
-        "err_if_using_emscripten( GCMAKE_OVERRIDE_EMSCRIPTEN_COMPILATION )"
+        "\terr_if_using_emscripten( GCMAKE_OVERRIDE_EMSCRIPTEN_COMPILATION )"
       )?;
     }
+
+    writeln!(&self.cmakelists_file, "endif()")?;
 
     if !self.project_data.can_trivially_cross_compile() {
       self.set_basic_option(
@@ -537,6 +538,13 @@ impl<'a> CMakeListsWriter<'a> {
     }
 
     self.write_newline()?;
+
+    writeln!(&self.cmakelists_file,
+      "if( USING_MINGW )\n\tinitialize_mingw_dll_install_options()\nendif()"
+    )?;
+
+    self.write_newline()?;
+
     writeln!(&self.cmakelists_file, "get_property( isMultiConfigGenerator GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)")?;
 
     writeln!(&self.cmakelists_file,

@@ -11,7 +11,9 @@ There are a whole bunch of things which need doing. This is the place to list th
 
 - [ ] Add CLI commands for cleaning and updating the dep-cache. Not exactly sure how updating should work yet.
 - [ ] [Cargo-style package features](https://doc.rust-lang.org/cargo/reference/features.html)
-- [ ] 
+- [ ] Minimal installs based on what your project uses. Dependencies with only privately linked libraries only
+        need to have the targets themselves installed, no running the install step. Dependencies with
+        public linked libraries should install the target, but also run that project's install step.
 
 ## Configuration TODO
 
@@ -78,7 +80,7 @@ The command set for viewing project metadata.
 - [ ] TIFF
 - [x] wxWidgets
 - [ ] Vulkan
-- [ ] ZLIB
+- [x] ZLIB
 
 #### Other CMake projects
 
