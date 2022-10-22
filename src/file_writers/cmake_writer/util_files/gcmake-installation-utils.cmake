@@ -39,9 +39,10 @@ function( configure_installation
 
   foreach( project_output_to_install IN LISTS targets_installing )
     get_target_property( target_type ${project_output_to_install} TYPE )
+    unaliased_target_name( ${project_output_to_install} actual_output_name )
 
     if( target_type STREQUAL "EXECUTABLE" )
-      install( TARGETS ${project_output_to_install}
+      install( TARGETS ${actual_output_name}
         EXPORT ${PROJECT_NAME}Targets
         RUNTIME 
           DESTINATION bin
@@ -56,7 +57,7 @@ function( configure_installation
         COMPONENT ${project_component_name}
       )
     else()
-      install( TARGETS ${project_output_to_install}
+      install( TARGETS ${actual_output_name}
         EXPORT ${PROJECT_NAME}Targets
         RUNTIME 
           DESTINATION bin
@@ -69,6 +70,33 @@ function( configure_installation
           DESTINATION "include/${PROJECT_INCLUDE_PREFIX}"
       )
     endif()
+  endforeach()
+
+  foreach( minimal_target_to_install IN LISTS MY_MINIMAL_INSTALLS )
+    # NOTE: Due to limitations with how CMake installs work, a "minimal" install 
+    # does the same thing as just installing additional targets. I'd like a way
+    # to install only the components of a target needed at runtime, but that doesn't
+    # seem possible at the moment. 
+    install( TARGETS ${minimal_target_to_install}
+      EXPORT ${PROJECT_NAME}Targets
+      RUNTIME 
+        DESTINATION bin
+      # If we omit the LIBRARY and ARCHIVE sections, the fmt::fmt install is unable to find certain headers?
+      # What?? 
+      LIBRARY
+        DESTINATION lib
+      ARCHIVE
+        DESTINATION lib
+      COMPONENT ${project_component_name}
+      # Apparently targets which have INTERFACE or PUBLIC file sets can't be installed
+      # without them even if the target's file_set isn't ever needed. That's really annoying.
+      FILE_SET HEADERS
+        DESTINATION "include"
+      INCLUDES DESTINATION
+        # TODO: I might need to separate this into its own variable. I'll leave it for now though, since it
+        # isn't causing issues.
+        ${additional_relative_dep_paths}
+    )
   endforeach()
 
   if( has_files_to_install )
@@ -109,7 +137,7 @@ function( configure_installation
   if( has_custom_find_modules )
     install( FILES ${MY_CUSTOM_FIND_MODULES}
       DESTINATION "lib/cmake/${PROJECT_NAME}/modules"
-      COMPONENT ${has_custom_find_modules}
+      COMPONENT ${project_component_name}
     )
   endif()
 
@@ -181,6 +209,61 @@ function( generate_and_install_export_header
     "${installed_header_location}"
   )
 endfunction()
+
+# Sets the install mode for a GCMake library
+function( mark_gcmake_target_usage
+  lib_base_name
+  needed_install_mode
+)
+  set( SHOULD_CHANGE FALSE )
+
+  if( ${needed_install_mode} STREQUAL "FULL" )
+    set( SHOULD_CHANGE TRUE )
+  elseif( needed_install_mode STREQUAL "MINIMAL" )
+    if( NOT "${TARGET_${lib_base_name}_INSTALL_MODE}" STREQUAL "FULL" )
+      set( SHOULD_CHANGE TRUE )
+    endif()
+  else()
+    message( FATAL_ERROR "Invalid gcmake usage needed_install_mode \"${needed_install_mode}\" given. Must be either FULL or MINIMAL." )
+  endif()
+
+  if( SHOULD_CHANGE )
+    set( TARGET_${lib_base_name}_INSTALL_MODE ${needed_install_mode} PARENT_SCOPE )
+  endif()
+endfunction()
+
+function( mark_gcmake_project_usage
+  project_base_name
+  needed_install_mode
+)
+  set( SHOULD_CHANGE FALSE )
+
+  if( needed_install_mode STREQUAL "FULL" )
+    set( SHOULD_CHANGE TRUE )
+  elseif( needed_install_mode STREQUAL "MINIMAL" )
+    if( NOT "${PROJECT_${project_base_name}_INSTALL_MODE}" STREQUAL "FULL" )
+      set( SHOULD_CHANGE TRUE )
+    endif()
+  else()
+    message( FATAL_ERROR "Invalid gcmake usage needed_install_mode \"${needed_install_mode}\" given. Must be either FULL or MINIMAL." )
+  endif()
+
+  if( SHOULD_CHANGE )
+    set( PROJECT_${project_base_name}_INSTALL_MODE ${needed_install_mode} PARENT_SCOPE )
+  endif()
+endfunction()
+
+macro( initialize_install_mode )
+  if( TOPLEVEL_PROJECT_DIR STREQUAL CMAKE_SOURCE_DIR )
+    set( VALID_GCMAKE_INSTALL_MODES "NORMAL" "EXE_ONLY" "LIB_ONLY" )
+    set( GCMAKE_INSTALL_MODE "NORMAL" CACHE STRING "Installation mode for the project. \"NORMAL\" means both executables and libraries will be installed with minimum dependencies where possible")
+    set_property( CACHE GCMAKE_INSTALL_MODE PROPERTY STRINGS ${VALID_GCMAKE_INSTALL_MODES} )
+
+    if( NOT GCMAKE_INSTALL_MODE IN_LIST VALID_GCMAKE_INSTALL_MODES )
+      message( FATAL_ERROR "Invalid GCMAKE_INSTALL_MODE \"${GCMAKE_INSTALL_MODE}\" given. Must be one of: ${VALID_GCMAKE_INSTALL_MODES}" )
+    endif()
+  endif()
+endmacro()
 
 # ================================================================================
 # Generated export headers list: Auto-generated header files containing the
@@ -269,6 +352,37 @@ macro( raise_target_list )
 endmacro()
 
 # ================================================================================
+# Minimal installs: These are libraries which are used by your outputs, but not
+# needed further. They are essentially libraries which could be DLLs, and should
+# only have the DLL runtime component installed.
+# ================================================================================
+macro( initialize_minimal_installs )
+  set( MY_MINIMAL_INSTALLS "" )
+endmacro()
+
+macro( clean_minimal_installs )
+  clean_list( "${MY_MINIMAL_INSTALLS}" MY_MINIMAL_INSTALLS )
+endmacro()
+
+macro( add_to_minimal_installs
+  target_name
+  relative_dep_path
+)
+  get_target_property( unaliased_lib_name ${target_name} ALIASED_TARGET )
+
+  if( NOT unaliased_lib_name )
+    set( unaliased_lib_name ${target_name} )
+  endif()
+
+  set( MY_MINIMAL_INSTALLS "${MY_MINIMAL_INSTALLS}" "${unaliased_lib_name}" )
+  set( MY_ADDITIONAL_RELATIVE_DEP_PATHS "${MY_ADDITIONAL_RELATIVE_DEP_PATHS}" "${relative_dep_path}" )
+endmacro()
+
+macro( raise_minimal_installs )
+  set( LATEST_MINIMAL_INSTALLS_LIST "${MY_MINIMAL_INSTALLS}" PARENT_SCOPE )
+endmacro()
+
+# ================================================================================
 # Needed bin files: Any needed DLLs which are retrieved from outside the project,
 # but must be distributed with the project (such as SDL2.dll or the WxWidgets DLLs).
 # ================================================================================
@@ -309,7 +423,6 @@ macro( initialize_mingw_dll_install_options )
     "libatomic-1.dll"
   )
 
-  message( "compiler: ${CMAKE_C_COMPILER}")
   cmake_path( GET CMAKE_C_COMPILER PARENT_PATH MINGW_DLL_DIR )
 
   foreach( dll_name matching_file IN ZIP_LISTS _MINGW_DLL_NAME _CORRESPONDING_FILES )
@@ -438,5 +551,15 @@ function( configure_subproject
     endif()
 
     set( MY_GENERATED_EXPORT_HEADERS_INSTALL_INTERFACE "${combined_list}" PARENT_SCOPE )
+  endif()
+
+  if( NOT "${LATEST_MINIMAL_INSTALLS_LIST}" STREQUAL "" )
+    if( "${MY_MINIMAL_INSTALLS}" STREQUAL "" )
+      set( combined_list "${LATEST_MINIMAL_INSTALLS_LIST}" )
+    else()
+      set( combined_list "${MY_MINIMAL_INSTALLS}" "${LATEST_MINIMAL_INSTALLS_LIST}" )
+    endif()
+
+    set( MY_MINIMAL_INSTALLS "${combined_list}" PARENT_SCOPE )
   endif()
 endfunction()

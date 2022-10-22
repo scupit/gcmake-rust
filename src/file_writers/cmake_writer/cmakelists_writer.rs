@@ -1,11 +1,39 @@
 use std::{collections::{HashMap, HashSet}, fs::File, io::{self, Write, ErrorKind}, path::{PathBuf, Path}, rc::Rc, cell::{RefCell, Ref}, borrow::Borrow};
 
-use crate::{project_info::{final_project_data::{FinalProjectData}, path_manipulation::{cleaned_path_str, relative_to_project_root}, final_dependencies::{GitRevisionSpecifier, PredefinedCMakeComponentsModuleDep, PredefinedSubdirDep, PredefinedCMakeModuleDep, FinalPredepInfo, GCMakeDependencyStatus, FinalPredefinedDependencyConfig, base64_encoded, PredefinedDepFunctionality, FinalDownloadMethod}, raw_data_in::{BuildType, RawBuildConfig, BuildConfigCompilerSpecifier, SpecificCompilerSpecifier, OutputItemType, LanguageConfigMap, TargetSpecificBuildType, dependencies::internal_dep_config::{CMakeModuleType}, DefaultCompiledLibType}, FinalProjectType, CompiledOutputItem, PreBuildScript, LinkMode, FinalTestFramework, dependency_graph_mod::dependency_graph::{DependencyGraph, OrderedTargetInfo, ProjectWrapper, TargetNode, SimpleNodeOutputType, Link, EmscriptenLinkFlagInfo}, SystemSpecifierWrapper, SingleSystemSpec, CompilerDefine, FinalBuildConfig, CompilerFlag, LinkerFlag, gcmake_constants::{SRC_DIR, INCLUDE_DIR, TEMPLATE_IMPL_DIR}, platform_spec_parser::parse_leading_system_spec}, file_writers::cmake_writer::cmake_writer_helpers::system_constraint_expression};
+use crate::{project_info::{final_project_data::{FinalProjectData}, path_manipulation::{cleaned_path_str, relative_to_project_root}, final_dependencies::{GitRevisionSpecifier, PredefinedCMakeComponentsModuleDep, PredefinedSubdirDep, PredefinedCMakeModuleDep, FinalPredepInfo, GCMakeDependencyStatus, FinalPredefinedDependencyConfig, base64_encoded, PredefinedDepFunctionality, FinalDownloadMethod}, raw_data_in::{BuildType, RawBuildConfig, BuildConfigCompilerSpecifier, SpecificCompilerSpecifier, OutputItemType, LanguageConfigMap, TargetSpecificBuildType, dependencies::internal_dep_config::{CMakeModuleType}, DefaultCompiledLibType}, FinalProjectType, CompiledOutputItem, PreBuildScript, LinkMode, FinalTestFramework, dependency_graph_mod::dependency_graph::{DependencyGraph, OrderedTargetInfo, ProjectWrapper, TargetNode, SimpleNodeOutputType, Link, EmscriptenLinkFlagInfo, ContainedItem}, SystemSpecifierWrapper, SingleSystemSpec, CompilerDefine, FinalBuildConfig, CompilerFlag, LinkerFlag, gcmake_constants::{SRC_DIR, INCLUDE_DIR, TEMPLATE_IMPL_DIR}, platform_spec_parser::parse_leading_system_spec}, file_writers::cmake_writer::cmake_writer_helpers::system_constraint_generator_expression};
 
-use super::cmake_utils_writer::{CMakeUtilFile, CMakeUtilWriter};
+use super::{cmake_utils_writer::{CMakeUtilFile, CMakeUtilWriter}, cmake_writer_helpers::system_contstraint_conditional_expression};
+use colored::*;
 
 const RUNTIME_BUILD_DIR_VAR: &'static str = "${MY_RUNTIME_OUTPUT_DIR}";
 const LIB_BUILD_DIR_VAR: &'static str = "${MY_LIBRARY_OUTPUT_DIR}";
+
+struct UsageConditional {
+  // public_conditional represents whether the library will be needed transitively. Therefore it
+  // includes both Public and Interface links.
+  public_conditional: Option<SystemSpecifierWrapper>,
+  private_conditional: Option<SystemSpecifierWrapper>
+}
+
+impl UsageConditional {
+  pub fn was_used(&self) -> bool {
+    return self.public_conditional.is_some() || self.private_conditional.is_some()
+  }
+
+  fn full_conditional(&self) -> Option<SystemSpecifierWrapper> {
+    return union_maybe_specs(
+      self.public_conditional.as_ref(),
+      self.private_conditional.as_ref()
+    );
+  }
+
+  pub fn full_conditional_string_or(&self, used_by_default: bool) -> String {
+    match self.full_conditional() {
+      None => used_by_default.to_string().to_uppercase(),
+      Some(conditional) => system_contstraint_conditional_expression(&conditional)
+    }
+  }
+}
 
 enum DownloadMethodInfo {
   GitMethod {
@@ -64,10 +92,6 @@ pub fn configure_cmake_helper<'a>(
     )?;
 
     cmake_configurer.write_cmakelists()?;
-    
-    if project_data.is_root_project() {
-      cmake_configurer.write_cmake_config_in()?;
-    }
   }
 
   Ok(())
@@ -95,7 +119,7 @@ fn on_or_off_str(value: bool) -> &'static str {
 fn flattened_defines_list_string(spacer: &str, defines: &Vec<CompilerDefine>) -> String {
   defines.iter()
     .map(|CompilerDefine { system_spec, def_string }| {
-      let escaped: String = system_constraint_expression(
+      let escaped: String = system_constraint_generator_expression(
         system_spec,
         &quote_escaped_string(def_string.trim())
       );
@@ -109,7 +133,7 @@ fn flattened_defines_list_string(spacer: &str, defines: &Vec<CompilerDefine>) ->
 fn flattened_compiler_flags_string(spacer: &str, compiler_flags: &Vec<CompilerFlag>) -> String {
   let flattened_string: String = compiler_flags.iter()
     .map(|CompilerFlag { system_spec, flag_string }| {
-      let escaped: String = system_constraint_expression(
+      let escaped: String = system_constraint_generator_expression(
         system_spec,
         &quote_escaped_string(flag_string.trim())
       );
@@ -125,7 +149,7 @@ fn flattened_compiler_flags_string(spacer: &str, compiler_flags: &Vec<CompilerFl
 fn flattened_linker_flags_string(linker_flags: &Vec<LinkerFlag>) -> String {
   let comma_separated_flags: String = linker_flags.iter()
     .map(|LinkerFlag { system_spec, flag_string }|
-      system_constraint_expression(
+      system_constraint_generator_expression(
         system_spec,
         &quote_escaped_string(flag_string.trim())
       )
@@ -141,8 +165,7 @@ struct CMakeListsWriter<'a> {
   sorted_target_info: &'a OrderedTargetInfo<'a>,
   project_data: Rc<FinalProjectData>,
   util_writer: Option<CMakeUtilWriter>,
-  cmakelists_file: File,
-  cmake_config_in_file: Option<File>
+  cmakelists_file: File
 }
 
 impl<'a> CMakeListsWriter<'a> {
@@ -178,201 +201,16 @@ impl<'a> CMakeListsWriter<'a> {
     };
 
     let cmakelists_file_name: String = format!("{}/CMakeLists.txt", project_data.get_project_root());
-    let cmake_config_in_file_name: String = format!("{}/Config.cmake.in", project_data.get_project_root());
 
     drop(borrowed_graph);
 
     Ok(Self {
       dep_graph,
       sorted_target_info: sorted_target_info,
-      cmake_config_in_file: if project_data.is_root_project()
-        { Some(File::create(cmake_config_in_file_name)?) } 
-        else { None },
       project_data,
       util_writer,
       cmakelists_file: File::create(cmakelists_file_name)?
     })
-  }
-
-  // This function is only run when using a root project.
-  fn write_cmake_config_in(&mut self) -> io::Result<()> {
-    let config_in_file: &mut File = self.cmake_config_in_file.as_mut().unwrap();
-    writeln!(config_in_file, "@PACKAGE_INIT@\n")?;
-
-    writeln!(config_in_file,
-      "set( SAVED_CMAKE_MODULE_PATH ${{CMAKE_MODULE_PATH}} )"
-    )?;
-
-    writeln!(config_in_file,
-      "set( CMAKE_MODULE_PATH \"${{CMAKE_CURRENT_LIST_DIR}}/modules\" )"
-    )?;
-
-    writeln!(
-      config_in_file,
-      "include( CMakeFindDependencyMacro )"
-    )?;
-
-    // Collect all PUBLIC/INTERFACE linked find_module and find_module_components
-    // dependencies (+ all components) from the whole project. Import them here as if they
-    // were being used in the CMakeLists file (including all cmake hooks).
-
-    // All PUBLIC/INTERFACE linked subdirectory dependencies targets were already added as install targets
-    // to the current project's export set, and were also installed by their respective projects.
-    // Since they were built as part of the "current project", nothing needs to happen with those.
-
-    // All PUBLIC/INTERFACE linked gcmake dependency targets should have already been added as install
-    // targets to the current project's export set. This means their headers were installed too, since
-    // FILE_SET is used by gcmake. 
-    // The question then is, how to find_package that project's dependencies? It's possible to just include
-    // the project's toplevel CMake.Config.in, but that would try to retrieve all the dependencies needed
-    // by the that project (including dependencies for its executables, etc.). We only need the dependencies
-    // of its libraries which were PUBLIC/INTERFACE linked to our project.
-    // Looks like we might be able to recurse through all gcmake dependencies and collect a flattened list
-    // to generate (just like everything above) using the same method as a regular project.
-
-    // Actually you know what, it's fine to just include it. Successfully building and installing the
-    // GCMake dependency as part of your project means that all the dependencies needed by the
-    // GCMake dependency are already present. Since the dependencies of the GCMake dependency are
-    // 'inherited' by this project, including the CMake.Config.in of the GCMake dependency is necesary
-    // to ensure all needed system dependencies are available when importing the current project
-    // using find_package.
-
-    // if this project PUBLIC/INTERFACE links any libraries from a gcmake_dependency,
-    // include the Config.CMake.in file of the gcmake_dependency project.
-
-    // TODO: Definitely refactor this. This type is super ugly.
-    let mut needed_find_components_module_targets: HashMap<String, (Vec<String>, CMakeModuleType)> = HashMap::new();
-    let mut needed_find_modules: HashMap<String, CMakeModuleType> = HashMap::new();
-    let mut needed_public_gcmake_projects: HashSet<String> = HashSet::new();
-
-
-    for target in self.sorted_target_info.targets_in_link_order() {
-      let borrowed_target: &TargetNode = &target.as_ref().borrow();
-
-      if borrowed_target.should_be_searched_in_package_config() {
-        let borrowed_container_graph = borrowed_target.container_project();
-        let container_graph = borrowed_container_graph.as_ref().borrow();
-        let container_graph_name: String = container_graph.project_mangled_name().to_string();
-
-        match container_graph.project_wrapper() {
-          ProjectWrapper::NormalProject(_) => {
-            // If the target is built by a GCMake dependency
-            if container_graph.root_project_id() != self.dep_graph.as_ref().borrow().root_project_id() {
-              needed_public_gcmake_projects.insert(container_graph_name);
-            }
-          },
-          ProjectWrapper::GCMakeDependencyRoot(_) => {
-            needed_public_gcmake_projects.insert(container_graph_name);
-          },
-          ProjectWrapper::PredefinedDependency(predef_dep) => match predef_dep.predefined_dep_info() {
-            FinalPredepInfo::Subdirectory(_) => {
-              // Nothing needs to happen here, since subdirectory dependencies and their targets are already
-              // installed as part of this project.
-            },
-            FinalPredepInfo::CMakeComponentsModule(components_dep) => {
-              let target_name: &str = borrowed_target.get_name();
-
-              needed_find_components_module_targets.entry(container_graph_name)
-                .and_modify(|(used_target_list, _)| {
-                  // I'm not sure why the compiler is making me use contains with a &String instead
-                  // of just &str. I thought &str is fine in most cases.
-                  if !used_target_list.contains(&target_name.to_string()) {
-                    used_target_list.push(target_name.to_string());
-                  }
-                })
-                .or_insert(
-                  (
-                    vec![target_name.to_string()],
-                    components_dep.module_type().clone()
-                  )
-                );
-            },
-            FinalPredepInfo::CMakeModule(module_dep) => {
-              if !needed_find_modules.contains_key(&container_graph_name) {
-                needed_find_modules.insert(
-                  container_graph_name,
-                  module_dep.module_type().clone()
-                );
-              }
-            }
-          }
-        }
-      }
-    }
-
-    for (dep_name, (ordered_components, module_type)) in needed_find_components_module_targets {
-      if ordered_components.is_empty() {
-        continue;
-      }
-
-      let module_type_string: &str = match module_type {
-        CMakeModuleType::ConfigFile => "CONFIG",
-        CMakeModuleType::BuiltinFindModule => "MODULE",
-        CMakeModuleType::CustomFindModule => "MODULE"
-      };
-
-      write!(config_in_file,
-        "find_dependency( {} {} COMPONENTS",
-        dep_name,
-        module_type_string
-      )?;
-
-      for component_name in ordered_components {
-        write!(config_in_file,
-          " {}",
-          component_name
-        )?;
-      }
-
-      writeln!(config_in_file, " )")?;
-    }
-
-    for (dep_name, module_type) in needed_find_modules {
-      let module_type_string: &str = match module_type {
-        CMakeModuleType::ConfigFile => "CONFIG",
-        CMakeModuleType::BuiltinFindModule => "MODULE",
-        CMakeModuleType::CustomFindModule => "MODULE"
-      };
-
-      writeln!(config_in_file,
-        "find_dependency( {} {} )",
-        dep_name,
-        module_type_string
-      )?;
-    }
-
-    // Is this how this should work?
-    // I'm not sure if gcmake projects should be searched for using find_dependency in the install
-    // directory, Or if their Config.CMake.in file should be included directly into this one (note
-    // that the inclusion is recursive).
-    // I'm leaning toward find_dependency, because that includes the gcmake project's package config
-    // file anyways, which has the same effect. And since all gcmake projects are built as part of the
-    // main project, their config files, headers, and libraries should always be installed with the
-    // main project. This means including the package config file for gcmake dependencies should
-    // always be reliable AS LONG AS THE GCMAKE DEPENDENCY EXISTS IN THE TREE.
-
-    // I need to specify that CMake needs to search the current project's install tree.
-    // Not sure if I need to use CMAKE_CURRENT_LIST_DIR or CMAKE_INSTALL_PREFIX. Probably
-    // CMAKE_INSTALL_PREFIX.
-
-    for gcmake_dep_name in needed_public_gcmake_projects {
-      writeln!(config_in_file,
-        "find_dependency( {} \n\tPATHS\n\t\t\"${{CMAKE_CURRENT_LIST_DIR}}/../{}\"\n)",
-        gcmake_dep_name,
-        gcmake_dep_name
-      )?
-    }
-
-    writeln!(config_in_file,
-      "include( \"${{CMAKE_CURRENT_LIST_DIR}}/{}Targets.cmake\" )",
-      self.project_data.get_full_namespaced_project_name()
-    )?;
-
-    writeln!(config_in_file,
-      "set( CMAKE_MODULE_PATH ${{SAVED_CMAKE_MODULE_PATH}} )"
-    )?;
-
-    Ok(())
   }
 
   fn write_cmakelists(&mut self) -> io::Result<()> {
@@ -382,6 +220,7 @@ impl<'a> CMakeListsWriter<'a> {
     self.write_newline()?;
 
     if self.project_data.is_root_project() {
+      writeln!(&self.cmakelists_file, "gcmake_begin_config_file()")?;
       self.write_toplevel_tweaks()?;
     }
 
@@ -412,6 +251,7 @@ impl<'a> CMakeListsWriter<'a> {
 
     if !self.project_data.is_test_project() {
       self.write_section_header("Installation and Export configuration")?;
+      writeln!(&self.cmakelists_file, "gcmake_end_config_file()")?;
       self.write_installation_and_exports()?;
     }
 
@@ -687,8 +527,88 @@ impl<'a> CMakeListsWriter<'a> {
     }
 
     writeln!(&self.cmakelists_file,
-      "initialize_pgo_defaults()"
+      "initialize_pgo_defaults()\ninitialize_install_mode()"
     )?;
+
+    let reverse_project_targets = self.sorted_target_info
+      .regular_targets_with_root_project_id(self.dep_graph_ref().project_id())
+      .into_iter()
+      .rev()
+      .filter(|target|
+        // We never install test projects, so they should be filtered out.
+        !target.as_ref().borrow()
+          .container_project().as_ref().borrow()
+          .project_wrapper().clone().unwrap_normal_project().is_test_project()
+      );
+    
+    for output_node in reverse_project_targets {
+      let borrowed_target = output_node.as_ref().borrow();
+
+      let output_type_dependent_conditional: &str = if borrowed_target.maybe_regular_output().unwrap().is_executable_type() {
+        "GCMAKE_INSTALL_MODE STREQUAL \"NORMAL\" OR GCMAKE_INSTALL_MODE STREQUAL \"EXE_ONLY\" "
+      }
+      else {
+        "GCMAKE_INSTALL_MODE STREQUAL \"NORMAL\" OR GCMAKE_INSTALL_MODE STREQUAL \"LIB_ONLY\""
+      };
+
+      // When the project is top level, targets whose type matches the install mode should
+      // be fully installed.
+      writeln!(&self.cmakelists_file,
+        "if( TOPLEVEL_PROJECT_DIR STREQUAL CMAKE_SOURCE_DIR AND ( {} ) )",
+        output_type_dependent_conditional
+      )?;
+      writeln!(&self.cmakelists_file,
+        "\tmark_gcmake_target_usage( {} FULL )",
+        borrowed_target.get_name()
+      )?;
+      writeln!(&self.cmakelists_file, "endif()")?;
+
+      // If the output should be installed, ensure its dependencies are installed the proper way too.
+      writeln!(&self.cmakelists_file,
+        "if( ({}) AND (( NOT CMAKE_SOURCE_DIR STREQUAL TOPLEVEL_PROJECT_DIR AND DEFINED TARGET_{}_INSTALL_MODE ) OR (CMAKE_SOURCE_DIR STREQUAL TOPLEVEL_PROJECT_DIR AND ({})) ) )",
+        system_contstraint_conditional_expression(borrowed_target.get_system_spec_info()),
+        borrowed_target.get_name(),
+        output_type_dependent_conditional,
+      )?;
+
+      for (link_mode, dep_list) in self.sorted_target_info.regular_dependencies_by_mode(&output_node.0) {
+        for dependency_node in dep_list {
+          let borrowed_dependency = dependency_node.as_ref().borrow();
+          let usage_mode: &str = match &link_mode {
+            LinkMode::Public | LinkMode::Interface => "FULL",
+            LinkMode::Private => "MINIMAL"
+          };
+
+          match dependency_node.as_ref().borrow().get_contained_item() {
+            ContainedItem::PreBuild(_) => unreachable!("Pre-build scripts are filtered out when iterating over \"regular\" dependencies."),
+            ContainedItem::CompiledOutput(_) => {
+              writeln!(&self.cmakelists_file,
+                "\tmark_gcmake_target_usage( {} {} )",
+                borrowed_dependency.get_name(),
+                usage_mode
+              )?;
+            },
+            ContainedItem::PredefinedLibrary { .. } => {
+              let container_project_name: String = borrowed_dependency
+                .container_project().as_ref().borrow()
+                .root_project().as_ref().borrow()
+                .project_base_name().to_string();
+
+              writeln!(&self.cmakelists_file,
+                "\tmark_gcmake_project_usage( {} {} )",
+                // We're using the predefined dependency name this time instead of per-target name
+                container_project_name,
+                usage_mode
+              )?;
+            }
+          }
+        }
+      }
+
+      writeln!(&self.cmakelists_file,
+        "endif()",
+      )?;
+    }
 
     Ok(())
   }
@@ -720,6 +640,7 @@ impl<'a> CMakeListsWriter<'a> {
       }
     }
 
+    writeln!(&self.cmakelists_file, "initialize_minimal_installs()")?;
     writeln!(&self.cmakelists_file, "initialize_target_list()")?;
     writeln!(&self.cmakelists_file, "initialize_needed_bin_files_list()")?;
     writeln!(&self.cmakelists_file, "initialize_install_list()")?;
@@ -871,6 +792,23 @@ impl<'a> CMakeListsWriter<'a> {
         if let Some((dep_name, predep_graph)) = self.dep_graph_ref().get_predefined_dependencies().get_key_value(borrowed_graph.project_base_name()) {
           let dep_info: Rc<FinalPredefinedDependencyConfig> = predep_graph.as_ref().borrow().project_wrapper().clone().unwrap_predef_dep();
 
+          let usage_conditional: UsageConditional = self.get_usage_conditional_for_project(&wrapped_graph.0);
+
+          if !usage_conditional.was_used() {
+            println!(
+              "{} loading project [{}]: No targets from predefined dependency '{}' are ever actually linked to an output.",
+              "Warning".yellow(),
+              self.project_data.get_name_for_error_messages(),
+              borrowed_graph.project_debug_name()
+            );
+          }
+
+          // Usage conditional
+          writeln!(&self.cmakelists_file,
+            "if( {} )",
+            usage_conditional.full_conditional_string_or(true)
+          )?;
+
           if let Some(pre_load) = dep_info.pre_load_script() {
             writeln!(&self.cmakelists_file, "{}", pre_load.contents_ref())?;
           }
@@ -909,10 +847,16 @@ impl<'a> CMakeListsWriter<'a> {
               self.write_predefined_subdirectory_dependency(
                 dep_name,
                 subdir_dep,
+                &wrapped_graph.0,
                 dep_info.is_auto_fetchcontent_ready()
               )?;
             }
           }
+
+          // End usage conditional
+          writeln!(&self.cmakelists_file,
+            "endif()"
+          )?;
         }
       }
     }
@@ -962,6 +906,22 @@ impl<'a> CMakeListsWriter<'a> {
         dep_name,
         dep_info.get_gcmake_readme_link()
       ),
+      indent
+    )?;
+
+    writeln!(&self.cmakelists_file,
+      "{}if( \"${{PROJECT_{}_INSTALL_MODE}}\" STREQUAL \"FULL\" )",
+      indent,
+      dep_name
+    )?;
+    writeln!(&self.cmakelists_file,
+      "{}\tgcmake_config_file_add_contents( \"find_dependency( {} {} )\" )",
+      indent,
+      dep_name,
+      search_type_spec
+    )?;
+    writeln!(&self.cmakelists_file,
+      "{}endif()",
       indent
     )?;
 
@@ -1026,6 +986,31 @@ impl<'a> CMakeListsWriter<'a> {
         dep_info.get_gcmake_readme_link()
       )
     )?;
+
+    writeln!(&self.cmakelists_file,
+      "if( \"${{PROJECT_{}_INSTALL_MODE}}\" STREQUAL \"FULL\" )",
+      dep_name
+    )?;
+
+    let used_targets_in_this_dep: String = self.sorted_target_info.targets_in_link_order()
+      .filter(|target|
+        target.as_ref().borrow().container_project_id() == predep_graph.as_ref().borrow().root_project_id()
+      )
+      .map(|target| target.as_ref().borrow().get_cmake_target_base_name().to_string())
+      .collect::<Vec<String>>()
+      .join(" ");
+
+    writeln!(&self.cmakelists_file,
+      "\tgcmake_config_file_add_contents( \"find_dependency( {} {} COMPONENTS {} )\" )",
+      dep_name,
+      search_type_spec,
+      // For now, assume a components module will be installed with all components. Later, it would be nice
+      // to only list the components which are transitively needed (i.e. PUBLIC or INTERFACE linked to an
+      // installed output), but for now this is fine.
+      used_targets_in_this_dep
+    )?;
+
+    writeln!(&self.cmakelists_file, "endif()")?;
 
     Ok(())
   }
@@ -1202,6 +1187,7 @@ impl<'a> CMakeListsWriter<'a> {
     &self,
     dep_name: &str,
     dep_info: &PredefinedSubdirDep,
+    graph_for_dependency: &Rc<RefCell<DependencyGraph>>,
     is_auto_fetchcontent_ready: bool
   ) -> io::Result<()> {
     // Subdir dependencies which have this 'custom import' script
@@ -1247,18 +1233,71 @@ impl<'a> CMakeListsWriter<'a> {
       turn off any unneeded installation steps (if possible. Some libraries don't allow this.).
     */
     if let Some(installation_details) = dep_info.get_installation_details() {
-      let mut default_value: bool = installation_details.should_install_by_default;
+      if !installation_details.should_install_by_default {
+        let default_value: bool = installation_details.actual_value_for(installation_details.should_install_by_default);
 
-      if installation_details.is_inverse {
-        default_value = !default_value;
+        self.set_basic_option(
+          "",
+          &installation_details.var_name,
+          on_or_off_str(default_value),
+          &format!("Whether to install {}. GCMake sets this to {} by default.", dep_name, on_or_off_str(default_value))
+        )?;
       }
+      else {
+        // Here, the library should be installed by default. That means for libraries with an installation variable
+        // We can choose whether or not do do a full installation, or install on a per-library basis.
+        let usage_conditional: UsageConditional = self.get_usage_conditional_for_project(graph_for_dependency);
+        let var_default_name: String = format!("{}_DEFAULT_VALUE", &installation_details.var_name);
 
-      self.set_basic_option(
-        "",
-        &installation_details.var_name,
-        on_or_off_str(default_value),
-        &format!("Whether to install {}. GCMake sets this to {} by default.", dep_name, on_or_off_str(default_value))
-      )?;
+        if !usage_conditional.was_used() {
+          self.set_basic_var(
+            "",
+            &installation_details.var_name,
+            on_or_off_str(installation_details.actual_value_for(false))
+          )?;
+        }
+        else {
+          let mut if_str: &str = "if";
+
+          writeln!(&self.cmakelists_file,
+            "{}( \"${{PROJECT_{}_INSTALL_MODE}}\" STREQUAL \"FULL\" )",
+            if_str,
+            dep_name
+          )?;
+
+          if_str = "elseif";
+
+          self.set_basic_var(
+            "\t",
+            &var_default_name,
+            on_or_off_str(installation_details.actual_value_for(true))
+          )?;
+
+          writeln!(&self.cmakelists_file,
+            "{}( \"${{PROJECT_{}_INSTALL_MODE}}\" STREQUAL \"MINIMAL\" )",
+            if_str,
+            dep_name
+          )?;
+
+          if_str = "elseif";
+
+          self.set_basic_var(
+            "\t",
+            &var_default_name,
+            on_or_off_str(installation_details.actual_value_for(false))
+          )?;
+
+          // We can write this endif because at least one of the above conditionals is guaranteed to be written.
+          writeln!(&self.cmakelists_file, "endif()")?;
+        }
+
+        self.set_basic_option(
+          "",
+          &installation_details.var_name,
+          &format!("${{{}}}", &var_default_name),
+          &format!("Whether to install {}. GCMake sets this to ${{{}}} by default.", dep_name, var_default_name)
+        )?;
+      }
     }
 
     let download_method: DownloadMethodInfo = match dep_info.download_method() {
@@ -1282,25 +1321,57 @@ impl<'a> CMakeListsWriter<'a> {
   }
 
   fn write_gcmake_dependencies(&self) -> io::Result<()> {
-    for (dep_name, dep_info) in self.project_data.get_gcmake_dependencies() {
-      self.set_basic_var(
-        "\n",
-        &format!("{}_RELATIVE_DEP_PATH", dep_name),
-        &format!("dep/{}", dep_name)
-      )?;
+    for wrapped_graph in &self.sorted_target_info.project_order {
+      let borrowed_graph = wrapped_graph.as_ref().borrow();
 
-      self.write_dep_clone_code(
-        dep_name,
-        // GCMake projects just link using their targets as usual, since Emscripten
-        // doesn't explicitly specify support for projects we just made ourselves. Makes sense.
-        false,
-        // GCMake projects currently only support downloading each other using the Git method.
-        DownloadMethodInfo::GitMethod {
-          repo_url: dep_info.repo_url().to_string(),
-          revision: dep_info.revision().clone(),
-        },
-        true // All GCMake projects are FetchContent-ready.
-      )?;
+      if let Some(dep_info) = borrowed_graph.project_wrapper().maybe_gcmake_dep() {
+        let dep_name: &str = borrowed_graph.project_base_name();
+        let usage_conditional: UsageConditional = self.get_usage_conditional_for_project(&wrapped_graph.0);
+
+        if !usage_conditional.was_used() {
+          println!(
+            "{} loading project [{}]: No targets from gcmake dependency '{}' are ever actually linked to an output.",
+            "Warning".yellow(),
+            self.project_data.get_name_for_error_messages(),
+            borrowed_graph.project_debug_name()
+          );
+        }
+
+        // Usage conditional
+        writeln!(&self.cmakelists_file,
+          "if( {} )",
+          usage_conditional.full_conditional_string_or(true)
+        )?;
+
+        self.set_basic_var(
+          "\n",
+          &format!("{}_RELATIVE_DEP_PATH", dep_name),
+          &format!("dep/{}", dep_name)
+        )?;
+
+        self.write_dep_clone_code(
+          dep_name,
+          // GCMake projects just link using their targets as usual, since Emscripten
+          // doesn't explicitly specify support for projects we just made ourselves. Makes sense.
+          false,
+          // GCMake projects currently only support downloading each other using the Git method.
+          DownloadMethodInfo::GitMethod {
+            repo_url: dep_info.repo_url().to_string(),
+            revision: dep_info.revision().clone(),
+          },
+          true // All GCMake projects are FetchContent-ready.
+        )?;
+
+
+        writeln!(&self.cmakelists_file,
+          "gcmake_config_file_add_contents( \"find_dependency( {} \n\tPATHS\n\t\t\\\"${{CMAKE_CURRENT_LIST_DIR}}/../{}\\\"\n)\" )",
+          dep_name,
+          dep_name
+        )?;
+
+        // End usage conditional
+        writeln!(&self.cmakelists_file, "endif()")?;
+      }
     }
 
     Ok(()) 
@@ -1310,50 +1381,81 @@ impl<'a> CMakeListsWriter<'a> {
     writeln!(&self.cmakelists_file, "expose_uncached_deps()")?;
 
     if self.project_data.needs_fetchcontent() {
-      writeln!(&self.cmakelists_file, "\nFetchContent_MakeAvailable( ${{ACTUAL_DEP_LIST}} )")?;
+      writeln!(&self.cmakelists_file,
+        "list( LENGTH ACTUAL_DEP_LIST actual_dep_list_length )\nif( actual_dep_list_length )"
+      )?;
+      writeln!(&self.cmakelists_file, "\n\tFetchContent_MakeAvailable( ${{ACTUAL_DEP_LIST}} )\nendif()")?;
     }
 
-    for (dep_name, combined_dep_info) in self.project_data.get_predefined_dependencies() {
-      if let FinalPredepInfo::Subdirectory(dep_info) = combined_dep_info.predefined_dep_info() {
-        if dep_info.requires_custom_fetchcontent_populate() {
-          let is_dep_internally_supported_by_emscripten: bool = dep_info.is_internally_supported_by_emscripten();
-          if is_dep_internally_supported_by_emscripten {
+    for wrapped_graph in &self.sorted_target_info.project_order {
+      let borrowed_graph = wrapped_graph.as_ref().borrow();
+
+      if let Some(combined_dep_info) = borrowed_graph.project_wrapper().maybe_predef_dep() {
+        let dep_name: &str = borrowed_graph.project_base_name();
+        let usage_conditional: UsageConditional = self.get_usage_conditional_for_project(&wrapped_graph.0);
+
+        if !usage_conditional.was_used() {
+          println!(
+            "{} loading project [{}]: No targets from predefined dependency '{}' are ever actually linked to an output.",
+            "Warning".yellow(),
+            self.project_data.get_name_for_error_messages(),
+            borrowed_graph.project_debug_name()
+          );
+        }
+
+        // Usage conditional
+        writeln!(&self.cmakelists_file,
+          "if( {} )",
+          usage_conditional.full_conditional_string_or(true)
+        )?;
+
+
+        if let FinalPredepInfo::Subdirectory(dep_info) = combined_dep_info.predefined_dep_info() {
+          if dep_info.requires_custom_fetchcontent_populate() {
+            let is_dep_internally_supported_by_emscripten: bool = dep_info.is_internally_supported_by_emscripten();
+            if is_dep_internally_supported_by_emscripten {
+              writeln!(&self.cmakelists_file,
+                "if( NOT USING_EMSCRIPTEN )"
+              )?;
+            }
+
             writeln!(&self.cmakelists_file,
-              "if( NOT USING_EMSCRIPTEN )"
+              "\nFetchContent_GetProperties( {} )",
+              dep_name
             )?;
-          }
 
-          writeln!(&self.cmakelists_file,
-            "\nFetchContent_GetProperties( {} )",
-            dep_name
-          )?;
-
-          writeln!(&self.cmakelists_file,
-            "if( NOT {}_POPULATED )\n\tFetchContent_Populate( {} )",
-            dep_name,
-            dep_name
-          )?;
-
-          // The predefined dependency config loader guarantees that a custom_populate
-          // script exists when a subdirectory dependency specifies that it must
-          // be populated manually.
-          for line in combined_dep_info.custom_populate_script().as_ref().unwrap().contents_ref().lines() {
             writeln!(&self.cmakelists_file,
-              "\t{}",
-              line
+              "if( NOT {}_POPULATED )\n\tFetchContent_Populate( {} )",
+              dep_name,
+              dep_name
             )?;
-          }
 
-          writeln!(&self.cmakelists_file, "endif()")?;
+            // The predefined dependency config loader guarantees that a custom_populate
+            // script exists when a subdirectory dependency specifies that it must
+            // be populated manually.
+            for line in combined_dep_info.custom_populate_script().as_ref().unwrap().contents_ref().lines() {
+              writeln!(&self.cmakelists_file,
+                "\t{}",
+                line
+              )?;
+            }
 
-          if is_dep_internally_supported_by_emscripten {
             writeln!(&self.cmakelists_file, "endif()")?;
+
+            if is_dep_internally_supported_by_emscripten {
+              writeln!(&self.cmakelists_file, "endif()")?;
+            }
           }
         }
-      }
 
-      if let Some(post_load) = combined_dep_info.post_load_script() {
-        writeln!(&self.cmakelists_file, "{}", post_load.contents_ref())?;
+        if let Some(post_load) = combined_dep_info.post_load_script() {
+          writeln!(&self.cmakelists_file, "{}", post_load.contents_ref())?;
+        }
+
+        // End usage conditional
+        writeln!(&self.cmakelists_file,
+          "endif()"
+        )?;
       }
     }
 
@@ -1611,6 +1713,11 @@ impl<'a> CMakeListsWriter<'a> {
 
       let unwrapped_target = output_target.unwrap();
 
+      writeln!(&self.cmakelists_file,
+        "if( {} )",
+        system_contstraint_conditional_expression(unwrapped_target.as_ref().borrow().get_system_spec_info())
+      )?;
+
       match matching_output.get_output_type() {
         OutputItemType::Executable => {
           self.write_executable(
@@ -1649,6 +1756,10 @@ impl<'a> CMakeListsWriter<'a> {
           )?;
         }
       }
+
+      writeln!(&self.cmakelists_file,
+        "endif()"
+      )?;
     }
 
     Ok(())
@@ -2017,7 +2128,9 @@ impl<'a> CMakeListsWriter<'a> {
     &self,
     output_name: &str,
     output_data: &CompiledOutputItem,
-    output_target_node: &Rc<RefCell<TargetNode<'a>>>
+    output_target_node: &Rc<RefCell<TargetNode<'a>>>,
+    // This essentially means "not a pre-build script or test executable"
+    is_output_installed_with_project: bool
   ) -> io::Result<()> {
     let borrowed_output_target_node = output_target_node.as_ref().borrow();
 
@@ -2028,8 +2141,15 @@ impl<'a> CMakeListsWriter<'a> {
       // dependency. Therefore this set is used to ensure that variable is not written multiple times.
       let mut already_written: HashSet<String> = HashSet::new();
 
+      // Emscripten has special built-in support for some libraries. Instead of linking a local copy
+      // of the library, these libraries must be enabled using a '-s' flag variant passed to Emscripten.
+      // See this page:
+      // https://github.com/emscripten-core/emscripten/blob/main/src/settings.js
+      // for a list of -s flags. Example: -sUSE_SDL=2
       let mut emscripten_link_flags_to_apply: HashMap<String, Vec<EmscriptenLinkFlagInfo>> = HashMap::new();
 
+      let mut additional_installs: Vec<(Rc<RefCell<TargetNode>>, SystemSpecifierWrapper, LinkMode)> = Vec::new();
+      
       writeln!(&self.cmakelists_file,
         "target_link_libraries( {} ",
         output_name
@@ -2085,9 +2205,21 @@ impl<'a> CMakeListsWriter<'a> {
               );
             }
 
+            if let Some(predef_dep) = borrowed_node.container_project().as_ref().borrow().project_wrapper().maybe_predef_dep() {
+              if let FinalPredepInfo::Subdirectory(_) = predef_dep.predefined_dep_info() {
+                additional_installs.push(
+                  (
+                    Rc::clone(&dependency_node.0),
+                    normal_link_constraint.clone(),
+                    given_link_mode.clone()
+                  )
+                );
+              }
+            }
+
             writeln!(&self.cmakelists_file,
               "\t\t{}",
-              system_constraint_expression(
+              system_constraint_generator_expression(
                 &normal_link_constraint,
                 linkable_target_name
               )
@@ -2102,7 +2234,7 @@ impl<'a> CMakeListsWriter<'a> {
               .unwrap()
               .value;
             
-            emscripten_link_flag_info.full_flag_expression = system_constraint_expression(
+            emscripten_link_flag_info.full_flag_expression = system_constraint_generator_expression(
               &emscripten_constraint,
               &emscripten_link_flag_info.full_flag_expression
             );
@@ -2154,6 +2286,51 @@ impl<'a> CMakeListsWriter<'a> {
 
           writeln!(&self.cmakelists_file, ")\n")?;
         }
+      }
+
+      if is_output_installed_with_project && !additional_installs.is_empty() {
+        writeln!(&self.cmakelists_file,
+          "if( DEFINED TARGET_{}_INSTALL_MODE )",
+          output_name
+        )?;
+
+        // These are predefined subdirectory dependency targets which are PUBLIC or INTERFACE linked to
+        // one of our project's output libraries. These targets will be transitively needed by any
+        // project which makes use of our config file. These targets must be "installed" as part of
+        // our project's export set so that the installed configuration knows they exist, and can
+        // transitively link their properties correctly.
+        // That is the only reason these are installed here. Since these libraries have been linked
+        // as PUBLIC or INTERFACE, their whole project will actually install as well.
+        for (dependency_node, constraint, link_mode) in additional_installs {
+          writeln!(&self.cmakelists_file,
+            "\tif( {} )",
+            system_contstraint_conditional_expression(&constraint),
+          )?;
+
+          let namespaced_name: String = dependency_node.as_ref().borrow().get_cmake_namespaced_target_name().to_string();
+          let base_name = dependency_node.as_ref().borrow().container_project().as_ref().borrow().root_project().as_ref().borrow().project_base_name().to_string();
+
+          match &link_mode {
+            LinkMode::Public | LinkMode::Interface => {
+              writeln!(&self.cmakelists_file,
+                "\t\tadd_to_install_list( {} \"${{{}_RELATIVE_DEP_PATH}}\" )",
+                namespaced_name,
+                base_name
+              )?;
+            },
+            LinkMode::Private => {
+              writeln!(&self.cmakelists_file,
+                "\t\tadd_to_minimal_installs( {} \"${{{}_RELATIVE_DEP_PATH}}\")",
+                namespaced_name,
+                base_name
+              )?;
+            }
+          }
+
+          writeln!(&self.cmakelists_file, "\tendif()",)?;
+        }
+
+        writeln!(&self.cmakelists_file, "endif()")?;
       }
     }
 
@@ -2324,8 +2501,23 @@ impl<'a> CMakeListsWriter<'a> {
     }
 
     writeln!(&self.cmakelists_file,
-      "add_to_target_installation_list( {} )",
+      "if( \"${{TARGET_{}_INSTALL_MODE}}\" STREQUAL \"FULL\" )",
       target_name
+    )?;
+    writeln!(&self.cmakelists_file,
+      "\tadd_to_target_installation_list( {} )",
+      target_name
+    )?;
+    writeln!(&self.cmakelists_file,
+      "elseif( \"${{TARGET_{}_INSTALL_MODE}}\" STREQUAL \"MINIMAL\" )",
+      target_name
+    )?;
+    writeln!(&self.cmakelists_file,
+      "\tadd_to_minimal_installs( {} \"\" )",
+      target_name
+    )?;
+    writeln!(&self.cmakelists_file,
+      "endif()"
     )?;
     self.write_newline()?;
 
@@ -2367,7 +2559,7 @@ impl<'a> CMakeListsWriter<'a> {
     self.write_target_compile_options_for_output(output_name, output_data, &target_name)?;
     self.write_newline()?;
 
-    self.write_links_for_output(&target_name, output_data, output_target_node)?;
+    self.write_links_for_output(&target_name, output_data, output_target_node, true)?;
     Ok(())
   }
 
@@ -2437,10 +2629,17 @@ impl<'a> CMakeListsWriter<'a> {
         target_name
       )?;
 
+      // This is fine for now because executable minimal installs are the same as their
+      // full installs.
       writeln!(&self.cmakelists_file,
-        "add_to_target_installation_list( {} )",
+        "if( DEFINED TARGET_{}_INSTALL_MODE )",
         target_name
       )?;
+      writeln!(&self.cmakelists_file,
+        "\tadd_to_target_installation_list( {} )",
+        target_name
+      )?;
+      writeln!(&self.cmakelists_file, "endif()")?;
 
       writeln!(&self.cmakelists_file,
         "apply_include_dirs( {} EXE_RECEIVER \"${{{}}}\" )",
@@ -2482,7 +2681,12 @@ impl<'a> CMakeListsWriter<'a> {
     self.write_target_compile_options_for_output(output_name, output_data, target_name)?;
     self.write_newline()?;
 
-    self.write_links_for_output(receiver_lib_name, output_data, output_target_node)?;
+    self.write_links_for_output(
+      receiver_lib_name,
+      output_data,
+      output_target_node,
+      !is_pre_build_script && !self.project_data.is_test_project()
+    )?;
 
     writeln!(&self.cmakelists_file,
       "target_link_libraries( {} PRIVATE {} )",
@@ -2525,38 +2729,24 @@ impl<'a> CMakeListsWriter<'a> {
   // See this page for help and a good example:
   // https://cmake.org/cmake/help/latest/guide/tutorial/Adding%20Export%20Configuration.html
   fn write_installation_and_exports(&self) -> io::Result<()> {
-    if self.project_data.is_root_project() {
-      let mut extra_targets_to_install: HashMap<String, String> = HashMap::new();
-
-      for used_target in &self.sorted_target_info.targets_in_build_order {
-        let borrowed_target: &TargetNode = &used_target.as_ref().borrow();
-        let namespaced_target_name = borrowed_target.get_cmake_namespaced_target_name().to_string();
-        let container_project_name = borrowed_target.container_project().as_ref().borrow().project_mangled_name().to_string();
-
-        if borrowed_target.must_be_additionally_installed() {
-          extra_targets_to_install.insert(
-            namespaced_target_name,
-            container_project_name
-          );
-        }
-      }
-
-      for (namespaced_target, container_lib) in extra_targets_to_install {
-        writeln!(&self.cmakelists_file,
-          "add_to_install_list( {} \"${{{}_RELATIVE_DEP_PATH}}\" )",
-          namespaced_target,
-          container_lib
-        )?;
-      }
-    }
-
+    writeln!(&self.cmakelists_file, "clean_minimal_installs()")?;
     writeln!(&self.cmakelists_file, "clean_target_list()")?;
     writeln!(&self.cmakelists_file, "clean_needed_bin_files_list()")?;
     writeln!(&self.cmakelists_file, "clean_install_list()")?;
+    writeln!(&self.cmakelists_file, "clean_generated_export_headers_list()")?;
     
     if self.project_data.is_root_project() {
       writeln!(&self.cmakelists_file, "clean_custom_find_modules_list()")?;
     }
+
+    let write_raise_functions: &dyn Fn(&str) -> io::Result<()> = &|spacer: &str| {
+      writeln!(&self.cmakelists_file, "{}raise_minimal_installs()", spacer)?;
+      writeln!(&self.cmakelists_file, "{}raise_target_list()", spacer)?;
+      writeln!(&self.cmakelists_file, "{}raise_needed_bin_files_list()", spacer)?;
+      writeln!(&self.cmakelists_file, "{}raise_install_list()", spacer)?;
+      writeln!(&self.cmakelists_file, "{}raise_generated_export_headers_list()", spacer)?;
+      Ok(())
+    };
 
     match &self.project_data.get_project_type() {
       FinalProjectType::Root => {
@@ -2570,13 +2760,12 @@ impl<'a> CMakeListsWriter<'a> {
 
         writeln!(&self.cmakelists_file, "if( GCMAKE_INSTALL AND \"${{CMAKE_CURRENT_SOURCE_DIR}}\" STREQUAL \"${{TOPLEVEL_PROJECT_DIR}}\" )")?;
         writeln!(&self.cmakelists_file, "\tconfigure_installation( LOCAL_PROJECT_COMPONENT_NAME )")?;
+        writeln!(&self.cmakelists_file, "else()")?;
+        write_raise_functions("\t")?;
         writeln!(&self.cmakelists_file, "endif()")?;
       },
       FinalProjectType::Subproject { } => {
-        writeln!(&self.cmakelists_file, "raise_target_list()")?;
-        writeln!(&self.cmakelists_file, "raise_needed_bin_files_list()")?;
-        writeln!(&self.cmakelists_file, "raise_install_list()")?;
-        writeln!(&self.cmakelists_file, "raise_generated_export_headers_list()")?;
+        write_raise_functions("")?;
       },
       FinalProjectType::Test { .. } => {
         // NOTE: I don't think anything needs to happen here since tests are never installed
@@ -2667,5 +2856,85 @@ impl<'a> CMakeListsWriter<'a> {
 
   fn dep_graph_ref(&self) -> Ref<DependencyGraph<'a>> {
     return self.dep_graph.as_ref().borrow();
+  }
+
+  // NOTE: This should only be called from the root project
+  fn get_usage_conditional_for_project(&self, graph_for_dependency: &Rc<RefCell<DependencyGraph>>) -> UsageConditional {
+    let root_dep_id = graph_for_dependency.as_ref().borrow().root_project_id();
+    let constraints_for_used_links: Vec<(Option<SystemSpecifierWrapper>, Option<SystemSpecifierWrapper>)> = self.sorted_target_info.all_targets_with_root_project_id(self.dep_graph_ref().root_project_id())
+      .iter()
+      .filter_map(|wrapped_project_target| {
+        let dependent_system_specs: Vec<(LinkMode, SystemSpecifierWrapper)> = wrapped_project_target.as_ref().borrow().get_depends_on()
+          .iter()
+          .filter(|(_, link) | {
+            let root_project_id_of_linked_target = link.linked_target().as_ref().borrow().container_project().as_ref().borrow().root_project_id();
+            root_project_id_of_linked_target == root_dep_id
+          })
+          .map(|(_, link)| 
+            (
+              link.get_link_mode(),
+              link.linked_target().as_ref().borrow().get_system_spec_info().clone()
+            )
+          )
+          .collect();
+
+        let project_target_constraint: SystemSpecifierWrapper = wrapped_project_target.as_ref().borrow().get_system_spec_info().clone();
+
+        let public_needed_constraint = dependent_system_specs.iter()
+          .filter_map(|(link_mode, system_spec)| match link_mode {
+            LinkMode::Public | LinkMode::Interface => Some(system_spec.clone()),
+            LinkMode::Private => None
+          })
+          .reduce(|accum, item| accum.union(&item))
+          .map(|links_constraint| links_constraint.intersection(&project_target_constraint));
+
+        let private_needed_constraint = dependent_system_specs.into_iter()
+          .filter_map(|(link_mode, system_spec)| match link_mode {
+            LinkMode::Private => Some(system_spec),
+            LinkMode::Public | LinkMode::Interface => None,
+          })
+          .reduce(|accum, item| accum.union(&item))
+          .map(|links_constraint| links_constraint.intersection(&project_target_constraint));
+        
+        match (&public_needed_constraint, &private_needed_constraint) {
+          (None, None) => None,
+          _ => Some((public_needed_constraint, private_needed_constraint))
+        }
+      })
+      .collect();
+
+    return if constraints_for_used_links.is_empty() {
+      UsageConditional {
+        public_conditional: None,
+        private_conditional: None
+      }
+    }
+    else {
+      let (public_constraint, private_constraint) = constraints_for_used_links.into_iter()
+        .reduce(|(public_accum, private_accum), (public_target_constraint, private_target_constraint)|
+          (
+            union_maybe_specs(public_accum.as_ref(), public_target_constraint.as_ref()),
+            union_maybe_specs(private_accum.as_ref(), private_target_constraint.as_ref()),
+          )
+        )
+        .unwrap();
+
+      UsageConditional {
+        public_conditional: public_constraint,
+        private_conditional: private_constraint
+      }
+    }
+  }
+}
+
+fn union_maybe_specs(
+  first: Option<&SystemSpecifierWrapper>,
+  second: Option<&SystemSpecifierWrapper>
+) -> Option<SystemSpecifierWrapper> {
+  match (first, second) {
+    (None, None) => None,
+    (Some(spec), None) => Some(spec.clone()),
+    (None, Some(spec)) => Some(spec.clone()),
+    (Some(spec), Some(other_spec)) => Some(spec.union(&other_spec))
   }
 }

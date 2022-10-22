@@ -190,6 +190,14 @@ impl<'a> Link<'a> {
     Weak::upgrade(&self.target).unwrap().as_ref().borrow().unique_target_id()
   }
 
+  pub fn linked_target(&self) -> Rc<RefCell<TargetNode<'a>>> {
+    Weak::upgrade(&self.target).unwrap()
+  }
+
+  pub fn get_link_mode(&self) -> LinkMode {
+    self.link_mode.clone()
+  }
+
   pub fn get_system_spec_info(&self) -> &SystemSpecifierWrapper {
     &self.system_spec_info
   }
@@ -217,6 +225,15 @@ pub enum ContainedItem<'a> {
     external_requirements: Vec<FinalExternalRequirementSpecifier>
   },
   PreBuild(&'a PreBuildScript)
+}
+
+impl<'a> ContainedItem<'a> {
+  pub fn is_predefined_lib(&self) -> bool {
+    match self {
+      Self::PredefinedLibrary { .. } => true,
+      _ => false
+    }
+  }
 }
 
 // Target which might not have been imported into the project, but still needs to be referenced
@@ -401,6 +418,10 @@ impl<'a> TargetNode<'a> {
     }
   }
 
+  pub fn get_depends_on(&self) -> &HashMap<TargetId, Link<'a>> {
+    &self.depends_on
+  }
+
   pub fn simple_output_type(&self) -> SimpleNodeOutputType {
     return self.output_type.clone();
   }
@@ -497,6 +518,13 @@ impl<'a> TargetNode<'a> {
 
   pub fn get_link_by_id(&self, target_id: TargetId) -> Option<&Link<'a>> {
     return self.depends_on.get(&target_id)
+  }
+
+  pub fn maybe_regular_output(&self) -> Option<&CompiledOutputItem> {
+    return match &self.contained_item {
+      ContainedItem::CompiledOutput(output) => Some(output),
+      _ => None
+    }
   }
 
   pub fn get_contained_item(&self) -> &ContainedItem {
@@ -613,6 +641,13 @@ impl ProjectWrapper {
     return match self.maybe_normal_project() {
       Some(project_info) => Rc::clone(project_info),
       None => panic!("Tried to unwrap a ProjectWrapper as a normal project, but the wrapper did not contain an available FinalProjectData.")
+    }
+  }
+
+  pub fn maybe_gcmake_dep(&self) -> Option<&Rc<FinalGCMakeDependency>> {
+    return match self {
+      Self::GCMakeDependencyRoot(gcmake_dep) => Some(gcmake_dep),
+      _ => None
     }
   }
 
@@ -2486,7 +2521,7 @@ impl<'a> DependencyGraph<'a> {
           Rc::new(RefCell::new(TargetNode::new(
             target_id_counter,
             target_name,
-            SystemSpecifierWrapper::default_include_all(),
+            output_item.system_specifier.clone(),
             target_output_name.clone(),
             project.receiver_lib_name(&target_output_name),
             project.prefix_with_project_namespace(&target_output_name),
@@ -2782,6 +2817,32 @@ impl<'a> OrderedTargetInfo<'a> {
 
   pub fn targets_in_link_order(&self) -> impl Iterator<Item=&RcRefcHashWrapper<TargetNode<'a>>> {
     return self.targets_in_build_order.iter().rev();
+  }
+
+  pub fn all_targets_with_root_project_id(&self, root_project_id: ProjectId) -> Vec<RcRefcHashWrapper<TargetNode<'a>>> {
+    return self.targets_in_build_order
+      .iter()
+      .filter(|target|
+        target.as_ref().borrow()
+        .container_project().as_ref().borrow()
+        .root_project_id() == root_project_id
+      )
+      .map(|wrapped_target| wrapped_target.clone())
+      .collect();
+  }
+
+  // Excludes pre-build targets
+  pub fn regular_targets_with_root_project_id(&self, root_project_id: ProjectId) -> Vec<RcRefcHashWrapper<TargetNode<'a>>> {
+    return self.targets_in_build_order
+      .iter()
+      .filter(|target| {
+        let borrowed_target = target.as_ref().borrow();
+        let ids_match: bool = borrowed_target.container_project().as_ref().borrow().root_project_id() == root_project_id;
+
+        ids_match && borrowed_target.is_regular_node()
+      })
+      .map(|wrapped_target| wrapped_target.clone())
+      .collect();
   }
 
   pub fn targets_with_project_id(&self, project_id: ProjectId) -> Vec<RcRefcHashWrapper<TargetNode<'a>>> {

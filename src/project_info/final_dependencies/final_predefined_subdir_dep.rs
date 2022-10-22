@@ -82,6 +82,14 @@ pub struct SubdirDepInstallationConfig {
   pub should_install_by_default: bool
 }
 
+impl SubdirDepInstallationConfig {
+  pub fn actual_value_for(&self, should_install: bool) -> bool {
+    return if self.is_inverse
+      { !should_install }
+      else { should_install }
+  }
+}
+
 fn resolve_download_method(
   subdir_dep: &RawSubdirectoryDependency,
   user_given_config: &UserGivenPredefinedDependencyConfig,

@@ -127,6 +127,7 @@ pub struct CompiledOutputItem {
   // That directory is not always the same as the project which directly contains the output item.
   pub windows_icon_relative_to_root_project: Option<PathBuf>,
   pub build_config: Option<FinalTargetBuildConfigMap>,
+  pub system_specifier: SystemSpecifierWrapper,
   pub requires_custom_main: bool
 }
 
@@ -213,11 +214,16 @@ impl CompiledOutputItem {
     return Ok(output_links);
   }
 
-  pub fn from(output_name: &str, raw_output_item: &RawCompiledItem) -> Result<CompiledOutputItem, String> {
+  pub fn from(
+    output_name: &str,
+    raw_output_item: &RawCompiledItem,
+    maybe_system_specifier: Option<SystemSpecifierWrapper>
+  ) -> Result<CompiledOutputItem, String> {
     let mut final_output_item = CompiledOutputItem {
       output_type: raw_output_item.output_type,
       entry_file: String::from(&raw_output_item.entry_file),
       links: OutputItemLinks::new_empty(),
+      system_specifier: maybe_system_specifier.unwrap_or_default(),
       windows_icon_relative_to_root_project: raw_output_item.windows_icon.clone()
         .map(PathBuf::from),
       build_config: make_final_target_build_config(raw_output_item.build_config.as_ref())?,

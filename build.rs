@@ -13,7 +13,8 @@ fn main() {
     "gcmake-windows-rc-file-utils",
     "gcmake-pgo-utils",
     "gcmake-installation-utils",
-    "gcmake-cpack-utils"
+    "gcmake-cpack-utils",
+    "gcmake-config-file-writer"
   ];
 
   match combine_cmake_util_files(ordered_cmake_util_names) {

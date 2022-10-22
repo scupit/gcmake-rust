@@ -2,7 +2,7 @@ use std::{collections::{HashMap, HashSet}, path::{Path, PathBuf}, io, rc::Rc, fs
 
 use crate::project_info::path_manipulation::cleaned_pathbuf;
 
-use super::{path_manipulation::{cleaned_path_str, relative_to_project_root, absolute_path}, final_dependencies::{FinalGCMakeDependency, FinalPredefinedDependencyConfig, GCMakeDependencyStatus}, raw_data_in::{RawProject, dependencies::internal_dep_config::AllRawPredefinedDependencies, BuildConfigMap, BuildType, LanguageConfigMap, OutputItemType, PreBuildConfigIn, SpecificCompilerSpecifier, BuildConfigCompilerSpecifier, TargetBuildConfigMap, TargetSpecificBuildType, LinkSection, RawTestFramework, RawInstallerConfig, DefaultCompiledLibType}, final_project_configurables::{FinalProjectType}, CompiledOutputItem, helpers::{parse_subproject_data, parse_root_project_data, populate_files, find_prebuild_script, PrebuildScriptFile, validate_raw_project_outputs, ProjectOutputType, RetrievedCodeFileType, retrieve_file_type, parse_test_project_data}, PreBuildScript, OutputItemLinks, FinalTestFramework, base_include_prefix_for_test, gcmake_constants::{SRC_DIR, INCLUDE_DIR, TEMPLATE_IMPL_DIR, TESTS_DIR, SUBPROJECTS_DIR}, FinalInstallerConfig, CompilerDefine, FinalBuildConfigMap, make_final_target_build_config, make_final_build_config_map, FinalTargetBuildConfigMap, FinalGlobalProperties, FinalShortcutConfig, parsers::version_parser::ThreePartVersion};
+use super::{path_manipulation::{cleaned_path_str, relative_to_project_root, absolute_path}, final_dependencies::{FinalGCMakeDependency, FinalPredefinedDependencyConfig, GCMakeDependencyStatus}, raw_data_in::{RawProject, dependencies::internal_dep_config::AllRawPredefinedDependencies, BuildConfigMap, BuildType, LanguageConfigMap, OutputItemType, PreBuildConfigIn, SpecificCompilerSpecifier, BuildConfigCompilerSpecifier, TargetBuildConfigMap, TargetSpecificBuildType, LinkSection, RawTestFramework, RawInstallerConfig, DefaultCompiledLibType}, final_project_configurables::{FinalProjectType}, CompiledOutputItem, helpers::{parse_subproject_data, parse_root_project_data, populate_files, find_prebuild_script, PrebuildScriptFile, validate_raw_project_outputs, ProjectOutputType, RetrievedCodeFileType, retrieve_file_type, parse_test_project_data}, PreBuildScript, OutputItemLinks, FinalTestFramework, base_include_prefix_for_test, gcmake_constants::{SRC_DIR, INCLUDE_DIR, TEMPLATE_IMPL_DIR, TESTS_DIR, SUBPROJECTS_DIR}, FinalInstallerConfig, CompilerDefine, FinalBuildConfigMap, make_final_target_build_config, make_final_build_config_map, FinalTargetBuildConfigMap, FinalGlobalProperties, FinalShortcutConfig, parsers::{version_parser::ThreePartVersion, general_parser::ParseSuccess}, platform_spec_parser::parse_leading_system_spec, SystemSpecifierWrapper};
 use colored::*;
 
 const SUBPROJECT_JOIN_STR: &'static str = "_S_";
@@ -18,6 +18,7 @@ fn resolve_prebuild_script(project_root: &str, pre_build_config: &PreBuildConfig
           output_type: OutputItemType::Executable,
           entry_file: relative_to_project_root(project_root, entry_file_pathbuf),
           windows_icon_relative_to_root_project: None,
+          system_specifier: SystemSpecifierWrapper::default(),
           links: match &pre_build_config.link {
             Some(raw_links) => CompiledOutputItem::make_link_map(
               &format!("Pre-build script"),
@@ -573,9 +574,26 @@ impl FinalProjectData {
         );
       }
 
+      let actual_output_name: &str;
+      let system_spec: Option<SystemSpecifierWrapper>;
+
+      match parse_leading_system_spec(output_name) {
+        Ok(Some(ParseSuccess { value: system_spec_wrapper, rest: real_output_name })) => {
+          actual_output_name = real_output_name;
+          system_spec = Some(system_spec_wrapper);
+        },
+        Ok(None) => {
+          actual_output_name = output_name;
+          system_spec = None;
+        },
+        Err(err_msg) => return Err(ProjectLoadFailureReason::Other(
+          format!("Error when parsing system specifier from output name '{}':\n{}", output_name, err_msg)
+        ))
+      }
+
       output_items.insert(
-        output_name.to_owned(),
-        CompiledOutputItem::from(output_name, raw_output_item)
+        actual_output_name.to_string(),
+        CompiledOutputItem::from(actual_output_name, raw_output_item, system_spec)
           .map_err(|err_message| ProjectLoadFailureReason::Other(
             format!("When creating output item named '{}':\n{}", output_name, err_message)
           ))?

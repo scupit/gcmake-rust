@@ -1,7 +1,15 @@
 use crate::project_info::{SystemSpecifierWrapper, SystemSpecExpressionTree, SingleSystemSpec};
 
+pub fn system_contstraint_conditional_expression(system_spec: &SystemSpecifierWrapper) -> String {
+  match system_spec {
+    SystemSpecifierWrapper::All => String::from("TRUE"),
+    SystemSpecifierWrapper::Specific(spec_tree) => {
+      format!("( {} )", make_inner_system_spec_conditional_expr(spec_tree))
+    }
+  }
+}
 
-pub fn system_constraint_expression(
+pub fn system_constraint_generator_expression(
   system_spec: &SystemSpecifierWrapper,
   contained_str: &str
 ) -> String {
@@ -89,6 +97,53 @@ fn make_inner_system_spec_generator_expression(
           right_string
         )
       }
+    }
+  }
+}
+
+fn make_inner_system_spec_conditional_expr(spec_tree: &SystemSpecExpressionTree) -> String {
+  match spec_tree {
+    SystemSpecExpressionTree::ParenGroup(group) => {
+      format!(
+        "( {} )",
+        make_inner_system_spec_conditional_expr(group)
+      )
+    },
+    SystemSpecExpressionTree::Not(expr) => {
+      format!(
+        "NOT ({})",
+        make_inner_system_spec_conditional_expr(expr)
+      )
+    },
+    SystemSpecExpressionTree::Value(value) => {
+      let var_name: &str = match value {
+        SingleSystemSpec::Android => "TARGET_SYSTEM_IS_ANDROID",
+        SingleSystemSpec::Windows => "TARGET_SYSTEM_IS_WINDOWS",
+        SingleSystemSpec::Linux => "TARGET_SYSTEM_IS_LINUX",
+        SingleSystemSpec::MacOS => "TARGET_SYSTEM_IS_MACOS",
+        SingleSystemSpec::Unix => "TARGET_SYSTEM_IS_UNIX",
+        SingleSystemSpec::MinGW => "USING_MINGW",
+        SingleSystemSpec::GCC => "USING_GCC",
+        SingleSystemSpec::Clang => "USING_CLANG",
+        SingleSystemSpec::MSVC => "USING_MSVC",
+        SingleSystemSpec::Emscripten => "USING_EMSCRIPTEN"
+      };
+
+      var_name.to_string()
+    },
+    SystemSpecExpressionTree::Or(left_expr, right_expr) => {
+      format!(
+        "( {} ) OR ( {} )",
+        make_inner_system_spec_conditional_expr(left_expr),
+        make_inner_system_spec_conditional_expr(right_expr)
+      )
+    },
+    SystemSpecExpressionTree::And(left_expr, right_expr) => {
+      format!(
+        "( {} ) AND ( {} )",
+        make_inner_system_spec_conditional_expr(left_expr),
+        make_inner_system_spec_conditional_expr(right_expr)
+      )
     }
   }
 }
