@@ -344,11 +344,33 @@ endmacro()
 macro( add_to_target_installation_list
   target_name
 )
-  set( MY_INSTALLABLE_TARGETS "${MY_INSTALLABLE_TARGETS}" "${target_name}" )
+  unaliased_target_name( ${target_name} actual_target_name )
+  set( MY_INSTALLABLE_TARGETS "${MY_INSTALLABLE_TARGETS}" "${actual_target_name}" )
 endmacro()
 
 macro( raise_target_list )
   set( LATEST_SUBPROJECT_TARGET_LIST "${MY_INSTALLABLE_TARGETS}" PARENT_SCOPE )
+endmacro()
+
+# ================================================================================
+# Debian package names which the project depends on.
+# ================================================================================
+macro( initialize_deb_list )
+  set( MY_NEEDED_DEB_PACKAGES "" )
+endmacro()
+
+macro( clean_deb_list )
+  clean_list( "${MY_NEEDED_DEB_PACKAGES}" MY_NEEDED_DEB_PACKAGES )
+endmacro()
+
+macro( add_to_deb_list
+  deb_package_name
+)
+  set( MY_NEEDED_DEB_PACKAGES "${MY_NEEDED_DEB_PACKAGES}" "${deb_package_name}" )
+endmacro()
+
+macro( raise_deb_list )
+  set( LATEST_NEEDED_DEB_PACKAGE_LIST "${MY_NEEDED_DEB_PACKAGES}" PARENT_SCOPE )
 endmacro()
 
 # ================================================================================
@@ -561,5 +583,15 @@ function( configure_subproject
     endif()
 
     set( MY_MINIMAL_INSTALLS "${combined_list}" PARENT_SCOPE )
+  endif()
+
+  if( NOT "${LATEST_NEEDED_DEB_PACKAGE_LIST}" STREQUAL "" )
+    if( "${MY_NEEDED_DEB_PACKAGES}" STREQUAL "" )
+      set( combined_list "${LATEST_NEEDED_DEB_PACKAGE_LIST}" )
+    else()
+      set( combined_list "${MY_NEEDED_DEB_PACKAGES}" "${LATEST_NEEDED_DEB_PACKAGE_LIST}" )
+    endif()
+
+    set( MY_NEEDED_DEB_PACKAGES "${combined_list}" PARENT_SCOPE )
   endif()
 endfunction()

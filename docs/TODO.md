@@ -10,10 +10,11 @@ There are a whole bunch of things which need doing. This is the place to list th
 ## Priorities
 
 - [ ] Add CLI commands for cleaning and updating the dep-cache. Not exactly sure how updating should work yet.
-- [ ] [Cargo-style package features](https://doc.rust-lang.org/cargo/reference/features.html)
-- [ ] Minimal installs based on what your project uses. Dependencies with only privately linked libraries only
-        need to have the targets themselves installed, no running the install step. Dependencies with
-        public linked libraries should install the target, but also run that project's install step.
+- [ ] [Cargo-style package features](https://doc.rust-lang.org/cargo/reference/features.html). More or less
+        just need to add a `feature:feature-name` item to the constraint specifier parser.
+        Ex: `(( windows and feature:zlib ))`
+- [ ] Debian package dependencies for each predefined dependency (dev when transitively required, runtime when only needed at runtime)
+- [ ] Now that minimal installs are implemented, add ability to specify exactly which executables are installed.
 
 ## Configuration TODO
 
@@ -32,7 +33,6 @@ The command set for viewing dependency graph info.
 
 - [ ] `dep-graph` command which prints a dependency graph for each target in the current project.
 - [ ] `dep-graph <target>` command which prints a dependency graph for the given target.
-- [ ] Debian package dependencies for each predefined dependency (dev when transitively required, runtime when only needed at runtime)
 
 #### show
 

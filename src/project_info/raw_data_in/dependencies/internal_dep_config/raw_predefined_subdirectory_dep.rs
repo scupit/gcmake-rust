@@ -1,6 +1,6 @@
 use serde::{Deserialize};
 
-use super::{raw_target_config_common::RawPredefinedTargetMapIn, RawMutualExclusionSet, raw_dep_common::{RawPredepCommon, RawEmscriptenConfig}};
+use super::{raw_target_config_common::RawPredefinedTargetMapIn, RawMutualExclusionSet, raw_dep_common::{RawPredepCommon, RawEmscriptenConfig, RawDebianPackagesConfig}};
 
 #[derive(Deserialize, Clone)]
 #[serde(deny_unknown_fields)]
@@ -62,6 +62,7 @@ pub struct RawSubdirectoryDependency {
   pub target_configs: RawPredefinedTargetMapIn,
   pub mutually_exclusive: Option<RawMutualExclusionSet>,
   pub emscripten_config: Option<RawEmscriptenConfig>,
+  pub debian_packages: Option<RawDebianPackagesConfig>,
 
   #[serde(default = "default_requires_custom_populate")]
   pub requires_custom_fetchcontent_populate: bool,
@@ -86,6 +87,10 @@ impl RawSubdirectoryDependency {
 }
 
 impl RawPredepCommon for RawSubdirectoryDependency {
+  fn raw_debian_packages_config(&self) -> Option<&RawDebianPackagesConfig> {
+    self.debian_packages.as_ref()
+  }
+
   fn can_trivially_cross_compile(&self) -> bool {
     self._can_cross_compile
   }

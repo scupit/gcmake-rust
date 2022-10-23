@@ -13,7 +13,7 @@ pub use final_predefined_cmake_components_module_dep::*;
 pub use final_gcmake_project_dep::*;
 pub use final_predefined_cmake_module_dep::*;
 pub use final_target_map_common::{FinalRequirementSpecifier, FinalTargetConfig, FinalExternalRequirementSpecifier};
-pub use predep_module_common::PredefinedDepFunctionality;
+pub use predep_module_common::{PredefinedDepFunctionality, FinalDebianPackagesConfig};
 
 use crate::project_info::{platform_spec_parser::parse_leading_system_spec, parsers::general_parser::ParseSuccess};
 
@@ -289,7 +289,7 @@ impl FinalPredefinedDependencyConfig {
   // }
 
   pub fn get_target_config_map(&self) -> &FinalTargetConfigMap {
-    return self.unwrap_dep_common().get_target_config_map();
+    return self.as_common().get_target_config_map();
   }
 
   pub fn get_cmake_namespaced_target_name(&self, target_name: &str) -> Option<String> {
@@ -314,7 +314,7 @@ impl FinalPredefinedDependencyConfig {
     }
   }
 
-  fn unwrap_dep_common(&self) -> &dyn PredefinedDepFunctionality {
+  pub fn as_common(&self) -> &dyn PredefinedDepFunctionality {
     let the_dep: &dyn PredefinedDepFunctionality = match &self.predep_info {
       FinalPredepInfo::Subdirectory(subdir_dep) => subdir_dep,
       FinalPredepInfo::CMakeModule(module_dep) => module_dep,

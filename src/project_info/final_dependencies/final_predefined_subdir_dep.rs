@@ -1,10 +1,10 @@
-use std::{collections::{HashMap, HashSet}};
+use std::{collections::{HashMap, HashSet, BTreeSet}};
 
 use colored::Colorize;
 
 use crate::project_info::{raw_data_in::dependencies::{internal_dep_config::{RawSubdirectoryDependency, raw_dep_common::{RawPredepCommon, RawEmscriptenConfig}, RawExtensionsByPlatform}, user_given_dep_config::{UserGivenPredefinedDependencyConfig}}, parsers::{general_parser::alternatives_parse, version_parser::{ThreePartVersionTuple, ThreePartVersion, parse_version}, version_transform_parser::transform_version}, path_manipulation::without_leading_dot};
 
-use super::{predep_module_common::PredefinedDepFunctionality, final_target_map_common::{FinalTargetConfigMap, make_final_target_config_map}};
+use super::{predep_module_common::{PredefinedDepFunctionality, FinalDebianPackagesConfig}, final_target_map_common::{FinalTargetConfigMap, make_final_target_config_map}};
 
 #[derive(Clone)]
 pub struct FinalSubdirDepLinks {
@@ -242,6 +242,7 @@ pub struct PredefinedSubdirDep {
   // install dir on Windows.
   // TODO: Do that, actually.
   config_file_project_name: Option<String>,
+  debian_packages: FinalDebianPackagesConfig,
   // Map of target base name to the namespaced target name used for linking.
   target_map: FinalTargetConfigMap,
   cmake_namespaced_target_map: HashMap<String, String>,
@@ -370,6 +371,7 @@ impl PredefinedSubdirDep {
         installed_include_dir_name: subdir_dep.installed_include_dir_name.clone(),
         config_file_project_name: subdir_dep.config_file_project_name.clone(),
         target_map,
+        debian_packages: FinalDebianPackagesConfig::make_from(subdir_dep.raw_debian_packages_config()),
         cmake_namespaced_target_map,
         yaml_namespaced_target_map,
         requires_custom_populate: subdir_dep.requires_custom_fetchcontent_populate,
@@ -381,6 +383,10 @@ impl PredefinedSubdirDep {
 }
 
 impl PredefinedDepFunctionality for PredefinedSubdirDep {
+  fn debian_packages_config(&self) -> &FinalDebianPackagesConfig {
+    &self.debian_packages
+  }
+
   fn can_cross_compile(&self) -> bool {
     self.raw_dep.can_trivially_cross_compile()
   }

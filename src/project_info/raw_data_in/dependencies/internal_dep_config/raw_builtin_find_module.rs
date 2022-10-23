@@ -1,6 +1,6 @@
 use serde::{Deserialize};
 
-use super::{ComponentsFindModuleLinks, raw_target_config_common::RawPredefinedTargetMapIn, RawMutualExclusionSet, raw_dep_common::{RawPredepCommon, RawEmscriptenConfig}};
+use super::{ComponentsFindModuleLinks, raw_target_config_common::RawPredefinedTargetMapIn, RawMutualExclusionSet, raw_dep_common::{RawPredepCommon, RawEmscriptenConfig, RawDebianPackagesConfig}};
 
 #[derive(Deserialize, Clone)]
 #[serde(deny_unknown_fields)]
@@ -23,12 +23,17 @@ pub struct RawModuleDep {
   pub module_type: CMakeModuleType,
   pub links: ComponentsFindModuleLinks,
   pub namespace_config: BuiltinFindModuleNamespaceConfig,
+  pub debian_packages: Option<RawDebianPackagesConfig>,
   pub mutually_exclusive: Option<RawMutualExclusionSet>,
   pub emscripten_config: Option<RawEmscriptenConfig>,
   pub targets: RawPredefinedTargetMapIn
 }
 
 impl RawPredepCommon for RawModuleDep {
+  fn raw_debian_packages_config(&self) -> Option<&RawDebianPackagesConfig> {
+    self.debian_packages.as_ref()
+  }
+
   fn can_trivially_cross_compile(&self) -> bool {
     false
   }

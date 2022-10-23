@@ -2,7 +2,7 @@ use std::collections::{HashSet, HashMap};
 
 use crate::project_info::raw_data_in::dependencies::{internal_dep_config::{RawComponentsModuleDep, ComponentsFindModuleLinks, UsageMode, CMakeModuleType, raw_dep_common::{RawPredepCommon, RawEmscriptenConfig}}, user_given_dep_config::{UserGivenPredefinedDependencyConfig}};
 
-use super::{predep_module_common::PredefinedDepFunctionality, final_target_map_common::{FinalTargetConfigMap, make_final_target_config_map}};
+use super::{predep_module_common::{PredefinedDepFunctionality, FinalDebianPackagesConfig}, final_target_map_common::{FinalTargetConfigMap, make_final_target_config_map}};
 
 #[derive(Clone)]
 pub struct PredefinedCMakeComponentsModuleDep {
@@ -10,6 +10,7 @@ pub struct PredefinedCMakeComponentsModuleDep {
   lib_link_mode: UsageMode,
   cmake_namespaced_target_map: HashMap<String, String>,
   yaml_namespaced_target_map: HashMap<String, String>,
+  debian_packages: FinalDebianPackagesConfig,
   components: FinalTargetConfigMap,
   _can_cross_compile: bool
 }
@@ -102,6 +103,7 @@ impl PredefinedCMakeComponentsModuleDep {
       components,
       cmake_namespaced_target_map,
       yaml_namespaced_target_map,
+      debian_packages: FinalDebianPackagesConfig::make_from(components_dep.raw_debian_packages_config()),
       lib_link_mode: components_dep.cmakelists_usage.link_format.clone(),
       raw_dep: components_dep.clone(),
       _can_cross_compile: components_dep.can_trivially_cross_compile()
@@ -110,6 +112,10 @@ impl PredefinedCMakeComponentsModuleDep {
 }
 
 impl PredefinedDepFunctionality for PredefinedCMakeComponentsModuleDep {
+  fn debian_packages_config(&self) -> &FinalDebianPackagesConfig {
+    &self.debian_packages
+  }
+
   fn can_cross_compile(&self) -> bool {
     self._can_cross_compile
   }

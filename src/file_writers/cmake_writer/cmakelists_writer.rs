@@ -1,6 +1,6 @@
 use std::{collections::{HashMap, HashSet}, fs::File, io::{self, Write, ErrorKind}, path::{PathBuf, Path}, rc::Rc, cell::{RefCell, Ref}, borrow::Borrow};
 
-use crate::{project_info::{final_project_data::{FinalProjectData}, path_manipulation::{cleaned_path_str, relative_to_project_root}, final_dependencies::{GitRevisionSpecifier, PredefinedCMakeComponentsModuleDep, PredefinedSubdirDep, PredefinedCMakeModuleDep, FinalPredepInfo, GCMakeDependencyStatus, FinalPredefinedDependencyConfig, base64_encoded, PredefinedDepFunctionality, FinalDownloadMethod}, raw_data_in::{BuildType, RawBuildConfig, BuildConfigCompilerSpecifier, SpecificCompilerSpecifier, OutputItemType, LanguageConfigMap, TargetSpecificBuildType, dependencies::internal_dep_config::{CMakeModuleType}, DefaultCompiledLibType}, FinalProjectType, CompiledOutputItem, PreBuildScript, LinkMode, FinalTestFramework, dependency_graph_mod::dependency_graph::{DependencyGraph, OrderedTargetInfo, ProjectWrapper, TargetNode, SimpleNodeOutputType, Link, EmscriptenLinkFlagInfo, ContainedItem}, SystemSpecifierWrapper, SingleSystemSpec, CompilerDefine, FinalBuildConfig, CompilerFlag, LinkerFlag, gcmake_constants::{SRC_DIR, INCLUDE_DIR, TEMPLATE_IMPL_DIR}, platform_spec_parser::parse_leading_system_spec}, file_writers::cmake_writer::cmake_writer_helpers::system_constraint_generator_expression};
+use crate::{project_info::{final_project_data::{FinalProjectData}, path_manipulation::{cleaned_path_str, relative_to_project_root}, final_dependencies::{GitRevisionSpecifier, PredefinedCMakeComponentsModuleDep, PredefinedSubdirDep, PredefinedCMakeModuleDep, FinalPredepInfo, GCMakeDependencyStatus, FinalPredefinedDependencyConfig, base64_encoded, PredefinedDepFunctionality, FinalDownloadMethod, FinalDebianPackagesConfig}, raw_data_in::{BuildType, RawBuildConfig, BuildConfigCompilerSpecifier, SpecificCompilerSpecifier, OutputItemType, LanguageConfigMap, TargetSpecificBuildType, dependencies::internal_dep_config::{CMakeModuleType}, DefaultCompiledLibType}, FinalProjectType, CompiledOutputItem, PreBuildScript, LinkMode, FinalTestFramework, dependency_graph_mod::dependency_graph::{DependencyGraph, OrderedTargetInfo, ProjectWrapper, TargetNode, SimpleNodeOutputType, Link, EmscriptenLinkFlagInfo, ContainedItem}, SystemSpecifierWrapper, SingleSystemSpec, CompilerDefine, FinalBuildConfig, CompilerFlag, LinkerFlag, gcmake_constants::{SRC_DIR, INCLUDE_DIR, TEMPLATE_IMPL_DIR}, platform_spec_parser::parse_leading_system_spec}, file_writers::cmake_writer::cmake_writer_helpers::system_constraint_generator_expression};
 
 use super::{cmake_utils_writer::{CMakeUtilFile, CMakeUtilWriter}, cmake_writer_helpers::system_contstraint_conditional_expression};
 use colored::*;
@@ -640,6 +640,7 @@ impl<'a> CMakeListsWriter<'a> {
       }
     }
 
+    writeln!(&self.cmakelists_file, "initialize_deb_list()")?;
     writeln!(&self.cmakelists_file, "initialize_minimal_installs()")?;
     writeln!(&self.cmakelists_file, "initialize_target_list()")?;
     writeln!(&self.cmakelists_file, "initialize_needed_bin_files_list()")?;
@@ -852,6 +853,46 @@ impl<'a> CMakeListsWriter<'a> {
               )?;
             }
           }
+
+          if dep_info.as_common().debian_packages_config().has_packages() {
+            let FinalDebianPackagesConfig {
+              runtime: runtime_packages,
+              dev: dev_packages
+            } = dep_info.as_common().debian_packages_config();
+
+            writeln!(&self.cmakelists_file,
+              "\tif( DEFINED PROJECT_{}_INSTALL_MODE )",
+              dep_name
+            )?;
+
+            for runtime_package_name in runtime_packages {
+              writeln!(&self.cmakelists_file,
+                "\t\tadd_to_deb_list( \"{}\" )",
+                runtime_package_name
+              )?;
+            }
+
+            if !dev_packages.is_empty() {
+              writeln!(&self.cmakelists_file,
+                "\t\tif( \"${{PROJECT_{}_INSTALL_MODE}}\" STREQUAL \"FULL\" )",
+                dep_name
+              )?;
+
+              for dev_package_name in dev_packages {
+                writeln!(&self.cmakelists_file,
+                  "add_to_deb_list( \"{}\" )",
+                  dev_package_name
+                )?;
+              }
+
+              writeln!(&self.cmakelists_file,
+                "\t\tendif()",
+              )?;
+            }
+
+            writeln!(&self.cmakelists_file, "\tendif()")?;
+          }
+
 
           // End usage conditional
           writeln!(&self.cmakelists_file,
@@ -2729,6 +2770,7 @@ impl<'a> CMakeListsWriter<'a> {
   // See this page for help and a good example:
   // https://cmake.org/cmake/help/latest/guide/tutorial/Adding%20Export%20Configuration.html
   fn write_installation_and_exports(&self) -> io::Result<()> {
+    writeln!(&self.cmakelists_file, "clean_deb_list()")?;
     writeln!(&self.cmakelists_file, "clean_minimal_installs()")?;
     writeln!(&self.cmakelists_file, "clean_target_list()")?;
     writeln!(&self.cmakelists_file, "clean_needed_bin_files_list()")?;
@@ -2740,6 +2782,7 @@ impl<'a> CMakeListsWriter<'a> {
     }
 
     let write_raise_functions: &dyn Fn(&str) -> io::Result<()> = &|spacer: &str| {
+      writeln!(&self.cmakelists_file, "{}raise_deb_list()", spacer)?;
       writeln!(&self.cmakelists_file, "{}raise_minimal_installs()", spacer)?;
       writeln!(&self.cmakelists_file, "{}raise_target_list()", spacer)?;
       writeln!(&self.cmakelists_file, "{}raise_needed_bin_files_list()", spacer)?;
