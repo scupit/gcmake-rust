@@ -23,6 +23,7 @@
 | `LICENSE` \| `LICENSE.md` \| `LICENSE.txt` | The file specifying the project's license. This will also be embedded in some graphical installers. |
 | `CMakeLists.txt` | **AUTO-CONFIGURED:** The file which facilitates CMake builds. This paired with the `cmake/` directory is what makes the magic happen. This should be committed in your source control. |
 | `Config.cmake.in` | **AUTO-CONFIGURED:** The configuration template for a CMake installation. This file allows CMake to discover an installation of your project, and as a result allows other CMake projects to use your project installation as a CMake dependency with just a single *find_package* call. This should be committed in your source control. |
+| `install-deb-development-packages.sh` | **AUTO-CONFIGURED:** A helper file for installing all debian packages which may be needed for developing the project. This should be committed in your source control. |
 
 ## File Extensions
 
