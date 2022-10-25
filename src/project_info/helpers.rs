@@ -11,15 +11,15 @@ pub enum RetrievedCodeFileType {
   Unknown
 }
 
-pub fn retrieve_file_type(any_path_type: impl AsRef<Path>) -> RetrievedCodeFileType {
+pub fn code_file_type(any_path_type: impl AsRef<Path>) -> RetrievedCodeFileType {
   let the_path: &Path = any_path_type.as_ref();
 
   return match the_path.extension() {
     Some(extension) => match extension.to_str().unwrap() {
-      "c" | "cpp" | "cxx" => RetrievedCodeFileType::Source,
-      "h" | "hpp" | "hxx" => RetrievedCodeFileType::Header,
-      "tpp" | "txx"       => RetrievedCodeFileType::TemplateImpl,
-      _                   => RetrievedCodeFileType::Unknown
+      "c" | "cpp" | "cxx"   => RetrievedCodeFileType::Source,
+      "h" | "hpp" | "hxx"   => RetrievedCodeFileType::Header,
+      "tpp" | "txx" | "inl" => RetrievedCodeFileType::TemplateImpl,
+      _                     => RetrievedCodeFileType::Unknown
     },
     None => RetrievedCodeFileType::Unknown
   }
@@ -96,14 +96,21 @@ pub fn parse_test_project_data(project_root: &str) -> YamlParseResult<RawTestPro
   yaml_parse_helper(project_root)
 }
 
-pub fn populate_files(dir: &Path, file_list: &mut Vec<PathBuf>) -> io::Result<()> {
+pub fn populate_files<F>(
+  dir: &Path,
+  file_list: &mut Vec<PathBuf>,
+  filter_func: &F
+) -> io::Result<()>
+  where F: Fn(&Path) -> bool
+{
   if dir.is_dir() {
     for dirent in fs::read_dir(dir)? {
       let path = dirent?.path();
+
       if path.is_dir() {
-        populate_files(&path, file_list)?;
+        populate_files(&path, file_list, filter_func)?;
       }
-      else {
+      else if path.is_file() && filter_func(path.as_path()) {
         file_list.push(cleaned_pathbuf(path));
       }
     }

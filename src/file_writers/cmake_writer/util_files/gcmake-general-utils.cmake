@@ -88,7 +88,6 @@ function( apply_exe_files
   entry_file
   sources
   headers
-  template_impls
 )
   set( receiver_interface_lib ${receiver_target} )
 
@@ -111,7 +110,7 @@ function( apply_exe_files
     ${source_gens_i}
   )
 
-  set( all_headers "${headers};${template_impls}" )
+  set( all_headers "${headers}" )
   clean_list( "${all_headers}" all_headers )
 
   if( NOT "${all_headers}" STREQUAL "" )
@@ -139,7 +138,6 @@ function( apply_lib_files
   entry_file
   sources
   headers
-  template_impls
 )
   if( NOT "${lib_type_spec}" STREQUAL "COMPILED_LIB" AND NOT "${lib_type_spec}" STREQUAL "HEADER_ONLY_LIB" )
     message( FATAL_ERROR "Invalid lib type spec '${lib_type_spec}' given to apply_lib_files(...)" )
@@ -169,7 +167,7 @@ function( apply_lib_files
   file( MAKE_DIRECTORY "${entry_file_alias_dir}/${TOPLEVEL_INCLUDE_PREFIX}" )
   file( CREATE_LINK "${entry_file}" "${aliased_entry_file_path}" COPY_ON_ERROR )
 
-  set( all_headers "${entry_file};${headers};${template_impls}" )
+  set( all_headers "${entry_file};${headers}" )
   clean_list( "${all_headers}" all_headers )
 
   get_without_source_dir_prefix( "${all_headers}" all_headers_install_interface )

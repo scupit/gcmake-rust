@@ -260,7 +260,7 @@ fn write_template_impl(
 ) -> io::Result<PathBuf> {
   // Ensure the directory structure exists
   let file_path = ensure_directory_structure(
-    project_info.get_template_impl_dir(),
+    project_info.get_include_dir(),
     file_info,
     extension_for(CodeFileType::TemplateImpl(language.clone()))
   )?;

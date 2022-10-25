@@ -1,6 +1,6 @@
-use std::{collections::{HashMap, HashSet, BTreeMap}, fs::File, io::{self, Write, ErrorKind}, path::{PathBuf, Path}, rc::Rc, cell::{RefCell, Ref}, borrow::Borrow};
+use std::{collections::{HashMap, HashSet, BTreeMap}, fs::File, io::{self, Write, ErrorKind}, path::{PathBuf, Path}, rc::Rc, cell::{RefCell, Ref}};
 
-use crate::{project_info::{final_project_data::{FinalProjectData}, path_manipulation::{cleaned_path_str, relative_to_project_root}, final_dependencies::{GitRevisionSpecifier, PredefinedCMakeComponentsModuleDep, PredefinedSubdirDep, PredefinedCMakeModuleDep, FinalPredepInfo, GCMakeDependencyStatus, FinalPredefinedDependencyConfig, base64_encoded, PredefinedDepFunctionality, FinalDownloadMethod, FinalDebianPackagesConfig}, raw_data_in::{BuildType, RawBuildConfig, BuildConfigCompilerSpecifier, SpecificCompilerSpecifier, OutputItemType, LanguageConfigMap, TargetSpecificBuildType, dependencies::internal_dep_config::{CMakeModuleType}, DefaultCompiledLibType}, FinalProjectType, CompiledOutputItem, PreBuildScript, LinkMode, FinalTestFramework, dependency_graph_mod::dependency_graph::{DependencyGraph, OrderedTargetInfo, ProjectWrapper, TargetNode, SimpleNodeOutputType, Link, EmscriptenLinkFlagInfo, ContainedItem}, SystemSpecifierWrapper, SingleSystemSpec, CompilerDefine, FinalBuildConfig, CompilerFlag, LinkerFlag, gcmake_constants::{SRC_DIR, INCLUDE_DIR, TEMPLATE_IMPL_DIR}, platform_spec_parser::parse_leading_system_spec}, file_writers::cmake_writer::cmake_writer_helpers::system_constraint_generator_expression};
+use crate::{project_info::{final_project_data::{FinalProjectData}, path_manipulation::{cleaned_path_str, relative_to_project_root}, final_dependencies::{GitRevisionSpecifier, PredefinedCMakeComponentsModuleDep, PredefinedSubdirDep, PredefinedCMakeModuleDep, FinalPredepInfo, GCMakeDependencyStatus, FinalPredefinedDependencyConfig, base64_encoded, PredefinedDepFunctionality, FinalDownloadMethod, FinalDebianPackagesConfig}, raw_data_in::{BuildType, BuildConfigCompilerSpecifier, SpecificCompilerSpecifier, OutputItemType, LanguageConfigMap, TargetSpecificBuildType, dependencies::internal_dep_config::{CMakeModuleType}, DefaultCompiledLibType}, FinalProjectType, CompiledOutputItem, PreBuildScript, LinkMode, FinalTestFramework, dependency_graph_mod::dependency_graph::{DependencyGraph, OrderedTargetInfo, ProjectWrapper, TargetNode, SimpleNodeOutputType, Link, EmscriptenLinkFlagInfo, ContainedItem}, SystemSpecifierWrapper, CompilerDefine, FinalBuildConfig, CompilerFlag, LinkerFlag, gcmake_constants::{SRC_DIR, INCLUDE_DIR}, platform_spec_parser::parse_leading_system_spec}, file_writers::cmake_writer::cmake_writer_helpers::system_constraint_generator_expression};
 
 use super::{cmake_utils_writer::{CMakeUtilFile, CMakeUtilWriter}, cmake_writer_helpers::system_contstraint_conditional_expression};
 use colored::*;
@@ -745,7 +745,6 @@ impl<'a> CMakeListsWriter<'a> {
             exe_info,
             self.dep_graph_ref().get_pre_build_node().as_ref().unwrap(),
             &self.project_data.prebuild_script_name(),
-            "UNUSED",
             "UNUSED",
             "UNUSED",
             "UNUSED"
@@ -1765,13 +1764,11 @@ impl<'a> CMakeListsWriter<'a> {
 
     let src_root_varname: String = format!("{}_SRC_ROOT", project_name);
     let include_root_varname: String = format!("{}_HEADER_ROOT", project_name);
-    let template_impls_root_varname: String = format!("{}_TEMPLATE_IMPLS_ROOT", project_name);
     
     let project_include_dir_varname: String = format!("{}_INCLUDE_DIR", project_name);
 
     let src_var_name: String = format!("{}_SOURCES", project_name);
     let includes_var_name: String = format!("{}_HEADERS", project_name);
-    let template_impls_var_name: String = format!("{}_TEMPLATE_IMPLS", project_name);
 
     self.write_newline()?;
 
@@ -1779,7 +1776,6 @@ impl<'a> CMakeListsWriter<'a> {
     self.set_basic_var("", "PROJECT_INCLUDE_PREFIX", &format!("\"{}\"", self.project_data.get_full_include_prefix()))?;
     self.set_basic_var("", &src_root_varname, &format!("${{CMAKE_CURRENT_SOURCE_DIR}}/{}/${{PROJECT_INCLUDE_PREFIX}}", SRC_DIR))?;
     self.set_basic_var("", &include_root_varname, &format!("${{CMAKE_CURRENT_SOURCE_DIR}}/{}/${{PROJECT_INCLUDE_PREFIX}}", INCLUDE_DIR))?;
-    self.set_basic_var("", &template_impls_root_varname, &format!("${{CMAKE_CURRENT_SOURCE_DIR}}/{}/${{PROJECT_INCLUDE_PREFIX}}", TEMPLATE_IMPL_DIR))?;
     self.set_basic_var("", &project_include_dir_varname, &format!("${{CMAKE_CURRENT_SOURCE_DIR}}/{}", INCLUDE_DIR))?;
 
     self.write_newline()?;
@@ -1800,12 +1796,28 @@ impl<'a> CMakeListsWriter<'a> {
     )?;
     self.write_newline()?;
 
-    self.set_file_collection(
-      &template_impls_var_name,
-      self.project_data.get_template_impl_dir(),
-      &template_impls_root_varname,
-      &self.project_data.template_impl_files
-    )?;
+    {
+      let template_impl_var_name: String = format!(
+        "{}_TEMPLATE_IMPLS",
+        project_name
+      );
+
+      self.set_file_collection(
+        &template_impl_var_name,
+        self.project_data.get_include_dir(),
+        &include_root_varname,
+        &self.project_data.template_impl_files
+      )?;
+      self.write_newline()?;
+
+      // Template-impl files are now treated as part of the header files list.
+      writeln!(&self.cmakelists_file,
+        "list( APPEND {} ${{{}}} )",
+        includes_var_name,
+        template_impl_var_name
+      )?;
+    }
+
 
     // for output_target in self.sorted_target_info.targets_with_project_id(self.dep_graph_ref().project_id()) {
     for output_target in self.sorted_target_info.regular_targets_with_project_id(self.dep_graph_ref().project_id()) {
@@ -1837,7 +1849,6 @@ impl<'a> CMakeListsWriter<'a> {
             &output_name,
             &src_var_name,
             &includes_var_name,
-            &template_impls_var_name,
             &project_include_dir_varname
           )?;
         },
@@ -1851,7 +1862,6 @@ impl<'a> CMakeListsWriter<'a> {
             &output_name,
             &src_var_name,
             &includes_var_name,
-            &template_impls_var_name,
             &project_include_dir_varname
           )?;
         },
@@ -1862,7 +1872,6 @@ impl<'a> CMakeListsWriter<'a> {
             &output_name,
             &src_var_name,
             &includes_var_name,
-            &template_impls_var_name,
             &project_include_dir_varname
           )?;
         }
@@ -2533,7 +2542,6 @@ impl<'a> CMakeListsWriter<'a> {
     output_name: &str,
     src_var_name: &str,
     includes_var_name: &str,
-    template_impls_var_name: &str,
     project_include_dir_varname: &str
   ) -> io::Result<()> {
     self.write_output_title(output_name)?;
@@ -2564,7 +2572,6 @@ impl<'a> CMakeListsWriter<'a> {
       output_name,
       project_include_dir_varname,
       includes_var_name,
-      template_impls_var_name,
       src_var_name
     )?;
 
@@ -2578,7 +2585,6 @@ impl<'a> CMakeListsWriter<'a> {
     output_name: &str,
     src_var_name: &str,
     includes_var_name: &str,
-    template_impls_var_name: &str,
     project_include_dir_varname: &str
   ) -> io::Result<()> {
     self.write_output_title(output_name)?;
@@ -2597,7 +2603,6 @@ impl<'a> CMakeListsWriter<'a> {
       output_name,
       project_include_dir_varname,
       includes_var_name,
-      template_impls_var_name,
       src_var_name
     )?;
 
@@ -2611,7 +2616,6 @@ impl<'a> CMakeListsWriter<'a> {
     output_name: &str,
     project_include_dir_varname: &str,
     includes_var_name: &str,
-    template_impls_var_name: &str,
     src_var_name: &str
   ) -> io::Result<()> {
     let target_name: String;
@@ -2671,13 +2675,12 @@ impl<'a> CMakeListsWriter<'a> {
     self.write_newline()?;
 
     writeln!(&self.cmakelists_file,
-      "apply_lib_files( {} {} \"${{CMAKE_CURRENT_SOURCE_DIR}}/{}\" \"${{{}}}\" \"${{{}}}\" \"${{{}}}\" )",
+      "apply_lib_files( {} {} \"${{CMAKE_CURRENT_SOURCE_DIR}}/{}\" \"${{{}}}\" \"${{{}}}\" )",
       target_name,
       lib_spec_string,
       output_data.get_entry_file().replace("./", ""),
       src_var_name,
-      includes_var_name,
-      template_impls_var_name
+      includes_var_name
     )?;
 
     writeln!(&self.cmakelists_file,
@@ -2719,7 +2722,6 @@ impl<'a> CMakeListsWriter<'a> {
     output_name: &str,
     src_var_name: &str,
     includes_var_name: &str,
-    template_impls_var_name: &str,
     project_include_dir_varname: &str
   ) -> io::Result<String> {
     let borrowed_node: &TargetNode = &output_target_node.as_ref().borrow();
@@ -2797,13 +2799,12 @@ impl<'a> CMakeListsWriter<'a> {
       )?;
 
       writeln!(&self.cmakelists_file,
-        "apply_exe_files( {} {} \n\t\"${{CMAKE_CURRENT_SOURCE_DIR}}/{}\"\n\t\"${{{}}}\"\n\t\"${{{}}}\"\n\t\"${{{}}}\"\n)",
+        "apply_exe_files( {} {} \n\t\"${{CMAKE_CURRENT_SOURCE_DIR}}/{}\"\n\t\"${{{}}}\"\n\t\"${{{}}}\"\n)",
         target_name,
         receiver_lib_name,
         output_data.get_entry_file().replace("./", ""),
         src_var_name,
-        includes_var_name,
-        template_impls_var_name
+        includes_var_name
       )?;
       self.write_newline()?;
     }

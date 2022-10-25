@@ -2,7 +2,7 @@ use std::{collections::{HashMap, HashSet}, path::{Path, PathBuf}, io, rc::Rc, fs
 
 use crate::project_info::path_manipulation::cleaned_pathbuf;
 
-use super::{path_manipulation::{cleaned_path_str, relative_to_project_root, absolute_path}, final_dependencies::{FinalGCMakeDependency, FinalPredefinedDependencyConfig, GCMakeDependencyStatus}, raw_data_in::{RawProject, dependencies::internal_dep_config::AllRawPredefinedDependencies, BuildConfigMap, BuildType, LanguageConfigMap, OutputItemType, PreBuildConfigIn, SpecificCompilerSpecifier, BuildConfigCompilerSpecifier, TargetBuildConfigMap, TargetSpecificBuildType, LinkSection, RawTestFramework, RawInstallerConfig, DefaultCompiledLibType}, final_project_configurables::{FinalProjectType}, CompiledOutputItem, helpers::{parse_subproject_data, parse_root_project_data, populate_files, find_prebuild_script, PrebuildScriptFile, validate_raw_project_outputs, ProjectOutputType, RetrievedCodeFileType, retrieve_file_type, parse_test_project_data}, PreBuildScript, OutputItemLinks, FinalTestFramework, base_include_prefix_for_test, gcmake_constants::{SRC_DIR, INCLUDE_DIR, TEMPLATE_IMPL_DIR, TESTS_DIR, SUBPROJECTS_DIR}, FinalInstallerConfig, CompilerDefine, FinalBuildConfigMap, make_final_target_build_config, make_final_build_config_map, FinalTargetBuildConfigMap, FinalGlobalProperties, FinalShortcutConfig, parsers::{version_parser::ThreePartVersion, general_parser::ParseSuccess}, platform_spec_parser::parse_leading_system_spec, SystemSpecifierWrapper};
+use super::{path_manipulation::{cleaned_path_str, relative_to_project_root, absolute_path}, final_dependencies::{FinalGCMakeDependency, FinalPredefinedDependencyConfig}, raw_data_in::{RawProject, dependencies::internal_dep_config::AllRawPredefinedDependencies, BuildType, LanguageConfigMap, OutputItemType, PreBuildConfigIn, SpecificCompilerSpecifier, BuildConfigCompilerSpecifier, TargetSpecificBuildType, LinkSection, RawTestFramework, DefaultCompiledLibType}, final_project_configurables::{FinalProjectType}, CompiledOutputItem, helpers::{parse_subproject_data, parse_root_project_data, populate_files, find_prebuild_script, PrebuildScriptFile, validate_raw_project_outputs, ProjectOutputType, RetrievedCodeFileType, code_file_type, parse_test_project_data}, PreBuildScript, OutputItemLinks, FinalTestFramework, base_include_prefix_for_test, gcmake_constants::{SRC_DIR, INCLUDE_DIR, TESTS_DIR, SUBPROJECTS_DIR}, FinalInstallerConfig, CompilerDefine, FinalBuildConfigMap, make_final_target_build_config, make_final_build_config_map, FinalTargetBuildConfigMap, FinalGlobalProperties, FinalShortcutConfig, parsers::{version_parser::ThreePartVersion, general_parser::ParseSuccess}, platform_spec_parser::parse_leading_system_spec, SystemSpecifierWrapper};
 use colored::*;
 
 const SUBPROJECT_JOIN_STR: &'static str = "_S_";
@@ -162,7 +162,6 @@ pub struct FinalProjectData {
   full_include_prefix: String,
   src_dir: String,
   include_dir: String,
-  template_impls_dir: String,
   pub src_files: Vec<PathBuf>,
   pub include_files: Vec<PathBuf>,
   pub template_impl_files: Vec<PathBuf>,
@@ -408,13 +407,6 @@ impl FinalProjectData {
       "{}/{}/{}",
       &project_root,
       INCLUDE_DIR,
-      &full_include_prefix
-    );
-
-    let project_template_impls_dir = format!(
-      "{}/{}/{}",
-      &project_root,
-      TEMPLATE_IMPL_DIR,
       &full_include_prefix
     );
 
@@ -703,7 +695,6 @@ impl FinalProjectData {
       project_root,
       src_dir: project_src_dir,
       include_dir: project_include_dir,
-      template_impls_dir: project_template_impls_dir,
       src_files: Vec::<PathBuf>::new(),
       include_files: Vec::<PathBuf>::new(),
       template_impl_files: Vec::<PathBuf>::new(),
@@ -725,19 +716,31 @@ impl FinalProjectData {
 
     populate_files(
       Path::new(&finalized_project_data.src_dir),
-      &mut finalized_project_data.src_files
+      &mut finalized_project_data.src_files,
+      &|file_path| match code_file_type(file_path) {
+        RetrievedCodeFileType::Source => true,
+        _ => false
+      }
     )
       .map_err(|err| ProjectLoadFailureReason::Other(err.to_string()))?;
 
     populate_files(
       Path::new(&finalized_project_data.include_dir),
-      &mut finalized_project_data.include_files
+      &mut finalized_project_data.include_files,
+      &|file_path| match code_file_type(file_path) {
+        RetrievedCodeFileType::Header => true,
+        _ => false
+      }
     )
       .map_err(|err| ProjectLoadFailureReason::Other(err.to_string()))?;
 
     populate_files(
-      Path::new(&finalized_project_data.template_impls_dir),
-      &mut finalized_project_data.template_impl_files
+      Path::new(&finalized_project_data.include_dir),
+      &mut finalized_project_data.template_impl_files,
+      &|file_path| match code_file_type(file_path) {
+        RetrievedCodeFileType::TemplateImpl => true,
+        _ => false
+      }
     )
       .map_err(|err| ProjectLoadFailureReason::Other(err.to_string()))?;
 
@@ -980,7 +983,7 @@ impl FinalProjectData {
     output_item: &CompiledOutputItem,
     is_prebuild_script: bool
   ) -> Result<(), String> {
-    let entry_file_type: RetrievedCodeFileType = retrieve_file_type(output_item.get_entry_file());
+    let entry_file_type: RetrievedCodeFileType = code_file_type(output_item.get_entry_file());
     let item_string: String = if is_prebuild_script
       { String::from("prebuild script") }
       else { format!("output item '{}'", output_name )};
@@ -1240,10 +1243,6 @@ impl FinalProjectData {
 
   pub fn get_include_dir(&self) -> &str {
     &self.include_dir
-  }
-
-  pub fn get_template_impl_dir(&self) -> &str {
-    &self.template_impls_dir
   }
 
   pub fn get_build_configs(&self) -> &FinalBuildConfigMap {

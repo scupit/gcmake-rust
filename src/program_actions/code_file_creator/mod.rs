@@ -1,6 +1,6 @@
 use std::{path::{Path, PathBuf}, rc::Rc};
 
-use crate::{project_info::{final_project_data::FinalProjectData, path_manipulation::{relative_to_project_root, cleaned_path_str, absolute_path}}, cli_config::clap_cli_config::CreateFilesCommand, common::prompt::{prompt_until_custom, prompt_until_custom_or_default, prompt_until_boolean}};
+use crate::{project_info::{final_project_data::FinalProjectData, path_manipulation::{relative_to_project_root, absolute_path}}, cli_config::clap_cli_config::CreateFilesCommand, common::prompt::{prompt_until_custom}};
 use self::{file_creation_info::{FileTypeGeneratingInfo, validate_which_generating, SharedFileInfo, validate_shared_file_info, FileGuardStyle}, code_file_writer::{write_code_files, extension_for, CodeFileType}};
 
 mod code_file_writer;
@@ -82,7 +82,7 @@ fn create_single_file_set(
     // (project_data.get_template_impl_dir(), extension_for(CodeFileType::TemplateImpl(command.language.clone()))),
     (project_data.get_include_dir(), CodeFileType::Header(command.language.clone())),
     (project_data.get_src_dir(), CodeFileType::Source(command.language.clone())),
-    (project_data.get_template_impl_dir(), CodeFileType::TemplateImpl(command.language.clone()))
+    (project_data.get_include_dir(), CodeFileType::TemplateImpl(command.language.clone()))
   ]
     .map(|(code_root, code_file_type)| {
       let file_name = format!(

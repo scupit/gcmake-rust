@@ -9,7 +9,7 @@ use serde::Serialize;
 
 use std::{fs::{File, remove_dir_all, create_dir_all, self}, io::{self, ErrorKind}, path::{Path, PathBuf}};
 
-use crate::{program_actions::{ProjectTypeCreating, gcmake_config_root_dir}, common::prompt::{prompt_until_boolean, prompt_until_satisfies_or_default}, project_info::{base_include_prefix_for_test, gcmake_constants::{SRC_DIR, INCLUDE_DIR, TEMPLATE_IMPL_DIR, ASSETS_DIR, SUBPROJECTS_DIR, TESTS_DIR}, validators::{is_valid_base_include_prefix}, FinalTestFramework}, project_generator::{project_generator_prompts::{prompt_for_project_output_type, prompt_for_language, prompt_for_vendor, prompt_for_description, prompt_for_needs_custom_main}, c_file_generation::generate_c_main, cpp_file_generation::{generate_cpp_main, TestMainInitInfo}}};
+use crate::{program_actions::{ProjectTypeCreating, gcmake_config_root_dir}, common::prompt::{prompt_until_boolean, prompt_until_satisfies_or_default}, project_info::{base_include_prefix_for_test, gcmake_constants::{SRC_DIR, INCLUDE_DIR, ASSETS_DIR, SUBPROJECTS_DIR, TESTS_DIR}, validators::{is_valid_base_include_prefix}, FinalTestFramework}, project_generator::{project_generator_prompts::{prompt_for_project_output_type, prompt_for_language, prompt_for_vendor, prompt_for_description, prompt_for_needs_custom_main}, c_file_generation::generate_c_main, cpp_file_generation::{generate_cpp_main, TestMainInitInfo}}};
 use colored::*;
 
 pub struct GeneralNewProjectInfo {
@@ -144,7 +144,7 @@ pub fn create_project_at(
         write_cmake_yaml(&cmake_data_file, test_project_info)?
     }
 
-    for nested_dir in [SRC_DIR, INCLUDE_DIR, TEMPLATE_IMPL_DIR, ASSETS_DIR] {
+    for nested_dir in [SRC_DIR, INCLUDE_DIR, ASSETS_DIR] {
       let mut extended_path = project_root.to_path_buf();
       extended_path.push(nested_dir);
       create_dir_all(extended_path)?;
@@ -158,7 +158,7 @@ pub fn create_project_at(
       }
     }
 
-    for dir_requiring_include_suffix in [SRC_DIR, INCLUDE_DIR, TEMPLATE_IMPL_DIR, ASSETS_DIR] {
+    for dir_requiring_include_suffix in [SRC_DIR, INCLUDE_DIR, ASSETS_DIR] {
       let mut extended_path = project_root.to_path_buf();
       extended_path.push(dir_requiring_include_suffix);
       extended_path.push(&folder_generation_include_prefix);
