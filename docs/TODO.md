@@ -9,8 +9,6 @@ There are a whole bunch of things which need doing. This is the place to list th
 
 ## Priorities
 
-- [ ] Remove template-impls dir. Just use the same file name with `.tpp` or `.inl` extension in the *include*
-        directory.
 - [ ] Add CLI commands for cleaning and updating the dep-cache. Not exactly sure how updating should work yet.
 - [ ] [Cargo-style package features](https://doc.rust-lang.org/cargo/reference/features.html). More or less
         just need to add a `feature:feature-name` item to the constraint specifier parser.

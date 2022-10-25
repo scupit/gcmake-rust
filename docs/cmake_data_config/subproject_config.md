@@ -27,5 +27,4 @@ subproject would use the directories:
 
 - src/PARENT_PREFIX/SUB_PREFIX/
 - include/PARENT_PREFIX/SUB_PREFIX/
-- template-impls/PARENT_PREFIX/SUB_PREFIX/
 - resources/PARENT_PREFIX/SUB_PREFIX/

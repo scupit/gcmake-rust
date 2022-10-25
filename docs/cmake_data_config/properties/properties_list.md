@@ -81,7 +81,6 @@ will use these directories:
 
 - include/ROOT_PREFIX
 - src/ROOT_PREFIX
-- template-impls/ROOT_PREFIX
 
 A *subproject of that root project* which specifies
 
@@ -93,7 +92,6 @@ will use these directories:
 
 - include/ROOT_PREFIX/SUBPROJECT_PREFIX
 - src/ROOT_PREFIX/SUBPROJECT_PREFIX
-- template-impls/ROOT_PREFIX/SUBPROJECT_PREFIX
 
 And a *test project inside that subproject* which specifies:
 
@@ -105,7 +103,6 @@ will use these directories:
 
 - include/ROOT_PREFIX/SUBPROJECT_PREFIX/TEST/THE_TEST_PREFIX
 - src/ROOT_PREFIX/SUBPROJECT_PREFIX/TEST/THE_TEST_PREFIX
-- template-impls/ROOT_PREFIX/SUBPROJECT_PREFIX/TEST/THE_TEST_PREFIX
 
 ### version
 

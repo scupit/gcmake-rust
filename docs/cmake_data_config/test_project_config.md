@@ -39,7 +39,6 @@ test project would use the directories:
 
 - src/PARENT_PREFIX/TEST/MY_TEST_PREFIX/
 - include/PARENT_PREFIX/TEST/MY_TEST_PREFIX/
-- template-impls/PARENT_PREFIX/TEST/MY_TEST_PREFIX/
 - resources/PARENT_PREFIX/TEST/MY_TEST_PREFIX/
 
 ## Running the Tests
