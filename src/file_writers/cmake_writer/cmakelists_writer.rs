@@ -83,7 +83,7 @@ pub fn configure_cmake_helper<'a>(
   }
 
   if let Some(project_data) = borrowed_graph.project_wrapper().maybe_normal_project() {
-    let cmake_util_path = Path::new(project_data.get_project_root()).join("cmake");
+    let cmake_util_path = Path::new(project_data.get_project_root_dir()).join("cmake");
     let maybe_util_writer: Option<CMakeUtilWriter> = if project_data.is_root_project()
       { Some(CMakeUtilWriter::new(cmake_util_path)) }
       else { None };
@@ -207,7 +207,7 @@ impl<'a> CMakeListsWriter<'a> {
       }
     };
 
-    let cmakelists_file_name: String = format!("{}/CMakeLists.txt", project_data.get_project_root());
+    let cmakelists_file_name: String = format!("{}/CMakeLists.txt", project_data.get_project_root_dir());
 
     drop(borrowed_graph);
 
@@ -321,7 +321,7 @@ impl<'a> CMakeListsWriter<'a> {
         });
 
       let root_project_info = self.dep_graph_ref().project_wrapper().clone().unwrap_normal_project();
-      let root_project_root_path: &str = root_project_info.get_project_root();
+      let root_project_root_path: &str = root_project_info.get_project_root_dir();
 
       for some_project_graph in ordered_projects_in_this_tree {
         let borrowed_graph = some_project_graph.as_ref().borrow();
@@ -333,7 +333,7 @@ impl<'a> CMakeListsWriter<'a> {
         else if !subproject_data.is_test_project() {
           writeln!( &self.cmakelists_file,
             "configure_subproject(\n\t\"${{CMAKE_CURRENT_SOURCE_DIR}}/{}\"\n)",
-            relative_to_project_root(root_project_root_path, PathBuf::from(subproject_data.get_project_root()))
+            relative_to_project_root(root_project_root_path, PathBuf::from(subproject_data.get_project_root_dir()))
           )?;
         }
       }

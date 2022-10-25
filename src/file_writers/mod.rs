@@ -1,7 +1,8 @@
 mod cmake_writer;
+mod debian_sh_install_writer;
 
 use std::{io::{self}};
-use crate::project_info::{dependency_graph_mod::dependency_graph::{DependencyGraphInfoWrapper, DependencyGraph, GraphLoadFailureReason, TargetNode, OwningComplexTargetRequirement}, SystemSpecifierWrapper, dep_graph_loader::load_graph};
+use crate::project_info::{dependency_graph_mod::dependency_graph::{DependencyGraphInfoWrapper}};
 
 pub struct ProjectWriteConfiguration<'a> {
   name: String,
@@ -21,6 +22,10 @@ pub fn write_configurations<'a, FBefore, FAfter>(
     ProjectWriteConfiguration {
       name: String::from("CMake"),
       config_func: cmake_writer::configure_cmake
+    },
+    ProjectWriteConfiguration {
+      name: String::from("Debian dev dependency install sh"),
+      config_func: debian_sh_install_writer::write_debian_dep_install_sh
     }
   ];
 

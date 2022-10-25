@@ -142,7 +142,7 @@ pub struct ProjectConstructorConfig {
 pub struct FinalProjectData {
   project_type: FinalProjectType,
   project_output_type: ProjectOutputType,
-  project_root: String,
+  project_root_dir: String,
   absolute_project_root: PathBuf,
   pub version: ThreePartVersion,
   // project: RawProject,
@@ -692,7 +692,7 @@ impl FinalProjectData {
       project_output_type,
       absolute_project_root: absolute_path(&project_root)
         .map_err(ProjectLoadFailureReason::Other)?,
-      project_root,
+      project_root_dir: project_root,
       src_dir: project_src_dir,
       include_dir: project_include_dir,
       src_files: Vec::<PathBuf>::new(),
@@ -1185,8 +1185,8 @@ impl FinalProjectData {
     &self.prebuild_script
   }
 
-  pub fn get_project_root(&self) -> &str {
-    &self.project_root
+  pub fn get_project_root_dir(&self) -> &str {
+    &self.project_root_dir
   }
 
   pub fn get_absolute_project_root(&self) -> &str {
