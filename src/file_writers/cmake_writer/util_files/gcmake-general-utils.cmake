@@ -2,11 +2,14 @@ function( exe_add_lib_relative_install_rpath
   exe_target
 )
   if( NOT TARGET_SYSTEM_IS_WINDOWS )
-    set_property(
-      TARGET ${exe_target}
-      APPEND PROPERTY
-        INSTALL_RPATH "\${ORIGIN}/../lib"
-    )
+    set( POSSIBLE_LIB_DIRS "${CMAKE_INSTALL_LIBDIR}" "${DEPENDENCY_INSTALL_LIBDIR}" )
+    foreach( LIB_DIR IN LISTS POSSIBLE_LIB_DIRS )
+      set_property(
+        TARGET ${exe_target}
+        APPEND PROPERTY
+          INSTALL_RPATH "\${ORIGIN}/../${LIB_DIR}"
+      )
+    endforeach()
   endif()
 endfunction()
 
@@ -14,11 +17,21 @@ function( shared_lib_add_relative_install_rpath
   shared_lib_target
 )
   if( NOT TARGET_SYSTEM_IS_WINDOWS )
-    set_property(
-      TARGET ${shared_lib_target}
-      APPEND PROPERTY
-        INSTALL_RPATH "\${ORIGIN}"
+    string( REGEX REPLACE
+      "${CMAKE_INSTALL_LIBDIR}/?"
+      ""
+      RELATIVE_DEP_INSTALL_DIR
+      "${DEPENDENCY_INSTALL_LIBDIR}"
     )
+    set( INITIAL_RPATHS "\${ORIGIN}/${RELATIVE_DEP_INSTALL_DIR}" "\${ORIGIN}" )
+
+    foreach( NEEDED_RPATH IN LISTS INITIAL_RPATHS )
+      set_property(
+        TARGET ${shared_lib_target}
+        APPEND PROPERTY
+          INSTALL_RPATH "${NEEDED_RPATH}"
+      )
+    endforeach()
   endif()
 endfunction()
 
@@ -201,8 +214,12 @@ function( apply_include_dirs
   target_include_directories( ${target}
     ${include_dir_inheritance_mode}
       "$<BUILD_INTERFACE:${BUILD_INTERFACE_INCLUDE_DIRS}>"
+      "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>"
+      "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/${TOPLEVEL_INCLUDE_PREFIX}/include>"
+      # Some libraries (like SFML 2.6.x) hardcode the include dir installation path to 'include/'.
+      # This is fixed in SFML's master branch, but most people are going to want a stable branch.
+      # This allows targets to access include files for libraries which hardcode their installation dir.
       "$<INSTALL_INTERFACE:include>"
-      "$<INSTALL_INTERFACE:include/${TOPLEVEL_INCLUDE_PREFIX}/include>"
   )
 endfunction()
 

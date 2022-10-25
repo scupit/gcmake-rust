@@ -11,15 +11,15 @@ pub fn system_contstraint_conditional_expression(system_spec: &SystemSpecifierWr
 
 pub fn system_constraint_generator_expression(
   system_spec: &SystemSpecifierWrapper,
-  contained_str: &str
+  contained_str: impl AsRef<str>
 ) -> String {
   match system_spec {
-    SystemSpecifierWrapper::All => contained_str.to_string(),
+    SystemSpecifierWrapper::All => contained_str.as_ref().to_string(),
     SystemSpecifierWrapper::Specific(spec_tree) => {
       format!(
         "$<{}:{}>",
         make_inner_system_spec_generator_expression(spec_tree, CurrentSystemSpecContext::None),
-        contained_str
+        contained_str.as_ref()
       )
     }
   }

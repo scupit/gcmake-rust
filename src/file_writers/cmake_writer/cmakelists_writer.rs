@@ -1,4 +1,4 @@
-use std::{collections::{HashMap, HashSet}, fs::File, io::{self, Write, ErrorKind}, path::{PathBuf, Path}, rc::Rc, cell::{RefCell, Ref}, borrow::Borrow};
+use std::{collections::{HashMap, HashSet, BTreeMap}, fs::File, io::{self, Write, ErrorKind}, path::{PathBuf, Path}, rc::Rc, cell::{RefCell, Ref}, borrow::Borrow};
 
 use crate::{project_info::{final_project_data::{FinalProjectData}, path_manipulation::{cleaned_path_str, relative_to_project_root}, final_dependencies::{GitRevisionSpecifier, PredefinedCMakeComponentsModuleDep, PredefinedSubdirDep, PredefinedCMakeModuleDep, FinalPredepInfo, GCMakeDependencyStatus, FinalPredefinedDependencyConfig, base64_encoded, PredefinedDepFunctionality, FinalDownloadMethod, FinalDebianPackagesConfig}, raw_data_in::{BuildType, RawBuildConfig, BuildConfigCompilerSpecifier, SpecificCompilerSpecifier, OutputItemType, LanguageConfigMap, TargetSpecificBuildType, dependencies::internal_dep_config::{CMakeModuleType}, DefaultCompiledLibType}, FinalProjectType, CompiledOutputItem, PreBuildScript, LinkMode, FinalTestFramework, dependency_graph_mod::dependency_graph::{DependencyGraph, OrderedTargetInfo, ProjectWrapper, TargetNode, SimpleNodeOutputType, Link, EmscriptenLinkFlagInfo, ContainedItem}, SystemSpecifierWrapper, SingleSystemSpec, CompilerDefine, FinalBuildConfig, CompilerFlag, LinkerFlag, gcmake_constants::{SRC_DIR, INCLUDE_DIR, TEMPLATE_IMPL_DIR}, platform_spec_parser::parse_leading_system_spec}, file_writers::cmake_writer::cmake_writer_helpers::system_constraint_generator_expression};
 
@@ -33,6 +33,13 @@ impl UsageConditional {
       Some(conditional) => system_contstraint_conditional_expression(&conditional)
     }
   }
+}
+
+struct NormalLinkInfo {
+  is_installed_with_project: bool,
+  linkable_name: String,
+  unaliased_lib_var: String,
+  link_constraint: SystemSpecifierWrapper
 }
 
 enum DownloadMethodInfo {
@@ -235,6 +242,22 @@ impl<'a> CMakeListsWriter<'a> {
     if self.project_data.is_root_project() {
       self.write_apply_dependencies()?;
 
+      // This is the location dependency libraries should be installed to.
+      // On Windows, this is just lib/. On non-Windows systems, this is
+      // lib/dependencies/${PROJECT_NAME}
+      // Where PROJECT_NAME is the name of the topmost GCMake project.
+      self.set_basic_var(
+        "",
+        "DEPENDENCY_INSTALL_LIBDIR",
+        "\"${CMAKE_INSTALL_LIBDIR}\""
+      )?;
+
+      // Make sure the libdir is unmodified when building the actual project.
+      writeln!(&self.cmakelists_file,
+        "if( NOT TARGET_SYSTEM_IS_WINDOWS )\n\t{}\nendif()",
+        "set( CMAKE_INSTALL_LIBDIR \"${ORIGINAL_CMAKE_INSTALL_LIBDIR}\" CACHE PATH \"Library installation dir\" FORCE )"
+      )?;
+
       self.write_section_header("Language Configuration")?;
       self.write_language_config()?;
 
@@ -248,6 +271,13 @@ impl<'a> CMakeListsWriter<'a> {
     }
 
     self.write_project_order_dependent_info()?;
+
+    // Tests must be created after all project targets have been created.
+    // This is because tests always depend on a project target, but never vice-versa.
+    // tests also never depend on each other.
+    if self.project_data.has_tests() {
+      self.write_use_test_projects()?;
+    }
 
     if !self.project_data.is_test_project() {
       self.write_section_header("Installation and Export configuration")?;
@@ -493,9 +523,46 @@ impl<'a> CMakeListsWriter<'a> {
     writeln!(&self.cmakelists_file, "endif()")?;
     self.write_newline()?;
 
-    self.set_basic_var("", "MY_RUNTIME_OUTPUT_DIR", "\"${CMAKE_BINARY_DIR}/bin/$<CONFIG>\"")?;
-    self.set_basic_var("", "MY_LIBRARY_OUTPUT_DIR", "\"${CMAKE_BINARY_DIR}/lib/$<CONFIG>\"")?;
+    self.set_basic_var("", "MY_RUNTIME_OUTPUT_DIR", "\"${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_BINDIR}/$<CONFIG>\"")?;
+    self.set_basic_var("", "MY_LIBRARY_OUTPUT_DIR", "\"${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_LIBDIR}/$<CONFIG>\"")?;
     self.write_newline()?;
+
+    writeln!(&self.cmakelists_file,
+      "if( CMAKE_SOURCE_DIR STREQUAL TOPLEVEL_PROJECT_DIR )",
+    )?;
+
+    writeln!(&self.cmakelists_file,
+      "\tcmake_path( GET CMAKE_INSTALL_INCLUDEDIR STEM _the_includedir_stem )"
+    )?;
+    // Install headers to include/PROJECT_NAME so they don't collide with existing system headers.
+    writeln!(&self.cmakelists_file,
+      "\tif( NOT _the_includedir_stem STREQUAL PROJECT_NAME )\n{}\n\tendif()",
+      "\t\tset( CMAKE_INSTALL_INCLUDEDIR \"${CMAKE_INSTALL_INCLUDEDIR}/${PROJECT_NAME}\" CACHE PATH \"Header file installation dir\" FORCE )"
+    )?;
+
+    writeln!(&self.cmakelists_file,
+      "\tcmake_path( GET CMAKE_INSTALL_LIBDIR STEM _the_libdir_stem )"
+    )?;
+    self.set_basic_var(
+      "\t",
+      "ORIGINAL_CMAKE_INSTALL_LIBDIR",
+      "\"${CMAKE_INSTALL_LIBDIR}\""
+    )?;
+
+    writeln!(&self.cmakelists_file,
+      "\tif( NOT _the_libdir_stem STREQUAL PROJECT_NAME )"
+    )?;
+    // This is modified for the dependency loading step so that dependency libraries are installed to
+    // a location which won't conflict with already installed libraries.
+    writeln!(&self.cmakelists_file,
+      "\t\tif( NOT TARGET_SYSTEM_IS_WINDOWS ){}\nendif()",
+      "\n\t\t\tset( CMAKE_INSTALL_LIBDIR \"${CMAKE_INSTALL_LIBDIR}/dependencies/${PROJECT_NAME}\" CACHE PATH \"Library installation dir\" FORCE )"
+    )?;
+    writeln!(&self.cmakelists_file,
+      "\tendif()"
+    )?;
+
+    writeln!(&self.cmakelists_file, "endif()")?;
 
     writeln!(&self.cmakelists_file,
       "if( \"${{CMAKE_CURRENT_SOURCE_DIR}}\" STREQUAL \"${{CMAKE_SOURCE_DIR}}\" )"
@@ -509,6 +576,8 @@ impl<'a> CMakeListsWriter<'a> {
     self.set_basic_var("\t", "CMAKE_EXPORT_COMPILE_COMMANDS", "TRUE")?;
 
     self.set_basic_var("\t", "CMAKE_RUNTIME_OUTPUT_DIRECTORY", RUNTIME_BUILD_DIR_VAR)?;
+    self.set_basic_var("\t", "CMAKE_PDB_OUTPUT_DIRECTORY", RUNTIME_BUILD_DIR_VAR)?;
+    self.set_basic_var("\t", "CMAKE_COMPILE_PDB_OUTPUT_DIRECTORY", LIB_BUILD_DIR_VAR)?;
     self.set_basic_var("\t", "CMAKE_LIBRARY_OUTPUT_DIRECTORY", LIB_BUILD_DIR_VAR)?;
     self.set_basic_var("\t", "CMAKE_ARCHIVE_OUTPUT_DIRECTORY", LIB_BUILD_DIR_VAR)?;
 
@@ -627,6 +696,7 @@ impl<'a> CMakeListsWriter<'a> {
 
     if self.project_data.is_root_project() {
       writeln!(&self.cmakelists_file, "include(GenerateExportHeader)")?;
+      writeln!(&self.cmakelists_file, "include(GNUInstallDirs)")?;
       assert!(
         self.util_writer.is_some(),
         "A CMakeListsWriter for a root project should always have a util_writer."
@@ -2190,11 +2260,7 @@ impl<'a> CMakeListsWriter<'a> {
       let mut emscripten_link_flags_to_apply: HashMap<String, Vec<EmscriptenLinkFlagInfo>> = HashMap::new();
 
       let mut additional_installs: Vec<(Rc<RefCell<TargetNode>>, SystemSpecifierWrapper, LinkMode)> = Vec::new();
-      
-      writeln!(&self.cmakelists_file,
-        "target_link_libraries( {} ",
-        output_name
-      )?;
+      let mut libs_to_link: BTreeMap<LinkMode, Vec<NormalLinkInfo>> = BTreeMap::new();
 
       for (given_link_mode, dep_node_list) in self.sorted_target_info.regular_dependencies_by_mode(output_target_node) {
         assert!(
@@ -2202,24 +2268,7 @@ impl<'a> CMakeListsWriter<'a> {
           "If a link category for a target's dependencies exists in the map, then the target should have at least one dependency in that category."
         );
 
-        let inheritance_method: &str = match output_data.get_output_type() {
-          // Every executable now has a "receiver INTERFACE library" which contains
-          // the target's defines, code files (except for the entry file) and linked libraries.
-          // In theory this should make testing much easier, since test executables can
-          // just inherit all needed code, libraries, and defines for testing executables
-          // by linking to the "receiver library".
-          OutputItemType::Executable => "INTERFACE",
-          _ => match given_link_mode {
-            LinkMode::Public => "PUBLIC",
-            LinkMode::Private => "PRIVATE",
-            LinkMode::Interface => "INTERFACE",
-          }
-        };
-
-        writeln!(&self.cmakelists_file,
-          "\t{}",
-          inheritance_method
-        )?;
+        let mut link_info_for_section: Vec<NormalLinkInfo> = Vec::new();
 
         // For compilers where link order matters, libraries must be listed before the libraries they depend on.
         for dependency_node in dep_node_list.iter().rev() {
@@ -2258,13 +2307,24 @@ impl<'a> CMakeListsWriter<'a> {
               }
             }
 
-            writeln!(&self.cmakelists_file,
-              "\t\t{}",
-              system_constraint_generator_expression(
-                &normal_link_constraint,
-                linkable_target_name
-              )
-            )?;
+            let is_dep_installed_with_project: bool = match borrowed_node.container_project().as_ref().borrow().project_wrapper() {
+              ProjectWrapper::GCMakeDependencyRoot(_) => true,
+              ProjectWrapper::NormalProject(_) => true,
+              ProjectWrapper::PredefinedDependency(predep_config) => match predep_config.predefined_dep_info() {
+                FinalPredepInfo::Subdirectory(_) => true,
+                _ => false
+              }
+            };
+
+            link_info_for_section.push(NormalLinkInfo {
+              linkable_name: linkable_target_name.to_string(),
+              link_constraint: normal_link_constraint.clone(),
+              unaliased_lib_var: format!(
+                "_UNALIASED_{}",
+                borrowed_node.get_yaml_namespaced_target_name().replace(":", "_")
+              ),
+              is_installed_with_project: is_dep_installed_with_project
+            });
 
             already_written.insert(String::from(linkable_target_name));
           }
@@ -2281,7 +2341,7 @@ impl<'a> CMakeListsWriter<'a> {
             );
 
             emscripten_link_flags_to_apply
-              .entry(inheritance_method.to_string())
+              .entry(get_link_inheritance_method(output_data, given_link_mode.clone()).to_string())
               .and_modify(|flag_list| {
                 if !flag_list.contains(&emscripten_link_flag_info) {
                   flag_list.push(emscripten_link_flag_info.clone());
@@ -2289,6 +2349,54 @@ impl<'a> CMakeListsWriter<'a> {
               })
               .or_insert(vec![emscripten_link_flag_info]);
           }
+        }
+
+        libs_to_link.insert(given_link_mode.clone(), link_info_for_section);
+      }
+
+      for (_, link_info_list) in &libs_to_link {
+        for single_dep_info in link_info_list {
+          if single_dep_info.is_installed_with_project {
+            writeln!(&self.cmakelists_file,
+              "if( {} )\n\tunaliased_target_name( {} {} )\nendif()",
+              system_contstraint_conditional_expression(&single_dep_info.link_constraint),
+              single_dep_info.linkable_name,
+              &single_dep_info.unaliased_lib_var
+            )?;
+          }
+        }
+      }
+      
+      writeln!(&self.cmakelists_file,
+        "target_link_libraries( {} ",
+        output_name
+      )?;
+
+      for (link_mode, link_info_list) in libs_to_link {
+        writeln!(&self.cmakelists_file,
+          "\t{}",
+          get_link_inheritance_method(output_data, link_mode)
+        )?;
+
+        for single_dep_info in link_info_list {
+          let inner_expression: String = if single_dep_info.is_installed_with_project {
+            format!(
+              "$<BUILD_INTERFACE:{}>$<INSTALL_INTERFACE:${{LOCAL_TOPLEVEL_PROJECT_NAME}}::${{{}}}>",
+              &single_dep_info.linkable_name,
+              &single_dep_info.unaliased_lib_var
+            )
+          }
+          else {
+            single_dep_info.linkable_name
+          };
+
+          writeln!(&self.cmakelists_file,
+            "\t\t{}",
+            system_constraint_generator_expression(
+              &single_dep_info.link_constraint,
+              inner_expression
+            )
+          )?;
         }
       }
 
@@ -2793,19 +2901,13 @@ impl<'a> CMakeListsWriter<'a> {
 
     match &self.project_data.get_project_type() {
       FinalProjectType::Root => {
-        // writeln!(&self.cmakelists_file, "if( \"${{CMAKE_SOURCE_DIR}}\" STREQUAL \"${{CMAKE_CURRENT_SOURCE_DIR}}\" )")?;
-        // writeln!(&self.cmakelists_file, "\tconfigure_installation( LOCAL_PROJECT_COMPONENT_NAME )")?;
-        // writeln!(&self.cmakelists_file, "else()")?;
-        // writeln!(&self.cmakelists_file, "\traise_target_list()")?;
-        // writeln!(&self.cmakelists_file, "\traise_needed_bin_files_list()")?;
-        // writeln!(&self.cmakelists_file, "\traise_install_list()")?;
-        // writeln!(&self.cmakelists_file, "endif()")?;
-
-        writeln!(&self.cmakelists_file, "if( GCMAKE_INSTALL AND \"${{CMAKE_CURRENT_SOURCE_DIR}}\" STREQUAL \"${{TOPLEVEL_PROJECT_DIR}}\" )")?;
-        writeln!(&self.cmakelists_file, "\tconfigure_installation( LOCAL_PROJECT_COMPONENT_NAME )")?;
-        writeln!(&self.cmakelists_file, "else()")?;
-        write_raise_functions("\t")?;
-        writeln!(&self.cmakelists_file, "endif()")?;
+        writeln!(&self.cmakelists_file,
+          "if( GCMAKE_INSTALL )\n\t{}\n\t{}",
+          "\tconfigure_installation( LOCAL_PROJECT_COMPONENT_NAME )",
+          "\tif( NOT \"${CMAKE_CURRENT_SOURCE_DIR}\" STREQUAL \"${TOPLEVEL_PROJECT_DIR}\" )"
+        )?;
+        write_raise_functions("\t\t")?;
+        writeln!(&self.cmakelists_file, "\tendif()\nendif()")?;
       },
       FinalProjectType::Subproject { } => {
         write_raise_functions("")?;
@@ -2848,6 +2950,7 @@ impl<'a> CMakeListsWriter<'a> {
   // Is only run if the project has tests
   fn write_test_config_section(&self) -> io::Result<()> {
     writeln!(&self.cmakelists_file,
+      // Make sure this variable is the same when including test projects in write_use_test_projects(...)
       "if( ${{LOCAL_TOPLEVEL_PROJECT_NAME}}_BUILD_TESTS )"
     )?;
 
@@ -2884,6 +2987,15 @@ impl<'a> CMakeListsWriter<'a> {
         }
       }
     }
+
+    writeln!(&self.cmakelists_file, "endif()")?;
+    Ok(())
+  }
+
+  fn write_use_test_projects(&self) -> io::Result<()> {
+    writeln!(&self.cmakelists_file,
+      "if( ${{LOCAL_TOPLEVEL_PROJECT_NAME}}_BUILD_TESTS )"
+    )?;
 
     for (test_name, _) in self.project_data.get_test_projects() {
       writeln!(&self.cmakelists_file,
@@ -2979,5 +3091,25 @@ fn union_maybe_specs(
     (Some(spec), None) => Some(spec.clone()),
     (None, Some(spec)) => Some(spec.clone()),
     (Some(spec), Some(other_spec)) => Some(spec.union(&other_spec))
+  }
+}
+
+
+fn get_link_inheritance_method(
+  output_data: &CompiledOutputItem,
+  given_link_mode: LinkMode
+) -> &str {
+  match output_data.get_output_type() {
+    // Every executable now has a "receiver INTERFACE library" which contains
+    // the target's defines, code files (except for the entry file) and linked libraries.
+    // In theory this should make testing much easier, since test executables can
+    // just inherit all needed code, libraries, and defines for testing executables
+    // by linking to the "receiver library".
+    OutputItemType::Executable => "INTERFACE",
+    _ => match given_link_mode {
+      LinkMode::Public => "PUBLIC",
+      LinkMode::Private => "PRIVATE",
+      LinkMode::Interface => "INTERFACE",
+    }
   }
 }

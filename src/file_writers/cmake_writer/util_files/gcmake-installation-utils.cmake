@@ -14,7 +14,7 @@ function( configure_installation
   list( REMOVE_DUPLICATES additional_installs )
 
   set( additional_relative_dep_paths "${MY_ADDITIONAL_RELATIVE_DEP_PATHS}" )
-  list( TRANSFORM additional_relative_dep_paths PREPEND "include/" )
+  list( TRANSFORM additional_relative_dep_paths PREPEND "${CMAKE_INSTALL_INCLUDEDIR}/" )
   list( REMOVE_DUPLICATES additional_relative_dep_paths )
 
   list( LENGTH targets_installing has_targets_to_install )
@@ -45,29 +45,29 @@ function( configure_installation
       install( TARGETS ${actual_output_name}
         EXPORT ${PROJECT_NAME}Targets
         RUNTIME 
-          DESTINATION bin
+          DESTINATION "${CMAKE_INSTALL_BINDIR}"
           PERMISSIONS
             OWNER_READ OWNER_WRITE OWNER_EXECUTE 
             GROUP_READ GROUP_EXECUTE
             WORLD_READ
         LIBRARY
-          DESTINATION lib
+          DESTINATION "${CMAKE_INSTALL_LIBDIR}"
         ARCHIVE
-          DESTINATION lib
+          DESTINATION "${CMAKE_INSTALL_LIBDIR}"
         COMPONENT ${project_component_name}
       )
     else()
       install( TARGETS ${actual_output_name}
         EXPORT ${PROJECT_NAME}Targets
         RUNTIME 
-          DESTINATION bin
+          DESTINATION "${CMAKE_INSTALL_BINDIR}"
         LIBRARY
-          DESTINATION lib
+          DESTINATION "${CMAKE_INSTALL_LIBDIR}"
         ARCHIVE
-          DESTINATION lib
+          DESTINATION "${CMAKE_INSTALL_LIBDIR}"
         COMPONENT ${project_component_name}
         FILE_SET HEADERS
-          DESTINATION "include/${PROJECT_INCLUDE_PREFIX}"
+          DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/${PROJECT_INCLUDE_PREFIX}"
       )
     endif()
   endforeach()
@@ -80,18 +80,18 @@ function( configure_installation
     install( TARGETS ${minimal_target_to_install}
       EXPORT ${PROJECT_NAME}Targets
       RUNTIME 
-        DESTINATION bin
+        DESTINATION "${CMAKE_INSTALL_BINDIR}"
       # If we omit the LIBRARY and ARCHIVE sections, the fmt::fmt install is unable to find certain headers?
       # What?? 
       LIBRARY
-        DESTINATION lib
+        DESTINATION "${DEPENDENCY_INSTALL_LIBDIR}"
       ARCHIVE
-        DESTINATION lib
+        DESTINATION "${DEPENDENCY_INSTALL_LIBDIR}"
       COMPONENT ${project_component_name}
       # Apparently targets which have INTERFACE or PUBLIC file sets can't be installed
       # without them even if the target's file_set isn't ever needed. That's really annoying.
       FILE_SET HEADERS
-        DESTINATION "include"
+        DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
       INCLUDES DESTINATION
         # TODO: I might need to separate this into its own variable. I'll leave it for now though, since it
         # isn't causing issues.
@@ -101,7 +101,7 @@ function( configure_installation
 
   if( has_files_to_install )
     install( FILES ${bin_files_installing}
-      DESTINATION bin
+      DESTINATION ${CMAKE_INSTALL_BINDIR}
       COMPONENT ${project_component_name}
     )
   endif()
@@ -117,18 +117,18 @@ function( configure_installation
   endif()
 
   if( has_additional_installs )
-    message( "${PROJECT_NAME} additional installs: ${additional_installs}" )
+    # message( "${PROJECT_NAME} additional installs: ${additional_installs}" )
     install( TARGETS ${additional_installs}
       EXPORT ${PROJECT_NAME}Targets
       RUNTIME 
-        DESTINATION bin
+        DESTINATION "${CMAKE_INSTALL_BINDIR}"
       LIBRARY
-        DESTINATION lib
+        # Since additional installs should only be used for dependencies, 
+        DESTINATION "${DEPENDENCY_INSTALL_LIBDIR}"
       ARCHIVE
-        DESTINATION lib
-        # DESTINATION lib/static
+        DESTINATION "${DEPENDENCY_INSTALL_LIBDIR}"
       FILE_SET HEADERS
-        DESTINATION "include"
+        DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
       INCLUDES DESTINATION
         ${additional_relative_dep_paths}
     )
@@ -136,22 +136,24 @@ function( configure_installation
 
   if( has_custom_find_modules )
     install( FILES ${MY_CUSTOM_FIND_MODULES}
-      DESTINATION "lib/cmake/${PROJECT_NAME}/modules"
+      DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/${PROJECT_NAME}/modules"
       COMPONENT ${project_component_name}
     )
   endif()
 
   if( EXISTS "${MY_RUNTIME_OUTPUT_DIR}/resources" )
     install( DIRECTORY "${MY_RUNTIME_OUTPUT_DIR}/resources"
-      DESTINATION bin
+      DESTINATION "${CMAKE_INSTALL_BINDIR}"
       COMPONENT ${project_component_name}
     )
   endif()
 
   install( EXPORT ${PROJECT_NAME}Targets
     FILE ${PROJECT_NAME}Targets.cmake
+    # PROJECT_NAME is the same as LOCAL_TOPLEVEL_PROJECT_NAME here since installations
+    # are only invoked from the root of a project.
     NAMESPACE "${PROJECT_NAME}::"
-    DESTINATION "lib/cmake/${PROJECT_NAME}"
+    DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/${PROJECT_NAME}"
     COMPONENT ${project_component_name}
   )
 
@@ -159,7 +161,7 @@ function( configure_installation
 
   configure_package_config_file( "${CMAKE_CURRENT_SOURCE_DIR}/Config.cmake.in"
     "${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}Config.cmake"
-    INSTALL_DESTINATION "lib/cmake"
+    INSTALL_DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake"
   )
 
   # TODO: Allow configuration of COMPATIBILITY
@@ -172,7 +174,7 @@ function( configure_installation
   install( FILES 
     "${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}Config.cmake"
     "${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}ConfigVersion.cmake"
-    DESTINATION "lib/cmake/${PROJECT_NAME}"
+    DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/${PROJECT_NAME}"
     COMPONENT ${project_component_name}
   )
 
@@ -187,7 +189,7 @@ function( generate_and_install_export_header
   target_name
 )
   set( the_export_header_file "${CMAKE_BINARY_DIR}/generated_export_headers/${PROJECT_INCLUDE_PREFIX}/${target_name}_export.h" )
-  set( installed_header_location "include/${PROJECT_INCLUDE_PREFIX}/${target_name}_export.h" )
+  set( installed_header_location "${CMAKE_INSTALL_INCLUDEDIR}/${PROJECT_INCLUDE_PREFIX}/${target_name}_export.h" )
 
   generate_export_header( ${target_name}
     EXPORT_FILE_NAME "${the_export_header_file}"
@@ -396,7 +398,7 @@ macro( add_to_minimal_installs
     set( unaliased_lib_name ${target_name} )
   endif()
 
-  set( MY_MINIMAL_INSTALLS "${MY_MINIMAL_INSTALLS}" "${unaliased_lib_name}" )
+  set( MY_MINIMAL_INSTALLS "${MY_MINIMAL_INSTALLS}" ${unaliased_lib_name} )
   set( MY_ADDITIONAL_RELATIVE_DEP_PATHS "${MY_ADDITIONAL_RELATIVE_DEP_PATHS}" "${relative_dep_path}" )
 endmacro()
 
