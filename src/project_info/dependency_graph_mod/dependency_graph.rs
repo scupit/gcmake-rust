@@ -1,6 +1,6 @@
 use std::{cell::{RefCell}, rc::{Rc, Weak}, hash::{Hash, Hasher}, collections::{HashMap, HashSet, VecDeque}, borrow::Borrow, path::{Path, PathBuf}};
 
-use crate::{project_info::{LinkMode, CompiledOutputItem, PreBuildScript, OutputItemLinks, final_project_data::FinalProjectData, final_dependencies::{FinalGCMakeDependency, FinalPredefinedDependencyConfig, GCMakeDependencyStatus, FinalRequirementSpecifier, FinalTargetConfig, FinalExternalRequirementSpecifier}, LinkSpecifier, FinalProjectType, parsers::{link_spec_parser::{LinkAccessMode, LinkSpecTargetList, LinkSpecifierTarget}, system_spec::platform_spec_parser::SystemSpecifierWrapper}, raw_data_in::dependencies::internal_dep_config::raw_dep_common::RawEmscriptenConfig}, project_generator::configuration};
+use crate::{project_info::{LinkMode, CompiledOutputItem, PreBuildScript, OutputItemLinks, final_project_data::FinalProjectData, final_dependencies::{FinalGCMakeDependency, FinalPredefinedDependencyConfig, GCMakeDependencyStatus, FinalRequirementSpecifier, FinalTargetConfig, FinalExternalRequirementSpecifier}, LinkSpecifier, FinalProjectType, parsers::{link_spec_parser::{LinkAccessMode, LinkSpecTargetList, LinkSpecifierTarget}, system_spec::platform_spec_parser::SystemSpecifierWrapper}, raw_data_in::{dependencies::internal_dep_config::raw_dep_common::RawEmscriptenConfig, OutputItemType}}, project_generator::configuration};
 
 use super::hash_wrapper::RcRefcHashWrapper;
 use colored::*;
@@ -50,6 +50,11 @@ impl<'a> CycleNode<'a> {
 }
 
 pub enum AdditionalConfigValidationFailureReason<'a> {
+  EmscriptenHTMLPathPointsToNonexistent {
+    target: Rc<RefCell<TargetNode<'a>>>,
+    absolute_path_to_html_file: PathBuf,
+    given_relative_path: PathBuf
+  },
   WindowsIconPathPointsToNonexistent {
     target: Rc<RefCell<TargetNode<'a>>>,
     absolute_path_to_icon: PathBuf,
@@ -993,23 +998,31 @@ impl<'a> DependencyGraph<'a> {
       for (_, target_rc) in self.targets.borrow().iter() {
         let target: &TargetNode = &target_rc.as_ref().borrow();
 
-        let maybe_windows_icon_relative_path: Option<&Path> = match &target.contained_item {
+        let output_executable: Option<&CompiledOutputItem> = match &target.contained_item {
           ContainedItem::PredefinedLibrary { .. } => None,
           ContainedItem::PreBuild(pre_build) => match pre_build {
-            PreBuildScript::Exe(pre_build_exe) => {
-              pre_build_exe.windows_icon_relative_to_root_project.as_ref().map(Path::new)
-            },
+            PreBuildScript::Exe(pre_build_exe) => Some(pre_build_exe),
             _ => None
           }
-          ContainedItem::CompiledOutput(output) => {
-            if !output.is_executable_type() {
-              None
-            }
-            else {
-              output.windows_icon_relative_to_root_project.as_ref().map(Path::new)
-            }
+          ContainedItem::CompiledOutput(output) => match output.get_output_type() {
+            OutputItemType::Executable => Some(output),
+            _ => None
           },
         };
+
+        let maybe_windows_icon_relative_path: Option<&Path>;
+        let maybe_emscripten_html_relative_path: Option<&Path>;
+
+        match output_executable {
+          Some(exe_config) => {
+            maybe_windows_icon_relative_path = exe_config.windows_icon_relative_to_root_project.as_ref().map(Path::new);
+            maybe_emscripten_html_relative_path = exe_config.emscripten_html_shell_relative_to_project_root.as_ref().map(Path::new);
+          },
+          None => {
+            maybe_windows_icon_relative_path = None;
+            maybe_emscripten_html_relative_path = None;
+          }
+        }
 
         if let Some(windows_icon_relative_path) = maybe_windows_icon_relative_path {
           let absolute_path_to_icon: PathBuf = absolute_project_root.join(windows_icon_relative_path);
@@ -1022,6 +1035,21 @@ impl<'a> DependencyGraph<'a> {
                 target: Rc::clone(target_rc),
                 absolute_path_to_icon,
                 given_relative_path: windows_icon_relative_path.to_path_buf()
+              }
+            });
+          }
+        }
+
+        if let Some(emscripten_html_relative_path) = maybe_emscripten_html_relative_path {
+          let absolute_path_to_html_file: PathBuf = absolute_project_root.join(emscripten_html_relative_path);
+
+          if !absolute_path_to_html_file.is_file() {
+            return Err(GraphLoadFailureReason::FailedAdditionalProjectValidation {
+              project: Weak::upgrade(&self.current_graph_ref).unwrap(),
+              failure_reason: AdditionalConfigValidationFailureReason::EmscriptenHTMLPathPointsToNonexistent {
+                target: Rc::clone(target_rc),
+                absolute_path_to_html_file,
+                given_relative_path: emscripten_html_relative_path.to_path_buf()
               }
             });
           }

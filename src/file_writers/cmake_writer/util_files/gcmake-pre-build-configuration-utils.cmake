@@ -11,7 +11,7 @@ if( NOT GCMAKE_PRE_BUILD_UTIL_HAS_BEEN_INCLUDED )
     )
 
     if( NOT GCMAKE_NODEJS_EXECUTABLE )
-      message( WARNING "GCMake Warning: Unable to find a NodeJS executable on your system. Any executable pre-build scripts built by your project will not be run.")
+      message( WARNING "GCMake Warning: Unable to find a NO_HTML executable on your system. Any executable pre-build scripts built by your project will not be run.")
     endif()
   endif()
   
@@ -34,8 +34,8 @@ endfunction()
 function( use_executable_prebuild_script
   pre_build_executable_target
 )
-  if( USING_EMSCRIPTEN AND EMSCRIPTEN_MODE STREQUAL "Browser" AND GCMAKE_NODEJS_EXECUTABLE )
-    # The Browser "executable" output file is a .html file. A runnable .js file is also guaranteed to
+  if( USING_EMSCRIPTEN AND EMSCRIPTEN_MODE STREQUAL "WITH_HTML" AND GCMAKE_NODEJS_EXECUTABLE )
+    # The WITH_HTML "executable" output file is a .html file. A runnable .js file is also guaranteed to
     # be produced, so we need to make sure to run that instead of attempting to run the .html file with
     # Node.
     set( runnable_command ${GCMAKE_NODEJS_EXECUTABLE} "${MY_RUNTIME_OUTPUT_DIR}/${pre_build_executable_target}.js" )

@@ -34,7 +34,8 @@ Executables build by test projects have a few additional properties:
 | -------- | ----------- | ---- | ----------- |
 | [output_type](#output_type) | **Required** | [Output Item Type](#output_type) | Dictates the output item's type (executable vs library, and which library type) |
 | [entry_file](#entry_file) | **Required** | Relative file name | Sets the output item's entry point. |
-| [windows_icon](#windows_icon) | *Optional* | Relative file name | Sets the output item's entry point. |
+| [windows_icon](#windows_icon) | *Optional* | Relative file name (relative to root project) | Sets an executable's Windows icon. |
+| [emscripten_html_shell](#emscripten_html_shell) | *Optional* | Relative file name (relative to root project) | Sets a [custom HTML shell file](https://emscripten.org/docs/tools_reference/emcc.html#emcc-shell-file) for an executable when building with Emscripten. |
 | [link](#link) | *Optional* | `List<`[LinkSpecifier](../data_formats.md#link-specifier)`>` | This section is used to link libraries to your output. |
 | [build_config](#build_config) | *Optional* | Define additional build configuration which is specific to the output item only. |
 | [requires_custom_main](#requires_custom_main) | *Optional* | boolean | **Applies to test executables only.** Dictates whether or not the test executable must provide its own main function. |
@@ -114,6 +115,28 @@ output:
 
 sets *my-exe*'s icon to `YOUR_ROOT_PROJECT_DIR/icons/Smiley.ico` regardless of whether *my-exe* is defined
 in the root project or a subproject.
+
+### emscripten_html_shell
+
+> *Optional* Relative file path `String`
+
+**IMPORTANT!** The windows icon path is resolved **relative to the root project**, not to the project
+which the output is built from. This means that icon files should best placed somewhere in the root project
+for easy access.
+
+For example, assume the root project contains the directory `shell-files/` and the icon file
+`shell-files/my-awesome-shell-file.html`. This configuration:
+
+``` yaml
+output:
+  my-exe:
+    output_type: Executable
+    entry_file: main.cpp
+    emscripten_html_shell: shell-files/my-awesome-shell-file.html
+```
+
+sets *my-exe*'s icon to `YOUR_ROOT_PROJECT_DIR/shell-files/my-awesome-shell-file.html` regardless of
+whether *my-exe* is defined in the root project or a subproject.
 
 ### link
 

@@ -68,7 +68,7 @@ function( apply_emscripten_specifics
       "${target_file_base}.wasm.map"
     )
 
-    if( EMSCRIPTEN_MODE STREQUAL "Browser" )
+    if( EMSCRIPTEN_MODE STREQUAL "WITH_HTML" )
       list( APPEND additional_files_list "${target_file_base}.js" )
     endif()
 
@@ -84,16 +84,16 @@ macro( configure_emscripten_mode
   default_mode
 )
   if( NOT ALREADY_CONFIGURED_EMSCRIPTEN_MODE )
-    # Browser
-    # NodeJS
-    set( EMSCRIPTEN_MODE ${default_mode} CACHE STRING "'Browser' builds an html file and js/wasm runnable in a web browser. 'NodeJS' omits the html file and just creates a js file runnable by NodeJS." )
+    # WITH_HTML
+    # NO_HTML
+    set( EMSCRIPTEN_MODE ${default_mode} CACHE STRING "'WITH_HTML' builds an html file and js/wasm runnable in a web browser. 'NO_HTML' omits the html file and just creates a js file runnable by NO_HTML." )
 
-    set( valid_emscripten_modes "Browser" "NodeJS" )
+    set( valid_emscripten_modes "WITH_HTML" "NO_HTML" )
     set_property( CACHE EMSCRIPTEN_MODE PROPERTY STRINGS ${valid_emscripten_modes} )
 
-    if( EMSCRIPTEN_MODE STREQUAL "Browser" )
+    if( EMSCRIPTEN_MODE STREQUAL "WITH_HTML" )
       set( CMAKE_EXECUTABLE_SUFFIX ".html" )
-    elseif( EMSCRIPTEN_MODE STREQUAL "NodeJS" )
+    elseif( EMSCRIPTEN_MODE STREQUAL "NO_HTML" )
       set( CMAKE_EXECUTABLE_SUFFIX ".js" )
     else()
       message( FATAL_ERROR "Given EMCRIPTEN_MODE '${EMSCRIPTEN_MODE}' is invalid. Must be one of: ${valid_emscripten_modes}" )
@@ -103,3 +103,13 @@ macro( configure_emscripten_mode
     set( ALREADY_CONFIGURED_EMSCRIPTEN_MODE TRUE )
   endif()
 endmacro()
+
+function( use_custom_emscripten_shell_file
+  exe_target
+  html_shell_file_path
+)
+  target_link_options( ${exe_target}
+    PRIVATE
+      "SHELL:--shell-file '${html_shell_file_path}'"
+  )
+endfunction()

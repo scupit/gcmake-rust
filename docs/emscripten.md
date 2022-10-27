@@ -32,30 +32,38 @@ features and sets up its cross-compilation environment all in one step.
 
 ## EMSCRIPTEN_MODE
 
-GCMake specifies two Emscripten modes: `Browser` and `NodeJS`.
+GCMake specifies two Emscripten modes: `WITH_HTML` and `NO_HTML`.
 
-> `Browser` is the default `EMSCRIPTEN_MODE`.
+> `WITH_HTML` is the default `EMSCRIPTEN_MODE`.
 
 | Mode | Description |
 | ---- | ----------- |
-| `Browser` | Builds the .js and .wasm files, and automatically creates a .html wrapper file for running the .js and .wasm in the browser. **NOTE** that *the .js file can also be run by NodeJS*. |
-| `NodeJS` | Only the .js and .wasm files are built. |
+| `WITH_HTML` | Builds the .js and .wasm files, and automatically creates a .html wrapper file for running the .js and .wasm in the browser. **NOTE** that *the .js file can often also be run with NodeJS*. |
+| `NO_HTML` | Only the .js and .wasm files are built. |
 
 ## Running the Build Files with NodeJS
 
-The .js file produced by an Emscripten build can be run locally using NodeJS. For example:
-`node your-build-dir/bin/Debug/your-exe.js`
+The .js file produced by an Emscripten build can often run locally using NodeJS. For example:
+`node your-build-dir/bin/Debug/your-exe.js`. Just NOTE that this isn't always the case.
 
 ## Running the Built Files in the Browser
 
 > Your project must produce an HTML file to be run in the browser. Make sure `EMSCRIPTEN_MODE`
-> is set to `Browser`.
+> is set to `WITH_HTML`.
+
+**If you plan to debug your app using source maps, read ["debugging with WASM source maps"](#debugging-with-wasm-source-maps) first.**
 
 You can run your project in a browser by hosting the build output directory in a http server:
 
 ``` sh
 # Hosts your-build-directory/ at http://localhost:8080/
 python -m http.server --directory your-build-directory/ --bind localhost 8080
+```
+
+or by using Emscripten's built-in runner tool `emrun`:
+
+``` sh
+emrun bin/Debug/your-exe.html
 ```
 
 then opening the built HTML file in the browser. Example URL:
@@ -96,3 +104,19 @@ and the build acessed at `http://localhost:8080/my-build-dir/bin/Debug/my-exe.ht
 
 This way, the relative paths specified in each WASM source map will correctly resolve to the
 path of each source file on the local server.
+
+## Using a Custom HTML Shell File
+
+> [emscripten_html_shell](cmake_data_config/properties/output.md#emscripten_html_shell)
+
+Sometimes when using Emscripten you might want to
+[custom HTML shell file](https://emscripten.org/docs/tools_reference/emcc.html#emcc-shell-file). The main
+benefit to specifying a custom shell file is *full control over page customization*.
+
+For example, the [emscripten-custom-html](/gcmake-test-project/emscripten-custom-html/) example project
+configures an [xterm-style browser console](https://www.npmjs.com/package/xterm) for displaying output
+printed to stdout. This allows the executable's [FTXUI](https://github.com/ArthurSonzogni/FTXUI) output
+to be printed in full color (in the browser) as if it were being printed to a native terminal emulator.
+
+See the [emscripten_html_shell](cmake_data_config/properties/output.md#emscripten_html_shell) property
+for an explanation of how to actually use a shell file.

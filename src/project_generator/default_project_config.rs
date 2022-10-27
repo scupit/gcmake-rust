@@ -289,6 +289,7 @@ pub fn get_default_project_config(
           }
         },
         windows_icon: None,
+        emscripten_html_shell: None,
         link: None,
         build_config: None,
         requires_custom_main

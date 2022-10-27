@@ -126,6 +126,7 @@ pub struct CompiledOutputItem {
   // NOTE: This is a relative path which references a file RELATIVE TO THE ROOT PROJECT'S ROOT DIRECTORY.
   // That directory is not always the same as the project which directly contains the output item.
   pub windows_icon_relative_to_root_project: Option<PathBuf>,
+  pub emscripten_html_shell_relative_to_project_root: Option<PathBuf>,
   pub build_config: Option<FinalTargetBuildConfigMap>,
   pub system_specifier: SystemSpecifierWrapper,
   pub requires_custom_main: bool
@@ -225,6 +226,9 @@ impl CompiledOutputItem {
       links: OutputItemLinks::new_empty(),
       system_specifier: maybe_system_specifier.unwrap_or_default(),
       windows_icon_relative_to_root_project: raw_output_item.windows_icon.clone()
+        .map(PathBuf::from),
+      emscripten_html_shell_relative_to_project_root: raw_output_item.emscripten_html_shell
+        .clone()
         .map(PathBuf::from),
       build_config: make_final_target_build_config(raw_output_item.build_config.as_ref())?,
       requires_custom_main: raw_output_item.requires_custom_main.unwrap_or(false)

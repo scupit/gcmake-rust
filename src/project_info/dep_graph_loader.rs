@@ -329,6 +329,19 @@ pub fn load_graph(
             given_relative_path.to_str().unwrap().purple(),
             absolute_path_to_icon.to_str().unwrap()
           ))
+        },
+        AdditionalConfigValidationFailureReason::EmscriptenHTMLPathPointsToNonexistent {
+          ref target,
+          absolute_path_to_html_file,
+          given_relative_path
+        } => {
+          return wrap_error_msg(format!(
+            "Executable target '{}' in project [{}] specifies an Emscripten HTML shell file path \"{}\", however that path doesn't point to an existing icon file. NOTE that the Emscripten HTML shell file path is resolved relative to the root project. Final path: {}",
+            borrow_target(target).get_name(),
+            borrow_project(project).project_debug_name().yellow(),
+            given_relative_path.to_str().unwrap().purple(),
+            absolute_path_to_html_file.to_str().unwrap()
+          ))
         }
       }
     }

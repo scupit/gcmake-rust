@@ -54,6 +54,7 @@ configuration work together.
 - [Default config files](the_configuration_directory.md#manual-configuration) such as .gitignore, .clang-format, and .clang-tidy
 - [Compiling using Zig](compile_using_zig.md)
 - [Emscripten Usage and Caveats](./emscripten.md)
+- [Using a custom Emscripten HTML shell file](./emscripten.md#using-a-custom-html-shell-file)
 
 ## GCMake Repository Links
 

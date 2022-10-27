@@ -18,6 +18,7 @@ fn resolve_prebuild_script(project_root: &str, pre_build_config: &PreBuildConfig
           output_type: OutputItemType::Executable,
           entry_file: relative_to_project_root(project_root, entry_file_pathbuf),
           windows_icon_relative_to_root_project: None,
+          emscripten_html_shell_relative_to_project_root: None,
           system_specifier: SystemSpecifierWrapper::default(),
           links: match &pre_build_config.link {
             Some(raw_links) => CompiledOutputItem::make_link_map(

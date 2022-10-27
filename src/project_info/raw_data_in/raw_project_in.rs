@@ -318,7 +318,8 @@ pub struct RawCompiledItem {
   pub requires_custom_main: Option<bool>, // Used for tests executables only
   pub output_type: OutputItemType,
   pub entry_file: String,
-  pub windows_icon: Option<String>,
+  pub windows_icon: Option<String>, 
+  pub emscripten_html_shell: Option<String>,
   pub build_config: Option<TargetBuildConfigMap>,
   pub link: Option<LinkSection>
 }

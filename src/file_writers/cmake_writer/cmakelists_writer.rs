@@ -368,7 +368,7 @@ impl<'a> CMakeListsWriter<'a> {
     
     writeln!(&self.cmakelists_file, "if( USING_EMSCRIPTEN )")?;
     writeln!(&self.cmakelists_file,
-      "\tconfigure_emscripten_mode( Browser )"
+      "\tconfigure_emscripten_mode( WITH_HTML )"
     )?;
 
     if !self.project_data.supports_emscripten() {
@@ -2764,6 +2764,15 @@ impl<'a> CMakeListsWriter<'a> {
       receiver_lib_name,
       target_name
     )?;
+
+    if let Some(emscripten_html_shell_relative_path) = &output_data.emscripten_html_shell_relative_to_project_root {
+      writeln!(&self.cmakelists_file,
+        "\tuse_custom_emscripten_shell_file( {} \"${{TOPLEVEL_PROJECT_DIR}}/{}\" )",
+        target_name,
+        emscripten_html_shell_relative_path.to_str().unwrap()
+      )?;
+    }
+
     writeln!(&self.cmakelists_file, "endif()")?;
 
     if let Some(windows_icon_relative_path) = &output_data.windows_icon_relative_to_root_project {
