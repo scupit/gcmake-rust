@@ -43,6 +43,12 @@ fn make_inner_system_spec_generator_expression(
         make_inner_system_spec_generator_expression(expr, CurrentSystemSpecContext::None)
       )
     },
+    SystemSpecExpressionTree::Feature { name: feature_name } => {
+      format!(
+        "$<BOOL:${{${{LOCAL_TOPLEVEL_PROJECT_NAME}}_FEATURE_{}}}>",
+        feature_name
+      )
+    },
     SystemSpecExpressionTree::Value(value) => {
       // These variables are all defined in the gcmake-variables.cmake util file.
       let var_str: &str = match value {
@@ -113,6 +119,12 @@ fn make_inner_system_spec_conditional_expr(spec_tree: &SystemSpecExpressionTree)
       format!(
         "NOT ({})",
         make_inner_system_spec_conditional_expr(expr)
+      )
+    },
+    SystemSpecExpressionTree::Feature { name: feature_name } => {
+      format!(
+        "${{LOCAL_TOPLEVEL_PROJECT_NAME}}_FEATURE_{}",
+        feature_name
       )
     },
     SystemSpecExpressionTree::Value(value) => {

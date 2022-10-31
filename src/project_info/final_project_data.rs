@@ -1,16 +1,19 @@
-use std::{collections::{HashMap, HashSet}, path::{Path, PathBuf}, io, rc::Rc, fs::{self}, iter::FromIterator};
+use std::{collections::{HashMap, HashSet, BTreeSet, BTreeMap}, path::{Path, PathBuf}, io, rc::Rc, fs::{self}, iter::FromIterator};
 
 use crate::project_info::path_manipulation::cleaned_pathbuf;
 
-use super::{path_manipulation::{cleaned_path_str, relative_to_project_root, absolute_path}, final_dependencies::{FinalGCMakeDependency, FinalPredefinedDependencyConfig}, raw_data_in::{RawProject, dependencies::internal_dep_config::AllRawPredefinedDependencies, BuildType, LanguageConfigMap, OutputItemType, PreBuildConfigIn, SpecificCompilerSpecifier, BuildConfigCompilerSpecifier, TargetSpecificBuildType, LinkSection, RawTestFramework, DefaultCompiledLibType}, final_project_configurables::{FinalProjectType}, CompiledOutputItem, helpers::{parse_subproject_data, parse_root_project_data, populate_files, find_prebuild_script, PrebuildScriptFile, validate_raw_project_outputs, ProjectOutputType, RetrievedCodeFileType, code_file_type, parse_test_project_data}, PreBuildScript, OutputItemLinks, FinalTestFramework, base_include_prefix_for_test, gcmake_constants::{SRC_DIR, INCLUDE_DIR, TESTS_DIR, SUBPROJECTS_DIR}, FinalInstallerConfig, CompilerDefine, FinalBuildConfigMap, make_final_target_build_config, make_final_build_config_map, FinalTargetBuildConfigMap, FinalGlobalProperties, FinalShortcutConfig, parsers::{version_parser::ThreePartVersion, general_parser::ParseSuccess}, platform_spec_parser::parse_leading_system_spec, SystemSpecifierWrapper};
+use super::{path_manipulation::{cleaned_path_str, relative_to_project_root, absolute_path}, final_dependencies::{FinalGCMakeDependency, FinalPredefinedDependencyConfig}, raw_data_in::{RawProject, dependencies::internal_dep_config::AllRawPredefinedDependencies, BuildType, LanguageConfigMap, OutputItemType, PreBuildConfigIn, SpecificCompilerSpecifier, BuildConfigCompilerSpecifier, TargetSpecificBuildType, LinkSection, RawTestFramework, DefaultCompiledLibType}, final_project_configurables::{FinalProjectType}, CompiledOutputItem, helpers::{parse_subproject_data, parse_root_project_data, populate_files, find_prebuild_script, PrebuildScriptFile, validate_raw_project_outputs, ProjectOutputType, RetrievedCodeFileType, code_file_type, parse_test_project_data}, PreBuildScript, OutputItemLinks, FinalTestFramework, base_include_prefix_for_test, gcmake_constants::{SRC_DIR, INCLUDE_DIR, TESTS_DIR, SUBPROJECTS_DIR}, FinalInstallerConfig, CompilerDefine, FinalBuildConfigMap, make_final_target_build_config, make_final_build_config_map, FinalTargetBuildConfigMap, FinalGlobalProperties, FinalShortcutConfig, parsers::{version_parser::ThreePartVersion, general_parser::ParseSuccess}, platform_spec_parser::parse_leading_system_spec, SystemSpecifierWrapper, FinalFeatureConfig};
 use colored::*;
 
 const SUBPROJECT_JOIN_STR: &'static str = "_S_";
 const TEST_PROJECT_JOIN_STR: &'static str = "_TP_";
 const TEST_TARGET_JOIN_STR: &'static str = "_T_";
 
-
-fn resolve_prebuild_script(project_root: &str, pre_build_config: &PreBuildConfigIn) -> Result<Option<PreBuildScript>, String> {
+fn resolve_prebuild_script(
+  project_root: &str,
+  pre_build_config: &PreBuildConfigIn,
+  valid_feature_list: Option<&Vec<&str>>
+) -> Result<Option<PreBuildScript>, String> {
   let merged_script_config = if let Some(script_file) = find_prebuild_script(project_root) {
     Some(match script_file {
       PrebuildScriptFile::Exe(entry_file_pathbuf) => {
@@ -24,11 +27,15 @@ fn resolve_prebuild_script(project_root: &str, pre_build_config: &PreBuildConfig
             Some(raw_links) => CompiledOutputItem::make_link_map(
               &format!("Pre-build script"),
               &OutputItemType::Executable,
-              &LinkSection::Uncategorized(raw_links.clone())
+              &LinkSection::Uncategorized(raw_links.clone()),
+              valid_feature_list
             )?,
             None => OutputItemLinks::new_empty()
           },
-          build_config: make_final_target_build_config(pre_build_config.build_config.as_ref())?,
+          build_config: make_final_target_build_config(
+            pre_build_config.build_config.as_ref(),
+            valid_feature_list
+          )?,
           requires_custom_main: false
         })
       },
@@ -40,6 +47,16 @@ fn resolve_prebuild_script(project_root: &str, pre_build_config: &PreBuildConfig
   else { None };
 
   return Ok(merged_script_config);
+}
+
+fn feature_list_from(feature_map: &BTreeMap<String, FinalFeatureConfig>) -> Option<Vec<&str>> {
+  let feature_name_list: Vec<&str> = feature_map.iter()
+    .map(|(feature_name, _)| &feature_name[..])
+    .collect();
+
+  return if feature_name_list.is_empty()
+    { None }
+    else { Some(feature_name_list) }
 }
 
 pub struct UseableFinalProjectDataGroup {
@@ -132,7 +149,8 @@ struct NeededParseInfoFromParent {
   target_namespace_prefix: String,
   build_config_map: Rc<FinalBuildConfigMap>,
   language_config_map: Rc<LanguageConfigMap>,
-  supported_compilers: Rc<HashSet<SpecificCompilerSpecifier>>
+  supported_compilers: Rc<HashSet<SpecificCompilerSpecifier>>,
+  inherited_features: Rc<BTreeMap<String, FinalFeatureConfig>>
 }
 
 pub struct ProjectConstructorConfig {
@@ -174,6 +192,7 @@ pub struct FinalProjectData {
   predefined_dependencies: HashMap<String, Rc<FinalPredefinedDependencyConfig>>,
   gcmake_dependency_projects: HashMap<String, Rc<FinalGCMakeDependency>>,
 
+  features: Rc<BTreeMap<String, FinalFeatureConfig>>,
   prebuild_script: Option<PreBuildScript>,
   target_namespace_prefix: String,
   was_just_created: bool
@@ -246,25 +265,44 @@ impl FinalProjectData {
     let project_type: FinalProjectType;
     let full_namespaced_project_name: String;
 
-    // TODO: Resolve the given predefined dependency (which corresponds to the test framework)
-    // and use it here.
     let final_test_framework: Option<FinalTestFramework>;
 
     let language_config: Rc<LanguageConfigMap>;
     let build_config: Rc<FinalBuildConfigMap>;
     let supported_compiler_set: Rc<HashSet<SpecificCompilerSpecifier>>;
+    let features: Rc<BTreeMap<String, FinalFeatureConfig>>;
 
     match &parent_project_info {
       None => {
         raw_project = parse_root_project_data(&unclean_project_root)?;
         language_config = Rc::new(raw_project.languages.clone());
-        build_config = Rc::new(
-          make_final_build_config_map(&raw_project.build_configs)
-            .map_err(ProjectLoadFailureReason::Other)?
-        );
         supported_compiler_set = Rc::new(HashSet::from_iter(raw_project.supported_compilers.clone()));
         full_namespaced_project_name = raw_project.name.clone();
         project_type = FinalProjectType::Root;
+        features = Rc::new(
+          raw_project.features.clone()
+            .map_or(BTreeMap::new(), |feature_map|
+              feature_map
+                .into_iter()
+                .map(|(feature_name, raw_feature)|
+                  (
+                    feature_name,
+                    FinalFeatureConfig::from(raw_feature)
+                  )
+                )
+                .collect()
+            )
+        );
+
+        let valid_feature_list: Option<Vec<&str>> = feature_list_from(&features);
+
+        build_config = Rc::new(
+          make_final_build_config_map(
+            &raw_project.build_configs,
+            valid_feature_list.as_ref()
+          )
+            .map_err(ProjectLoadFailureReason::Other)?,
+        );
         final_test_framework = match &raw_project.test_framework {
           None => None,
           Some(raw_framework_info) => {
@@ -272,7 +310,8 @@ impl FinalProjectData {
             let test_framework_lib: Rc<FinalPredefinedDependencyConfig> = FinalPredefinedDependencyConfig::new(
               all_dep_config,
               raw_framework_info.lib_config(),
-              raw_framework_info.name()
+              raw_framework_info.name(),
+              valid_feature_list.as_ref()
             )
               .map(|config| Rc::new(config))
               .map_err(ProjectLoadFailureReason::Other)?;
@@ -294,11 +333,14 @@ impl FinalProjectData {
         language_config_map,
         actual_base_name,
         actual_vendor,
-        ..
+        include_prefix: _,
+        target_namespace_prefix: _,
+        inherited_features
       }) => {
         language_config = Rc::clone(language_config_map);
         supported_compiler_set = Rc::clone(supported_compilers);
         build_config = Rc::clone(build_config_map);
+        features = Rc::clone(inherited_features);
 
         let project_path = PathBuf::from(cleaned_path_str(unclean_project_root));
         let test_project_name: &str = project_path
@@ -344,11 +386,14 @@ impl FinalProjectData {
         build_config_map,
         actual_base_name,
         actual_vendor,
-        ..
+        include_prefix: _,
+        target_namespace_prefix: _,
+        inherited_features
       }) => {
         language_config = Rc::clone(language_config_map);
         supported_compiler_set = Rc::clone(supported_compilers);
         build_config = Rc::clone(build_config_map);
+        features = Rc::clone(inherited_features);
 
         raw_project = parse_subproject_data(&unclean_project_root)?.into();
         raw_project.name = actual_base_name.clone();
@@ -364,6 +409,17 @@ impl FinalProjectData {
         final_test_framework = test_framework.clone();
       }
     }
+
+    let valid_feature_list: Option<Vec<&str>> = if features.is_empty() {
+      None
+    }
+    else {
+      Some(
+        features.keys()
+          .map(|key| &key[..])
+          .collect()
+      )
+    };
 
     let project_output_type: ProjectOutputType = match validate_raw_project_outputs(&raw_project) {
       Ok(project_output_type) => project_output_type,
@@ -444,7 +500,8 @@ impl FinalProjectData {
               target_namespace_prefix: target_namespace_prefix.clone(),
               build_config_map: Rc::clone(&build_config),
               language_config_map: Rc::clone(&language_config),
-              supported_compilers: Rc::clone(&supported_compiler_set)
+              supported_compilers: Rc::clone(&supported_compiler_set),
+              inherited_features: Rc::clone(&features)
             }),
             all_dep_config,
             just_created_project_at
@@ -498,7 +555,8 @@ impl FinalProjectData {
               target_namespace_prefix: target_namespace_prefix.clone(),
               supported_compilers: Rc::clone(&supported_compiler_set),
               build_config_map: Rc::clone(&build_config),
-              language_config_map: Rc::clone(&language_config)
+              language_config_map: Rc::clone(&language_config),
+              inherited_features: Rc::clone(&features)
             }),
             all_dep_config,
             just_created_project_at
@@ -570,7 +628,7 @@ impl FinalProjectData {
       let actual_output_name: &str;
       let system_spec: Option<SystemSpecifierWrapper>;
 
-      match parse_leading_system_spec(output_name) {
+      match parse_leading_system_spec(output_name, valid_feature_list.as_ref()) {
         Ok(Some(ParseSuccess { value: system_spec_wrapper, rest: real_output_name })) => {
           actual_output_name = real_output_name;
           system_spec = Some(system_spec_wrapper);
@@ -586,7 +644,7 @@ impl FinalProjectData {
 
       output_items.insert(
         actual_output_name.to_string(),
-        CompiledOutputItem::from(actual_output_name, raw_output_item, system_spec)
+        CompiledOutputItem::make_from(actual_output_name, raw_output_item, system_spec, valid_feature_list.as_ref())
           .map_err(|err_message| ProjectLoadFailureReason::Other(
             format!("When creating output item named '{}':\n{}", output_name, err_message)
           ))?
@@ -609,7 +667,8 @@ impl FinalProjectData {
         let finalized_dep = FinalPredefinedDependencyConfig::new(
           all_dep_config,
           user_given_config,
-          dep_name
+          dep_name,
+          valid_feature_list.as_ref()
         )
           .map_err(ProjectLoadFailureReason::Other)?;
 
@@ -622,7 +681,8 @@ impl FinalProjectData {
       raw_project.prebuild_config.as_ref().unwrap_or(&PreBuildConfigIn {
         link: None,
         build_config: None
-      })
+      }),
+      valid_feature_list.as_ref()
     ).map_err(ProjectLoadFailureReason::Other)?;
 
     let maybe_version: Option<ThreePartVersion> = ThreePartVersion::from_str(raw_project.get_version());
@@ -667,7 +727,7 @@ impl FinalProjectData {
       .as_ref()
       .map_or(
         Ok(Vec::new()),
-        |defines_set| CompilerDefine::make_list(&defines_set)
+        |defines_set| CompilerDefine::make_list(&defines_set, valid_feature_list.as_ref())
       )
       .map_err(ProjectLoadFailureReason::Other)?;
 
@@ -682,6 +742,7 @@ impl FinalProjectData {
       full_include_prefix,
       base_include_prefix: raw_project.get_include_prefix().to_string(),
       global_defines: global_defines,
+      features,
       global_properties: raw_project.global_properties
         .as_ref()
         .map(FinalGlobalProperties::from_raw),
@@ -846,6 +907,8 @@ impl FinalProjectData {
       ))
     }
 
+    self.validate_features()?;
+
     for (_, test_project) in &self.tests {
       if let ProjectOutputType::ExeProject = &test_project.project_output_type {
         test_project.validate_correctness()?;
@@ -915,6 +978,30 @@ impl FinalProjectData {
     }
 
     self.validate_installer_config()?;
+
+    Ok(())
+  }
+
+  fn validate_features(&self) -> Result<(), String> {
+    for (feature_name, feature_config) in self.features.iter() {
+      if feature_name.contains(" ") {
+        return Err(format!(
+          "Invalid feature name \"{}\" given. Feature names cannot contain whitespace.",
+          feature_name.yellow()
+        ));
+      }
+
+      for feature_name_to_enable in &feature_config.enables {
+        if !self.features.contains_key(feature_name_to_enable) {
+          return Err(format!(
+            "Feature \"{}\" specifies that it should enable another feature named \"{}\", but the project doesn't define a feature called {}.",
+            feature_name.purple(),
+            feature_name_to_enable.yellow(),
+            feature_name_to_enable.yellow()
+          ));
+        }
+      }
+    }
 
     Ok(())
   }
@@ -1172,6 +1259,14 @@ impl FinalProjectData {
       "PRE_BUILD_SCRIPT_{}",
       self.project_base_name
     )
+  }
+
+  pub fn get_features(&self) -> &BTreeMap<String, FinalFeatureConfig> {
+    &self.features
+  }
+
+  pub fn has_features(&self) -> bool {
+    !self.features.is_empty()
   }
 
   pub fn get_test_framework(&self) -> &Option<FinalTestFramework> {

@@ -299,10 +299,11 @@ impl PredefinedSubdirDep {
   pub fn from_subdir_dep(
     subdir_dep: &RawSubdirectoryDependency,
     user_given_config: &UserGivenPredefinedDependencyConfig,
-    dep_name: &str
+    dep_name: &str,
+    valid_feature_list: Option<&Vec<&str>>
   ) -> Result<Self, String> {
     
-    let target_map = make_final_target_config_map(dep_name, subdir_dep)
+    let target_map = make_final_target_config_map(dep_name, subdir_dep, valid_feature_list)
       .map_err(|err_msg| format!(
         "When loading predefined subdirectory dependency \"{}\":\n\n{}",
         dep_name,

@@ -1,6 +1,6 @@
-use std::{rc::Rc, collections::{HashMap, HashSet}, path::PathBuf};
+use std::{rc::Rc, collections::{HashMap, HashSet, BTreeSet}, path::PathBuf};
 
-use super::{raw_data_in::{OutputItemType, RawCompiledItem, TargetBuildConfigMap, LinkSection, BuildConfigCompilerSpecifier, BuildType, TargetSpecificBuildType, RawBuildConfig, BuildTypeOptionMap, BuildConfigMap, RawGlobalPropertyConfig, DefaultCompiledLibType, RawShortcutConfig}, final_dependencies::FinalPredefinedDependencyConfig, LinkSpecifier, parsers::{link_spec_parser::LinkAccessMode, general_parser::ParseSuccess}, SystemSpecifierWrapper, platform_spec_parser::parse_leading_system_spec};
+use super::{raw_data_in::{OutputItemType, RawCompiledItem, TargetBuildConfigMap, LinkSection, BuildConfigCompilerSpecifier, BuildType, TargetSpecificBuildType, RawBuildConfig, BuildTypeOptionMap, BuildConfigMap, RawGlobalPropertyConfig, DefaultCompiledLibType, RawShortcutConfig, RawFeatureConfig}, final_dependencies::FinalPredefinedDependencyConfig, LinkSpecifier, parsers::{link_spec_parser::LinkAccessMode, general_parser::ParseSuccess}, SystemSpecifierWrapper, platform_spec_parser::parse_leading_system_spec};
 
 #[derive(Clone)]
 pub enum FinalTestFramework {
@@ -75,6 +75,20 @@ pub struct FinalInstallerConfig {
 pub enum PreBuildScript {
   Exe(CompiledOutputItem),
   Python(String)
+}
+
+pub struct FinalFeatureConfig {
+  pub is_enabled_by_default: bool,
+  pub enables: HashSet<String>
+}
+
+impl From<RawFeatureConfig> for FinalFeatureConfig {
+  fn from(raw_feature_config: RawFeatureConfig) -> Self {
+    return Self {
+      enables: raw_feature_config.enables.unwrap_or_default(),
+      is_enabled_by_default: raw_feature_config.default
+    }
+  }
 }
 
 // Ordered from most permissive to least permissive.
@@ -154,7 +168,8 @@ impl CompiledOutputItem {
   pub fn make_link_map(
     _output_name: &str,
     output_type: &OutputItemType,
-    raw_links: &LinkSection
+    raw_links: &LinkSection,
+    valid_feature_list: Option<&Vec<&str>>
   ) -> Result<OutputItemLinks, String> {
     let mut output_links = OutputItemLinks::new_empty();
 
@@ -168,7 +183,8 @@ impl CompiledOutputItem {
         LinkSection::Uncategorized(link_strings) => {
           parse_all_links_into(
             link_strings,
-            &mut output_links.cmake_private
+            &mut output_links.cmake_private,
+            valid_feature_list
           )?;
         }
       },
@@ -181,7 +197,8 @@ impl CompiledOutputItem {
         LinkSection::Uncategorized(link_strings) => {
           parse_all_links_into(
             link_strings,
-            &mut output_links.cmake_interface
+            &mut output_links.cmake_interface,
+            valid_feature_list
           )?;
         }
       },
@@ -193,14 +210,16 @@ impl CompiledOutputItem {
           if let Some(public_links) = public {
             parse_all_links_into(
               public_links,
-              &mut output_links.cmake_public
+              &mut output_links.cmake_public,
+              valid_feature_list
             )?;
           }
 
           if let Some(private_links) = private {
             parse_all_links_into(
               private_links,
-              &mut output_links.cmake_private
+              &mut output_links.cmake_private,
+              valid_feature_list
             )?;
           }
         },
@@ -215,10 +234,11 @@ impl CompiledOutputItem {
     return Ok(output_links);
   }
 
-  pub fn from(
+  pub fn make_from(
     output_name: &str,
     raw_output_item: &RawCompiledItem,
-    maybe_system_specifier: Option<SystemSpecifierWrapper>
+    maybe_system_specifier: Option<SystemSpecifierWrapper>,
+    valid_feature_list: Option<&Vec<&str>>
   ) -> Result<CompiledOutputItem, String> {
     let mut final_output_item = CompiledOutputItem {
       output_type: raw_output_item.output_type,
@@ -230,7 +250,7 @@ impl CompiledOutputItem {
       emscripten_html_shell_relative_to_project_root: raw_output_item.emscripten_html_shell
         .clone()
         .map(PathBuf::from),
-      build_config: make_final_target_build_config(raw_output_item.build_config.as_ref())?,
+      build_config: make_final_target_build_config(raw_output_item.build_config.as_ref(), valid_feature_list)?,
       requires_custom_main: raw_output_item.requires_custom_main.unwrap_or(false)
     };
 
@@ -238,7 +258,8 @@ impl CompiledOutputItem {
       final_output_item.links = Self::make_link_map(
         output_name,
         final_output_item.get_output_type(),
-        raw_links
+        raw_links,
+        valid_feature_list
       )?
     }
 
@@ -294,10 +315,11 @@ impl CompiledOutputItem {
 
 fn parse_all_links_into(
   link_strings: &Vec<String>,
-  destination_vec: &mut Vec<LinkSpecifier>
+  destination_vec: &mut Vec<LinkSpecifier>,
+  valid_feature_list: Option<&Vec<&str>>
 ) -> Result<(), String> {
   for link_str in link_strings {
-    destination_vec.push(LinkSpecifier::parse_from(link_str, LinkAccessMode::UserFacing)?);
+    destination_vec.push(LinkSpecifier::parse_from(link_str, LinkAccessMode::UserFacing, None)?);
   }
   Ok(())
 }
@@ -308,8 +330,11 @@ pub struct CompilerDefine {
 }
 
 impl CompilerDefine {
-  pub fn new(define_string: &str) -> Result<Self, String> {
-    return match parse_leading_system_spec(define_string)? {
+  pub fn new(
+    define_string: &str,
+    valid_feature_list: Option<&Vec<&str>>
+  ) -> Result<Self, String> {
+    return match parse_leading_system_spec(define_string, valid_feature_list)? {
       Some(ParseSuccess { value, rest }) => {
         Ok(Self {
           system_spec: value,
@@ -325,16 +350,22 @@ impl CompilerDefine {
     }
   }
 
-  pub fn make_list_from_maybe(maybe_def_list: Option<&Vec<String>>) -> Result<Vec<Self>, String> {
+  pub fn make_list_from_maybe(
+    maybe_def_list: Option<&Vec<String>>,
+    valid_feature_list: Option<&Vec<&str>>
+  ) -> Result<Vec<Self>, String> {
     return match maybe_def_list {
-      Some(def_list) => Self::make_list(def_list),
+      Some(def_list) => Self::make_list(def_list, valid_feature_list),
       None => Ok(Vec::new())
     }
   }
 
-  pub fn make_list(def_list: &Vec<String>) -> Result<Vec<Self>, String> {
+  pub fn make_list(
+    def_list: &Vec<String>,
+    valid_feature_list: Option<&Vec<&str>>
+  ) -> Result<Vec<Self>, String> {
     def_list.iter()
-      .map(|single_def| Self::new(single_def))
+      .map(|single_def| Self::new(single_def, valid_feature_list))
       .collect()
   }
 }
@@ -345,8 +376,11 @@ pub struct CompilerFlag {
 }
 
 impl CompilerFlag {
-  pub fn new(flag_str: &str) -> Result<Self, String> {
-    return match parse_leading_system_spec(flag_str)? {
+  pub fn new(
+    flag_str: &str,
+    valid_feature_list: Option<&Vec<&str>>
+  ) -> Result<Self, String> {
+    return match parse_leading_system_spec(flag_str, valid_feature_list)? {
       Some(ParseSuccess { value, rest }) => {
         Ok(Self {
           system_spec: value,
@@ -362,16 +396,22 @@ impl CompilerFlag {
     }
   }
 
-  pub fn make_list_from_maybe(maybe_flag_list: Option<&Vec<String>>) -> Result<Vec<Self>, String> {
+  pub fn make_list_from_maybe(
+    maybe_flag_list: Option<&Vec<String>>,
+    valid_feature_list: Option<&Vec<&str>>
+  ) -> Result<Vec<Self>, String> {
     return match maybe_flag_list {
-      Some(flag_list) => Self::make_list(flag_list),
+      Some(flag_list) => Self::make_list(flag_list, valid_feature_list),
       None => Ok(Vec::new())
     }
   }
 
-  pub fn make_list(flag_list: &Vec<String>) -> Result<Vec<Self>, String> {
+  pub fn make_list(
+    flag_list: &Vec<String>,
+    valid_feature_list: Option<&Vec<&str>>
+  ) -> Result<Vec<Self>, String> {
     flag_list.iter()
-      .map(|single_flag| Self::new(single_flag))
+      .map(|single_flag| Self::new(single_flag, valid_feature_list))
       .collect()
   }
 }
@@ -386,12 +426,27 @@ pub struct FinalBuildConfig {
 }
 
 impl FinalBuildConfig {
-  pub fn make_from(raw_build_config: &RawBuildConfig) -> Result<Self, String> {
+  pub fn make_from(
+    raw_build_config: &RawBuildConfig,
+    valid_feature_list: Option<&Vec<&str>>
+  ) -> Result<Self, String> {
     Ok(Self {
-      compiler_flags: CompilerFlag::make_list_from_maybe(raw_build_config.compiler_flags.as_ref())?,
-      link_time_flags: CompilerFlag::make_list_from_maybe(raw_build_config.link_time_flags.as_ref())?,
-      linker_flags: LinkerFlag::make_list_from_maybe(raw_build_config.linker_flags.as_ref())?,
-      defines: CompilerDefine::make_list_from_maybe(raw_build_config.defines.as_ref())?
+      compiler_flags: CompilerFlag::make_list_from_maybe(
+        raw_build_config.compiler_flags.as_ref(),
+        valid_feature_list
+      )?,
+      link_time_flags: CompilerFlag::make_list_from_maybe(
+        raw_build_config.link_time_flags.as_ref(),
+        valid_feature_list
+      )?,
+      linker_flags: LinkerFlag::make_list_from_maybe(
+        raw_build_config.linker_flags.as_ref(),
+        valid_feature_list
+      )?,
+      defines: CompilerDefine::make_list_from_maybe(
+        raw_build_config.defines.as_ref(),
+        valid_feature_list
+      )?
     })
   }
 
@@ -416,33 +471,42 @@ pub type FinalBuildTypeOptionMap = HashMap<BuildConfigCompilerSpecifier, FinalBu
 pub type FinalBuildConfigMap = HashMap<BuildType, FinalBuildTypeOptionMap>;
 pub type FinalTargetBuildConfigMap = HashMap<TargetSpecificBuildType, FinalBuildTypeOptionMap>;
 
-pub fn make_final_build_config_map(raw_build_config_map: &BuildConfigMap) -> Result<FinalBuildConfigMap, String> {
+pub fn make_final_build_config_map(
+  raw_build_config_map: &BuildConfigMap,
+  valid_feature_list: Option<&Vec<&str>>
+) -> Result<FinalBuildConfigMap, String> {
   let mut resulting_map: FinalBuildConfigMap = FinalBuildConfigMap::new();
 
   for (build_type, raw_build_config_by_compiler) in raw_build_config_map {
     resulting_map.insert(
       build_type.clone(),
-      make_final_by_compiler_config_map(raw_build_config_by_compiler)?
+      make_final_by_compiler_config_map(raw_build_config_by_compiler, valid_feature_list)?
     );
   }
 
   return Ok(resulting_map);
 }
 
-pub fn make_final_by_compiler_config_map(raw_by_compiler_map: &BuildTypeOptionMap) -> Result<FinalBuildTypeOptionMap, String> {
+pub fn make_final_by_compiler_config_map(
+  raw_by_compiler_map: &BuildTypeOptionMap,
+  valid_feature_list: Option<&Vec<&str>>
+) -> Result<FinalBuildTypeOptionMap, String> {
   let mut resulting_map: FinalBuildTypeOptionMap = FinalBuildTypeOptionMap::new();
 
   for (compiler_spec, raw_build_config) in raw_by_compiler_map {
     resulting_map.insert(
       compiler_spec.clone(),
-      FinalBuildConfig::make_from(raw_build_config)?
+      FinalBuildConfig::make_from(raw_build_config, valid_feature_list)?
     );
   }
 
   return Ok(resulting_map);
 }
 
-pub fn make_final_target_build_config(raw_build_config: Option<&TargetBuildConfigMap>) -> Result<Option<FinalTargetBuildConfigMap>, String> {
+pub fn make_final_target_build_config(
+  raw_build_config: Option<&TargetBuildConfigMap>,
+  valid_feature_list: Option<&Vec<&str>>
+) -> Result<Option<FinalTargetBuildConfigMap>, String> {
   return match raw_build_config {
     None => Ok(None),
     Some(config_map) => {
@@ -451,7 +515,7 @@ pub fn make_final_target_build_config(raw_build_config: Option<&TargetBuildConfi
       for (target_build_type, by_compiler_config) in config_map {
         resulting_map.insert(
           target_build_type.clone(),
-          make_final_by_compiler_config_map(by_compiler_config)?
+          make_final_by_compiler_config_map(by_compiler_config, valid_feature_list)?
         );
       }
 

@@ -14,7 +14,8 @@ fn main() {
     "gcmake-pgo-utils",
     "gcmake-installation-utils",
     "gcmake-cpack-utils",
-    "gcmake-config-file-writer"
+    "gcmake-config-file-writer",
+    "gcmake-features-util"
   ];
 
   match combine_cmake_util_files(ordered_cmake_util_names) {

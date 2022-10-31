@@ -1,9 +1,15 @@
-use crate::project_info::parsers::general_parser;
+use std::{collections::{HashSet, BTreeSet}, borrow::Borrow};
+
+use crate::project_info::parsers::general_parser::{self, parse_given_str};
+use colored::Colorize;
 use general_parser::{ParseResult, parse_whitespace, ParseError, ParseSuccess, alternatives_parse, parse_given_str_after_whitespace, point_to_position, Parser};
 
 const VALID_JOINT_TERMS: [&'static str; 2] = ["and", "or"];
 
 pub type SystemSpecParseResult<'a> = ParseResult<'a, SystemSpecExpressionTree, SpecParseError>;
+struct SystemSpecParseOptions<'a> {
+  valid_feature_names: Option<HashSet<&'a str>>
+}
 
 #[derive(PartialEq, Eq, Clone)]
 pub enum SingleSystemSpec {
@@ -76,6 +82,9 @@ impl SingleSystemSpec {
 #[derive(Clone)]
 pub enum SystemSpecExpressionTree {
   Value(SingleSystemSpec),
+  Feature {
+    name: String
+  },
   Not(Box<SystemSpecExpressionTree>),
   And(Box<SystemSpecExpressionTree>, Box<SystemSpecExpressionTree>),
   Or(Box<SystemSpecExpressionTree>, Box<SystemSpecExpressionTree>),
@@ -83,8 +92,17 @@ pub enum SystemSpecExpressionTree {
 }
 
 impl SystemSpecExpressionTree {
-  pub fn parse_from<'a>(s: &'a str) -> SystemSpecParseResult<'a> {
-    return parse_full_spec(s);
+  pub fn parse_from<'a, 'b>(
+    s: &'a str,
+    maybe_feature_name_list: Option<impl Iterator<Item = &'b str>>
+  ) -> SystemSpecParseResult<'a> {
+
+    let options: SystemSpecParseOptions = SystemSpecParseOptions {
+      valid_feature_names: maybe_feature_name_list
+        .map(|names_iter| names_iter.collect())
+    };
+
+    return parse_full_spec(s, &options);
     // match parse_full_spec(s) {
     //   Ok(Some(ParseSuccess { value, rest })) => {
     //     // TODO: Reorder the tree to comply with precedence, then simplify out equivalence expressions.
@@ -100,6 +118,7 @@ impl SystemSpecExpressionTree {
   fn inner_to_string(&self) -> String {
     match self {
       Self::Value(single_spec) => single_spec.to_str().to_string(),
+      Self::Feature { name } => format!("feature:{}", name),
       Self::Not(expr) => format!("not {}", expr.inner_to_string()),
       Self::And(left_expr, right_expr) => format!("{} and {}", left_expr.inner_to_string(), right_expr.inner_to_string()),
       Self::Or(left_expr, right_expr) => format!("{} or {}", left_expr.inner_to_string(), right_expr.inner_to_string()),
@@ -110,6 +129,7 @@ impl SystemSpecExpressionTree {
   fn exactly_matches_structure(&self, other: &SystemSpecExpressionTree) -> bool {
     match (self, other) {
       (SystemSpecExpressionTree::Value(value), SystemSpecExpressionTree::Value(other_val)) => value == other_val,
+      (SystemSpecExpressionTree::Feature { name: this_name }, SystemSpecExpressionTree::Feature { name: other_name }) => this_name == other_name,
       (SystemSpecExpressionTree::ParenGroup(group), SystemSpecExpressionTree::ParenGroup(other_group)) => {
         group.exactly_matches_structure(other_group)
       },
@@ -149,6 +169,11 @@ pub enum SpecParseError {
     parsed_from: String,
     needed: String
   },
+  InvalidFeatureName {
+    parsed_from: String,
+    received: String,
+    valid_names: BTreeSet<String>
+  },
   _NotOpened {
     what_parsing: String,
     parsed_from: String,
@@ -156,8 +181,14 @@ pub enum SpecParseError {
   }
 }
 
-pub fn parse_spec_with_diagnostic<'a>(expr_str: &'a str) -> Result<Option<ParseSuccess<'a, SystemSpecExpressionTree>>, String> {
-  return match SystemSpecExpressionTree::parse_from(expr_str) {
+pub fn parse_spec_with_diagnostic<'a>(
+  expr_str: &'a str,
+  maybe_feature_name_list: Option<&Vec<&str>>
+) -> Result<Option<ParseSuccess<'a, SystemSpecExpressionTree>>, String> {
+  let feature_list_iter: Option<_> = maybe_feature_name_list
+    .map(|feature_list| feature_list.iter().copied());
+
+  return match SystemSpecExpressionTree::parse_from(expr_str, feature_list_iter) {
     Ok(None) => Ok(None),
     Ok(Some(success_data)) => Ok(Some(success_data)),
     Err(parsing_err) => match parsing_err {
@@ -193,6 +224,18 @@ pub fn parse_spec_with_diagnostic<'a>(expr_str: &'a str) -> Result<Option<ParseS
             point_to_position(expr_str, &parsed_from)
           ))
         },
+        SpecParseError::InvalidFeatureName { parsed_from, received, valid_names } => {
+          let valid_names_str: String = valid_names.into_iter()
+            .collect::<Vec<String>>()
+            .join(", ");
+
+          Err(format!(
+            "Failed to parse feature spec because it specifies the name \"{}\" which isn't in the specified features list. Must be one of: {}.\n{}",
+            received.yellow(),
+            valid_names_str.green(),
+            point_to_position(expr_str, &parsed_from)
+          ))
+        },
         SpecParseError::_NotOpened { what_parsing, parsed_from, needed } => {
           unreachable!(
             "Failed to parse {} because it was never properly opened with '{}'. NOTE that this branch only exists for parser debugging purposes, and should be unreachable when not debugging the parser.\n{}.",
@@ -212,7 +255,10 @@ pub fn parse_spec_with_diagnostic<'a>(expr_str: &'a str) -> Result<Option<ParseS
   }
 }
 
-fn parse_full_spec<'a>(s: &'a str) -> SystemSpecParseResult<'a> {
+fn parse_full_spec<'a>(
+  s: &'a str,
+  options: &SystemSpecParseOptions
+) -> SystemSpecParseResult<'a> {
   return match parse_given_str_after_whitespace::<SpecParseError>("((", s)? {
     // None => Err(ParseError::Custom(SpecParseError::NotOpened {
     //   what_parsing: String::from("start of full system spec expression"),
@@ -220,7 +266,7 @@ fn parse_full_spec<'a>(s: &'a str) -> SystemSpecParseResult<'a> {
     //   needed: String::from("((")
     // })),
     None => Ok(None),
-    Some(ParseSuccess { value: _, rest }) => match parse_expression(rest)? {
+    Some(ParseSuccess { value: _, rest }) => match parse_expression(rest, options)? {
       None => Ok(None),
       Some(ParseSuccess { value: expr, rest: after_inner }) => match parse_given_str_after_whitespace::<SpecParseError>("))", after_inner) {
         Ok(Some(ParseSuccess { value: _, rest: after_full_spec })) => Ok(Some(ParseSuccess {
@@ -238,10 +284,13 @@ fn parse_full_spec<'a>(s: &'a str) -> SystemSpecParseResult<'a> {
   }
 }
 
-fn parse_paren_group<'a>(s: &'a str) -> SystemSpecParseResult<'a> {
+fn parse_paren_group<'a>(
+  s: &'a str,
+  options: &SystemSpecParseOptions
+) -> SystemSpecParseResult<'a> {
   match parse_given_str_after_whitespace::<SpecParseError>("(", s).unwrap() {
     None => Ok(None),
-    Some(ParseSuccess { value: _, rest}) => match parse_expression(rest)? {
+    Some(ParseSuccess { value: _, rest}) => match parse_expression(rest, options)? {
       None => Err(ParseError::NoneMatched {
         what_parsing: String::from("parenthesized expression group"),
         parsed_from: rest.to_string(),
@@ -258,30 +307,59 @@ fn parse_paren_group<'a>(s: &'a str) -> SystemSpecParseResult<'a> {
   }
 }
 
-fn parse_without_joint<'a>(s: &'a str) -> SystemSpecParseResult<'a> {
-  return alternatives_parse(s, vec![&parse_not, &parse_paren_group, &parse_value]);
-}
-
-fn parse_without_or<'a>(s: &'a str) -> SystemSpecParseResult<'a> {
-  return alternatives_parse(s, vec![&parse_inner_and, &parse_not_without_or, &parse_paren_group, &parse_value]);
-}
-
-fn parse_without_and<'a>(s: &'a str) -> SystemSpecParseResult<'a> {
-  return alternatives_parse(s, vec![&parse_inner_or, &parse_not_without_and, &parse_paren_group, &parse_value]);
-}
-
-fn parse_expression<'a>(s: &'a str) -> SystemSpecParseResult<'a> {
-  return alternatives_parse(s, vec![&parse_and, &parse_or, &parse_not, &parse_paren_group, &parse_value]);
-}
-
-fn parse_not_base<'a>(
+fn parse_without_joint<'a>(
   s: &'a str,
-  inner_expression_parser: &dyn Parser<'a, SystemSpecExpressionTree, SpecParseError>
+  options: &SystemSpecParseOptions
 ) -> SystemSpecParseResult<'a> {
-  return match parse_token(s)? {
+  return alternatives_parse(
+    s,
+    options,
+    vec![&parse_not, &parse_paren_group, &parse_feature, &parse_value]
+  );
+}
+
+fn parse_without_or<'a>(
+  s: &'a str,
+  options: &SystemSpecParseOptions
+) -> SystemSpecParseResult<'a> {
+  return alternatives_parse(
+    s,
+    options,
+    vec![&parse_inner_and, &parse_not_without_or, &parse_paren_group, &parse_feature, &parse_value]
+  );
+}
+
+fn parse_without_and<'a>(
+  s: &'a str,
+  options: &SystemSpecParseOptions
+) -> SystemSpecParseResult<'a> {
+  return alternatives_parse(
+    s,
+    options,
+    vec![&parse_inner_or, &parse_not_without_and, &parse_paren_group, &parse_feature, &parse_value]
+  );
+}
+
+fn parse_expression<'a>(
+  s: &'a str,
+  options: &SystemSpecParseOptions
+) -> SystemSpecParseResult<'a> {
+  return alternatives_parse(
+    s,
+    options,
+    vec![&parse_and, &parse_or, &parse_not, &parse_paren_group, &parse_feature, &parse_value]
+  );
+}
+
+fn parse_not_base<'a, 'b>(
+  s: &'a str,
+  options: &'b SystemSpecParseOptions,
+  inner_expression_parser: &dyn Parser<'a, SystemSpecExpressionTree, SystemSpecParseOptions<'b>, SpecParseError>
+) -> SystemSpecParseResult<'a> {
+  return match parse_token(s, true)? {
     None => Ok(None),
     Some(ParseSuccess { value, rest }) => match value {
-      "not" => match inner_expression_parser.parse(rest)? {
+      "not" => match inner_expression_parser.parse(rest, options)? {
         None => Ok(None),
         Some(ParseSuccess { value: expr, rest: rest_of_expr }) => {
           Ok(Some(ParseSuccess {
@@ -296,20 +374,32 @@ fn parse_not_base<'a>(
   
 }
 
-fn parse_not<'a>(s: &'a str) -> SystemSpecParseResult<'a> {
-  parse_not_base(s, &parse_expression)
+fn parse_not<'a>(
+  s: &'a str,
+  options: &SystemSpecParseOptions
+) -> SystemSpecParseResult<'a> {
+  parse_not_base(s, options, &parse_expression)
 }
 
-fn parse_not_without_and<'a>(s: &'a str) -> SystemSpecParseResult<'a> {
-  parse_not_base(s, &parse_without_and)
+fn parse_not_without_and<'a>(
+  s: &'a str,
+  options: &SystemSpecParseOptions
+) -> SystemSpecParseResult<'a> {
+  parse_not_base(s, options, &parse_without_and)
 }
 
-fn parse_not_without_or<'a>(s: &'a str) -> SystemSpecParseResult<'a> {
-  parse_not_base(s, &parse_without_or)
+fn parse_not_without_or<'a>(
+  s: &'a str,
+  options: &SystemSpecParseOptions
+) -> SystemSpecParseResult<'a> {
+  parse_not_base(s, options, &parse_without_or)
 }
 
-fn parse_value<'a>(s: &'a str) -> SystemSpecParseResult<'a> {
-  return match parse_token(s)? {
+fn parse_value<'a>(
+  s: &'a str,
+  options: &SystemSpecParseOptions
+) -> SystemSpecParseResult<'a> {
+  return match parse_token(s, true)? {
     None => Ok(None),
     Some(ParseSuccess { value, rest }) => match SingleSystemSpec::from_str(value) {
       Some(single_spec) => Ok(Some(ParseSuccess {
@@ -326,47 +416,109 @@ fn parse_value<'a>(s: &'a str) -> SystemSpecParseResult<'a> {
   }
 }
 
-fn parse_inner_and<'a>(s: &'a str) -> SystemSpecParseResult<'a> {
+fn parse_feature<'a>(
+  s: &'a str,
+  options: &SystemSpecParseOptions
+) -> SystemSpecParseResult<'a> {
+  return match parse_token(s, true)? {
+    None => Ok(None),
+    Some(ParseSuccess { value: left_token, rest: after_left }) => match left_token {
+      "feature" => match parse_given_str(":", after_left)? {
+        None => Err(ParseError::InvalidIdentifier {
+          what_parsing: String::from("feature specifier separator ':'"),
+          identifier: after_left[0..1].to_string(),
+          expected: Some(String::from(":")),
+          parsed_from: after_left.to_string()
+        }),
+        Some(ParseSuccess { value: _, rest: after_separator }) => match parse_token(after_separator, false)? {
+          Some(ParseSuccess { value, rest }) => {
+            if let Some(valid_feature_names) = &options.valid_feature_names {
+              if !valid_feature_names.contains(value) {
+                return Err(ParseError::Custom(SpecParseError::InvalidFeatureName {
+                  parsed_from: after_separator.to_string(),
+                  received: value.to_string(),
+                  valid_names: valid_feature_names.clone().into_iter()
+                    .map(|feature_name| feature_name.to_string())
+                    .collect()
+                }))
+              }
+            }
+
+            return Ok(Some(ParseSuccess {
+              value: SystemSpecExpressionTree::Feature { name: value.to_string() },
+              rest
+            }))
+          },
+          None => Err(ParseError::NoneMatched {
+            what_parsing: String::from("feature name"),
+            failure_reason: String::from("A feature name was not provided."),
+            parsed_from: after_separator.to_string()
+          })
+        }
+      },
+      _ => Ok(None)
+    }
+  }
+}
+
+fn parse_inner_and<'a>(
+  s: &'a str,
+  options: &SystemSpecParseOptions
+) -> SystemSpecParseResult<'a> {
   parse_joined_term(
     &parse_without_joint,
     "and",
     SystemSpecExpressionTree::And,
-    s
+    s,
+    options
   )
 }
 
-fn parse_and<'a>(s: &'a str) -> SystemSpecParseResult<'a> {
+fn parse_and<'a>(
+  s: &'a str,
+  options: &SystemSpecParseOptions
+) -> SystemSpecParseResult<'a> {
   parse_joined_term(
     &parse_without_and,
     "and",
     SystemSpecExpressionTree::And,
-    s
+    s,
+    options
   )
 }
 
-fn parse_inner_or<'a>(s: &'a str) -> SystemSpecParseResult<'a> {
+fn parse_inner_or<'a>(
+  s: &'a str,
+  options: &SystemSpecParseOptions
+) -> SystemSpecParseResult<'a> {
   parse_joined_term(
     &parse_without_joint,
     "or",
     SystemSpecExpressionTree::Or,
-    s
+    s,
+    options
   )
 }
 
-fn parse_or<'a>(s: &'a str) -> SystemSpecParseResult<'a> {
+fn parse_or<'a>(
+  s: &'a str,
+  options: &SystemSpecParseOptions
+) -> SystemSpecParseResult<'a> {
   parse_joined_term(
     &parse_without_or,
     "or",
     SystemSpecExpressionTree::Or,
-    s
+    s,
+    options
   )
 }
 
-fn parse_joined_term<'a, F>(
-  left_side_parser: &dyn Parser<'a, SystemSpecExpressionTree, SpecParseError>,
+fn parse_joined_term<'a, 'b, F>(
+  left_side_parser: &dyn Parser<'a, SystemSpecExpressionTree, SystemSpecParseOptions<'b>, SpecParseError>,
   join_word: &str,
   joint_constructor: F,
-  s: &'a str
+  s: &'a str,
+  options: &SystemSpecParseOptions<'b>
 ) -> SystemSpecParseResult<'a>
   where F: Fn(Box<SystemSpecExpressionTree>, Box<SystemSpecExpressionTree>) -> SystemSpecExpressionTree
 {
@@ -375,10 +527,10 @@ fn parse_joined_term<'a, F>(
     "When parsing a joined term (i.e. 'and' or 'or' expression), the joining word must be present in VALID_JOINT_TERMS."
   );
 
-  match left_side_parser.parse(s)? {
+  match left_side_parser.parse(s, options)? {
     None => Ok(None),
-    Some(ParseSuccess { value: left_expr, rest: after_left }) => match parse_token(after_left)? {
-      Some(ParseSuccess { value: middle_token, rest: after_middle_token }) => match parse_expression(after_middle_token)? {
+    Some(ParseSuccess { value: left_expr, rest: after_left }) => match parse_token(after_left, true)? {
+      Some(ParseSuccess { value: middle_token, rest: after_middle_token }) => match parse_expression(after_middle_token, options)? {
         None => Ok(None),
         Some(ParseSuccess { value: right_expr, rest }) => {
           if middle_token == join_word {
@@ -409,18 +561,22 @@ fn parse_joined_term<'a, F>(
       _ => Ok(None)
     }
   }
-
-
 }
 
-fn parse_token<'a>(s: &'a str) -> ParseResult<'a, &'a str, SpecParseError> {
-  let str_parsing: &str = parse_whitespace(s)?.unwrap().rest;
+fn parse_token<'a>(
+  s: &'a str,
+  should_parse_whitespace_first: bool
+) -> ParseResult<'a, &'a str, SpecParseError> {
+  let str_parsing: &str = if should_parse_whitespace_first
+    { parse_whitespace(s)?.unwrap().rest }
+    else { s };
+
   let mut non_token_char_index: usize = 0;
 
   for c in str_parsing.chars() {
     match c {
       'a'..='z' | 'A'..='Z' | '-' | '_' => non_token_char_index += 1,
-      ' ' | '(' | ')' => break,
+      ' ' | '(' | ')' | ':' => break,
       invalid_token => return Err(ParseError::InvalidIdentifier {
         what_parsing: String::from("token"),
         identifier: invalid_token.to_string(),
@@ -611,6 +767,22 @@ fn test_parser() {
         )),
       ))
     },
+    ParserTestGroup {
+      raw_expr: "(( feature:the-feature ))",
+      expected_tree: Some(SystemSpecExpressionTree::Feature { name: String::from("the-feature") })
+    },
+    ParserTestGroup {
+      raw_expr: "(( not feature:the-feature and feature:other-feature and windows ))",
+      expected_tree: Some(SystemSpecExpressionTree::And(
+        Box::new(SystemSpecExpressionTree::Not(
+          Box::new(SystemSpecExpressionTree::Feature { name: String::from("the-feature") })
+        )),
+        Box::new(SystemSpecExpressionTree::And(
+          Box::new(SystemSpecExpressionTree::Feature { name: String::from("other-feature") }),
+          Box::new(SystemSpecExpressionTree::Value(SingleSystemSpec::Windows))
+        ))
+      ))
+    }
   ];
 
   let invalid_expressions = [
@@ -642,11 +814,37 @@ fn test_parser() {
     ParserTestGroup {
       raw_expr: "((mingw or not (windows onr linux)))",
       expected_tree: None
+    },
+    ParserTestGroup {
+      raw_expr: "(( feature :something ))",
+      expected_tree: None
+    },
+    ParserTestGroup {
+      raw_expr: "(( feature: something ))",
+      expected_tree: None
+    },
+    ParserTestGroup {
+      raw_expr: "(( featre:something ))",
+      expected_tree: None
+    },
+    ParserTestGroup {
+      raw_expr: "(( feature:: )",
+      expected_tree: None
+    },
+    ParserTestGroup {
+      raw_expr: "(( feature::something )",
+      expected_tree: None
+    },
+    ParserTestGroup {
+      raw_expr: "(( feature:feature: )",
+      expected_tree: None
     }
   ];
 
   for ParserTestGroup { raw_expr, expected_tree } in valid_expressions.iter().chain(invalid_expressions.iter()) {
-    match (expected_tree, parse_spec_with_diagnostic(raw_expr)) {
+    // The iterator type given to 'None' here is just a placeholder, but is necessary because the
+    // function must be instantiated with a concrete iterator type.
+    match (expected_tree, parse_spec_with_diagnostic(raw_expr, None)) {
       (Some(expected), Ok(Some(ParseSuccess { value, ..}))) => {
         assert!(
           expected.exactly_matches_structure(&value),

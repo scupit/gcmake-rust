@@ -268,6 +268,7 @@ pub fn get_default_project_config(
     installer_config: None,
     supported_compilers: supported_compilers_default(include_emscripten_support),
     prebuild_config: None,
+    features: None,
     languages: LanguageConfigMap {
       c: SingleLanguageConfig {
         standard: 11

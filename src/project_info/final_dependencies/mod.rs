@@ -90,12 +90,14 @@ impl FinalPredefinedDependencyConfig {
   pub fn new(
     all_raw_dep_configs: &AllRawPredefinedDependencies,
     user_given_config: &UserGivenPredefinedDependencyConfig,
-    dep_name: &str
+    dep_name: &str,
+    valid_feature_list: Option<&Vec<&str>>
   ) -> Result<Self, String> {
     let configs = PredefinedDependencyAllConfigs::new(
       all_raw_dep_configs,
       user_given_config,
-      dep_name
+      dep_name,
+      valid_feature_list
     )?;
 
     let predep_info: FinalPredepInfo = if let Some(subdir_dep) = configs.as_subdirectory {
@@ -153,7 +155,7 @@ impl FinalPredefinedDependencyConfig {
                   let mut has_matching_target_name: bool = false;
 
                   for (unparsed_target_name, _) in raw_predep_config.dep_configs.get_common()?.raw_target_map_in() {
-                    let raw_target_name: &str = match parse_leading_system_spec(unparsed_target_name)? {
+                    let raw_target_name: &str = match parse_leading_system_spec(unparsed_target_name, valid_feature_list)? {
                       None => unparsed_target_name,
                       Some(ParseSuccess { value: _, rest }) => rest
                     };
@@ -335,7 +337,8 @@ impl PredefinedDependencyAllConfigs {
   pub fn new(
     all_raw_dep_configs: &AllRawPredefinedDependencies,
     user_given_config: &UserGivenPredefinedDependencyConfig,
-    dep_name: &str
+    dep_name: &str,
+    valid_feature_list: Option<&Vec<&str>>
   ) -> Result<Self, String> {
 
     let dep_info: &RawPredefinedDependencyInfo = match all_raw_dep_configs.get(dep_name) {
@@ -358,7 +361,8 @@ impl PredefinedDependencyAllConfigs {
       final_config.as_subdirectory = Some(PredefinedSubdirDep::from_subdir_dep(
         subdir_dep_info,
         user_given_config,
-        dep_name
+        dep_name,
+        valid_feature_list
       )?);
     }
 
@@ -366,7 +370,8 @@ impl PredefinedDependencyAllConfigs {
       let final_components_dep = PredefinedCMakeComponentsModuleDep::from_components_find_module_dep(
         components_find_module_dep,
         user_given_config,
-        dep_name
+        dep_name,
+        valid_feature_list
       )?;
 
       final_config.components_built_in_find_module = Some(final_components_dep);
@@ -376,7 +381,8 @@ impl PredefinedDependencyAllConfigs {
       let final_find_module_info = PredefinedCMakeModuleDep::from_find_module_dep(
         find_module_dep_info,
         user_given_config,
-        dep_name
+        dep_name,
+        valid_feature_list
       )?;
 
       final_config.built_in_find_module = Some(final_find_module_info);

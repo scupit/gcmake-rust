@@ -90,8 +90,11 @@ impl Default for SystemSpecifierWrapper {
 }
 
 
-pub fn parse_leading_system_spec<'a>(some_string: &'a str) -> Result<Option<ParseSuccess<'a, SystemSpecifierWrapper>>, String> {
-  match parse_spec_with_diagnostic(some_string) {
+pub fn parse_leading_system_spec<'a>(
+  some_string: &'a str,
+  maybe_valid_feature_list: Option<&Vec<&str>>
+) -> Result<Option<ParseSuccess<'a, SystemSpecifierWrapper>>, String> {
+  match parse_spec_with_diagnostic(some_string, maybe_valid_feature_list) {
     Err(err_diagnostic_msg) => Err(err_diagnostic_msg),
     // Ok(None) => Ok(ParseSuccess {
     //   value: SystemSpecCombinedInfo::default_include_all(),

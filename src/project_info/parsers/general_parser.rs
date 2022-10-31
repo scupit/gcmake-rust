@@ -1,4 +1,6 @@
 use std::fmt::Write;
+// TODO: Parser sequencing. I currently write most sequencing by hand, which is fine
+// but can also be a pain.
 
 pub struct ParseSuccess<'a, T> {
   pub value: T,
@@ -22,34 +24,35 @@ pub enum ParseError<E> {
 }
 
 pub type ParseResult<'a, T, E> = Result<Option<ParseSuccess<'a, T>>, ParseError<E>>;
-pub type ParserFunc<'a, T, E> = fn(&str) -> ParseResult<'a, T, E>;
+pub type ParserFunc<'a, T, O, E> = fn(&str, &O) -> ParseResult<'a, T, E>;
 
-pub trait Parser<'a, T, E> {
-  fn parse(&self, s: &'a str) -> ParseResult<'a, T, E>;
+pub trait Parser<'a, T, O, E> {
+  fn parse(&self, s: &'a str, options: &O) -> ParseResult<'a, T, E>;
 }
 
-impl<'a, T, E, F> Parser<'a, T, E> for F
-  where F: Fn(&'a str) -> ParseResult<'a, T, E>
+impl<'a, T, O, E, F> Parser<'a, T, O, E> for F
+  where F: Fn(&'a str, &O) -> ParseResult<'a, T, E>
 {
-  fn parse(&self, s: &'a str) -> ParseResult<'a, T, E> {
-    self(s)
+  fn parse(&self, s: &'a str, options: &O) -> ParseResult<'a, T, E> {
+    self(s, options)
   }
 }
 
-pub struct ParserWrapper<'a, T, E>(pub ParserFunc<'a, T, E>);
+pub struct ParserWrapper<'a, T, O, E>(pub ParserFunc<'a, T, O, E>);
 
-impl<'a, T, E> Parser<'a, T, E> for ParserWrapper<'a, T, E> {
-  fn parse(&self, s: &str) -> ParseResult<'a, T, E> {
-    (self.0)(s)
+impl<'a, T, O, E> Parser<'a, T, O, E> for ParserWrapper<'a, T, O, E> {
+  fn parse(&self, s: &str, options: &O) -> ParseResult<'a, T, E> {
+    (self.0)(s, options)
   }
 }
 
-pub fn alternatives_parse<'a, T, E>(
+pub fn alternatives_parse<'a, T, O, E>(
   s: &'a str,
-  parsers: Vec<&dyn Parser<'a, T, E>>
+  options: &O,
+  parsers: Vec<&dyn Parser<'a, T, O, E>>
 ) -> ParseResult<'a, T, E> {
   for parser in parsers {
-    match parser.parse(s) {
+    match parser.parse(s, options) {
       Ok(Some(success)) => return Ok(Some(success)),
       Ok(None) => continue,
       Err(err) => return Err(err)

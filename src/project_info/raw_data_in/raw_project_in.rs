@@ -75,6 +75,13 @@ pub struct RawGlobalPropertyConfig {
   // TODO: Add option for setting default Emscripten mode.
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(deny_unknown_fields)]
+pub struct RawFeatureConfig {
+  pub default: bool,
+  pub enables: Option<HashSet<String>>
+}
+
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(deny_unknown_fields)]
 pub struct RawProject {
@@ -87,6 +94,7 @@ pub struct RawProject {
   pub installer_config: Option<RawInstallerConfig>,
   pub default_build_type: BuildType,
   pub languages: LanguageConfigMap,
+  pub features: Option<HashMap<String, RawFeatureConfig>>,
   pub prebuild_config: Option<PreBuildConfigIn>,
   pub supported_compilers: BTreeSet<SpecificCompilerSpecifier>,
   pub test_framework: Option<RawTestFramework>,

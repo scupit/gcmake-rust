@@ -48,9 +48,10 @@ impl PredefinedCMakeModuleDep {
   pub fn from_find_module_dep(
     dep: &RawModuleDep,
     _user_given_dep_config: &UserGivenPredefinedDependencyConfig,
-    dep_name: &str
+    dep_name: &str,
+    valid_feature_list: Option<&Vec<&str>>
   ) -> Result<Self, String> {
-    let target_map = make_final_target_config_map(dep_name, dep)
+    let target_map = make_final_target_config_map(dep_name, dep, valid_feature_list)
       .map_err(|err_msg| format!(
         "When loading predefined CMake Module dependency \"{}\": \n\n{}",
         dep_name,

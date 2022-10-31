@@ -111,7 +111,7 @@ pub fn print_target_info(
       else {
         let search_result = operating_on.as_ref().borrow().find_targets_using_link_spec(
           false,
-          &LinkSpecifier::parse_with_full_permissions(selector)?
+          &LinkSpecifier::parse_with_full_permissions(selector, None)?
         )?;
 
         Ok(search_result)
@@ -179,7 +179,7 @@ pub fn print_project_info(
       else {
         let search_result = operating_on.as_ref().borrow().find_projects_using_link_spec(
           false,
-          &LinkSpecifier::parse_with_full_permissions(selector)?
+          &LinkSpecifier::parse_with_full_permissions(selector, None)?
         )?;
 
         Ok(search_result)

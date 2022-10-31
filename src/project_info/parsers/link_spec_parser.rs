@@ -105,27 +105,31 @@ impl LinkSpecifier {
     &self.namespace_queue
   }
 
-  pub fn parse_with_full_permissions(link_spec: impl AsRef<str>) -> Result<Self, String> {
-    Self::parse_from(link_spec, LinkAccessMode::Internal)
+  pub fn parse_with_full_permissions(
+    link_spec: impl AsRef<str>,
+    maybe_valid_feature_list: Option<&Vec<&str>>
+  ) -> Result<Self, String> {
+    Self::parse_from(link_spec, LinkAccessMode::Internal, maybe_valid_feature_list)
   }
 
   pub fn parse_from(
     link_spec: impl AsRef<str>,
-    access_mode: LinkAccessMode
+    access_mode: LinkAccessMode,
+    maybe_valid_feature_list: Option<&Vec<&str>>
   ) -> Result<Self, String> {
     let full_specifier_string: String = link_spec.as_ref().to_string();
 
     let maybe_system_spec: Option<SystemSpecifierWrapper>;
     let specifiers_only_str: &str;
 
-    match parse_leading_system_spec(&full_specifier_string)? {
+    match parse_leading_system_spec(&full_specifier_string, maybe_valid_feature_list)? {
       Some(ParseSuccess { value, rest }) => {
         maybe_system_spec = Some(value);
-        specifiers_only_str= rest;
+        specifiers_only_str = rest;
       },
       None => {
         maybe_system_spec = None;
-        specifiers_only_str= &full_specifier_string;
+        specifiers_only_str = &full_specifier_string;
       }
     }
 
@@ -161,7 +165,8 @@ impl LinkSpecifier {
 
       let target_list_parse_result = Self::parse_target_list(
         &specifiers_only_str[open_brace_index + 1..close_brace_index],
-        &maybe_system_spec
+        &maybe_system_spec,
+        maybe_valid_feature_list
       );
 
       let target_list: LinkSpecTargetList = match target_list_parse_result {
@@ -228,7 +233,8 @@ impl LinkSpecifier {
 
   fn parse_target_list(
     target_list_str: &str,
-    full_link_set_system_spec: &Option<SystemSpecifierWrapper>
+    full_link_set_system_spec: &Option<SystemSpecifierWrapper>,
+    maybe_valid_feature_list: Option<&Vec<&str>>
   ) -> Result<LinkSpecTargetList, String> {
     let mut verified_targets: LinkSpecTargetList = Vec::new();
 
@@ -236,7 +242,7 @@ impl LinkSpecifier {
       let target_specific_system_spec: Option<SystemSpecifierWrapper>;
       let untrimmed_target_name: &str;
 
-      match parse_leading_system_spec(full_target_spec)? {
+      match parse_leading_system_spec(full_target_spec, maybe_valid_feature_list)? {
         Some(ParseSuccess { value, rest }) => {
           target_specific_system_spec = Some(value);
           untrimmed_target_name = rest;

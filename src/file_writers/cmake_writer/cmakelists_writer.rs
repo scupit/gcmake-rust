@@ -229,6 +229,7 @@ impl<'a> CMakeListsWriter<'a> {
     if self.project_data.is_root_project() {
       writeln!(&self.cmakelists_file, "gcmake_begin_config_file()")?;
       self.write_toplevel_tweaks()?;
+      self.write_features()?;
     }
 
     if self.project_data.has_predefined_dependencies() {
@@ -2297,7 +2298,7 @@ impl<'a> CMakeListsWriter<'a> {
 
             if borrowed_node.is_internally_supported_by_emscripten() {
               normal_link_constraint = normal_link_constraint.intersection(
-                &parse_leading_system_spec("((not emscripten))")
+                &parse_leading_system_spec("((not emscripten))", None)
                   .unwrap()
                   .unwrap()
                   .value
@@ -2339,7 +2340,7 @@ impl<'a> CMakeListsWriter<'a> {
           }
 
           if let Some(mut emscripten_link_flag_info) = borrowed_node.emscripten_link_flag() {
-            let emscripten_constraint: SystemSpecifierWrapper = parse_leading_system_spec("((emscripten))")
+            let emscripten_constraint: SystemSpecifierWrapper = parse_leading_system_spec("((emscripten))", None)
               .unwrap()
               .unwrap()
               .value;
@@ -3019,6 +3020,51 @@ impl<'a> CMakeListsWriter<'a> {
     Ok(())
   }
 
+  // Only called by the root project.
+  fn write_features(&self) -> io::Result<()> {
+    for (feature_name, feature_config) in self.project_data.get_features() {
+      write!(&self.cmakelists_file,
+        "gcmake_register_feature( NAME {}",
+        feature_name
+      )?;
+
+      if !feature_config.enables.is_empty() {
+        write!(&self.cmakelists_file, "\n\tENABLES")?;
+
+        for enables_feature_name in &feature_config.enables {
+          write!(&self.cmakelists_file,
+            " {}",
+            enables_feature_name
+          )?;
+        }
+      }
+
+      writeln!(&self.cmakelists_file, ")")?;
+    }
+
+    // TODO: Allow this step to be bypassed if <PROJECT_NAME>_use_feature_defaults (or similarly named
+    // variable) is turned OFF. It should be ON by default.
+    for (feature_name, feature_config) in self.project_data.get_features() {
+      if feature_config.is_enabled_by_default {
+        writeln!(&self.cmakelists_file,
+          "gcmake_mark_for_enable( ${{LOCAL_TOPLEVEL_PROJECT_NAME}} {} )",
+          feature_name
+        )?;
+      }
+    }
+
+    self.write_newline()?;
+
+    for (feature_name, _) in self.project_data.get_features() {
+      writeln!(&self.cmakelists_file,
+        "gcmake_enable_feature_if_marked( {} )",
+        feature_name
+      )?;
+    }
+
+    Ok(())
+  }
+
   fn dep_graph_ref(&self) -> Ref<DependencyGraph<'a>> {
     return self.dep_graph.as_ref().borrow();
   }
@@ -3038,7 +3084,14 @@ impl<'a> CMakeListsWriter<'a> {
           .map(|(_, link)| 
             (
               link.get_link_mode(),
-              link.linked_target().as_ref().borrow().get_system_spec_info().clone()
+              // TODO: This doesn't directly take into account constraints on the linked dependency target itself;
+              // only constraints placed on the link to the target. I think that's fine, since
+              // GCMake will issue a warning explaining that the constraint given to the link
+              // must be a subset of the constraint given to the linked dependency target (i.e. ((windows)) ).
+              // However, it might be worth ANDing these for correctness. I'll have to wait and see. The
+              // commented out block below would be what we'd AND this one with.
+              link.get_system_spec_info().clone()
+              // link.linked_target().as_ref().borrow().get_system_spec_info().clone()
             )
           )
           .collect();

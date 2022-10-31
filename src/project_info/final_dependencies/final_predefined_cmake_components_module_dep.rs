@@ -52,9 +52,10 @@ impl PredefinedCMakeComponentsModuleDep {
   pub fn from_components_find_module_dep(
     components_dep: &RawComponentsModuleDep,
     _user_given_dep_config: &UserGivenPredefinedDependencyConfig,
-    dep_name: &str
+    dep_name: &str,
+    valid_feature_list: Option<&Vec<&str>>
   ) -> Result<Self, String> {
-    let components = make_final_target_config_map(dep_name, components_dep)
+    let components = make_final_target_config_map(dep_name, components_dep, valid_feature_list)
       .map_err(|err_msg| format!(
         "When loading predefined CMake Components Module dependency \"{}\":\n\n{}",
         dep_name,

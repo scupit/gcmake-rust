@@ -80,7 +80,10 @@ pub type FinalTargetConfigMap = HashMap<String, FinalTargetConfig>;
 
 type NameParsedTargetMapIn<'a> = HashMap<String, (Option<SystemSpecifierWrapper>, &'a RawTargetConfig)>;
 
-fn name_parsed_target_map(raw_target_map: &RawPredefinedTargetMapIn) -> Result<NameParsedTargetMapIn, String> {
+fn name_parsed_target_map<'a>(
+  raw_target_map: &'a RawPredefinedTargetMapIn,
+  valid_feature_list: Option<&Vec<&str>>
+) -> Result<NameParsedTargetMapIn<'a>, String> {
   let mut resulting_map = NameParsedTargetMapIn::new();
   
   for (target_name_with_system_spec, raw_target_config) in raw_target_map {
@@ -88,7 +91,7 @@ fn name_parsed_target_map(raw_target_map: &RawPredefinedTargetMapIn) -> Result<N
     let maybe_system_spec: Option<SystemSpecifierWrapper>;
     let target_name_only: &str;
 
-    match parse_leading_system_spec(target_name_with_system_spec)? {
+    match parse_leading_system_spec(target_name_with_system_spec, valid_feature_list)? {
       Some(ParseSuccess { value, rest }) => {
         maybe_system_spec = Some(value);
         target_name_only = rest;
@@ -110,10 +113,14 @@ fn name_parsed_target_map(raw_target_map: &RawPredefinedTargetMapIn) -> Result<N
 
 pub fn make_final_target_config_map(
   dep_name: &str,
-  dep_info: &dyn RawPredepCommon
+  dep_info: &dyn RawPredepCommon,
+  valid_feature_list: Option<&Vec<&str>>
 ) -> Result<FinalTargetConfigMap, String> {
   let mut final_map = FinalTargetConfigMap::new();
-  let raw_target_config_map_with_parsed_names: NameParsedTargetMapIn = name_parsed_target_map(dep_info.raw_target_map_in())?;
+  let raw_target_config_map_with_parsed_names: NameParsedTargetMapIn = name_parsed_target_map(
+    dep_info.raw_target_map_in(),
+    valid_feature_list
+  )?;
 
   for (target_name, (maybe_system_spec, raw_target_config)) in &raw_target_config_map_with_parsed_names {
     let mut requirements_set: HashSet<FinalRequirementSpecifier> = HashSet::new();
@@ -149,7 +156,11 @@ pub fn make_final_target_config_map(
       for full_specifier in external_requirement_spec_set {
         let given_link_specs: Vec<LinkSpecifier> = separate_alternate_requirement_spec(full_specifier)
           .iter()
-          .map(|link_spec_str| LinkSpecifier::parse_from(link_spec_str, LinkAccessMode::UserFacing))
+          .map(|link_spec_str| LinkSpecifier::parse_from(
+            link_spec_str,
+            LinkAccessMode::UserFacing,
+            valid_feature_list
+          ))
           .collect::<Result<_, String>>()?;
 
         if given_link_specs.is_empty() {
