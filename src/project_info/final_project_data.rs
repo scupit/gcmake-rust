@@ -2,7 +2,7 @@ use std::{collections::{HashMap, HashSet, BTreeSet, BTreeMap}, path::{Path, Path
 
 use crate::project_info::path_manipulation::cleaned_pathbuf;
 
-use super::{path_manipulation::{cleaned_path_str, relative_to_project_root, absolute_path}, final_dependencies::{FinalGCMakeDependency, FinalPredefinedDependencyConfig}, raw_data_in::{RawProject, dependencies::internal_dep_config::AllRawPredefinedDependencies, BuildType, LanguageConfigMap, OutputItemType, PreBuildConfigIn, SpecificCompilerSpecifier, BuildConfigCompilerSpecifier, TargetSpecificBuildType, LinkSection, RawTestFramework, DefaultCompiledLibType}, final_project_configurables::{FinalProjectType}, CompiledOutputItem, helpers::{parse_subproject_data, parse_root_project_data, populate_files, find_prebuild_script, PrebuildScriptFile, validate_raw_project_outputs, ProjectOutputType, RetrievedCodeFileType, code_file_type, parse_test_project_data}, PreBuildScript, OutputItemLinks, FinalTestFramework, base_include_prefix_for_test, gcmake_constants::{SRC_DIR, INCLUDE_DIR, TESTS_DIR, SUBPROJECTS_DIR}, FinalInstallerConfig, CompilerDefine, FinalBuildConfigMap, make_final_target_build_config, make_final_build_config_map, FinalTargetBuildConfigMap, FinalGlobalProperties, FinalShortcutConfig, parsers::{version_parser::ThreePartVersion, general_parser::ParseSuccess}, platform_spec_parser::parse_leading_system_spec, SystemSpecifierWrapper, FinalFeatureConfig};
+use super::{path_manipulation::{cleaned_path_str, relative_to_project_root, absolute_path}, final_dependencies::{FinalGCMakeDependency, FinalPredefinedDependencyConfig}, raw_data_in::{RawProject, dependencies::internal_dep_config::AllRawPredefinedDependencies, BuildType, LanguageConfigMap, OutputItemType, PreBuildConfigIn, SpecificCompilerSpecifier, BuildConfigCompilerSpecifier, TargetSpecificBuildType, LinkSection, RawTestFramework, DefaultCompiledLibType}, final_project_configurables::{FinalProjectType}, CompiledOutputItem, helpers::{parse_subproject_data, parse_root_project_data, populate_files, find_prebuild_script, PrebuildScriptFile, validate_raw_project_outputs, ProjectOutputType, RetrievedCodeFileType, code_file_type, parse_test_project_data}, PreBuildScript, OutputItemLinks, FinalTestFramework, base_include_prefix_for_test, gcmake_constants::{SRC_DIR, INCLUDE_DIR, TESTS_DIR, SUBPROJECTS_DIR}, FinalInstallerConfig, CompilerDefine, FinalBuildConfigMap, make_final_target_build_config, make_final_build_config_map, FinalTargetBuildConfigMap, FinalGlobalProperties, FinalShortcutConfig, parsers::{version_parser::ThreePartVersion, general_parser::ParseSuccess}, platform_spec_parser::parse_leading_system_spec, SystemSpecifierWrapper, FinalFeatureConfig, FinalFeatureEnabler};
 use colored::*;
 
 const SUBPROJECT_JOIN_STR: &'static str = "_S_";
@@ -281,17 +281,21 @@ impl FinalProjectData {
         project_type = FinalProjectType::Root;
         features = Rc::new(
           raw_project.features.clone()
-            .map_or(BTreeMap::new(), |feature_map|
+            .map_or(Ok(BTreeMap::new()), |feature_map|
               feature_map
                 .into_iter()
                 .map(|(feature_name, raw_feature)|
-                  (
-                    feature_name,
-                    FinalFeatureConfig::from(raw_feature)
-                  )
+                  FinalFeatureConfig::make_from(raw_feature)
+                    .map(|final_feature|
+                      (
+                        feature_name,
+                        final_feature
+                      )
+                    )
                 )
                 .collect()
             )
+            .map_err(ProjectLoadFailureReason::Other)?
         );
 
         let valid_feature_list: Option<Vec<&str>> = feature_list_from(&features);
@@ -991,8 +995,10 @@ impl FinalProjectData {
         ));
       }
 
-      for feature_name_to_enable in &feature_config.enables {
-        if !self.features.contains_key(feature_name_to_enable) {
+      for FinalFeatureEnabler { dep_name, feature_name: feature_name_to_enable } in &feature_config.enables {
+        // Dependency feature enablers are checked in the dependency graph's
+        // do_additional_project_checks(...) function.
+        if dep_name.is_none() && !self.features.contains_key(feature_name) {
           return Err(format!(
             "Feature \"{}\" specifies that it should enable another feature named \"{}\", but the project doesn't define a feature called {}.",
             feature_name.purple(),

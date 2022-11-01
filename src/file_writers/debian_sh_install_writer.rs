@@ -24,7 +24,7 @@ pub fn write_debian_dep_install_sh<'a>(
     if accumulated_deps.is_empty() {
       write!(&deb_dep_installer_file,
         "echo 'No system dependencies need to be installed for developing {}'",
-        borrowed_project.project_base_name()
+        borrowed_project.project_identifier_name()
       )?;
     }
     else {

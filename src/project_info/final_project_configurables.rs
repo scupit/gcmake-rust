@@ -77,17 +77,60 @@ pub enum PreBuildScript {
   Python(String)
 }
 
-pub struct FinalFeatureConfig {
-  pub is_enabled_by_default: bool,
-  pub enables: HashSet<String>
+#[derive(Hash, PartialEq, Eq, PartialOrd, Ord)]
+pub struct FinalFeatureEnabler {
+  pub dep_name: Option<String>,
+  pub feature_name: String
 }
 
-impl From<RawFeatureConfig> for FinalFeatureConfig {
-  fn from(raw_feature_config: RawFeatureConfig) -> Self {
-    return Self {
-      enables: raw_feature_config.enables.unwrap_or_default(),
-      is_enabled_by_default: raw_feature_config.default
+impl FinalFeatureEnabler {
+  pub fn make_from(feature_spec: impl AsRef<str>) -> Result<Self, String> {
+    let sections: Vec<&str> = feature_spec.as_ref().split('/').collect();
+
+    if sections.len() > 2 {
+      return Err(format!(
+        "\"{}\" is not in valid feature enabler format.",
+        feature_spec.as_ref()
+      ));
     }
+
+    let mut sections_iter = sections.iter();
+
+    return if sections.len() == 1 {
+      Ok(FinalFeatureEnabler {
+        dep_name: None,
+        feature_name: sections_iter.nth(0).unwrap().to_string()
+      })
+    }
+    else {
+      Ok(FinalFeatureEnabler {
+        dep_name: Some(sections_iter.nth(0).unwrap().to_string()),
+        feature_name: sections_iter.nth(0).unwrap().to_string(),
+      })
+    }
+  }
+}
+
+pub struct FinalFeatureConfig {
+  pub is_enabled_by_default: bool,
+  pub enables: BTreeSet<FinalFeatureEnabler>
+}
+
+impl FinalFeatureConfig {
+  pub fn make_from(raw_feature_config: RawFeatureConfig) -> Result<Self, String> {
+    let enables_results: Result<BTreeSet<FinalFeatureEnabler>, String> = raw_feature_config.enables.as_ref()
+      .map_or(Ok(BTreeSet::new()), |enables_set|
+        enables_set.iter()
+          .map(FinalFeatureEnabler::make_from)
+          .collect()
+      );
+
+    return Ok(Self {
+      // TODO: map dependency features like "my-dep/the-dep-feature"
+      // and check them in the dependency graph.
+      enables: enables_results?,
+      is_enabled_by_default: raw_feature_config.default
+    });
   }
 }
 

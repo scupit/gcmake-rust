@@ -18,7 +18,7 @@ endmacro()
 # gcmake_register_feature( NAME my-feature ENABLES some another noice )
 function( gcmake_register_feature )
   set( ONE_VALUE_KEYWORDS "NAME" )
-  set( MULTI_VALUE_KEYWORDS "ENABLES" )
+  set( MULTI_VALUE_KEYWORDS "ENABLES" "DEP_ENABLES" )
   cmake_parse_arguments( PARSE_ARGV 0 "_FEATURE" "" "${ONE_VALUE_KEYWORDS}" "${MULTI_VALUE_KEYWORDS}")
 
   if( NOT DEFINED _FEATURE_NAME )
@@ -29,6 +29,18 @@ function( gcmake_register_feature )
 
   if( DEFINED _FEATURE_ENABLES )
     set( ${LOCAL_TOPLEVEL_PROJECT_NAME}_FEATURE_${_FEATURE_NAME}_ENABLES ${_FEATURE_ENABLES} PARENT_SCOPE )
+  endif()
+
+  # Transitively enable dependency features. Must be given in sets of two. First item = project name,
+  # second item = feature name.
+  if( DEFINED _FEATURE_DEP_ENABLES )
+    list( LENGTH _FEATURE_DEP_ENABLES dep_enables_length )
+    math( EXPR value "${dep_enables_length} % 2" OUTPUT_FORMAT DECIMAL )
+    if( value EQUAL 1 )
+      message( FATAL_ERROR "Features which enable dependency features must specify both the dependency project name and the feature name. However, the DEP_ENABLES list for feature ${_FEATURE_NAME} has an odd number of elements. The list: ${_FEATURE_DEP_ENABLES}")
+    else()
+      set( ${LOCAL_TOPLEVEL_PROJECT_NAME}_FEATURE_${_FEATURE_NAME}_DEP_ENABLES ${_FEATURE_DEP_ENABLES} PARENT_SCOPE )
+    endif()
   endif()
 endfunction()
 
@@ -59,5 +71,18 @@ macro( gcmake_enable_feature
     foreach( feature_to_enable IN LISTS ${LOCAL_TOPLEVEL_PROJECT_NAME}_FEATURE_${feature_name}_ENABLES )
       gcmake_enable_feature( ${feature_to_enable} )
     endforeach()
+
+    list( LENGTH ${LOCAL_TOPLEVEL_PROJECT_NAME}_FEATURE_${feature_name}_DEP_ENABLES _dep_enables_end_index )
+    if( _dep_enables_end_index GREATER 0 )
+      math( EXPR _dep_enables_end_index "${_dep_enables_end_index} - 1" OUTPUT_FORMAT DECIMAL )
+
+      foreach( _project_name_index RANGE 0 ${_dep_enables_end_index} 2 )
+        list( GET ${LOCAL_TOPLEVEL_PROJECT_NAME}_FEATURE_${feature_name}_DEP_ENABLES ${_project_name_index} _project_name_containing_feature )
+        math( EXPR _feature_name_index "${_project_name_index} + 1" OUTPUT_FORMAT DECIMAL )
+        list( GET ${LOCAL_TOPLEVEL_PROJECT_NAME}_FEATURE_${feature_name}_DEP_ENABLES ${_feature_name_index} _dep_feature_name )
+
+        gcmake_mark_for_enable( "${_project_name_containing_feature}" "${_dep_feature_name}" )
+      endforeach()
+    endif()
   endif()
 endmacro()

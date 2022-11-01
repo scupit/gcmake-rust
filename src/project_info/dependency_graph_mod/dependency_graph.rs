@@ -1,6 +1,6 @@
 use std::{cell::{RefCell}, rc::{Rc, Weak}, hash::{Hash, Hasher}, collections::{HashMap, HashSet, VecDeque}, borrow::Borrow, path::{Path, PathBuf}};
 
-use crate::{project_info::{LinkMode, CompiledOutputItem, PreBuildScript, OutputItemLinks, final_project_data::FinalProjectData, final_dependencies::{FinalGCMakeDependency, FinalPredefinedDependencyConfig, GCMakeDependencyStatus, FinalRequirementSpecifier, FinalTargetConfig, FinalExternalRequirementSpecifier}, LinkSpecifier, FinalProjectType, parsers::{link_spec_parser::{LinkAccessMode, LinkSpecTargetList, LinkSpecifierTarget}, system_spec::platform_spec_parser::SystemSpecifierWrapper}, raw_data_in::{dependencies::internal_dep_config::raw_dep_common::RawEmscriptenConfig, OutputItemType}}, project_generator::configuration};
+use crate::{project_info::{LinkMode, CompiledOutputItem, PreBuildScript, OutputItemLinks, final_project_data::FinalProjectData, final_dependencies::{FinalGCMakeDependency, FinalPredefinedDependencyConfig, GCMakeDependencyStatus, FinalRequirementSpecifier, FinalTargetConfig, FinalExternalRequirementSpecifier}, LinkSpecifier, FinalProjectType, parsers::{link_spec_parser::{LinkAccessMode, LinkSpecTargetList, LinkSpecifierTarget}, system_spec::platform_spec_parser::SystemSpecifierWrapper}, raw_data_in::{dependencies::internal_dep_config::raw_dep_common::RawEmscriptenConfig, OutputItemType}, FinalFeatureEnabler}, project_generator::configuration};
 
 use super::hash_wrapper::RcRefcHashWrapper;
 use colored::*;
@@ -59,6 +59,16 @@ pub enum AdditionalConfigValidationFailureReason<'a> {
     target: Rc<RefCell<TargetNode<'a>>>,
     absolute_path_to_icon: PathBuf,
     given_relative_path: PathBuf
+  },
+  FeatureEnablerDependencyProjectNotFound {
+    container_feature_name: String,
+    gcmake_dep_name: String,
+    feature_name_to_enable: String
+  },
+  FeatureEnablerDependencyFeatureNotFound {
+    container_feature_name: String,
+    gcmake_dep_name: String,
+    feature_name_to_enable: String
   }
 }
 
@@ -599,7 +609,15 @@ pub enum ProjectWrapper {
 }
 
 impl ProjectWrapper {
-  pub fn base_name(&self) -> &str {
+  pub fn internal_project_name(&self) -> &str {
+    match self {
+      Self::NormalProject(project_info) => project_info.get_project_base_name(),
+      Self::GCMakeDependencyRoot(gcmake_dep) => gcmake_dep.project_base_name(),
+      Self::PredefinedDependency(predef_dep) => predef_dep.get_name()
+    }
+  }
+
+  pub fn identifier_name(&self) -> &str {
     match self {
       Self::NormalProject(project_info) => project_info.get_project_base_name(),
       Self::GCMakeDependencyRoot(gcmake_dep) => gcmake_dep.given_dependency_name(),
@@ -785,8 +803,12 @@ impl<'a> DependencyGraph<'a> {
     self.project_wrapper().mangled_name()
   }
 
-  pub fn project_base_name(&self) -> &str {
-    self.project_wrapper().base_name()
+  pub fn internal_project_name(&self) -> &str {
+    self.project_wrapper().internal_project_name()
+  }
+
+  pub fn project_identifier_name(&self) -> &str {
+    self.project_wrapper().identifier_name()
   }
 
   pub fn project_debug_name(&self) -> &str {
@@ -993,6 +1015,47 @@ impl<'a> DependencyGraph<'a> {
 
   fn do_additional_project_checks(&self) -> Result<(), GraphLoadFailureReason<'a>> {
     if let Some(root_project) = self.root_project().as_ref().borrow().project_wrapper().maybe_normal_project() {
+      // Ensure that any transitively enabled dependency features actually exist.
+      // TODO: Refactor this mess. Thing is, I can't really see a good way to refactor it.
+      if self.root_project_id() == self.project_id() {
+        if let Some(normal_project_config) = self.project_wrapper().maybe_normal_project() {
+          for (container_feature_name, feature_config) in normal_project_config.get_features() {
+            for FinalFeatureEnabler { dep_name, feature_name } in &feature_config.enables {
+              if let Some(dep_name_str) = dep_name {
+                match self.root_project().as_ref().borrow().gcmake_deps.get(dep_name_str) {
+                  None => {
+                    return Err(GraphLoadFailureReason::FailedAdditionalProjectValidation {
+                      project: Weak::upgrade(&self.current_graph_ref).unwrap(),
+                      failure_reason: AdditionalConfigValidationFailureReason::FeatureEnablerDependencyProjectNotFound {
+                        container_feature_name: container_feature_name.to_string(),
+                        gcmake_dep_name: dep_name_str.to_string(),
+                        feature_name_to_enable: feature_name.to_string()
+                      }
+                    });
+                  }
+                  Some(gcmake_dep) => {
+                    if let Some(available_gcmake_dep) = gcmake_dep.as_ref().borrow().project_wrapper().maybe_normal_project() {
+                      if !available_gcmake_dep.get_features().contains_key(feature_name) {
+                        return Err(GraphLoadFailureReason::FailedAdditionalProjectValidation {
+                          project: Weak::upgrade(&self.current_graph_ref).unwrap(),
+                          failure_reason: AdditionalConfigValidationFailureReason::FeatureEnablerDependencyFeatureNotFound {
+                            container_feature_name: container_feature_name.to_string(),
+                            gcmake_dep_name: dep_name_str.to_string(),
+                            feature_name_to_enable: feature_name.to_string()
+                          }
+                        });
+                      }
+                    }
+                  },
+                }
+              }
+            }
+          }
+        }
+      }
+
+      // Validate paths resolved relative to the project root. Current examples are Windows Executable icon
+      // and custom Emscripten HTML file.
       let absolute_project_root: &Path = Path::new(root_project.get_absolute_project_root());
 
       for (_, target_rc) in self.targets.borrow().iter() {
@@ -1164,7 +1227,7 @@ impl<'a> DependencyGraph<'a> {
     &self, 
     root_project_name_idents: &mut HashMap<String, Rc<RefCell<DependencyGraph<'a>>>>
   ) -> Result<(), GraphLoadFailureReason<'a>> {
-    match root_project_name_idents.get(self.project_base_name()) {
+    match root_project_name_idents.get(self.project_identifier_name()) {
       Some(matching_project) => {
         if matching_project.as_ref().borrow().ne(self) {
           return Err(GraphLoadFailureReason::DuplicateRootProjectIdentifier {
@@ -1175,7 +1238,7 @@ impl<'a> DependencyGraph<'a> {
       },
       None => {
         root_project_name_idents.insert(
-          self.project_base_name().to_string(),
+          self.project_identifier_name().to_string(),
           Weak::upgrade(&self.current_graph_ref).unwrap()
         );
       }
@@ -1189,7 +1252,7 @@ impl<'a> DependencyGraph<'a> {
   fn err_if_subproject_overlaps_dependency_name(
     subproject_graph: &Rc<RefCell<DependencyGraph<'a>>>
   ) -> Result<(), GraphLoadFailureReason<'a>> {
-    let subproject_name: String = subproject_graph.as_ref().borrow().project_base_name().to_string();
+    let subproject_name: String = subproject_graph.as_ref().borrow().project_identifier_name().to_string();
     let root_project: Rc<RefCell<DependencyGraph>> = Weak::upgrade(&subproject_graph.as_ref().borrow().toplevel).unwrap();
 
     if let Some(matching_predep) = root_project.as_ref().borrow().predefined_deps.get(&subproject_name) {
@@ -2243,7 +2306,7 @@ impl<'a> DependencyGraph<'a> {
               namespace_ident,
               LinkSpecifier::join_some_namespace_queue(whole_link_spec.get_namespace_queue()),
               self.project_debug_name(),
-              self.project_base_name()
+              self.project_identifier_name()
             ));
           }
         },
@@ -2333,7 +2396,7 @@ impl<'a> DependencyGraph<'a> {
     project_name: &str,
     is_finding_initial_namespace: bool
   ) -> Result<Option<Rc<RefCell<DependencyGraph<'a>>>>, String> {
-    if project_name == "self" || project_name == self.project_base_name() {
+    if project_name == "self" || project_name == self.project_identifier_name() {
       return Ok(Some(Weak::upgrade(&self.current_graph_ref).unwrap()));
     }
 
@@ -2344,7 +2407,7 @@ impl<'a> DependencyGraph<'a> {
             "Error resolving initial project '{}' in [{}]: [{}] doesn't have a parent project.",
             namespace_ident,
             self.project_debug_name(),
-            self.project_base_name()
+            self.project_identifier_name()
           )),
           Some(parent_graph) => return Ok(Some(Weak::upgrade(parent_graph).unwrap()))
         },

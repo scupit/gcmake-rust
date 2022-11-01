@@ -662,7 +662,7 @@ impl<'a> CMakeListsWriter<'a> {
               let container_project_name: String = borrowed_dependency
                 .container_project().as_ref().borrow()
                 .root_project().as_ref().borrow()
-                .project_base_name().to_string();
+                .project_identifier_name().to_string();
 
               writeln!(&self.cmakelists_file,
                 "\tmark_gcmake_project_usage( {} {} )",
@@ -860,9 +860,8 @@ impl<'a> CMakeListsWriter<'a> {
       let borrowed_graph = wrapped_graph.as_ref().borrow();
 
       if borrowed_graph.project_wrapper().contains_predef_dep() {
-        if let Some((dep_name, predep_graph)) = self.dep_graph_ref().get_predefined_dependencies().get_key_value(borrowed_graph.project_base_name()) {
+        if let Some((dep_name, predep_graph)) = self.dep_graph_ref().get_predefined_dependencies().get_key_value(borrowed_graph.project_identifier_name()) {
           let dep_info: Rc<FinalPredefinedDependencyConfig> = predep_graph.as_ref().borrow().project_wrapper().clone().unwrap_predef_dep();
-
           let usage_conditional: UsageConditional = self.get_usage_conditional_for_project(&wrapped_graph.0);
 
           if !usage_conditional.was_used() {
@@ -1436,7 +1435,7 @@ impl<'a> CMakeListsWriter<'a> {
       let borrowed_graph = wrapped_graph.as_ref().borrow();
 
       if let Some(dep_info) = borrowed_graph.project_wrapper().maybe_gcmake_dep() {
-        let dep_name: &str = borrowed_graph.project_base_name();
+        let dep_name: &str = borrowed_graph.project_identifier_name();
         let usage_conditional: UsageConditional = self.get_usage_conditional_for_project(&wrapped_graph.0);
 
         if !usage_conditional.was_used() {
@@ -1516,8 +1515,12 @@ impl<'a> CMakeListsWriter<'a> {
     for wrapped_graph in &self.sorted_target_info.project_order {
       let borrowed_graph = wrapped_graph.as_ref().borrow();
 
+      if self.dep_graph_ref().get_predefined_dependencies().get(borrowed_graph.project_identifier_name()).is_none() {
+        continue;
+      }
+
       if let Some(combined_dep_info) = borrowed_graph.project_wrapper().maybe_predef_dep() {
-        let dep_name: &str = borrowed_graph.project_base_name();
+        let dep_name: &str = borrowed_graph.project_identifier_name();
         let usage_conditional: UsageConditional = self.get_usage_conditional_for_project(&wrapped_graph.0);
 
         if !usage_conditional.was_used() {
@@ -2482,7 +2485,7 @@ impl<'a> CMakeListsWriter<'a> {
           )?;
 
           let namespaced_name: String = dependency_node.as_ref().borrow().get_cmake_namespaced_target_name().to_string();
-          let base_name = dependency_node.as_ref().borrow().container_project().as_ref().borrow().root_project().as_ref().borrow().project_base_name().to_string();
+          let base_name = dependency_node.as_ref().borrow().container_project().as_ref().borrow().root_project().as_ref().borrow().project_identifier_name().to_string();
 
           match &link_mode {
             LinkMode::Public | LinkMode::Interface => {
@@ -3048,17 +3051,52 @@ impl<'a> CMakeListsWriter<'a> {
     writeln!(&self.cmakelists_file, "endif()")?;
 
     for (feature_name, feature_config) in self.project_data.get_features() {
+      let mut dep_enable_pairs: Vec<(&str, &str)> = Vec::new();
+      let mut normal_enable_names: Vec<&str> = Vec::new();
+
+      for enabler_config in &feature_config.enables {
+        match &enabler_config.dep_name {
+          None => normal_enable_names.push(&enabler_config.feature_name),
+          Some(enabler_dep_name) => dep_enable_pairs.push(
+            (
+              enabler_dep_name,
+              &enabler_config.feature_name
+            )
+          )
+        }
+      }
+
       write!(&self.cmakelists_file,
         "gcmake_register_feature( NAME {}",
         feature_name
       )?;
 
-      if !feature_config.enables.is_empty() {
+      if !normal_enable_names.is_empty() {
         write!(&self.cmakelists_file, "\n\tENABLES")?;
 
-        for enables_feature_name in &feature_config.enables {
+        for enables_feature_name in &normal_enable_names {
           write!(&self.cmakelists_file,
             " {}",
+            enables_feature_name
+          )?;
+        }
+      }
+
+      if !dep_enable_pairs.is_empty() {
+        writeln!(&self.cmakelists_file, "\n\tDEP_ENABLES")?;
+
+        for (gcmake_dep_identifier, enables_feature_name) in dep_enable_pairs {
+          let internal_gcmake_dep_project_name: String = self.dep_graph_ref()
+            .root_project().as_ref().borrow()
+            .get_gcmake_dependencies()
+            .get(gcmake_dep_identifier)
+            .unwrap().as_ref().borrow()
+            .internal_project_name()
+            .to_string();
+            
+          writeln!(&self.cmakelists_file,
+            "\t\t\"{}\" \"{}\"",
+            internal_gcmake_dep_project_name,
             enables_feature_name
           )?;
         }

@@ -299,9 +299,9 @@ pub fn load_graph(
         return wrap_error_msg(format!(
           "Duplicate root project names detected:\n\t[{}] == \"{}\"\n\t[{}] == \"{}\"",
           borrow_project(project1).project_debug_name(),
-          borrow_project(project1).project_base_name(),
+          borrow_project(project1).project_identifier_name(),
           borrow_project(project2).project_debug_name(),
-          borrow_project(project2).project_base_name()
+          borrow_project(project2).project_identifier_name()
         ))
       },
       GraphLoadFailureReason::SubprojectNameOverlapsDependency {
@@ -311,9 +311,9 @@ pub fn load_graph(
         return wrap_error_msg(format!(
           "Subproject name overlaps dependency name, which could create linking ambiguity issues.\n\tSubproject: [{}] == \"{}\"\n\tDependency: [{}] == \"{}\"",
           borrow_project(subproject).project_debug_name(),
-          borrow_project(subproject).project_base_name(),
+          borrow_project(subproject).project_identifier_name(),
           borrow_project(dependency_project).project_debug_name(),
-          borrow_project(dependency_project).project_base_name()
+          borrow_project(dependency_project).project_identifier_name()
         ))
       },
       GraphLoadFailureReason::FailedAdditionalProjectValidation { ref project, failure_reason } => match failure_reason {
@@ -342,8 +342,38 @@ pub fn load_graph(
             given_relative_path.to_str().unwrap().purple(),
             absolute_path_to_html_file.to_str().unwrap()
           ))
+        },
+        AdditionalConfigValidationFailureReason::FeatureEnablerDependencyProjectNotFound {
+          container_feature_name,
+          gcmake_dep_name,
+          feature_name_to_enable
+        } => {
+          return wrap_error_msg(format!(
+            "Feature '{}' in project [{}] tries to enable a dependency feature '{}/{}'. However, a GCMake dependency project named [{}] doesn't exist.",
+            container_feature_name.yellow(),
+            borrow_project(project).project_debug_name().yellow(),
+            gcmake_dep_name.purple(),
+            feature_name_to_enable.purple(),
+            gcmake_dep_name.yellow()
+          ))
+        },
+        AdditionalConfigValidationFailureReason::FeatureEnablerDependencyFeatureNotFound {
+          container_feature_name,
+          gcmake_dep_name,
+          feature_name_to_enable
+        } => {
+          return wrap_error_msg(format!(
+            "Feature '{}' in project [{}] tries to enable a dependency feature '{}/{}'. However, the GCMake dependency project [{}] doesn't have a feature called '{}'.",
+            container_feature_name.yellow(),
+            borrow_project(project).project_debug_name().yellow(),
+            gcmake_dep_name.purple(),
+            feature_name_to_enable.purple(),
+            gcmake_dep_name.yellow(),
+            feature_name_to_enable.purple()
+          ))
+        
         }
-      }
+      },
     }
   }
 }
