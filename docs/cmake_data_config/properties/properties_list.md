@@ -29,6 +29,7 @@ supported for a specific project type.
 | [supported_compilers](#supported_compilers) | A list of compilers which are known to successfully compile the project |
 | [languages](#languages) | Configuration metadata (such as language standard) for the C and C++ languages |
 | [default_build_type](#default_build_type) | Selects the project's default build configuration |
+| [features](#features) | Configure a set of high-level project "features" which can be used as constraints throughout the yaml configuration. Inspired by [Rust's Cargo "features"](https://doc.rust-lang.org/cargo/reference/features.html). |
 | [predefined_dependencies](#predefined_dependencies) | Imports a non-GCMake dependency into the project. Only [pre-configured dependencies](../../predefined_dependency_doc.md) with a directory in the [predefined dependency configuration repository](/gcmake-dependency-configs/) are supported. |
 | [gcmake_dependencies](#gcmake_dependencies) | Imports other GCMake projects as dependencies into the build. |
 | [test_framework](#test_framework) | Sets the test framework to be used for all the project's tests |
@@ -261,6 +262,14 @@ build_configs:
       compiler_flags: [ -O3 ]
 ```
 
+### features
+
+> *Root project only*
+>
+> **OPTIONAL** `Map<FeatureName, FeatureConfigObject>`
+
+Features are explained in their own document [features.md](./features.md).
+
 ### predefined_dependencies
 
 > *Root project only*
@@ -354,33 +363,8 @@ predefined_dependencies:
 
 This is the section where external GCMake projects can be imported and consumed as dependencies.
 
-GCMake dependencies are configured in the exact same way as
-[predefined subdirectory dependencies](#subdirectory-dependency-configuration-options), except
-these **must specify a `git_repo`**.
-
-> **NOTE:** Validation (name duplicate checks, linking verification, etc.) is disabled for
-> GCMake dependencies until they are cloned into *dep/* during a CMake configuration run.
-> This is because a GCMake project's *cmake_data.yaml* must be present for validation to
-> occur, and that's only possible if the repo is actually cloned.
->
-> As a result, `gcmake-rust` should be re-run after all repos are cloned by CMake so that
-> target link namespaces can be properly written.
-
-Example:
-
-``` yaml
-output:
-  my-exe:
-    output_type: Executable
-    entry_file: main.cpp
-    link:
-      # Assumes my-project 
-      - my-project::{ first-lib, second-lib }
-gcmake_dependencies:
-  my-project:
-    repo_url: git@some-site:noice/some-great-project
-    git_tag: v1.0.0
-```
+The gcmake_dependencies property is described in its own document
+[gcmake_dependencies.md](./gcmake_dependencies.md).
 
 ### prebuild_config
 

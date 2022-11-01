@@ -283,8 +283,6 @@ All three [test frameworks](properties_list.md#test_framework) supported by GCMa
 ``` yaml
 output:
   my-exe-in-test-project:
-    # While writing this, I realized that output_type is required to be defined for tests.
-    # TODO: Make output_type optional for test projects, since tests should always be executables anyways.
     output_type: Executable
     entry_file: main.cpp
     requires_custom_main: true

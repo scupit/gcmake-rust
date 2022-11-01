@@ -13,7 +13,7 @@ Link specifiers can be given in either of two formats:
 1. Single format: `namespace::libname`
 2. Multi format: `namespace::{ lib1, lib2 }`
 
-Link specifiers may also be prefixed with [system specifiers](data_formats.md#system-specifier):
+Link specifiers may also be prefixed with [system specifiers](data_formats.md#constraint-specifier):
 
 - `((linux or macos)) namespace::libname`
 - `((unix)) namespace::{ lib1, lib2 }`

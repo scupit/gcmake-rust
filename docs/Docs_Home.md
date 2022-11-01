@@ -7,11 +7,6 @@ project example. To create a new working project, see the [new project command](
 These are great ways to get a feel for how the tool, project structure, and [cmake_data.yaml](cmake_data.md)
 configuration work together.
 
-> **TODO:** Create a page explaining how to use Emscripten. Also explain how debugging with source maps
-> requires hosting a server from your drive root and building on the same drive as your project for the
-> moment anyways. There has to be a better way to do it that I haven't figured out yet).
-> Also explain the quick `python -m http.server --directory D:\ --bind localhost 8080` script.
-
 ## Table of Contents
 
 1. [Project Overview](overview.md)
@@ -28,6 +23,7 @@ configuration work together.
 - [Compiling using Zig](compile_using_zig.md)
 - [Emscripten Usage and Caveats](./emscripten.md)
 - [Using CCache](./using_ccache.md)
+- [Cargo-like "features"](./cmake_data_config/properties/features.md)
 
 ## Important Concepts
 
@@ -49,6 +45,7 @@ configuration work together.
 - [Configuring project compilation flags and defines](cmake_data_config/properties/build_configs.md)
 - [Linking to an output](cmake_data_config/properties/output.md#link)
 - [Configuring additional flags and defines per output item](cmake_data_config/properties/output.md#build_config)
+- [Configuring a project's feature set](cmake_data_config/properties/features.md)
 - [Adding a pre-build script](cmake_data_config/properties/properties_list.md#prebuild_config)
 - [Managing dependencies](cmake_data_config/properties/properties_list.md#predefined_dependencies)
 - [Default config files](the_configuration_directory.md#manual-configuration) such as .gitignore, .clang-format, and .clang-tidy

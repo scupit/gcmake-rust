@@ -126,8 +126,6 @@ impl FinalFeatureConfig {
       );
 
     return Ok(Self {
-      // TODO: map dependency features like "my-dep/the-dep-feature"
-      // and check them in the dependency graph.
       enables: enables_results?,
       is_enabled_by_default: raw_feature_config.default
     });
@@ -362,7 +360,7 @@ fn parse_all_links_into(
   valid_feature_list: Option<&Vec<&str>>
 ) -> Result<(), String> {
   for link_str in link_strings {
-    destination_vec.push(LinkSpecifier::parse_from(link_str, LinkAccessMode::UserFacing, None)?);
+    destination_vec.push(LinkSpecifier::parse_from(link_str, LinkAccessMode::UserFacing, valid_feature_list)?);
   }
   Ok(())
 }

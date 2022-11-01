@@ -128,7 +128,7 @@ The list of defines to be added for the selected configuration and compiler.
 
 Defines should be written exactly as you would pass them on the command line, without the
 leading flag prefix `-D`.  They may also be prefixed with a
-[system specifier](../data_formats.md#system-specifier). Further formatting information is detailed
+[system specifier](../data_formats.md#constraint-specifier). Further formatting information is detailed
 in [data_formats.md](../data_formats.md#compiler-defines).
 
 ``` yaml
@@ -154,7 +154,7 @@ build_configs:
 The list of flags to be passed to the given compiler for the selection configuration.
 
 Compiler flags should be written exactly as you would pass them on the command line.
-They may also be prefixed with a [system specifier](../data_formats.md#system-specifier).
+They may also be prefixed with a [system specifier](../data_formats.md#constraint-specifier).
 Further formatting information is detailed in [data_formats.md](../data_formats.md#compiler-flags).
 
 **NOTE:** compile_flags passed to Emscripten will automatically also be passed at link time.
@@ -186,7 +186,7 @@ build_configs:
 The list of flags to be passed at link time for the selection configuration.
 
 These flags should be written exactly as you would pass them on the command line.
-They may also be prefixed with a [system specifier](../data_formats.md#system-specifier).
+They may also be prefixed with a [system specifier](../data_formats.md#constraint-specifier).
 Further formatting information is detailed in [data_formats.md](../data_formats.md#compiler-flags).
 
 ``` yaml
@@ -210,7 +210,7 @@ The list of flags to be passed to the linker for the selection configuration.
 Linker flags should be written exactly as you would pass them on the command line.
 However, don't include flags like `-Xlinker` which compilers use to pass flags on to the linker.
 CMake will facilitate that automatically.
-They may also be prefixed with a [system specifier](../data_formats.md#system-specifier).
+They may also be prefixed with a [system specifier](../data_formats.md#constraint-specifier).
 Further formatting information is detailed in [data_formats.md](../data_formats.md#linker-flags).
 
 ``` yaml
