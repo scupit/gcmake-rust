@@ -126,6 +126,34 @@ output:
         - some-gcmake-dep::{ some-lib, another-lib }
 ```
 
+## Conditional Dependencies
+
+[gcmake_dependencies](./properties/gcmake_dependencies.md) and
+[predefined_dependencies](./properties/properties_list.md#predefined_dependencies) are lazy-loaded.
+This means that the CMake configuration will only attempt to import a dependency if the dependency
+will actively be used by the current configuration.
+
+Keeping that in mind, here's an example where [features](./properties/features.md) are used to
+make [fmt](https://github.com/fmtlib/fmt) an optional dependency.
+
+``` yaml
+features:
+  use-fmt:
+    default: false
+
+output:
+  my-exe:
+    output_type: Executable
+    entry_file: main.cpp
+    link:
+      # When the use-fmt feature is disabled, fmt::fmt will not be linked to my-exe.
+      # In that case, nothing in the project ever makes use of fmt, so CMake will never
+      # attempt to clone or search for fmt. If use-fmt is enabled, then CMake will clone
+      # it and link here as expected. That's essentially how optional dependencies work
+      # in GCMake.
+      - (( feature:use-fmt )) fmt::fmt
+```
+
 ## General CMake Linking Explanation
 
 > [This great answer from StackOverflow](https://stackoverflow.com/questions/26037954/cmake-target-link-libraries-interface-dependencies)

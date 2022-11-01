@@ -24,6 +24,7 @@ configuration work together.
 - [Emscripten Usage and Caveats](./emscripten.md)
 - [Using CCache](./using_ccache.md)
 - [Cargo-like "features"](./cmake_data_config/properties/features.md)
+- [Optional/conditional dependencies](./cmake_data_config/linking.md#conditional-dependencies)
 
 ## Important Concepts
 

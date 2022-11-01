@@ -12,7 +12,7 @@ pub enum CLIProjectOutputTypeIn {
 }
 
 #[derive(Parser)]
-#[clap(version = "1.4.3", author = SKY)]
+#[clap(version = "1.5.0", author = SKY)]
 #[clap(setting = AppSettings::ColoredHelp)]
 pub struct Opts {
   #[clap(default_value = ".")]
