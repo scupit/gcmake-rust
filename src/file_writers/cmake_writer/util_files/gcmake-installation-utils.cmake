@@ -91,8 +91,9 @@ function( configure_installation
       COMPONENT ${project_component_name}
       # Apparently targets which have INTERFACE or PUBLIC file sets can't be installed
       # without them even if the target's file_set isn't ever needed. That's really annoying.
+      # We'll install these to the _unused directory so we can at least see they aren't needed.
       FILE_SET HEADERS
-        DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
+        DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/_unused"
       INCLUDES DESTINATION
         # TODO: I might need to separate this into its own variable. I'll leave it for now though, since it
         # isn't causing issues.
