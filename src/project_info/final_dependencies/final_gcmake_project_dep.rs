@@ -1,6 +1,6 @@
-use std::rc::Rc;
+use std::{rc::Rc, collections::BTreeSet};
 
-use crate::project_info::{final_project_data::FinalProjectData, raw_data_in::dependencies::{user_given_dep_config::UserGivenGCMakeProjectDependency, internal_dep_config::raw_dep_common::RawEmscriptenConfig}};
+use crate::project_info::{final_project_data::FinalProjectData, raw_data_in::dependencies::{user_given_dep_config::UserGivenGCMakeProjectDependency}};
 
 use super::{FinalGitRepoDescriptor, GitRevisionSpecifier};
 
@@ -15,6 +15,8 @@ pub struct FinalGCMakeDependency {
   name: String,
   git_repo: FinalGitRepoDescriptor,
   dep_project_status: GCMakeDependencyStatus,
+  use_default_features: bool,
+  features: BTreeSet<String>
 }
 
 impl FinalGCMakeDependency {
@@ -42,12 +44,22 @@ impl FinalGCMakeDependency {
       dep_project_status: match maybe_associated_project {
         Some(project_info) => GCMakeDependencyStatus::Available(project_info),
         None => GCMakeDependencyStatus::NotDownloaded(dep_name.to_string())
-      }
+      },
+      use_default_features: given_config.use_default_features.unwrap_or(true),
+      features: given_config.features.clone()
+        .map_or(BTreeSet::default(), |feature_set| feature_set.into_iter().collect())
     })
   }
 
-  pub fn get_name(&self) -> &str {
+  pub fn given_dependency_name(&self) -> &str {
     &self.name
+  }
+
+  pub fn project_base_name(&self) -> &str {
+    match self.project_status() {
+      GCMakeDependencyStatus::NotDownloaded(_) => self.given_dependency_name(),
+      GCMakeDependencyStatus::Available(project) => project.get_project_base_name()
+    }
   }
 
   pub fn repo_url(&self) -> &str {
@@ -56,6 +68,14 @@ impl FinalGCMakeDependency {
 
   pub fn revision(&self) -> &GitRevisionSpecifier {
     &self.git_repo.revision_specifier
+  }
+
+  pub fn is_using_default_features(&self) -> bool {
+    self.use_default_features
+  }
+
+  pub fn specified_features(&self) -> &BTreeSet<String> {
+    &self.features
   }
 
   pub fn project_status(&self) -> &GCMakeDependencyStatus {

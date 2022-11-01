@@ -1,6 +1,13 @@
 
-# Provides the ability to say a feature should be enabled any time before the feature is
-# actually configured. This is necessary for enabling specific features inside dependency projects.
+macro( gcmake_set_use_default_features
+  associated_project_name
+  value
+)
+  set( ${associated_project_name}_USE_DEFAULT_FEATURES ${value} )
+endmacro()
+
+# Provides the ability to say a feature should be enabled any time before a project's features are
+# registered and/or configured. This is necessary for enabling specific features inside dependency projects.
 macro( gcmake_mark_for_enable
   associated_project_name
   feature_name

@@ -1460,6 +1460,21 @@ impl<'a> CMakeListsWriter<'a> {
           &format!("dep/{}", dep_name)
         )?;
 
+        if !dep_info.is_using_default_features() {
+          writeln!(&self.cmakelists_file,
+            "\tgcmake_set_use_default_features( \"{}\" OFF )",
+            dep_info.project_base_name()
+          )?;
+        }
+
+        for feature_name in dep_info.specified_features() {
+          writeln!(&self.cmakelists_file,
+            "\tgcmake_mark_for_enable( \"{}\" \"{}\" )",
+            dep_info.project_base_name(),
+            feature_name
+          )?;
+        }
+
         self.write_dep_clone_code(
           dep_name,
           // GCMake projects just link using their targets as usual, since Emscripten
@@ -3022,6 +3037,16 @@ impl<'a> CMakeListsWriter<'a> {
 
   // Only called by the root project.
   fn write_features(&self) -> io::Result<()> {
+    writeln!(&self.cmakelists_file,
+      "if( NOT DEFINED ${{LOCAL_TOPLEVEL_PROJECT_NAME}}_USE_DEFAULT_FEATURES )"
+    )?;
+
+    writeln!(&self.cmakelists_file,
+      "gcmake_set_use_default_features( ${{LOCAL_TOPLEVEL_PROJECT_NAME}} ON )"
+    )?;
+
+    writeln!(&self.cmakelists_file, "endif()")?;
+
     for (feature_name, feature_config) in self.project_data.get_features() {
       write!(&self.cmakelists_file,
         "gcmake_register_feature( NAME {}",
@@ -3042,17 +3067,20 @@ impl<'a> CMakeListsWriter<'a> {
       writeln!(&self.cmakelists_file, ")")?;
     }
 
-    // TODO: Allow this step to be bypassed if <PROJECT_NAME>_use_feature_defaults (or similarly named
-    // variable) is turned OFF. It should be ON by default.
+    writeln!(&self.cmakelists_file,
+      "if( ${{LOCAL_TOPLEVEL_PROJECT_NAME}}_USE_DEFAULT_FEATURES )"
+    )?;
+
     for (feature_name, feature_config) in self.project_data.get_features() {
       if feature_config.is_enabled_by_default {
         writeln!(&self.cmakelists_file,
-          "gcmake_mark_for_enable( ${{LOCAL_TOPLEVEL_PROJECT_NAME}} {} )",
+          "\tgcmake_mark_for_enable( ${{LOCAL_TOPLEVEL_PROJECT_NAME}} {} )",
           feature_name
         )?;
       }
     }
 
+    writeln!(&self.cmakelists_file, "endif()")?;
     self.write_newline()?;
 
     for (feature_name, _) in self.project_data.get_features() {

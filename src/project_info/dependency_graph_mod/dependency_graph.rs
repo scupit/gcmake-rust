@@ -602,7 +602,7 @@ impl ProjectWrapper {
   pub fn base_name(&self) -> &str {
     match self {
       Self::NormalProject(project_info) => project_info.get_project_base_name(),
-      Self::GCMakeDependencyRoot(gcmake_dep) => gcmake_dep.get_name(),
+      Self::GCMakeDependencyRoot(gcmake_dep) => gcmake_dep.given_dependency_name(),
       Self::PredefinedDependency(predef_dep) => predef_dep.get_name()
     }
   }
@@ -610,7 +610,7 @@ impl ProjectWrapper {
   pub fn mangled_name(&self) -> &str {
     match self {
       Self::NormalProject(project_info) => project_info.get_full_namespaced_project_name(),
-      Self::GCMakeDependencyRoot(gcmake_dep) => gcmake_dep.get_name(),
+      Self::GCMakeDependencyRoot(gcmake_dep) => gcmake_dep.given_dependency_name(),
       Self::PredefinedDependency(predef_dep) => predef_dep.get_name()
     }
   }
@@ -618,7 +618,7 @@ impl ProjectWrapper {
   pub fn name_for_error_messages(&self) -> &str {
     match self {
       Self::NormalProject(project_info) => project_info.get_name_for_error_messages(),
-      Self::GCMakeDependencyRoot(gcmake_dep) => gcmake_dep.get_name(),
+      Self::GCMakeDependencyRoot(gcmake_dep) => gcmake_dep.given_dependency_name(),
       Self::PredefinedDependency(predef_dep) => predef_dep.get_name()
     }
   }

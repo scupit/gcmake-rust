@@ -20,6 +20,7 @@ function( configure_installation
   list( LENGTH targets_installing has_targets_to_install )
   list( LENGTH bin_files_installing has_files_to_install )
   list( LENGTH additional_installs has_additional_installs )
+  list( LENGTH MY_MINIMAL_INSTALLS has_minimal_installs )
   list( LENGTH MY_GENERATED_EXPORT_HEADERS_BUILD_INTERFACE has_generated_export_headers )
   list( LENGTH MY_GENERATED_EXPORT_HEADERS_INSTALL_INTERFACE has_generated_export_install_headers )
   list( LENGTH MY_CUSTOM_FIND_MODULES has_custom_find_modules )
@@ -33,7 +34,7 @@ function( configure_installation
   set( project_component_name ProjectOutputs )
   set( ${project_component_name_var} ${project_component_name} PARENT_SCOPE )
 
-  if( NOT has_targets_to_install )
+  if( NOT (has_targets_to_install OR has_minimal_installs) )
     message( FATAL_ERROR "ERROR: This project (${PROJECT_NAME}) doesn't install any targets." )
   endif()
 

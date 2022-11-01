@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use serde::{Serialize, Deserialize};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -47,5 +49,8 @@ impl UserGivenPredefinedDependencyConfig {
 pub struct UserGivenGCMakeProjectDependency {
   pub git_tag: Option<String>,
   pub commit_hash: Option<String>,
-  pub repo_url: String
+  pub repo_url: String,
+
+  pub use_default_features: Option<bool>,
+  pub features: Option<HashSet<String>>
 }
