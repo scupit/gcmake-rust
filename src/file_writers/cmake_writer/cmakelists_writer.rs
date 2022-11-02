@@ -1,4 +1,4 @@
-use std::{collections::{HashMap, HashSet, BTreeMap}, fs::File, io::{self, Write, ErrorKind}, path::{PathBuf, Path}, rc::Rc, cell::{RefCell, Ref}, borrow::Borrow};
+use std::{collections::{HashMap, HashSet, BTreeMap}, fs::File, io::{self, Write, ErrorKind}, path::{PathBuf, Path}, rc::Rc, cell::{RefCell, Ref}};
 
 use crate::{project_info::{final_project_data::{FinalProjectData}, path_manipulation::{cleaned_path_str, relative_to_project_root}, final_dependencies::{GitRevisionSpecifier, PredefinedCMakeComponentsModuleDep, PredefinedSubdirDep, PredefinedCMakeModuleDep, FinalPredepInfo, GCMakeDependencyStatus, FinalPredefinedDependencyConfig, base64_encoded, PredefinedDepFunctionality, FinalDownloadMethod, FinalDebianPackagesConfig}, raw_data_in::{BuildType, BuildConfigCompilerSpecifier, SpecificCompilerSpecifier, OutputItemType, LanguageConfigMap, TargetSpecificBuildType, dependencies::internal_dep_config::{CMakeModuleType}, DefaultCompiledLibType}, FinalProjectType, CompiledOutputItem, PreBuildScript, LinkMode, FinalTestFramework, dependency_graph_mod::dependency_graph::{DependencyGraph, OrderedTargetInfo, ProjectWrapper, TargetNode, SimpleNodeOutputType, Link, EmscriptenLinkFlagInfo, ContainedItem}, SystemSpecifierWrapper, CompilerDefine, FinalBuildConfig, CompilerFlag, LinkerFlag, gcmake_constants::{SRC_DIR, INCLUDE_DIR}, platform_spec_parser::parse_leading_system_spec}, file_writers::cmake_writer::cmake_writer_helpers::system_constraint_generator_expression};
 
@@ -850,29 +850,6 @@ impl<'a> CMakeListsWriter<'a> {
     self.write_message("\t", "${PROJECT_NAME} is using C++${PROJECT_CXX_LANGUAGE_STANDARD}")?;
 
     writeln!(&self.cmakelists_file, "endif()")?;
-
-    Ok(())
-  }
-
-  fn write_def_list(
-    &self,
-    spacer: &'static str,
-    items: &Vec<String>
-  ) -> io::Result<()> {
-    writeln!(&self.cmakelists_file,
-      "{}add_compile_definitions(",
-      spacer
-    )?;
- 
-    for fully_processed_def_string in items {
-      writeln!(&self.cmakelists_file,
-        "{}\t{}",
-        spacer,
-        fully_processed_def_string
-      )?;
-    }
-
-    writeln!(&self.cmakelists_file, "{})", spacer)?;
 
     Ok(())
   }

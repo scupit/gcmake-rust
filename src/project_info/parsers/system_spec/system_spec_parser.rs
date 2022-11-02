@@ -1,4 +1,4 @@
-use std::{collections::{HashSet, BTreeSet}, borrow::Borrow};
+use std::{collections::{HashSet, BTreeSet}};
 
 use crate::project_info::parsers::general_parser::{self, parse_given_str};
 use colored::Colorize;
