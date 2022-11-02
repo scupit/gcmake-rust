@@ -1,4 +1,4 @@
-use std::{collections::{HashMap, HashSet, BTreeMap}, fs::File, io::{self, Write, ErrorKind}, path::{PathBuf, Path}, rc::Rc, cell::{RefCell, Ref}};
+use std::{collections::{HashMap, HashSet, BTreeMap}, fs::File, io::{self, Write, ErrorKind}, path::{PathBuf, Path}, rc::Rc, cell::{RefCell, Ref}, borrow::Borrow};
 
 use crate::{project_info::{final_project_data::{FinalProjectData}, path_manipulation::{cleaned_path_str, relative_to_project_root}, final_dependencies::{GitRevisionSpecifier, PredefinedCMakeComponentsModuleDep, PredefinedSubdirDep, PredefinedCMakeModuleDep, FinalPredepInfo, GCMakeDependencyStatus, FinalPredefinedDependencyConfig, base64_encoded, PredefinedDepFunctionality, FinalDownloadMethod, FinalDebianPackagesConfig}, raw_data_in::{BuildType, BuildConfigCompilerSpecifier, SpecificCompilerSpecifier, OutputItemType, LanguageConfigMap, TargetSpecificBuildType, dependencies::internal_dep_config::{CMakeModuleType}, DefaultCompiledLibType}, FinalProjectType, CompiledOutputItem, PreBuildScript, LinkMode, FinalTestFramework, dependency_graph_mod::dependency_graph::{DependencyGraph, OrderedTargetInfo, ProjectWrapper, TargetNode, SimpleNodeOutputType, Link, EmscriptenLinkFlagInfo, ContainedItem}, SystemSpecifierWrapper, CompilerDefine, FinalBuildConfig, CompilerFlag, LinkerFlag, gcmake_constants::{SRC_DIR, INCLUDE_DIR}, platform_spec_parser::parse_leading_system_spec}, file_writers::cmake_writer::cmake_writer_helpers::system_constraint_generator_expression};
 
@@ -8,30 +8,61 @@ use colored::*;
 const RUNTIME_BUILD_DIR_VAR: &'static str = "${MY_RUNTIME_OUTPUT_DIR}";
 const LIB_BUILD_DIR_VAR: &'static str = "${MY_LIBRARY_OUTPUT_DIR}";
 
-struct UsageConditional {
+struct SingleUsageConditional<'a> {
   // public_conditional represents whether the library will be needed transitively. Therefore it
   // includes both Public and Interface links.
-  public_conditional: Option<SystemSpecifierWrapper>,
-  private_conditional: Option<SystemSpecifierWrapper>
+  public_constraint: Option<SystemSpecifierWrapper>,
+  private_constraint: Option<SystemSpecifierWrapper>,
+  target_rc: Rc<RefCell<TargetNode<'a>>>
 }
 
-impl UsageConditional {
-  pub fn was_used(&self) -> bool {
-    return self.public_conditional.is_some() || self.private_conditional.is_some()
-  }
+struct UsageConditionalGroup<'a> {
+  all_conditionals: Vec<SingleUsageConditional<'a>>
+}
 
-  fn full_conditional(&self) -> Option<SystemSpecifierWrapper> {
-    return union_maybe_specs(
-      self.public_conditional.as_ref(),
-      self.private_conditional.as_ref()
-    );
+impl<'a> UsageConditionalGroup<'a> {
+  pub fn was_used(&self) -> bool {
+    return self.all_conditionals
+      .iter()
+      .any(|SingleUsageConditional { public_constraint, private_constraint, .. } |
+        public_constraint.is_some() || private_constraint.is_some()
+      );
   }
 
   pub fn full_conditional_string_or(&self, used_by_default: bool) -> String {
-    match self.full_conditional() {
-      None => used_by_default.to_string().to_uppercase(),
-      Some(conditional) => system_contstraint_conditional_expression(&conditional)
-    }
+    return self.all_conditionals.iter()
+      .map(|single_conditional| {
+        let full_constraint: Option<SystemSpecifierWrapper> = union_maybe_specs(
+          single_conditional.public_constraint.as_ref(),
+          single_conditional.private_constraint.as_ref()
+        );
+
+        let constraint_string: String = match full_constraint {
+          None => used_by_default.to_string().to_uppercase(),
+          Some(conditional) => system_contstraint_conditional_expression(&conditional)
+        };
+
+        let borrowed_target = single_conditional.target_rc.as_ref().borrow();
+        let is_test_target: bool = borrowed_target
+          .container_project().as_ref().borrow()
+          .project_wrapper()
+          .clone()
+          .unwrap_normal_project()
+          .is_test_project();
+
+        if borrowed_target.is_regular_node() && !is_test_target {
+          format!(
+            "(DEFINED TARGET_{}_INSTALL_MODE AND ({}))",
+            borrowed_target.get_name(),
+            constraint_string
+          )
+        }
+        else {
+          format!("({})", constraint_string)
+        }
+      })
+      .collect::<Vec<String>>()
+      .join(" OR ")
   }
 }
 
@@ -532,6 +563,14 @@ impl<'a> CMakeListsWriter<'a> {
       "if( CMAKE_SOURCE_DIR STREQUAL TOPLEVEL_PROJECT_DIR )",
     )?;
 
+    // IN_GCMAKE_CONTEXT determines whethwer the toplevel project is a GCMake project.
+    // This is necessary for deciding whether or not to build libraries
+    self.set_basic_var(
+      "\t",
+      "IN_GCMAKE_CONTEXT",
+      "TRUE"
+    )?;
+
     writeln!(&self.cmakelists_file,
       "\tcmake_path( GET CMAKE_INSTALL_INCLUDEDIR STEM _the_includedir_stem )"
     )?;
@@ -614,19 +653,27 @@ impl<'a> CMakeListsWriter<'a> {
     for output_node in reverse_project_targets {
       let borrowed_target = output_node.as_ref().borrow();
 
-      let output_type_dependent_conditional: &str = if borrowed_target.maybe_regular_output().unwrap().is_executable_type() {
-        "GCMAKE_INSTALL_MODE STREQUAL \"NORMAL\" OR GCMAKE_INSTALL_MODE STREQUAL \"EXE_ONLY\" "
-      }
-      else {
-        "GCMAKE_INSTALL_MODE STREQUAL \"NORMAL\" OR GCMAKE_INSTALL_MODE STREQUAL \"LIB_ONLY\""
-      };
+      let output_type_dependent_conditional: &str;
 
       // When the project is top level, targets whose type matches the install mode should
       // be fully installed.
-      writeln!(&self.cmakelists_file,
-        "if( TOPLEVEL_PROJECT_DIR STREQUAL CMAKE_SOURCE_DIR AND ( {} ) )",
-        output_type_dependent_conditional
-      )?;
+      if borrowed_target.maybe_regular_output().unwrap().is_executable_type() {
+        output_type_dependent_conditional = "GCMAKE_INSTALL_MODE STREQUAL \"NORMAL\" OR GCMAKE_INSTALL_MODE STREQUAL \"EXE_ONLY\" ";
+        writeln!(&self.cmakelists_file,
+          "if( TOPLEVEL_PROJECT_DIR STREQUAL CMAKE_SOURCE_DIR AND ( {} ) )",
+          output_type_dependent_conditional
+        )?;
+      }
+      else {
+        output_type_dependent_conditional = "GCMAKE_INSTALL_MODE STREQUAL \"NORMAL\" OR GCMAKE_INSTALL_MODE STREQUAL \"LIB_ONLY\"";
+        writeln!(&self.cmakelists_file,
+          // Libraries should all be built by default if this project is being used by a
+          // non-GCMake project.
+          "if( (NOT IN_GCMAKE_CONTEXT) OR (TOPLEVEL_PROJECT_DIR STREQUAL CMAKE_SOURCE_DIR AND ( {} )) )",
+          output_type_dependent_conditional
+        )?;
+      }
+
       writeln!(&self.cmakelists_file,
         "\tmark_gcmake_target_usage( {} FULL )",
         borrowed_target.get_name()
@@ -862,7 +909,7 @@ impl<'a> CMakeListsWriter<'a> {
       if borrowed_graph.project_wrapper().contains_predef_dep() {
         if let Some((dep_name, predep_graph)) = self.dep_graph_ref().get_predefined_dependencies().get_key_value(borrowed_graph.project_identifier_name()) {
           let dep_info: Rc<FinalPredefinedDependencyConfig> = predep_graph.as_ref().borrow().project_wrapper().clone().unwrap_predef_dep();
-          let usage_conditional: UsageConditional = self.get_usage_conditional_for_project(&wrapped_graph.0);
+          let usage_conditional: UsageConditionalGroup = self.get_usage_conditional_for_dependency(&wrapped_graph.0);
 
           if !usage_conditional.was_used() {
             println!(
@@ -1297,7 +1344,7 @@ impl<'a> CMakeListsWriter<'a> {
     &self,
     dep_name: &str,
     dep_info: &PredefinedSubdirDep,
-    graph_for_dependency: &Rc<RefCell<DependencyGraph>>,
+    graph_for_dependency: &Rc<RefCell<DependencyGraph<'a>>>,
     is_auto_fetchcontent_ready: bool
   ) -> io::Result<()> {
     // Subdir dependencies which have this 'custom import' script
@@ -1356,7 +1403,7 @@ impl<'a> CMakeListsWriter<'a> {
       else {
         // Here, the library should be installed by default. That means for libraries with an installation variable
         // We can choose whether or not do do a full installation, or install on a per-library basis.
-        let usage_conditional: UsageConditional = self.get_usage_conditional_for_project(graph_for_dependency);
+        let usage_conditional: UsageConditionalGroup = self.get_usage_conditional_for_dependency(graph_for_dependency);
         let var_default_name: String = format!("{}_DEFAULT_VALUE", &installation_details.var_name);
 
         if !usage_conditional.was_used() {
@@ -1436,7 +1483,7 @@ impl<'a> CMakeListsWriter<'a> {
 
       if let Some(dep_info) = borrowed_graph.project_wrapper().maybe_gcmake_dep() {
         let dep_name: &str = borrowed_graph.project_identifier_name();
-        let usage_conditional: UsageConditional = self.get_usage_conditional_for_project(&wrapped_graph.0);
+        let usage_conditional: UsageConditionalGroup = self.get_usage_conditional_for_dependency(&wrapped_graph.0);
 
         if !usage_conditional.was_used() {
           println!(
@@ -1521,7 +1568,7 @@ impl<'a> CMakeListsWriter<'a> {
 
       if let Some(combined_dep_info) = borrowed_graph.project_wrapper().maybe_predef_dep() {
         let dep_name: &str = borrowed_graph.project_identifier_name();
-        let usage_conditional: UsageConditional = self.get_usage_conditional_for_project(&wrapped_graph.0);
+        let usage_conditional: UsageConditionalGroup = self.get_usage_conditional_for_dependency(&wrapped_graph.0);
 
         if !usage_conditional.was_used() {
           println!(
@@ -1855,10 +1902,34 @@ impl<'a> CMakeListsWriter<'a> {
 
       let unwrapped_target = output_target.unwrap();
 
-      writeln!(&self.cmakelists_file,
-        "if( {} )",
-        system_contstraint_conditional_expression(unwrapped_target.as_ref().borrow().get_system_spec_info())
-      )?;
+      if self.project_data.is_test_project() {
+        let parent_project_id = self.dep_graph_ref().parent_project().unwrap().as_ref().borrow().project_id();
+        
+        // Only build the test if every target we're testing is actually also built.
+        let parent_target_existence_check: String = self.sorted_target_info.regular_targets_with_project_id(parent_project_id)
+          .iter()
+          .map(|parent_target|
+            format!(
+              "DEFINED TARGET_{}_INSTALL_MODE",
+              parent_target.0.as_ref().borrow().get_name().to_string()
+            )
+          )
+          .collect::<Vec<String>>()
+          .join(" AND ");
+
+        writeln!(&self.cmakelists_file,
+          "if( {} AND ({}) )",
+          parent_target_existence_check,
+          system_contstraint_conditional_expression(unwrapped_target.as_ref().borrow().get_system_spec_info())
+        )?;
+      }
+      else {
+        writeln!(&self.cmakelists_file,
+          "if( DEFINED TARGET_{}_INSTALL_MODE AND ({}) )",
+          output_name,
+          system_contstraint_conditional_expression(unwrapped_target.as_ref().borrow().get_system_spec_info())
+        )?;
+      }
 
       match matching_output.get_output_type() {
         OutputItemType::Executable => {
@@ -3136,9 +3207,12 @@ impl<'a> CMakeListsWriter<'a> {
   }
 
   // NOTE: This should only be called from the root project
-  fn get_usage_conditional_for_project(&self, graph_for_dependency: &Rc<RefCell<DependencyGraph>>) -> UsageConditional {
+  fn get_usage_conditional_for_dependency(
+    &self,
+    graph_for_dependency: &Rc<RefCell<DependencyGraph<'a>>>
+  ) -> UsageConditionalGroup<'a> {
     let root_dep_id = graph_for_dependency.as_ref().borrow().root_project_id();
-    let constraints_for_used_links: Vec<(Option<SystemSpecifierWrapper>, Option<SystemSpecifierWrapper>)> = self.sorted_target_info.all_targets_with_root_project_id(self.dep_graph_ref().root_project_id())
+    let constraints_for_used_links: Vec<SingleUsageConditional> = self.sorted_target_info.all_targets_with_root_project_id(self.dep_graph_ref().root_project_id())
       .iter()
       .filter_map(|wrapped_project_target| {
         let dependent_system_specs: Vec<(LinkMode, SystemSpecifierWrapper)> = wrapped_project_target.as_ref().borrow().get_depends_on()
@@ -3182,31 +3256,17 @@ impl<'a> CMakeListsWriter<'a> {
         
         match (&public_needed_constraint, &private_needed_constraint) {
           (None, None) => None,
-          _ => Some((public_needed_constraint, private_needed_constraint))
+          _ => Some(SingleUsageConditional {
+            public_constraint: public_needed_constraint,
+            private_constraint: private_needed_constraint,
+            target_rc: Rc::clone(&wrapped_project_target.0)
+          })
         }
       })
       .collect();
 
-    return if constraints_for_used_links.is_empty() {
-      UsageConditional {
-        public_conditional: None,
-        private_conditional: None
-      }
-    }
-    else {
-      let (public_constraint, private_constraint) = constraints_for_used_links.into_iter()
-        .reduce(|(public_accum, private_accum), (public_target_constraint, private_target_constraint)|
-          (
-            union_maybe_specs(public_accum.as_ref(), public_target_constraint.as_ref()),
-            union_maybe_specs(private_accum.as_ref(), private_target_constraint.as_ref()),
-          )
-        )
-        .unwrap();
-
-      UsageConditional {
-        public_conditional: public_constraint,
-        private_conditional: private_constraint
-      }
+    return UsageConditionalGroup {
+      all_conditionals: constraints_for_used_links
     }
   }
 }

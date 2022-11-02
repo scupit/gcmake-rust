@@ -827,6 +827,12 @@ impl<'a> DependencyGraph<'a> {
     return Weak::upgrade(&self.toplevel).unwrap();
   }
 
+  pub fn parent_project(&self) -> Option<Rc<RefCell<DependencyGraph<'a>>>> {
+    return self.parent
+      .as_ref()
+      .map(|parent| Weak::upgrade(parent).unwrap());
+  }
+
   pub fn get_pre_build_node(&self) -> &Option<Rc<RefCell<TargetNode<'a>>>> {
     &self.pre_build_wrapper
   }

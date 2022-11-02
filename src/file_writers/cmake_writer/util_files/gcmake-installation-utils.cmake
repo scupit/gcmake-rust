@@ -34,8 +34,11 @@ function( configure_installation
   set( project_component_name ProjectOutputs )
   set( ${project_component_name_var} ${project_component_name} PARENT_SCOPE )
 
-  if( NOT (has_targets_to_install OR has_minimal_installs) )
-    message( FATAL_ERROR "ERROR: This project (${PROJECT_NAME}) doesn't install any targets." )
+  # It's fine to not install any targets if this is a dependency project. If it's the main project,
+  # we should install at least one. I think this can happen when a GCMake dependency target is
+  # linked to a pre-build script or test executable but not an output target.
+  if( CMAKE_SOURCE_DIR STREQUAL TOPLEVEL_PROJECT_DIR AND NOT (has_targets_to_install OR has_minimal_installs) )
+    message( FATAL_ERROR "ERROR: This project (${PROJECT_NAME}) doesn't install any targets. It's likely that no project targets are being built with the current configuration settings." )
   endif()
 
   foreach( project_output_to_install IN LISTS targets_installing )
@@ -260,7 +263,7 @@ endfunction()
 macro( initialize_install_mode )
   if( TOPLEVEL_PROJECT_DIR STREQUAL CMAKE_SOURCE_DIR )
     set( VALID_GCMAKE_INSTALL_MODES "NORMAL" "EXE_ONLY" "LIB_ONLY" )
-    set( GCMAKE_INSTALL_MODE "NORMAL" CACHE STRING "Installation mode for the project. \"NORMAL\" means both executables and libraries will be installed with minimum dependencies where possible")
+    set( GCMAKE_INSTALL_MODE "NORMAL" CACHE STRING "Build/Installation mode for the project. \"NORMAL\" means both executables and libraries will be built installed with minimum dependencies where possible." )
     set_property( CACHE GCMAKE_INSTALL_MODE PROPERTY STRINGS ${VALID_GCMAKE_INSTALL_MODES} )
 
     if( NOT GCMAKE_INSTALL_MODE IN_LIST VALID_GCMAKE_INSTALL_MODES )
