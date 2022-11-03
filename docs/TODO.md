@@ -10,6 +10,7 @@ There are a whole bunch of things which need doing. This is the place to list th
 ## Priorities
 
 - [ ] Add CLI commands for cleaning and updating the dep-cache. Not exactly sure how updating should work yet.
+- [ ] Normalize predefined dependency names and target names. They should all follow a uniform lowercase format.
 
 ## Configuration TODO
 
@@ -101,19 +102,14 @@ The command set for viewing project metadata.
 - [x] [argparse](https://github.com/p-ranav/argparse)
 - [x] [FreeType](https://freetype.org/index.html)
 - [ ] [drogon](https://github.com/drogonframework/drogon) (This looks like it might take some work)
-- [ ] [re2](https://github.com/google/re2)
+- [x] [re2](https://github.com/google/re2)
+- [ ] [zstd](https://github.com/facebook/zstd) CMake project, but use custom find module
+- [ ] [brotli](https://github.com/google/brotli) CMake project, but use custom find module
+- [ ] [Hyperscan](https://github.com/intel/hyperscan)
 
 #### Support when FetchContent ready
 
 - [ ] [GLM (The actual repo, not a fork)](https://github.com/g-truc/glm)
-
-#### CMake Config file only
-
-- [ ] [Hyperscan](https://github.com/intel/hyperscan)
-
-#### Support after allowing custom Find Files
-
-- [ ] [zstd](https://github.com/facebook/zstd)
 
 #### Testing Frameworks
 

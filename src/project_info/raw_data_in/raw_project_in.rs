@@ -97,7 +97,11 @@ pub struct RawProject {
   pub features: Option<HashMap<String, RawFeatureConfig>>,
   pub prebuild_config: Option<PreBuildConfigIn>,
   pub supported_compilers: BTreeSet<SpecificCompilerSpecifier>,
+
+  // See https://github.com/dtolnay/serde-yaml/pull/300
+  #[serde(with = "serde_yaml::with::singleton_map")]
   pub test_framework: Option<RawTestFramework>,
+
   pub output: HashMap<String, RawCompiledItem>,
   pub global_defines: Option<Vec<String>>,
   pub global_properties: Option<RawGlobalPropertyConfig>,
