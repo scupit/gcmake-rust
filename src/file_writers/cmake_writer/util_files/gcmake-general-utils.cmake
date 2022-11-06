@@ -194,7 +194,7 @@ function( apply_include_dirs
 )
   if( "${target_type}" STREQUAL "COMPILED_LIB" OR "${target_type}" STREQUAL "HEADER_ONLY_LIB" )
     get_entry_file_alias_dir( entry_file_alias_dir )
-    set( BUILD_INTERFACE_INCLUDE_DIRS "${entry_file_alias_dir};${project_include_dir}")
+    set( BUILD_INTERFACE_INCLUDE_DIRS "${entry_file_alias_dir}" "${project_include_dir}")
   elseif( "${target_type}" STREQUAL "EXE_RECEIVER" OR "${target_type}")
     set( BUILD_INTERFACE_INCLUDE_DIRS "${project_include_dir}")
   else()
@@ -209,9 +209,15 @@ function( apply_include_dirs
     set( include_dir_inheritance_mode PUBLIC )
   endif()
 
+  foreach( include_dir_build_only IN LISTS BUILD_INTERFACE_INCLUDE_DIRS )
+    target_include_directories( ${target}
+      ${include_dir_inheritance_mode}
+        "$<BUILD_INTERFACE:${include_dir_build_only}>"
+    )
+  endforeach()
+
   target_include_directories( ${target}
     ${include_dir_inheritance_mode}
-      "$<BUILD_INTERFACE:${BUILD_INTERFACE_INCLUDE_DIRS}>"
       "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>"
       "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/${TOPLEVEL_INCLUDE_PREFIX}/include>"
       # Some libraries (like SFML 2.6.x) hardcode the include dir installation path to 'include/'.

@@ -82,6 +82,8 @@ pub struct RawFeatureConfig {
   pub enables: Option<HashSet<String>>
 }
 
+fn make_none<T>() -> Option<T> { None }
+
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(deny_unknown_fields)]
 pub struct RawProject {
@@ -99,7 +101,10 @@ pub struct RawProject {
   pub supported_compilers: BTreeSet<SpecificCompilerSpecifier>,
 
   // See https://github.com/dtolnay/serde-yaml/pull/300
-  #[serde(with = "serde_yaml::with::singleton_map")]
+  #[serde(
+    with = "serde_yaml::with::singleton_map",
+    default = "make_none"
+  )]
   pub test_framework: Option<RawTestFramework>,
 
   pub output: HashMap<String, RawCompiledItem>,

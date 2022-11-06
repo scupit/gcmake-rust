@@ -6,7 +6,7 @@ use super::{CMakeModuleType, raw_target_config_common::RawPredefinedTargetMapIn,
 #[serde(deny_unknown_fields)]
 pub struct ComponentsFindModuleLinks {
   pub gcmake_readme: String,
-  pub cmake_find_module: String,
+  pub cmake_find_module: Option<String>,
   pub components_doc: Option<String>
 }
 
