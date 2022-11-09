@@ -490,10 +490,8 @@ impl<'a> CMakeListsWriter<'a> {
     )?;
     self.write_newline()?;
 
-    self.set_basic_var(
-      "",
-      "CMAKE_MODULE_PATH",
-      "\"${TOPLEVEL_PROJECT_DIR}/cmake/modules\""
+    writeln!(&self.cmakelists_file,
+      "list( APPEND CMAKE_MODULE_PATH \"${{TOPLEVEL_PROJECT_DIR}}/cmake/modules\" )"
     )?;
 
     self.set_basic_var(

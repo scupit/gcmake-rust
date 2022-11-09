@@ -70,10 +70,10 @@ The command set for viewing project metadata.
 - [ ] OpenAL-soft
 - [x] OpenGL
 - [ ] OpenSceneGraph (maybe) (NOTE: has cmake package config file)
-- [ ] OpenSSL
+- [x] OpenSSL
 - [ ] PNG
 - [x] SDL2
-- [3] SQLite (3)
+- [x] SQLite (3)
 - [x] Threads
 - [ ] TIFF
 - [x] wxWidgets
@@ -105,6 +105,11 @@ The command set for viewing project metadata.
 - [x] [re2](https://github.com/google/re2)
 - [x] [zstd](https://github.com/facebook/zstd) CMake project, but use custom find module
 - [ ] [Hyperscan](https://github.com/intel/hyperscan)
+- [x] [Crow](https://github.com/CrowCpp/Crow)
+- [ ] [libharu](https://github.com/libharu/libharu)
+- [ ] [concurrencpp](https://github.com/David-Haim/concurrencpp)
+- [ ] [opus](https://opus-codec.org/)
+- [ ] [Vorbis](https://xiph.org/vorbis/)
 
 #### Support when FetchContent ready
 
@@ -125,3 +130,4 @@ The command set for viewing project metadata.
 
 - [x] [stb](https://github.com/nothings/stb)
 - [x] [imgui](https://github.com/ocornut/imgui)
+- [ ] [brotli](https://github.com/google/brotli)
