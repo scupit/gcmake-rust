@@ -1,6 +1,6 @@
-use std::{cell::{RefCell}, rc::{Rc, Weak}, hash::{Hash, Hasher}, collections::{HashMap, HashSet, VecDeque}, borrow::Borrow, path::{Path, PathBuf}};
+use std::{cell::{RefCell}, rc::{Rc, Weak}, hash::{Hash, Hasher}, collections::{HashMap, HashSet, VecDeque, BTreeSet}, borrow::Borrow, path::{Path, PathBuf}, iter::FromIterator};
 
-use crate::{project_info::{LinkMode, CompiledOutputItem, PreBuildScript, OutputItemLinks, final_project_data::FinalProjectData, final_dependencies::{FinalGCMakeDependency, FinalPredefinedDependencyConfig, GCMakeDependencyStatus, FinalRequirementSpecifier, FinalTargetConfig, FinalExternalRequirementSpecifier}, LinkSpecifier, FinalProjectType, parsers::{link_spec_parser::{LinkAccessMode, LinkSpecTargetList, LinkSpecifierTarget}, system_spec::platform_spec_parser::SystemSpecifierWrapper}, raw_data_in::{dependencies::internal_dep_config::raw_dep_common::RawEmscriptenConfig, OutputItemType}, FinalFeatureEnabler}};
+use crate::{project_info::{LinkMode, CompiledOutputItem, PreBuildScript, OutputItemLinks, final_project_data::FinalProjectData, final_dependencies::{FinalGCMakeDependency, FinalPredefinedDependencyConfig, GCMakeDependencyStatus, FinalRequirementSpecifier, FinalTargetConfig, FinalExternalRequirementSpecifier, FinalPredepInfo}, LinkSpecifier, FinalProjectType, parsers::{link_spec_parser::{LinkAccessMode, LinkSpecTargetList, LinkSpecifierTarget}, system_spec::platform_spec_parser::SystemSpecifierWrapper}, raw_data_in::{dependencies::internal_dep_config::raw_dep_common::RawEmscriptenConfig, OutputItemType}, FinalFeatureEnabler}};
 
 use super::hash_wrapper::RcRefcHashWrapper;
 use colored::*;
@@ -237,7 +237,8 @@ pub enum ContainedItem<'a> {
   CompiledOutput(&'a CompiledOutputItem),
   PredefinedLibrary {
     target_name: String,
-    external_requirements: Vec<FinalExternalRequirementSpecifier>
+    external_requirements: Vec<FinalExternalRequirementSpecifier>,
+    links_using_variable: bool
   },
   PreBuild(&'a PreBuildScript)
 }
@@ -459,6 +460,13 @@ impl<'a> TargetNode<'a> {
   fn is_predefined_lib(&self) -> bool {
     match &self.node_type {
       NodeType::PredefinedLib => true,
+      _ => false
+    }
+  }
+
+  pub fn links_using_variable(&self) -> bool {
+    match self.get_contained_item() {
+      ContainedItem::PredefinedLibrary { links_using_variable, .. } => *links_using_variable,
       _ => false
     }
   }
@@ -1173,45 +1181,67 @@ impl<'a> DependencyGraph<'a> {
   fn err_if_target_ident_is_duplicate(
     target: &Rc<RefCell<TargetNode<'a>>>,
     cmake_identifiers: &mut HashMap<String, Rc<RefCell<TargetNode<'a>>>>,
-    yaml_identifiers: &mut HashMap<String, Rc<RefCell<TargetNode<'a>>>>
+    yaml_identifiers: &mut HashMap<String, Rc<RefCell<TargetNode<'a>>>>,
+    is_predefined_dep_target: bool
   ) -> Result<(), GraphLoadFailureReason<'a>> {
     let borrowed_target = target.as_ref().borrow();
 
-    let target_cmake_ident: &str = borrowed_target.get_cmake_target_base_name();
-    let target_yaml_ident: &str = borrowed_target.get_name();
+    // Due to how yaml target name resolution works, predefined target names can overlap
+    // without issue. Only their CMake names can cause issues.
+    if !is_predefined_dep_target {
+      let yaml_idents_to_check: BTreeSet<&str> = BTreeSet::from_iter([
+        borrowed_target.get_name(),
+        borrowed_target.get_yaml_namespaced_target_name()
+      ]);
 
-    match yaml_identifiers.get(target_yaml_ident) {
-      Some(matching_target) => {
-        // Only err if two different targets share the same identifier. Obviously
-        // a target has the same identifier as itself. This check is important because
-        // dependency targets are checked once for each root project tree they are a part of.
-        if matching_target.as_ref().borrow().ne(borrowed_target.borrow()) {
-          return Err(GraphLoadFailureReason::DuplicateYamlIdentifier {
-            target1: Rc::clone(target),
-            target1_project: borrowed_target.container_project(),
-            target2: Rc::clone(matching_target),
-            target2_project: matching_target.as_ref().borrow().container_project()
-          });
+      for target_yaml_ident in yaml_idents_to_check {
+        match yaml_identifiers.get(target_yaml_ident) {
+          Some(matching_target) => {
+            // Only err if two different targets share the same identifier. Obviously
+            // a target has the same identifier as itself. This check is important because
+            // dependency targets are checked once for each root project tree they are a part of.
+            if matching_target.as_ref().borrow().ne(borrowed_target.borrow()) {
+              return Err(GraphLoadFailureReason::DuplicateYamlIdentifier {
+                target1: Rc::clone(target),
+                target1_project: borrowed_target.container_project(),
+                target2: Rc::clone(matching_target),
+                target2_project: matching_target.as_ref().borrow().container_project()
+              });
+            }
+          },
+          None => {
+            yaml_identifiers.insert(target_yaml_ident.to_string(), Rc::clone(target));
+          }
         }
-      },
-      None => {
-        yaml_identifiers.insert(target_yaml_ident.to_string(), Rc::clone(target));
       }
     }
 
-    match cmake_identifiers.get(target_cmake_ident) {
-      Some(matching_target) => {
-        if matching_target.as_ref().borrow().ne(borrowed_target.borrow()) {
-          return Err(GraphLoadFailureReason::DuplicateCMakeIdentifier {
-            target1: Rc::clone(target),
-            target1_project: borrowed_target.container_project(),
-            target2: Rc::clone(matching_target),
-            target2_project: matching_target.as_ref().borrow().container_project()
-          });
+    let mut cmake_idents_to_check: BTreeSet<&str> = BTreeSet::from_iter([
+      borrowed_target.get_cmake_target_base_name()
+    ]);
+
+    if !borrowed_target.links_using_variable() {
+      cmake_idents_to_check.insert(borrowed_target.get_cmake_namespaced_target_name());
+    }
+
+    for target_cmake_ident in cmake_idents_to_check {
+      match cmake_identifiers.get(target_cmake_ident) {
+        Some(matching_target) => {
+          if matching_target.as_ref().borrow().ne(borrowed_target.borrow()) {
+            println!(
+              "Weird"
+            );
+            return Err(GraphLoadFailureReason::DuplicateCMakeIdentifier {
+              target1: Rc::clone(target),
+              target1_project: borrowed_target.container_project(),
+              target2: Rc::clone(matching_target),
+              target2_project: matching_target.as_ref().borrow().container_project()
+            });
+          }
+        },
+        None => {
+          cmake_identifiers.insert(target_cmake_ident.to_string(), Rc::clone(target));
         }
-      },
-      None => {
-        cmake_identifiers.insert(target_cmake_ident.to_string(), Rc::clone(target));
       }
     }
     
@@ -1296,11 +1326,14 @@ impl<'a> DependencyGraph<'a> {
       )?;
     }
 
+    let is_predef_dep_target: bool = self.project_wrapper().contains_predef_dep();
+
     if let Some(pre_build_target) = &self.pre_build_wrapper {
       Self::err_if_target_ident_is_duplicate(
         pre_build_target,
         cmake_identifiers,
-        yaml_identifiers
+        yaml_identifiers,
+        is_predef_dep_target
       )?;
     }
 
@@ -1308,7 +1341,8 @@ impl<'a> DependencyGraph<'a> {
       Self::err_if_target_ident_is_duplicate(
         target,
         cmake_identifiers,
-        yaml_identifiers
+        yaml_identifiers,
+        is_predef_dep_target
       )?;
     }
 
@@ -2014,7 +2048,8 @@ impl<'a> DependencyGraph<'a> {
           Weak::clone(&self.current_graph_ref),
           ContainedItem::PredefinedLibrary {
             target_name: link_target_spec.get_name().to_string(),
-            external_requirements: Vec::new()
+            external_requirements: Vec::new(),
+            links_using_variable: false
           },
           LinkAccessMode::UserFacing,
           true
@@ -2736,7 +2771,11 @@ impl<'a> DependencyGraph<'a> {
             Rc::downgrade(&graph),
             ContainedItem::PredefinedLibrary {
               target_name: target_name.clone(),
-              external_requirements: target_config.external_requirements_set.clone()
+              external_requirements: target_config.external_requirements_set.clone(),
+              links_using_variable: match predef_dep.predefined_dep_info() {
+                FinalPredepInfo::CMakeComponentsModule(components_module) => components_module.whole_lib_links_using_variable(),
+                _ => false
+              }
             },
             LinkAccessMode::UserFacing,
             true

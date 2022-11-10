@@ -130,4 +130,4 @@ The command set for viewing project metadata.
 
 - [x] [stb](https://github.com/nothings/stb)
 - [x] [imgui](https://github.com/ocornut/imgui)
-- [ ] [brotli](https://github.com/google/brotli)
+- [x] [brotli](https://github.com/google/brotli)
