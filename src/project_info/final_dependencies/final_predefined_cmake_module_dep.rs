@@ -23,6 +23,10 @@ impl PredefinedCMakeModuleDep {
     &self.target_map
   }
 
+  pub fn find_module_base_name(&self) -> &str {
+    &self.raw_dep.module_name
+  }
+
   pub fn module_type(&self) -> &CMakeModuleType {
     &self.raw_dep.module_type
   }

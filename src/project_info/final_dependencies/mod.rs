@@ -144,8 +144,9 @@ impl FinalPredefinedDependencyConfig {
               match all_raw_dep_configs.get(the_namespace) {
                 None => {
                   return Err(format!(
-                    "The external dependency '{}' of target '{}' requires a library from predefined dependency '{}', however there is no predefined dependency named '{}'.",
+                    "The external dependency '{}' of target '{}::{}' requires a library from predefined dependency '{}', however there is no predefined dependency named '{}'.",
                     link_spec.original_spec_str(),
+                    dep_name,
                     target_name,
                     the_namespace,
                     the_namespace
@@ -168,8 +169,9 @@ impl FinalPredefinedDependencyConfig {
 
                   if !has_matching_target_name {
                     return Err(format!(
-                      "The external dependency '{}' of target '{}' requires a library from predefined dependency '{}', but '{}' doesn't have a target named '{}'",
+                      "The external dependency '{}' of target '{}::{}' requires a library from predefined dependency '{}', but '{}' doesn't have a target named '{}'",
                       link_spec.original_spec_str(),
+                      dep_name,
                       target_name,
                       the_namespace,
                       the_namespace,

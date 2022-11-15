@@ -20,7 +20,9 @@ pub struct LanguageConfigMap {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(deny_unknown_fields)]
 pub enum RawTestFramework {
+  #[serde(rename = "catch2")]
   Catch2(UserGivenPredefinedDependencyConfig),
+  #[serde(rename = "googletest")]
   GoogleTest(UserGivenPredefinedDependencyConfig),
   #[serde(rename = "doctest")]
   DocTest(UserGivenPredefinedDependencyConfig),
@@ -37,9 +39,9 @@ impl RawTestFramework {
 
   pub fn name(&self) -> &str {
     match self {
-      Self::Catch2(_) => "Catch2",
+      Self::Catch2(_) => "catch2",
       Self::DocTest(_) => "doctest",
-      Self::GoogleTest(_) => "GoogleTest"
+      Self::GoogleTest(_) => "googletest"
     }
   }
 }

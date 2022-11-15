@@ -1023,7 +1023,7 @@ impl<'a> CMakeListsWriter<'a> {
     writeln!(&self.cmakelists_file,
       "{}find_package( {} {} )",
       indent,
-      dep_name,
+      dep_info.find_module_base_name(),
       search_type_spec
     )?;
 
@@ -1078,7 +1078,7 @@ impl<'a> CMakeListsWriter<'a> {
 
     write!(&self.cmakelists_file,
       "find_package( {} {} COMPONENTS ",
-      dep_name,
+      dep_info.find_module_base_name(),
       search_type_spec
     )?;
 
@@ -1087,7 +1087,7 @@ impl<'a> CMakeListsWriter<'a> {
       .filter(|target|
         target.as_ref().borrow().container_project_id() == predep_graph.as_ref().borrow().project_id() 
       )
-      .map(|target| target.as_ref().borrow().get_name().to_string())
+      .map(|target| target.as_ref().borrow().get_cmake_target_base_name().to_string())
       // Targets are iterated in build order, meaning targets are listed AFTER all their dependencies.
       // However, for compilers where link order matters (i.e. GCC), targets must be listed BEFORE their
       // dependencies. That's why this list is reversed.

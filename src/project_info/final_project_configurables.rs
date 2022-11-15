@@ -20,25 +20,25 @@ impl FinalTestFramework {
 
   pub fn project_dependency_name(&self) -> &str {
     match self {
-      Self::Catch2(_) => "Catch2",
+      Self::Catch2(_) => "catch2",
       Self::DocTest(_) => "doctest",
-      Self::GoogleTest(_) => "GoogleTest"
+      Self::GoogleTest(_) => "googletest"
     }
   }
 
   pub fn main_provided_link_target_name(&self) -> &str {
     match self {
-      Self::Catch2(_) => "Catch2WithMain",
-      Self::DocTest(_) => "doctest_with_main",
-      Self::GoogleTest(_) => "gtest_main"
+      Self::Catch2(_) => "with_main",
+      Self::DocTest(_) => "with_main",
+      Self::GoogleTest(_) => "with_main"
     }
   }
 
   pub fn main_not_provided_link_target_name(&self) -> &str {
     match self {
-      Self::Catch2(_) => "Catch2",
-      Self::DocTest(_) => "doctest",
-      Self::GoogleTest(_) => "gtest",
+      Self::Catch2(_) => "without_main",
+      Self::DocTest(_) => "without_main",
+      Self::GoogleTest(_) => "without_main",
     }
   }
 }

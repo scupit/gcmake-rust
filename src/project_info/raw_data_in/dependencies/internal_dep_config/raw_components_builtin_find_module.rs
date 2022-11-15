@@ -30,6 +30,7 @@ pub struct ComponentsFindModuleUsage {
 pub struct RawComponentsModuleDep {
   pub links: ComponentsFindModuleLinks,
   pub module_type: CMakeModuleType,
+  pub module_name: String,
   pub cmakelists_usage: ComponentsFindModuleUsage,
   pub debian_packages: Option<RawDebianPackagesConfig>,
   pub mutually_exclusive: Option<RawMutualExclusionSet>,
@@ -37,6 +38,10 @@ pub struct RawComponentsModuleDep {
 }
 
 impl RawPredepCommon for RawComponentsModuleDep {
+  fn find_module_base_name(&self) -> Option<&str> {
+    Some(&self.module_name)
+  }
+
   fn raw_debian_packages_config(&self) -> Option<&RawDebianPackagesConfig> {
     self.debian_packages.as_ref()
   }

@@ -87,6 +87,10 @@ impl RawSubdirectoryDependency {
 }
 
 impl RawPredepCommon for RawSubdirectoryDependency {
+  fn find_module_base_name(&self) -> Option<&str> {
+    None
+  }
+
   fn raw_debian_packages_config(&self) -> Option<&RawDebianPackagesConfig> {
     self.debian_packages.as_ref()
   }

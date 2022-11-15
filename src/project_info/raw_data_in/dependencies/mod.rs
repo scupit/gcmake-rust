@@ -82,17 +82,17 @@ pub fn all_raw_supported_dependency_configs() -> Result<AllRawPredefinedDependen
           dep_dir_name.green(),
           err.to_string()
         ))?;
-
+      
       let dep_config_container = RawPredefinedDependencyInfo {
+        custom_find_module: load_hook_file(
+          &entry_path,
+          dep_configs.get_common()?.find_module_base_name().unwrap_or(dep_dir_name),
+          format!("Find{}.cmake", dep_dir_name)
+        )?,
         dep_configs,
         pre_load: load_hook_file(&entry_path, dep_dir_name, "pre_load.cmake")?,
         post_load: load_hook_file(&entry_path, dep_dir_name, "post_load.cmake")?,
         custom_populate: load_hook_file(&entry_path, dep_dir_name, "custom_populate.cmake")?,
-        custom_find_module: load_hook_file(
-          &entry_path,
-          dep_dir_name,
-          format!("Find{}.cmake", dep_dir_name)
-        )?,
       };
 
       if let Some(subdir_dep) = &dep_config_container.dep_configs.as_subdirectory {

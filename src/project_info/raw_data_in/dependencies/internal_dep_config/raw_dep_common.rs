@@ -19,6 +19,8 @@ pub struct RawEmscriptenConfig {
 }
 
 pub trait RawPredepCommon {
+  fn find_module_base_name(&self) -> Option<&str>;
+
   fn can_trivially_cross_compile(&self) -> bool;
   fn maybe_mutual_exclusion_groups(&self) -> &Option<RawMutualExclusionSet>;
   fn raw_target_map_in(&self) -> &RawPredefinedTargetMapIn;
