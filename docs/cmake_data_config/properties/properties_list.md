@@ -114,13 +114,13 @@ will use these directories:
 The project version, provided as a three part string. The version can optionally be prefixed with a `v`.
 
 ``` yaml
-version: "1.5.2"
+version: "1.5.3"
 ```
 
 or
 
 ``` yaml
-version: v1.5.2
+version: v1.5.3
 ```
 
 ### description
