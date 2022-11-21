@@ -1387,13 +1387,23 @@ impl<'a> DependencyGraph<'a> {
       None => false
     };
 
-    let cppfront_artifacts_target: Option<Rc<RefCell<TargetNode<'a>>>> = self.predefined_deps
+    let cppfront_artifacts_target: Option<Rc<RefCell<TargetNode<'a>>>> = self.root_project().as_ref().borrow()
+      .predefined_deps
       .get("cppfront")
       .map(|cppfront_graph|
         Rc::clone(cppfront_graph.as_ref().borrow().targets.borrow().get("artifacts").unwrap())
       );
 
-    for (_, target_config) in self.targets.borrow().iter() {
+    let borrowed_target_map = self.targets.borrow();
+    let mut target_refs: Vec<&Rc<RefCell<TargetNode<'a>>>> = borrowed_target_map.iter()
+      .map(|(_, target_config)| target_config)
+      .collect();
+
+    if let Some(pre_build_node) = self.get_pre_build_node() {
+      target_refs.push(pre_build_node);
+    }
+
+    for target_config in target_refs{
       let target: &mut TargetNode = &mut target_config.as_ref().borrow_mut();
 
       // TODO: No need to calculate this if the project already requires cppfront.
@@ -1410,11 +1420,13 @@ impl<'a> DependencyGraph<'a> {
           "cppfront::artifacts should be guaranteed to exist when loading the FinalProjectData."
         );
 
-        target.add_complex_requirement(NonOwningComplexTargetRequirement::OneOf(vec![
-          MaybePresentNonOwningTarget::Populated(
-            Rc::downgrade(&cppfront_artifacts_target.clone().unwrap())
-          )
-        ]));
+        let unwrapped_artifacts_target = cppfront_artifacts_target.clone().unwrap();
+        target.insert_link(Link::new(
+          unwrapped_artifacts_target.as_ref().borrow().get_name().to_string(),
+          SystemSpecifierWrapper::default(),
+          Rc::downgrade(&unwrapped_artifacts_target),
+          LinkMode::Private
+        ));
       }
     }
 

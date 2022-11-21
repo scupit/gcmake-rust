@@ -916,11 +916,12 @@ impl FinalProjectData {
 
     if self.any_files_contain_cpp2_grammar() && !self.predefined_dependencies.contains_key("cppfront") {
       return Err(format!(
-        "This project contains at least one {} file, but is missing the predefined dependency '{}'. '{}' is required to build .cpp2 files. Please list {} under this project root's predefined dependencies.",
+        "This project contains at least one {} file, but is missing the predefined dependency '{}'. '{}' is required to build .cpp2 files. Please list {} under this project root's {}.",
         ".cpp2".green(),
         "cppfront".yellow(),
         "cppfront".yellow(),
-        "cppfront".yellow()
+        "cppfront".yellow(),
+        "predefined_dependecies".purple()
       ))
     }
 
@@ -1156,7 +1157,7 @@ impl FinalProjectData {
 
     match *output_item.get_output_type() {
       OutputItemType::Executable => {
-        if let RetrievedCodeFileType::Source { .. } = entry_file_type {
+        if !entry_file_type.is_source() {
           return Err(format!(
             "The entry_file for executable {} in project '{}' should be a source file, but isn't.",
             item_string,
@@ -1169,7 +1170,7 @@ impl FinalProjectData {
         | OutputItemType::SharedLib
         | OutputItemType::HeaderOnlyLib =>
       {
-        if let RetrievedCodeFileType::Header = entry_file_type {
+        if !entry_file_type.is_normal_header() {
           return Err(format!(
             "The entry_file for library {} in project '{}' should be a header file, but isn't.",
             item_string,

@@ -13,6 +13,22 @@ pub enum RetrievedCodeFileType {
   Unknown
 }
 
+impl RetrievedCodeFileType {
+  pub fn is_source(&self) -> bool {
+    match self {
+      Self::Source { .. } => true,
+      _ => false
+    }
+  }
+
+  pub fn is_normal_header(&self) -> bool {
+    match self {
+      Self::Header => true,
+      _ => false
+    }
+  }
+}
+
 pub fn code_file_type(any_path_type: impl AsRef<Path>) -> RetrievedCodeFileType {
   let the_path: &Path = any_path_type.as_ref();
 
@@ -53,7 +69,7 @@ pub enum PrebuildScriptFile {
 pub fn find_prebuild_script(project_root: &str) -> Option<PrebuildScriptFile> {
   let pre_build_file_base_name: &str = "pre_build";
 
-  for possible_exe_file in file_variants(project_root, pre_build_file_base_name, vec!["c", "cxx", "cpp"]) {
+  for possible_exe_file in file_variants(project_root, pre_build_file_base_name, vec!["c", "cxx", "cpp", "cpp2"]) {
     if Path::exists(possible_exe_file.as_path()) {
       return Some(PrebuildScriptFile::Exe(cleaned_pathbuf(possible_exe_file)));
     }

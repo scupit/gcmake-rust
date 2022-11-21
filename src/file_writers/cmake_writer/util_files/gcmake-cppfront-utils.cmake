@@ -126,7 +126,7 @@ function( gcmake_transform_cppfront_files
     DEPENDS ${${cpp2_file_list_var}}
   )
 
-  copy_mirrored(
+  gcmake_copy_mirrored(
     generated_files_list
     "${generated_files_initial_prefix}"
     "${generated_files_dir}"

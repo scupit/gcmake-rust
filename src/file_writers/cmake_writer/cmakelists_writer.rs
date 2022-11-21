@@ -285,21 +285,20 @@ impl<'a> CMakeListsWriter<'a> {
     self.write_newline()?;
 
     if self.project_data.is_root_project() {
+      self.write_section_header("Toplevel-project-only configuration")?;
+
       writeln!(&self.cmakelists_file, "gcmake_begin_config_file()")?;
       self.write_toplevel_tweaks()?;
       self.write_features()?;
     }
 
     if self.project_data.has_predefined_dependencies() {
+      self.write_section_header("Predefined dependency config")?;
       self.write_predefined_dependencies()?;
     }
 
-    // Must be after predefined dependencies, since cppfront is imported as a predefined dependency.
-    if self.project_data.any_files_contain_cpp2_grammar() {
-      self.write_cppfront_transform()?
-    }
-
     if self.project_data.has_gcmake_dependencies() {
+      self.write_section_header("GCMake dependency config")?;
       self.write_gcmake_dependencies()?;
     }
 
@@ -327,6 +326,14 @@ impl<'a> CMakeListsWriter<'a> {
 
       self.write_section_header("Build Configurations")?;
       self.write_build_config_section()?;
+    }
+
+    self.write_root_vars()?;
+
+    // Must be all dependencies are applied, since cppfront is imported as a predefined_dependency.
+    if self.project_data.any_files_contain_cpp2_grammar() {
+      self.write_section_header("CppFront File Transformation")?;
+      self.write_cppfront_transform()?
     }
 
     if self.project_data.has_tests() {
@@ -1035,8 +1042,6 @@ impl<'a> CMakeListsWriter<'a> {
       .collect();
     all_cpp2_source_list.sort();
 
-    self.set_basic_var("", "all_cpp2_files", "")?;
-
     self.set_code_file_collection(
       "all_cpp2_files",
       "./",
@@ -1672,6 +1677,23 @@ impl<'a> CMakeListsWriter<'a> {
     Ok(())
   }
 
+  fn write_root_vars(&self) -> io::Result<()> {
+    // Variables shared between all targets in the current project
+    self.set_basic_var("", "PROJECT_INCLUDE_PREFIX", &format!("\"{}\"", self.project_data.get_full_include_prefix()))?;
+    self.set_basic_var("", &self.entry_file_root_var, "\"${CMAKE_CURRENT_SOURCE_DIR}\"")?;
+    // src_root path always has to be prefixed inside the entry file root for gcmake_copy_mirrored to work
+    // when transforming cppfront (.cpp2) files. Luckily, this is always the case since entry files are
+    // always in the project root.
+    self.set_basic_var("", &self.src_root_var, &format!("\"${{{}}}/{}/${{PROJECT_INCLUDE_PREFIX}}\"", self.entry_file_root_var, SRC_DIR))?;
+    self.set_basic_var("", &self.generated_src_root_var, &format!("\"${{CMAKE_CURRENT_BINARY_DIR}}/GENERATED_SOURCES/${{PROJECT_INCLUDE_PREFIX}}\""))?;
+    self.set_basic_var("", &self.header_root_var, &format!("\"${{CMAKE_CURRENT_SOURCE_DIR}}/{}/${{PROJECT_INCLUDE_PREFIX}}\"", INCLUDE_DIR))?;
+    self.set_basic_var("", &self.include_dir_var, &format!("\"${{CMAKE_CURRENT_SOURCE_DIR}}/{}\"", INCLUDE_DIR))?;
+
+    self.write_newline()?;
+
+    Ok(())
+  }
+
   fn write_build_config_section(&self) -> io::Result<()> {
     self.write_newline()?;
 
@@ -1842,17 +1864,26 @@ impl<'a> CMakeListsWriter<'a> {
   fn cmake_absolute_code_file_path(
     &self,
     cleaned_file_root: &str,
-    CodeFileInfo { file_path, file_type }: &CodeFileInfo,
+    code_file_info: &CodeFileInfo,
     cmake_location_prefix: &str,
     generated_src_prefix: &str,
     options: &CodeFileTransformOptions
   ) -> String {
-    let mut fixed_file_path: String = file_path
+    let mut fixed_file_path: String = code_file_info.get_file_path()
       .to_str()
       .unwrap()
-      .replace(&cleaned_file_root, "");
+      .to_string();
 
-    let used_path_prefix_var: &str = match file_type {
+    if code_file_info.uses_cpp2_grammar() {
+      // Due to how .cpp2 files are processed, their path must always be relative to the
+      // project root, not to their "source directory" if applicable.
+      fixed_file_path = fixed_file_path.replace("./", "");
+    }
+    else if fixed_file_path.starts_with(&cleaned_file_root) {
+      fixed_file_path = fixed_file_path.replace(cleaned_file_root, "");
+    }
+
+    let used_path_prefix_var: &str = match code_file_info.code_file_type() {
       RetrievedCodeFileType::Source { uses_cpp2_grammar: true } if !options.should_retain_cpp2_paths => {
         // cppfront (.cpp2) generated files are always .cpp
         fixed_file_path = fixed_file_path.replace(".cpp2", ".cpp");
@@ -1861,7 +1892,11 @@ impl<'a> CMakeListsWriter<'a> {
       _ => cmake_location_prefix
     };
 
-    return format!("${{{}}}{}", used_path_prefix_var, fixed_file_path);
+    let relative_path: &str = if fixed_file_path.starts_with('/')
+      { &fixed_file_path[1..] }
+      else { &fixed_file_path[..] };
+
+    return format!("\"${{{}}}/{}\"", used_path_prefix_var, relative_path);
   }
 
   fn set_code_file_collection(
@@ -1910,19 +1945,6 @@ impl<'a> CMakeListsWriter<'a> {
 
     let src_var_name: String = format!("{}_SOURCES", project_name);
     let includes_var_name: String = format!("{}_HEADERS", project_name);
-
-    self.write_newline()?;
-
-    // Variables shared between all targets in the current project
-    self.set_basic_var("", "PROJECT_INCLUDE_PREFIX", &format!("\"{}\"", self.project_data.get_full_include_prefix()))?;
-    self.set_basic_var("", &self.entry_file_root_var, "${CMAKE_CURENT_SOURCE_DIR}")?;
-    // src_root path always has to be prefixed inside the entry file root for gcmake_copy_mirrored to work
-    // when transforming cppfront (.cpp2) files. Luckily, this is always the case since entry files are
-    // always in the project root.
-    self.set_basic_var("", &self.src_root_var, &format!("${{{}}}/{}/${{PROJECT_INCLUDE_PREFIX}}", self.entry_file_root_var, SRC_DIR))?;
-    self.set_basic_var("", &self.generated_src_root_var, &format!("${{CMAKE_CURRENT_BINARY_DIR}}/GENERATED_SOURCES/${{PROJECT_INCLUDE_PREFIX}}"))?;
-    self.set_basic_var("", &self.header_root_var, &format!("${{CMAKE_CURRENT_SOURCE_DIR}}/{}/${{PROJECT_INCLUDE_PREFIX}}", INCLUDE_DIR))?;
-    self.set_basic_var("", &self.include_dir_var, &format!("${{CMAKE_CURRENT_SOURCE_DIR}}/{}", INCLUDE_DIR))?;
 
     self.write_newline()?;
 
@@ -2851,7 +2873,7 @@ impl<'a> CMakeListsWriter<'a> {
     self.write_newline()?;
 
     writeln!(&self.cmakelists_file,
-      "apply_lib_files( {} {} \"{}\" \"${{{}}}\" \"${{{}}}\" )",
+      "apply_lib_files( {} {} {} \"${{{}}}\" \"${{{}}}\" )",
       target_name,
       lib_spec_string,
       self.cmake_absolute_entry_file_path(output_data.get_entry_file()),
@@ -2915,7 +2937,7 @@ impl<'a> CMakeListsWriter<'a> {
 
     if is_pre_build_script {
       writeln!(&self.cmakelists_file,
-        "add_executable( {} \"{}\" )",
+        "add_executable( {} {} )",
         target_name,
         self.cmake_absolute_entry_file_path(output_data.get_entry_file())
       )?;
@@ -2984,7 +3006,7 @@ impl<'a> CMakeListsWriter<'a> {
       )?;
 
       writeln!(&self.cmakelists_file,
-        "apply_exe_files( {} {} \n\t\"{}\"\n\t\"${{{}}}\"\n\t\"${{{}}}\"\n)",
+        "apply_exe_files( {} {} \n\t{}\n\t\"${{{}}}\"\n\t\"${{{}}}\"\n)",
         target_name,
         receiver_lib_name,
         self.cmake_absolute_entry_file_path(output_data.get_entry_file()),
