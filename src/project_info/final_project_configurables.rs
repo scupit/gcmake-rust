@@ -1,4 +1,4 @@
-use std::{rc::Rc, collections::{HashMap, BTreeSet}, path::{PathBuf, Path}};
+use std::{rc::Rc, collections::{HashMap, BTreeSet, BTreeMap}, path::{PathBuf, Path}};
 use std::hash::{ Hash, Hasher };
 
 use super::{raw_data_in::{OutputItemType, RawCompiledItem, TargetBuildConfigMap, LinkSection, BuildConfigCompilerSpecifier, BuildType, TargetSpecificBuildType, RawBuildConfig, BuildTypeOptionMap, BuildConfigMap, RawGlobalPropertyConfig, DefaultCompiledLibType, RawShortcutConfig, RawFeatureConfig}, final_dependencies::FinalPredefinedDependencyConfig, LinkSpecifier, parsers::{link_spec_parser::LinkAccessMode, general_parser::ParseSuccess}, SystemSpecifierWrapper, platform_spec_parser::parse_leading_system_spec, helpers::{RetrievedCodeFileType, code_file_type}};
@@ -572,9 +572,9 @@ impl FinalBuildConfig {
   }
 }
 
-pub type FinalBuildTypeOptionMap = HashMap<BuildConfigCompilerSpecifier, FinalBuildConfig>;
-pub type FinalBuildConfigMap = HashMap<BuildType, FinalBuildTypeOptionMap>;
-pub type FinalTargetBuildConfigMap = HashMap<TargetSpecificBuildType, FinalBuildTypeOptionMap>;
+pub type FinalBuildTypeOptionMap = BTreeMap<BuildConfigCompilerSpecifier, FinalBuildConfig>;
+pub type FinalBuildConfigMap = BTreeMap<BuildType, FinalBuildTypeOptionMap>;
+pub type FinalTargetBuildConfigMap = BTreeMap<TargetSpecificBuildType, FinalBuildTypeOptionMap>;
 
 pub fn make_final_build_config_map(
   raw_build_config_map: &BuildConfigMap,

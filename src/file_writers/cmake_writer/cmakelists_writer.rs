@@ -574,17 +574,39 @@ impl<'a> CMakeListsWriter<'a> {
       .map(|(build_type, _)| build_type.name_str())
       .collect();
 
-    writeln!(&self.cmakelists_file,
-      "if( NOT ${{isMultiConfigGenerator}} )"
+    self.set_basic_var(
+      "",
+      "ALL_VALID_BUILD_TYPES",
+      &enum_iterator::all::<BuildType>()
+        .map(|build_type| build_type.name_str())
+        .collect::<Vec<&str>>()
+        .join(" ")
+    )?;
+
+    self.set_basic_var(
+      "",
+      "PROJECT_VALID_BUILD_TYPES",
+      &config_names.join(" ")
     )?;
 
     writeln!(&self.cmakelists_file,
-      "\tset_property( CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS {} )",
-      config_names.join(" ")
+      "if( ${{isMultiConfigGenerator}} )"
+    )?;
+
+    self.set_basic_var("", "CMAKE_CONFIGURATION_TYPES", "${PROJECT_VALID_BUILD_TYPES}")?;
+
+    writeln!(&self.cmakelists_file,
+      "else()"
     )?;
 
     writeln!(&self.cmakelists_file,
-      "\n\tif( \"${{CMAKE_BUILD_TYPE}}\" STREQUAL \"\")\n\t\tset( CMAKE_BUILD_TYPE \"{}\" CACHE STRING \"${{LOCAL_CMAKE_BUILD_TYPE_DOC_STRING}}\" FORCE )\n\tendif()",
+      "\tset_property( CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS ${{PROJECT_VALID_BUILD_TYPES}} )",
+    )?;
+
+    // We use ALL_VALID_BUILD_TYPES instead of PROJECT_VALID_BUILD_TYPES here so we don't mess with
+    // a build when this project is being used as a subdirectory dependency.
+    writeln!(&self.cmakelists_file,
+      "\n\tif( NOT \"${{CMAKE_BUILD_TYPE}}\" IN_LIST ALL_VALID_BUILD_TYPES )\n\t\tset( CMAKE_BUILD_TYPE \"{}\" CACHE STRING \"${{LOCAL_CMAKE_BUILD_TYPE_DOC_STRING}}\" FORCE )\n\tendif()",
       self.project_data.get_default_build_config().name_str()
     )?;
     self.write_newline()?;
