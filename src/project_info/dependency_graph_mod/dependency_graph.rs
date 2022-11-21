@@ -50,6 +50,7 @@ impl<'a> CycleNode<'a> {
 }
 
 pub enum AdditionalConfigValidationFailureReason<'a> {
+  HasCpp2ButMissingCppfrontDependency { },
   EmscriptenHTMLPathPointsToNonexistent {
     target: Rc<RefCell<TargetNode<'a>>>,
     absolute_path_to_html_file: PathBuf,
@@ -849,7 +850,9 @@ impl<'a> DependencyGraph<'a> {
   }
 
   pub fn get_predefined_dependencies(&self) -> &HashMap<String, Rc<RefCell<DependencyGraph<'a>>>> {
-    &self.predefined_deps
+    unsafe {
+      return &(*self.root_project().as_ptr()).predefined_deps
+    }
   }
 
   pub fn project_wrapper(&self) -> &ProjectWrapper {
@@ -1382,6 +1385,17 @@ impl<'a> DependencyGraph<'a> {
   }
 
   fn associate_cppfront_with_dependent_targets(&self) -> Result<(), GraphLoadFailureReason<'a>> {
+    if let Some(normal_project) = self.project_wrapper().maybe_normal_project() {
+      if normal_project.any_files_contain_cpp2_grammar() {
+        if !self.get_predefined_dependencies().contains_key("cppfront") {
+          return Err(GraphLoadFailureReason::FailedAdditionalProjectValidation {
+            project: Weak::upgrade(&self.current_graph_ref).unwrap(),
+            failure_reason: AdditionalConfigValidationFailureReason::HasCpp2ButMissingCppfrontDependency { }
+          })
+        }
+      }
+    }
+
     let all_project_targets_require_cppfront: bool = match self.project_wrapper().maybe_normal_project() {
       Some(normal_project) => normal_project.any_files_contain_cpp2_grammar(),
       None => false

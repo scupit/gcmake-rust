@@ -914,17 +914,6 @@ impl FinalProjectData {
     self.validate_features()?;
     self.ensure_no_file_collision()?;
 
-    if self.any_files_contain_cpp2_grammar() && !self.predefined_dependencies.contains_key("cppfront") {
-      return Err(format!(
-        "This project contains at least one {} file, but is missing the predefined dependency '{}'. '{}' is required to build .cpp2 files. Please list {} under this project root's {}.",
-        ".cpp2".green(),
-        "cppfront".yellow(),
-        "cppfront".yellow(),
-        "cppfront".yellow(),
-        "predefined_dependecies".purple()
-      ))
-    }
-
     for (_, test_project) in &self.tests {
       if let ProjectOutputType::ExeProject = &test_project.project_output_type {
         test_project.validate_correctness()?;

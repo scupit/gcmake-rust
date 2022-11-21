@@ -1680,12 +1680,13 @@ impl<'a> CMakeListsWriter<'a> {
   fn write_root_vars(&self) -> io::Result<()> {
     // Variables shared between all targets in the current project
     self.set_basic_var("", "PROJECT_INCLUDE_PREFIX", &format!("\"{}\"", self.project_data.get_full_include_prefix()))?;
+    self.set_basic_var("", "PROJECT_BASE_NAME", self.project_data.get_project_base_name())?;
     self.set_basic_var("", &self.entry_file_root_var, "\"${CMAKE_CURRENT_SOURCE_DIR}\"")?;
     // src_root path always has to be prefixed inside the entry file root for gcmake_copy_mirrored to work
     // when transforming cppfront (.cpp2) files. Luckily, this is always the case since entry files are
     // always in the project root.
     self.set_basic_var("", &self.src_root_var, &format!("\"${{{}}}/{}/${{PROJECT_INCLUDE_PREFIX}}\"", self.entry_file_root_var, SRC_DIR))?;
-    self.set_basic_var("", &self.generated_src_root_var, &format!("\"${{CMAKE_CURRENT_BINARY_DIR}}/GENERATED_SOURCES/${{PROJECT_INCLUDE_PREFIX}}\""))?;
+    self.set_basic_var("", &self.generated_src_root_var, &format!("\"${{CMAKE_CURRENT_BINARY_DIR}}/GENERATED_SOURCES\""))?;
     self.set_basic_var("", &self.header_root_var, &format!("\"${{CMAKE_CURRENT_SOURCE_DIR}}/{}/${{PROJECT_INCLUDE_PREFIX}}\"", INCLUDE_DIR))?;
     self.set_basic_var("", &self.include_dir_var, &format!("\"${{CMAKE_CURRENT_SOURCE_DIR}}/{}\"", INCLUDE_DIR))?;
 
@@ -1874,13 +1875,14 @@ impl<'a> CMakeListsWriter<'a> {
       .unwrap()
       .to_string();
 
-    if code_file_info.uses_cpp2_grammar() {
-      // Due to how .cpp2 files are processed, their path must always be relative to the
-      // project root, not to their "source directory" if applicable.
-      fixed_file_path = fixed_file_path.replace("./", "");
-    }
-    else if fixed_file_path.starts_with(&cleaned_file_root) {
-      fixed_file_path = fixed_file_path.replace(cleaned_file_root, "");
+    // Due to how .cpp2 files are processed, their path must always be relative to the
+    // project root, not to their "src directory" if applicable.
+    let file_root_replacer: &str = if code_file_info.uses_cpp2_grammar()
+      { self.project_data.get_project_root_dir() }
+      else { cleaned_file_root };
+
+    if fixed_file_path.starts_with(file_root_replacer) {
+      fixed_file_path = fixed_file_path.replace(file_root_replacer, "");
     }
 
     let used_path_prefix_var: &str = match code_file_info.code_file_type() {
