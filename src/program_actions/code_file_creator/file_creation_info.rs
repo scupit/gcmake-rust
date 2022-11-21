@@ -118,7 +118,8 @@ pub fn validate_which_generating(
         ));
       }
     }
-    FileCreationLang::Cpp => { }
+    FileCreationLang::Cpp
+      | FileCreationLang::Cpp2 => (),
   }
 
   Ok(())

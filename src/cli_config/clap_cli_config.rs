@@ -118,7 +118,8 @@ pub struct NewTestProjectCommand {
 #[derive(ValueEnum, Clone, Copy)]
 pub enum FileCreationLang {
   C,
-  Cpp
+  Cpp,
+  Cpp2
 }
 
 #[derive(Args)]

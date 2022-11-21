@@ -90,15 +90,18 @@ pub fn extension_for(file_type: CodeFileType) -> &'static str {
   match file_type {
     CodeFileType::Header(lang) => match lang {
       FileCreationLang::C => ".h",
-      FileCreationLang::Cpp => ".hpp"
+      FileCreationLang::Cpp
+        | FileCreationLang::Cpp2 => ".hpp"
     },
     CodeFileType::Source(lang) => match lang {
       FileCreationLang::C => ".c",
-      FileCreationLang::Cpp => ".cpp"
+      FileCreationLang::Cpp => ".cpp",
+      FileCreationLang::Cpp2 => ".cpp2"
     },
     CodeFileType::TemplateImpl(lang) => match lang {
       FileCreationLang::C => ".tpp",
-      FileCreationLang::Cpp => ".tpp"
+      FileCreationLang::Cpp
+        | FileCreationLang::Cpp2 => ".tpp"
     }
   }
 }
@@ -163,7 +166,14 @@ fn write_header(
       FileCreationLang::Cpp => {
         writeln!(
           header_file,
-          "\nclass {}\n{{\n\n}};\n",
+          "\nclass {}\n{{\n\tpublic:\n\t\tvoid printName();\n}};\n",
+          &file_info.shared_name_c_ident
+        )?;
+      },
+      FileCreationLang::Cpp2 => {
+        writeln!(
+          header_file,
+          "\nint placeholder_{}(const int);\n",
           &file_info.shared_name_c_ident
         )?;
       }
@@ -209,7 +219,7 @@ fn write_compiled_lib_header_section(
     FileCreationLang::C => {
       writeln!(
         header_file,
-        "\nint {} placeholder_{}(void);\n",
+        "\n{} int placeholder_{}(void);\n",
         export_macro,
         &file_info.shared_name_c_ident
       )?;
@@ -217,7 +227,15 @@ fn write_compiled_lib_header_section(
     FileCreationLang::Cpp => {
       writeln!(
         header_file,
-        "\nclass {} {}\n{{\n\n}};\n",
+        "\nclass {} {}\n{{\n\tpublic:\n\t\tvoid printName();\n}};\n",
+        export_macro,
+        &file_info.shared_name_c_ident
+      )?;
+    },
+    FileCreationLang::Cpp2 => {
+      writeln!(
+        header_file,
+        "\n{} int placeholder_{}(const int);\n",
         export_macro,
         &file_info.shared_name_c_ident
       )?;
@@ -245,9 +263,34 @@ fn write_source(
   if let Some(header_file) = maybe_header {
     writeln!(
       &source_file,
-      "#include \"{}\"",
+      "#include \"{}\"\n",
       to_file_include_path(project_info, &header_file)
     )?;
+
+    match language {
+      FileCreationLang::C => {
+        writeln!(
+          &source_file,
+          "int placeholder_{}(const int n) {{\n\treturn n * 2;\n}}",
+          &file_info.shared_name_c_ident
+        )?;
+      },
+      FileCreationLang::Cpp => {
+        writeln!(
+          &source_file,
+          "#include <iostream>\n\nvoid {}::printName() {{\n\tstd::cout << \"{}\\n\";\n}}",
+          &file_info.shared_name_c_ident,
+          &file_info.shared_name_c_ident
+        )?;
+      },
+      FileCreationLang::Cpp2 => {
+        writeln!(
+          &source_file,
+          "placeholder_{}: (n: int) -> int = {{\n\treturn n * 2;\n}}",
+          &file_info.shared_name_c_ident
+        )?;
+      }
+    }
   }
 
   Ok(file_path)
