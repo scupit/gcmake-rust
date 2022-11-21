@@ -2,7 +2,7 @@ use std::{collections::{HashMap, HashSet, BTreeSet, BTreeMap}, path::{Path, Path
 
 use crate::project_info::path_manipulation::cleaned_pathbuf;
 
-use super::{path_manipulation::{cleaned_path_str, relative_to_project_root, absolute_path}, final_dependencies::{FinalGCMakeDependency, FinalPredefinedDependencyConfig}, raw_data_in::{RawProject, dependencies::internal_dep_config::AllRawPredefinedDependencies, BuildType, LanguageConfigMap, OutputItemType, PreBuildConfigIn, SpecificCompilerSpecifier, BuildConfigCompilerSpecifier, TargetSpecificBuildType, LinkSection, RawTestFramework, DefaultCompiledLibType}, final_project_configurables::{FinalProjectType}, CompiledOutputItem, helpers::{parse_subproject_data, parse_root_project_data, populate_files, find_prebuild_script, PrebuildScriptFile, validate_raw_project_outputs, ProjectOutputType, RetrievedCodeFileType, code_file_type, parse_test_project_data}, PreBuildScript, OutputItemLinks, FinalTestFramework, base_include_prefix_for_test, gcmake_constants::{SRC_DIR, INCLUDE_DIR, TESTS_DIR, SUBPROJECTS_DIR}, FinalInstallerConfig, CompilerDefine, FinalBuildConfigMap, make_final_target_build_config, make_final_build_config_map, FinalTargetBuildConfigMap, FinalGlobalProperties, FinalShortcutConfig, parsers::{version_parser::ThreePartVersion, general_parser::ParseSuccess}, platform_spec_parser::parse_leading_system_spec, SystemSpecifierWrapper, FinalFeatureConfig, FinalFeatureEnabler};
+use super::{path_manipulation::{cleaned_path_str, relative_to_project_root, absolute_path}, final_dependencies::{FinalGCMakeDependency, FinalPredefinedDependencyConfig}, raw_data_in::{RawProject, dependencies::internal_dep_config::AllRawPredefinedDependencies, BuildType, LanguageConfigMap, OutputItemType, PreBuildConfigIn, SpecificCompilerSpecifier, BuildConfigCompilerSpecifier, TargetSpecificBuildType, LinkSection, RawTestFramework, DefaultCompiledLibType}, final_project_configurables::{FinalProjectType}, CompiledOutputItem, helpers::{parse_subproject_data, parse_root_project_data, populate_files, find_prebuild_script, PrebuildScriptFile, validate_raw_project_outputs, ProjectOutputType, RetrievedCodeFileType, code_file_type, parse_test_project_data}, PreBuildScript, OutputItemLinks, FinalTestFramework, base_include_prefix_for_test, gcmake_constants::{SRC_DIR, INCLUDE_DIR, TESTS_DIR, SUBPROJECTS_DIR}, FinalInstallerConfig, CompilerDefine, FinalBuildConfigMap, make_final_target_build_config, make_final_build_config_map, FinalTargetBuildConfigMap, FinalGlobalProperties, FinalShortcutConfig, parsers::{version_parser::ThreePartVersion, general_parser::ParseSuccess}, platform_spec_parser::parse_leading_system_spec, SystemSpecifierWrapper, FinalFeatureConfig, FinalFeatureEnabler, CodeFileInfo};
 use colored::*;
 
 const SUBPROJECT_JOIN_STR: &'static str = "_S_";
@@ -19,7 +19,7 @@ fn resolve_prebuild_script(
       PrebuildScriptFile::Exe(entry_file_pathbuf) => {
         PreBuildScript::Exe(CompiledOutputItem {
           output_type: OutputItemType::Executable,
-          entry_file: relative_to_project_root(project_root, entry_file_pathbuf),
+          entry_file: CodeFileInfo::from_path(relative_to_project_root(project_root, entry_file_pathbuf)),
           windows_icon_relative_to_root_project: None,
           emscripten_html_shell_relative_to_project_root: None,
           system_specifier: SystemSpecifierWrapper::default(),
@@ -181,9 +181,9 @@ pub struct FinalProjectData {
   full_include_prefix: String,
   src_dir: String,
   include_dir: String,
-  pub src_files: Vec<PathBuf>,
-  pub include_files: Vec<PathBuf>,
-  pub template_impl_files: Vec<PathBuf>,
+  pub src_files: Vec<CodeFileInfo>,
+  pub include_files: Vec<CodeFileInfo>,
+  pub template_impl_files: Vec<CodeFileInfo>,
   subprojects: SubprojectMap,
   test_framework: Option<FinalTestFramework>,
   tests: TestProjectMap,
@@ -761,9 +761,9 @@ impl FinalProjectData {
       project_root_dir: project_root,
       src_dir: project_src_dir,
       include_dir: project_include_dir,
-      src_files: Vec::<PathBuf>::new(),
-      include_files: Vec::<PathBuf>::new(),
-      template_impl_files: Vec::<PathBuf>::new(),
+      src_files: Vec::new(),
+      include_files: Vec::new(),
+      template_impl_files: Vec::new(),
       subprojects,
       output: output_items,
       predefined_dependencies,
@@ -784,7 +784,7 @@ impl FinalProjectData {
       Path::new(&finalized_project_data.src_dir),
       &mut finalized_project_data.src_files,
       &|file_path| match code_file_type(file_path) {
-        RetrievedCodeFileType::Source => true,
+        RetrievedCodeFileType::Source { .. } => true,
         _ => false
       }
     )
@@ -912,6 +912,17 @@ impl FinalProjectData {
     }
 
     self.validate_features()?;
+    self.ensure_no_file_collision()?;
+
+    if self.any_files_contain_cpp2_grammar() && !self.predefined_dependencies.contains_key("cppfront") {
+      return Err(format!(
+        "This project contains at least one {} file, but is missing the predefined dependency '{}'. '{}' is required to build .cpp2 files. Please list {} under this project root's predefined dependencies.",
+        ".cpp2".green(),
+        "cppfront".yellow(),
+        "cppfront".yellow(),
+        "cppfront".yellow()
+      ))
+    }
 
     for (_, test_project) in &self.tests {
       if let ProjectOutputType::ExeProject = &test_project.project_output_type {
@@ -982,6 +993,67 @@ impl FinalProjectData {
     }
 
     self.validate_installer_config()?;
+
+    Ok(())
+  }
+
+  pub fn shared_sources_contain_cpp2_grammar(&self) -> bool {
+    return self.src_files.iter()
+      .any(|code_file| code_file.uses_cpp2_grammar());
+  }
+
+  pub fn any_files_contain_cpp2_grammar(&self) -> bool {
+    return !self.all_sources_by_grammar(true).is_empty();
+  }
+
+  // Also includes entry files for output items and executable pre-build script.
+  pub fn all_sources_by_grammar(&self, cpp2_grammar: bool) -> HashSet<&CodeFileInfo> {
+    let mut all_regular_cpp_file_names: HashSet<&CodeFileInfo> = self.src_files.iter()
+      .filter_map(|code_file_info|
+        if code_file_info.uses_cpp2_grammar() {
+          Some(code_file_info)
+        }
+        else {
+          None
+        }
+      )
+      .collect();
+
+    for (_, output) in &self.output {
+      if let RetrievedCodeFileType::Source { uses_cpp2_grammar } = output.entry_file.code_file_type() {
+        if uses_cpp2_grammar == cpp2_grammar {
+          all_regular_cpp_file_names.insert(output.get_entry_file());
+        }
+      }
+    }
+
+    if let Some(PreBuildScript::Exe(pre_build_exe)) = &self.prebuild_script {
+      if let RetrievedCodeFileType::Source { uses_cpp2_grammar } = pre_build_exe.entry_file.code_file_type() {
+        if uses_cpp2_grammar == cpp2_grammar {
+          all_regular_cpp_file_names.insert(pre_build_exe.get_entry_file());
+        }
+      }
+    }
+
+    return all_regular_cpp_file_names;
+  }
+
+  fn ensure_no_file_collision(&self) -> Result<(), String> {
+    let existing_normal_cpp_files: HashSet<&CodeFileInfo> = self.all_sources_by_grammar(false);
+
+    for cpp2_file_info in self.all_sources_by_grammar(true) {
+      let cpp2_file: &Path = cpp2_file_info.get_file_path();
+      let generated_file_name: PathBuf = cpp2_file.with_extension("").with_extension(".cpp");
+
+      if existing_normal_cpp_files.contains(&CodeFileInfo::from_path(generated_file_name.as_path())) {
+        return Err(format!(
+          "Source file conflict! cpp2 file \"{}\" will be used to generate cpp file \"{}\" at build time, but the file \"{}\" already exists. Please rename one of the files to something else.",
+          cpp2_file.to_str().unwrap().green(),
+          generated_file_name.to_str().unwrap().yellow(),
+          generated_file_name.to_str().unwrap().yellow(),
+        ));
+      }
+    }
 
     Ok(())
   }
@@ -1077,14 +1149,14 @@ impl FinalProjectData {
     output_item: &CompiledOutputItem,
     is_prebuild_script: bool
   ) -> Result<(), String> {
-    let entry_file_type: RetrievedCodeFileType = code_file_type(output_item.get_entry_file());
+    let entry_file_type: RetrievedCodeFileType = output_item.get_entry_file().code_file_type();
     let item_string: String = if is_prebuild_script
       { String::from("prebuild script") }
       else { format!("output item '{}'", output_name )};
 
     match *output_item.get_output_type() {
       OutputItemType::Executable => {
-        if entry_file_type != RetrievedCodeFileType::Source {
+        if let RetrievedCodeFileType::Source { .. } = entry_file_type {
           return Err(format!(
             "The entry_file for executable {} in project '{}' should be a source file, but isn't.",
             item_string,
@@ -1097,7 +1169,7 @@ impl FinalProjectData {
         | OutputItemType::SharedLib
         | OutputItemType::HeaderOnlyLib =>
       {
-        if entry_file_type != RetrievedCodeFileType::Header {
+        if let RetrievedCodeFileType::Header = entry_file_type {
           return Err(format!(
             "The entry_file for library {} in project '{}' should be a header file, but isn't.",
             item_string,

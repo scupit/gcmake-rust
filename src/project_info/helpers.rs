@@ -1,10 +1,12 @@
 use std::{path::{PathBuf, Path}, fs, io};
 
-use super::{raw_data_in::{RawProject, RawSubproject, OutputItemType, RawTestProject}, path_manipulation::cleaned_pathbuf, final_project_data::ProjectLoadFailureReason};
+use super::{raw_data_in::{RawProject, RawSubproject, OutputItemType, RawTestProject}, path_manipulation::cleaned_pathbuf, final_project_data::ProjectLoadFailureReason, CodeFileInfo};
 
-#[derive(PartialEq, Eq)]
+#[derive(Clone)]
 pub enum RetrievedCodeFileType {
-  Source,
+  Source {
+    uses_cpp2_grammar: bool
+  },
   Header,
   TemplateImpl,
   // Module (when implemented in compilers and build systems)
@@ -16,10 +18,11 @@ pub fn code_file_type(any_path_type: impl AsRef<Path>) -> RetrievedCodeFileType 
 
   return match the_path.extension() {
     Some(extension) => match extension.to_str().unwrap() {
-      "c" | "cpp" | "cxx"   => RetrievedCodeFileType::Source,
-      "h" | "hpp" | "hxx"   => RetrievedCodeFileType::Header,
-      "tpp" | "txx" | "inl" => RetrievedCodeFileType::TemplateImpl,
-      _                     => RetrievedCodeFileType::Unknown
+      "cpp2"                  => RetrievedCodeFileType::Source { uses_cpp2_grammar: true },
+      "c" | "cpp" | "cxx"     => RetrievedCodeFileType::Source { uses_cpp2_grammar: false },
+      "h" | "hpp" | "hxx"     => RetrievedCodeFileType::Header,
+      "tpp" | "txx" | "inl"   => RetrievedCodeFileType::TemplateImpl,
+      _                       => RetrievedCodeFileType::Unknown
     },
     None => RetrievedCodeFileType::Unknown
   }
@@ -98,7 +101,7 @@ pub fn parse_test_project_data(project_root: &str) -> YamlParseResult<RawTestPro
 
 pub fn populate_files<F>(
   dir: &Path,
-  file_list: &mut Vec<PathBuf>,
+  file_list: &mut Vec<CodeFileInfo>,
   filter_func: &F
 ) -> io::Result<()>
   where F: Fn(&Path) -> bool
@@ -111,7 +114,7 @@ pub fn populate_files<F>(
         populate_files(&path, file_list, filter_func)?;
       }
       else if path.is_file() && filter_func(path.as_path()) {
-        file_list.push(cleaned_pathbuf(path));
+        file_list.push(CodeFileInfo::from_path(cleaned_pathbuf(path)));
       }
     }
   }

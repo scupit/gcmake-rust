@@ -11,7 +11,7 @@ pub mod validators;
 mod parsers;
 
 pub use final_project_configurables::*;
-pub use helpers::ProjectOutputType;
+pub use helpers::{ ProjectOutputType, RetrievedCodeFileType };
 pub use parsers::link_spec_parser::LinkSpecifier;
 pub use parsers::system_spec::platform_spec_parser::{ SystemSpecifierWrapper };
 pub use parsers::system_spec::*;

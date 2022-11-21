@@ -1,6 +1,70 @@
-use std::{rc::Rc, collections::{HashMap, HashSet, BTreeSet}, path::PathBuf};
+use std::{rc::Rc, collections::{HashMap, BTreeSet}, path::{PathBuf, Path}};
+use std::hash::{ Hash, Hasher };
 
-use super::{raw_data_in::{OutputItemType, RawCompiledItem, TargetBuildConfigMap, LinkSection, BuildConfigCompilerSpecifier, BuildType, TargetSpecificBuildType, RawBuildConfig, BuildTypeOptionMap, BuildConfigMap, RawGlobalPropertyConfig, DefaultCompiledLibType, RawShortcutConfig, RawFeatureConfig}, final_dependencies::FinalPredefinedDependencyConfig, LinkSpecifier, parsers::{link_spec_parser::LinkAccessMode, general_parser::ParseSuccess}, SystemSpecifierWrapper, platform_spec_parser::parse_leading_system_spec};
+use super::{raw_data_in::{OutputItemType, RawCompiledItem, TargetBuildConfigMap, LinkSection, BuildConfigCompilerSpecifier, BuildType, TargetSpecificBuildType, RawBuildConfig, BuildTypeOptionMap, BuildConfigMap, RawGlobalPropertyConfig, DefaultCompiledLibType, RawShortcutConfig, RawFeatureConfig}, final_dependencies::FinalPredefinedDependencyConfig, LinkSpecifier, parsers::{link_spec_parser::LinkAccessMode, general_parser::ParseSuccess}, SystemSpecifierWrapper, platform_spec_parser::parse_leading_system_spec, helpers::{RetrievedCodeFileType, code_file_type}};
+
+pub struct CodeFileInfo {
+  pub file_path: PathBuf,
+  pub file_type: RetrievedCodeFileType
+}
+
+impl CodeFileInfo {
+  pub fn from_path(given_path: impl AsRef<Path>) -> Self {
+    let path_ref: &Path = given_path.as_ref();
+
+    Self {
+      file_path: PathBuf::from(path_ref),
+      file_type: code_file_type(path_ref)
+    }
+  }
+
+  pub fn uses_cpp2_grammar(&self) -> bool {
+    match &self.file_type {
+      RetrievedCodeFileType::Source { uses_cpp2_grammar } => *uses_cpp2_grammar,
+      _ => false
+    }
+  }
+
+  pub fn get_file_path(&self) -> &Path {
+    self.file_path.as_path()
+  }
+
+  pub fn code_file_type(&self) -> RetrievedCodeFileType {
+    self.file_type.clone()
+  }
+}
+
+impl Hash for CodeFileInfo {
+  fn hash<H: Hasher>(&self, state: &mut H) {
+    self.file_path.hash(state);
+  }
+}
+
+impl PartialEq for CodeFileInfo {
+  fn eq(&self, other: &Self) -> bool {
+    self.file_path == other.file_path
+  }
+}
+
+impl Eq for CodeFileInfo { }
+
+impl AsRef<CodeFileInfo> for CodeFileInfo {
+  fn as_ref(&self) -> &CodeFileInfo {
+    self
+  }
+}
+
+impl PartialOrd for CodeFileInfo {
+  fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+    self.file_path.partial_cmp(&other.file_path) 
+  }
+}
+
+impl Ord for CodeFileInfo {
+  fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+    self.partial_cmp(other).unwrap()
+  }
+}
 
 #[derive(Clone)]
 pub enum FinalTestFramework {
@@ -176,7 +240,7 @@ impl OutputItemLinks {
 
 pub struct CompiledOutputItem {
   pub output_type: OutputItemType,
-  pub entry_file: String,
+  pub entry_file: CodeFileInfo,
   pub links: OutputItemLinks,
   // NOTE: This is a relative path which references a file RELATIVE TO THE ROOT PROJECT'S ROOT DIRECTORY.
   // That directory is not always the same as the project which directly contains the output item.
@@ -283,7 +347,7 @@ impl CompiledOutputItem {
   ) -> Result<CompiledOutputItem, String> {
     let mut final_output_item = CompiledOutputItem {
       output_type: raw_output_item.output_type,
-      entry_file: String::from(&raw_output_item.entry_file),
+      entry_file: CodeFileInfo::from_path(&raw_output_item.entry_file),
       links: OutputItemLinks::new_empty(),
       system_specifier: maybe_system_specifier.unwrap_or_default(),
       windows_icon_relative_to_root_project: raw_output_item.windows_icon.clone()
@@ -315,7 +379,7 @@ impl CompiledOutputItem {
     &self.build_config
   }
 
-  pub fn get_entry_file(&self) -> &str {
+  pub fn get_entry_file(&self) -> &CodeFileInfo {
     return &self.entry_file;
   }
 

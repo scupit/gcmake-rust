@@ -1381,6 +1381,46 @@ impl<'a> DependencyGraph<'a> {
     Ok(())
   }
 
+  fn associate_cppfront_with_dependent_targets(&self) -> Result<(), GraphLoadFailureReason<'a>> {
+    let all_project_targets_require_cppfront: bool = match self.project_wrapper().maybe_normal_project() {
+      Some(normal_project) => normal_project.any_files_contain_cpp2_grammar(),
+      None => false
+    };
+
+    let cppfront_artifacts_target: Option<Rc<RefCell<TargetNode<'a>>>> = self.predefined_deps
+      .get("cppfront")
+      .map(|cppfront_graph|
+        Rc::clone(cppfront_graph.as_ref().borrow().targets.borrow().get("artifacts").unwrap())
+      );
+
+    for (_, target_config) in self.targets.borrow().iter() {
+      let target: &mut TargetNode = &mut target_config.as_ref().borrow_mut();
+
+      // TODO: No need to calculate this if the project already requires cppfront.
+      // Low priority.
+      let target_requires_cppfront: bool = match target.get_contained_item() {
+        ContainedItem::CompiledOutput(output) => output.get_entry_file().uses_cpp2_grammar(),
+        ContainedItem::PreBuild(PreBuildScript::Exe(pre_build_exe)) => pre_build_exe.entry_file.uses_cpp2_grammar(),
+        _ => false
+      };
+
+      if all_project_targets_require_cppfront || target_requires_cppfront {
+        assert!(
+          cppfront_artifacts_target.is_some(),
+          "cppfront::artifacts should be guaranteed to exist when loading the FinalProjectData."
+        );
+
+        target.add_complex_requirement(NonOwningComplexTargetRequirement::OneOf(vec![
+          MaybePresentNonOwningTarget::Populated(
+            Rc::downgrade(&cppfront_artifacts_target.clone().unwrap())
+          )
+        ]));
+      }
+    }
+
+    Ok(())
+  }
+
   /*
     After making associations, ensure correct predefined dependency inclusion for all
     targets (tests exes, project outputs, and pre-build script) for all non-predefined-dependency projects.
@@ -1408,6 +1448,8 @@ impl<'a> DependencyGraph<'a> {
           message if this is not the case.
   */
   fn ensure_proper_predefined_dep_links(&self) -> Result<(), GraphLoadFailureReason<'a>> {
+    self.associate_cppfront_with_dependent_targets()?;
+
     // "External requirements" for predefined dependencies must be loaded here because
     // we know that all predefined dependencies used by the project have been loaded at this point.
     for (_, predefined_dep) in &self.predefined_deps {

@@ -1,6 +1,6 @@
-use std::{collections::{HashMap, HashSet, BTreeMap}, fs::File, io::{self, Write, ErrorKind}, path::{PathBuf, Path}, rc::Rc, cell::{RefCell, Ref}};
+use std::{collections::{HashMap, HashSet, BTreeMap, BTreeSet}, fs::File, io::{self, Write, ErrorKind}, path::{PathBuf, Path}, rc::Rc, cell::{RefCell, Ref}};
 
-use crate::{project_info::{final_project_data::{FinalProjectData}, path_manipulation::{cleaned_path_str, relative_to_project_root}, final_dependencies::{GitRevisionSpecifier, PredefinedCMakeComponentsModuleDep, PredefinedSubdirDep, PredefinedCMakeModuleDep, FinalPredepInfo, GCMakeDependencyStatus, FinalPredefinedDependencyConfig, base64_encoded, PredefinedDepFunctionality, FinalDownloadMethod, FinalDebianPackagesConfig}, raw_data_in::{BuildType, BuildConfigCompilerSpecifier, SpecificCompilerSpecifier, OutputItemType, LanguageConfigMap, TargetSpecificBuildType, dependencies::internal_dep_config::{CMakeModuleType}, DefaultCompiledLibType}, FinalProjectType, CompiledOutputItem, PreBuildScript, LinkMode, FinalTestFramework, dependency_graph_mod::dependency_graph::{DependencyGraph, OrderedTargetInfo, ProjectWrapper, TargetNode, SimpleNodeOutputType, Link, EmscriptenLinkFlagInfo, ContainedItem}, SystemSpecifierWrapper, CompilerDefine, FinalBuildConfig, CompilerFlag, LinkerFlag, gcmake_constants::{SRC_DIR, INCLUDE_DIR}, platform_spec_parser::parse_leading_system_spec}, file_writers::cmake_writer::cmake_writer_helpers::system_constraint_generator_expression};
+use crate::{project_info::{final_project_data::{FinalProjectData}, path_manipulation::{cleaned_path_str, relative_to_project_root}, final_dependencies::{GitRevisionSpecifier, PredefinedCMakeComponentsModuleDep, PredefinedSubdirDep, PredefinedCMakeModuleDep, FinalPredepInfo, GCMakeDependencyStatus, FinalPredefinedDependencyConfig, base64_encoded, PredefinedDepFunctionality, FinalDownloadMethod, FinalDebianPackagesConfig}, raw_data_in::{BuildType, BuildConfigCompilerSpecifier, SpecificCompilerSpecifier, OutputItemType, LanguageConfigMap, TargetSpecificBuildType, dependencies::internal_dep_config::{CMakeModuleType}, DefaultCompiledLibType}, FinalProjectType, CompiledOutputItem, PreBuildScript, LinkMode, FinalTestFramework, dependency_graph_mod::dependency_graph::{DependencyGraph, OrderedTargetInfo, ProjectWrapper, TargetNode, SimpleNodeOutputType, Link, EmscriptenLinkFlagInfo, ContainedItem}, SystemSpecifierWrapper, CompilerDefine, FinalBuildConfig, CompilerFlag, LinkerFlag, gcmake_constants::{SRC_DIR, INCLUDE_DIR}, platform_spec_parser::parse_leading_system_spec, CodeFileInfo, RetrievedCodeFileType}, file_writers::cmake_writer::cmake_writer_helpers::system_constraint_generator_expression};
 
 use super::{cmake_utils_writer::{CMakeUtilFile, CMakeUtilWriter}, cmake_writer_helpers::system_contstraint_conditional_expression};
 use colored::*;
@@ -14,6 +14,18 @@ struct SingleUsageConditional<'a> {
   public_constraint: Option<SystemSpecifierWrapper>,
   private_constraint: Option<SystemSpecifierWrapper>,
   target_rc: Rc<RefCell<TargetNode<'a>>>
+}
+
+struct CodeFileTransformOptions {
+  should_retain_cpp2_paths: bool
+}
+
+impl Default for CodeFileTransformOptions {
+  fn default() -> Self {
+    Self {
+      should_retain_cpp2_paths: false
+    }
+  }
 }
 
 struct UsageConditionalGroup<'a> {
@@ -203,7 +215,14 @@ struct CMakeListsWriter<'a> {
   sorted_target_info: &'a OrderedTargetInfo<'a>,
   project_data: Rc<FinalProjectData>,
   util_writer: Option<CMakeUtilWriter>,
-  cmakelists_file: File
+  cmakelists_file: File,
+
+  include_dir_var: String,
+
+  src_root_var: String,
+  header_root_var: String,
+  generated_src_root_var: String,
+  entry_file_root_var: String
 }
 
 impl<'a> CMakeListsWriter<'a> {
@@ -242,7 +261,15 @@ impl<'a> CMakeListsWriter<'a> {
 
     drop(borrowed_graph);
 
+    let project_name: &str = project_data.get_project_base_name();
+
     Ok(Self {
+      src_root_var: format!("{}_SRC_ROOT", project_name),
+      include_dir_var: format!("{}_INCLUDE_DIR", project_name),
+      header_root_var: format!("{}_HEADER_ROOT", project_name),
+      entry_file_root_var: format!("{}_ENTRY_ROOT", project_name),
+      // Make sure this is the same in gcmake-cppfront-utils.cmake::gcmake_transform_cppfront_files
+      generated_src_root_var: format!("{}_GENERATED_SOURCE_ROOT", project_name),
       dep_graph,
       sorted_target_info: sorted_target_info,
       project_data,
@@ -265,6 +292,11 @@ impl<'a> CMakeListsWriter<'a> {
 
     if self.project_data.has_predefined_dependencies() {
       self.write_predefined_dependencies()?;
+    }
+
+    // Must be after predefined dependencies, since cppfront is imported as a predefined dependency.
+    if self.project_data.any_files_contain_cpp2_grammar() {
+      self.write_cppfront_transform()?
     }
 
     if self.project_data.has_gcmake_dependencies() {
@@ -394,6 +426,7 @@ impl<'a> CMakeListsWriter<'a> {
   }
 
   fn write_toplevel_tweaks(&self) -> io::Result<()> {
+    self.set_basic_var("", "IN_GCMAKE_CONTEXT", "TRUE")?;
     writeln!(&self.cmakelists_file, "ensure_gcmake_config_dirs_exist()")?;
 
     let project_supports_emscripten: bool = self.project_data.supports_emscripten();
@@ -992,6 +1025,32 @@ impl<'a> CMakeListsWriter<'a> {
         }
       }
     }
+
+    Ok(())
+  }
+
+  fn write_cppfront_transform(&self) -> io::Result<()> {
+    let mut all_cpp2_source_list: Vec<&CodeFileInfo> = self.project_data.all_sources_by_grammar(true)
+      .into_iter()
+      .collect();
+    all_cpp2_source_list.sort();
+
+    self.set_basic_var("", "all_cpp2_files", "")?;
+
+    self.set_code_file_collection(
+      "all_cpp2_files",
+      "./",
+      &self.entry_file_root_var,
+      &self.generated_src_root_var,
+      &all_cpp2_source_list,
+      &CodeFileTransformOptions {
+        should_retain_cpp2_paths: true
+      }
+    )?;
+
+    writeln!(&self.cmakelists_file,
+      "gcmake_transform_cppfront_files( all_cpp2_files )"
+    )?;
 
     Ok(())
   }
@@ -1767,22 +1826,68 @@ impl<'a> CMakeListsWriter<'a> {
     Ok(())
   }
 
-  fn set_file_collection(
+  fn cmake_absolute_entry_file_path(
+    &self,
+    code_file_info: &CodeFileInfo
+  ) -> String {
+    return self.cmake_absolute_code_file_path(
+      "./",
+      code_file_info,
+      &self.entry_file_root_var,
+      &self.generated_src_root_var,
+      &CodeFileTransformOptions::default()
+    )
+  }
+
+  fn cmake_absolute_code_file_path(
+    &self,
+    cleaned_file_root: &str,
+    CodeFileInfo { file_path, file_type }: &CodeFileInfo,
+    cmake_location_prefix: &str,
+    generated_src_prefix: &str,
+    options: &CodeFileTransformOptions
+  ) -> String {
+    let mut fixed_file_path: String = file_path
+      .to_str()
+      .unwrap()
+      .replace(&cleaned_file_root, "");
+
+    let used_path_prefix_var: &str = match file_type {
+      RetrievedCodeFileType::Source { uses_cpp2_grammar: true } if !options.should_retain_cpp2_paths => {
+        // cppfront (.cpp2) generated files are always .cpp
+        fixed_file_path = fixed_file_path.replace(".cpp2", ".cpp");
+        generated_src_prefix
+      },
+      _ => cmake_location_prefix
+    };
+
+    return format!("${{{}}}{}", used_path_prefix_var, fixed_file_path);
+  }
+
+  fn set_code_file_collection(
     &self,
     var_name: &str,
     file_location_root: &str,
     cmake_location_prefix: &str,
-    file_path_collection: &Vec<PathBuf>
+    generated_src_prefix: &str,
+    file_path_collection: &Vec<impl AsRef<CodeFileInfo>>,
+    options: &CodeFileTransformOptions
   ) -> io::Result<()> {
-    let cleaned_file_root:String = cleaned_path_str(file_location_root);
+    let cleaned_file_root: String = cleaned_path_str(file_location_root);
 
     writeln!(&self.cmakelists_file, "set( {}", var_name)?;
-    for file_path in file_path_collection {
-      let fixed_file_path = file_path
-        .to_string_lossy()
-        .replace(&cleaned_file_root, "");
-
-      writeln!(&self.cmakelists_file, "\t${{{}}}{}", &cmake_location_prefix, fixed_file_path)?;
+    for code_file_info in file_path_collection {
+      writeln!(
+        &self.cmakelists_file,
+        "\t{}",
+        self.cmake_absolute_code_file_path(
+          &cleaned_file_root,
+          code_file_info.as_ref(),
+          cmake_location_prefix,
+          generated_src_prefix,
+          &options
+        )
+      )?;
     }
     writeln!(&self.cmakelists_file, ")")?;
 
@@ -1803,11 +1908,6 @@ impl<'a> CMakeListsWriter<'a> {
   fn write_outputs(&self) -> io::Result<()> {
     let project_name: &str = self.project_data.get_project_base_name();
 
-    let src_root_varname: String = format!("{}_SRC_ROOT", project_name);
-    let include_root_varname: String = format!("{}_HEADER_ROOT", project_name);
-    
-    let project_include_dir_varname: String = format!("{}_INCLUDE_DIR", project_name);
-
     let src_var_name: String = format!("{}_SOURCES", project_name);
     let includes_var_name: String = format!("{}_HEADERS", project_name);
 
@@ -1815,25 +1915,34 @@ impl<'a> CMakeListsWriter<'a> {
 
     // Variables shared between all targets in the current project
     self.set_basic_var("", "PROJECT_INCLUDE_PREFIX", &format!("\"{}\"", self.project_data.get_full_include_prefix()))?;
-    self.set_basic_var("", &src_root_varname, &format!("${{CMAKE_CURRENT_SOURCE_DIR}}/{}/${{PROJECT_INCLUDE_PREFIX}}", SRC_DIR))?;
-    self.set_basic_var("", &include_root_varname, &format!("${{CMAKE_CURRENT_SOURCE_DIR}}/{}/${{PROJECT_INCLUDE_PREFIX}}", INCLUDE_DIR))?;
-    self.set_basic_var("", &project_include_dir_varname, &format!("${{CMAKE_CURRENT_SOURCE_DIR}}/{}", INCLUDE_DIR))?;
+    self.set_basic_var("", &self.entry_file_root_var, "${CMAKE_CURENT_SOURCE_DIR}")?;
+    // src_root path always has to be prefixed inside the entry file root for gcmake_copy_mirrored to work
+    // when transforming cppfront (.cpp2) files. Luckily, this is always the case since entry files are
+    // always in the project root.
+    self.set_basic_var("", &self.src_root_var, &format!("${{{}}}/{}/${{PROJECT_INCLUDE_PREFIX}}", self.entry_file_root_var, SRC_DIR))?;
+    self.set_basic_var("", &self.generated_src_root_var, &format!("${{CMAKE_CURRENT_BINARY_DIR}}/GENERATED_SOURCES/${{PROJECT_INCLUDE_PREFIX}}"))?;
+    self.set_basic_var("", &self.header_root_var, &format!("${{CMAKE_CURRENT_SOURCE_DIR}}/{}/${{PROJECT_INCLUDE_PREFIX}}", INCLUDE_DIR))?;
+    self.set_basic_var("", &self.include_dir_var, &format!("${{CMAKE_CURRENT_SOURCE_DIR}}/{}", INCLUDE_DIR))?;
 
     self.write_newline()?;
 
-    self.set_file_collection(
+    self.set_code_file_collection(
       &src_var_name,
       self.project_data.get_src_dir(),
-      &src_root_varname,
-      &self.project_data.src_files
+      &self.src_root_var,
+      &self.generated_src_root_var,
+      &self.project_data.src_files,
+      &CodeFileTransformOptions::default()
     )?;
     self.write_newline()?;
 
-    self.set_file_collection(
+    self.set_code_file_collection(
       &includes_var_name,
       self.project_data.get_include_dir(),
-      &include_root_varname,
-      &self.project_data.include_files
+      &self.header_root_var,
+      &self.generated_src_root_var,
+      &self.project_data.include_files,
+      &CodeFileTransformOptions::default()
     )?;
     self.write_newline()?;
 
@@ -1843,11 +1952,13 @@ impl<'a> CMakeListsWriter<'a> {
         project_name
       );
 
-      self.set_file_collection(
+      self.set_code_file_collection(
         &template_impl_var_name,
         self.project_data.get_include_dir(),
-        &include_root_varname,
-        &self.project_data.template_impl_files
+        &self.header_root_var,
+        &self.generated_src_root_var,
+        &self.project_data.template_impl_files,
+        &CodeFileTransformOptions::default()
       )?;
       self.write_newline()?;
 
@@ -1914,7 +2025,7 @@ impl<'a> CMakeListsWriter<'a> {
             &output_name,
             &src_var_name,
             &includes_var_name,
-            &project_include_dir_varname
+            &self.include_dir_var
           )?;
         },
         OutputItemType::StaticLib
@@ -1927,7 +2038,7 @@ impl<'a> CMakeListsWriter<'a> {
             &output_name,
             &src_var_name,
             &includes_var_name,
-            &project_include_dir_varname
+            &self.include_dir_var
           )?;
         },
         OutputItemType::CompiledLib => {
@@ -1937,7 +2048,7 @@ impl<'a> CMakeListsWriter<'a> {
             &output_name,
             &src_var_name,
             &includes_var_name,
-            &project_include_dir_varname
+            &self.include_dir_var
           )?;
         }
       }
@@ -2740,10 +2851,10 @@ impl<'a> CMakeListsWriter<'a> {
     self.write_newline()?;
 
     writeln!(&self.cmakelists_file,
-      "apply_lib_files( {} {} \"${{CMAKE_CURRENT_SOURCE_DIR}}/{}\" \"${{{}}}\" \"${{{}}}\" )",
+      "apply_lib_files( {} {} \"{}\" \"${{{}}}\" \"${{{}}}\" )",
       target_name,
       lib_spec_string,
-      output_data.get_entry_file().replace("./", ""),
+      self.cmake_absolute_entry_file_path(output_data.get_entry_file()),
       src_var_name,
       includes_var_name
     )?;
@@ -2804,9 +2915,9 @@ impl<'a> CMakeListsWriter<'a> {
 
     if is_pre_build_script {
       writeln!(&self.cmakelists_file,
-        "add_executable( {} ${{CMAKE_CURRENT_SOURCE_DIR}}/{} )",
+        "add_executable( {} \"{}\" )",
         target_name,
-        output_data.get_entry_file().replace("./", "")
+        self.cmake_absolute_entry_file_path(output_data.get_entry_file())
       )?;
     }
     else {
@@ -2873,10 +2984,10 @@ impl<'a> CMakeListsWriter<'a> {
       )?;
 
       writeln!(&self.cmakelists_file,
-        "apply_exe_files( {} {} \n\t\"${{CMAKE_CURRENT_SOURCE_DIR}}/{}\"\n\t\"${{{}}}\"\n\t\"${{{}}}\"\n)",
+        "apply_exe_files( {} {} \n\t\"{}\"\n\t\"${{{}}}\"\n\t\"${{{}}}\"\n)",
         target_name,
         receiver_lib_name,
-        output_data.get_entry_file().replace("./", ""),
+        self.cmake_absolute_entry_file_path(output_data.get_entry_file()),
         src_var_name,
         includes_var_name
       )?;
