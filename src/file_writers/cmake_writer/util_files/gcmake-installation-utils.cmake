@@ -77,6 +77,13 @@ function( configure_installation
   endforeach()
 
   foreach( minimal_target_to_install IN LISTS MY_MINIMAL_INSTALLS )
+    # cppfront::artifacts (cppfront_artifacts) is always private linked, therefore it should never
+    # be installed. The target may be imported if EMBED_CPPFRONT is set to OFF, so we manually filter
+    # it out here knowing that doing so won't cause issues.
+    if( "${minimal_target_to_install}" STREQUAL "cppfront_artifacts" )
+      continue()
+    endif()
+
     # NOTE: Due to limitations with how CMake installs work, a "minimal" install 
     # does the same thing as just installing additional targets. I'd like a way
     # to install only the components of a target needed at runtime, but that doesn't
