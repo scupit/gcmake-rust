@@ -25,6 +25,7 @@ configuration work together.
 - [Using CCache](./using_ccache.md)
 - [Cargo-like "features"](./cmake_data_config/properties/features.md)
 - [Optional/conditional dependencies](./cmake_data_config/linking.md#conditional-dependencies)
+- [CppFront (*.cpp2) Support](./cppfront_integration.md)
 
 ## Important Concepts
 
@@ -53,6 +54,7 @@ configuration work together.
 - [Compiling using Zig](compile_using_zig.md)
 - [Emscripten Usage and Caveats](./emscripten.md)
 - [Using a custom Emscripten HTML shell file](./emscripten.md#using-a-custom-html-shell-file)
+- [Using CppFront with your project](./cppfront_integration.md#using-cppfront-in-a-gcmake-project)
 
 ## GCMake Repository Links
 
