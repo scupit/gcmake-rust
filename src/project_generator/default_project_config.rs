@@ -1,14 +1,15 @@
 use std::{collections::{HashMap, BTreeSet, BTreeMap}, iter::FromIterator};
 
-use crate::{project_info::{raw_data_in::{RawProject, RawSubproject, SpecificCompilerSpecifier, RawCompiledItem, OutputItemType, BuildType, BuildConfigCompilerSpecifier, RawBuildConfig, SingleLanguageConfig, LanguageConfigMap, RawTestProject, RawGlobalPropertyConfig, DefaultCompiledLibType}}, program_actions::ProjectTypeCreating};
+use crate::{project_info::{raw_data_in::{RawProject, RawSubproject, SpecificCompilerSpecifier, RawCompiledItem, OutputItemType, BuildType, BuildConfigCompilerSpecifier, RawBuildConfig, SingleLanguageConfig, LanguageConfigMap, RawTestProject, RawGlobalPropertyConfig, DefaultCompiledLibType, dependencies::user_given_dep_config::UserGivenPredefinedDependencyConfig}}, program_actions::ProjectTypeCreating};
 
 use self::configuration::{MainFileLanguage, OutputLibType, CreationProjectOutputType};
 
 pub mod configuration {
-  #[derive(Clone, Copy)]
+  #[derive(Clone, Copy, PartialEq, Eq)]
   pub enum MainFileLanguage {
     C,
-    Cpp
+    Cpp,
+    Cpp2
   }
 
   #[derive(Clone)]
@@ -259,6 +260,23 @@ pub fn get_default_project_config(
 ) -> RawProject {
   let include_emscripten_support: bool = should_support_emscripten(project_type_creating);
 
+  let predefined_dependencies: Option<HashMap<String, UserGivenPredefinedDependencyConfig>> = match project_lang {
+    MainFileLanguage::Cpp2 => {
+      Some(HashMap::from_iter(
+        [(
+          String::from("cppfront"),
+          UserGivenPredefinedDependencyConfig {
+            git_tag: Some(String::from("master")),
+            commit_hash: None,
+            file_version: None,
+            repo_url: None
+          }
+        )]
+      ))
+    },
+    _ => None
+  };
+
   RawProject {
     name: project_name.to_string(),
     include_prefix: include_prefix.to_string(),
@@ -296,7 +314,7 @@ pub fn get_default_project_config(
         requires_custom_main
       })
     ]),
-    predefined_dependencies: None,
+    predefined_dependencies,
     gcmake_dependencies: None,
     build_configs: BTreeMap::from_iter([
       (BuildType::Debug, build_configs_debug_default(include_emscripten_support)),
@@ -365,26 +383,30 @@ pub fn main_file_name(
   project_lang: &MainFileLanguage,
   project_type: &CreationProjectOutputType
 ) -> String {
-  let extension_prefix: &str;
+  let extension: &str;
   let file_name: &str;
 
   match *project_type {
     CreationProjectOutputType::Executable => {
-      extension_prefix = "c";
       file_name = "main";
+      extension = match project_lang {
+        MainFileLanguage::C => "c",
+        MainFileLanguage::Cpp => "cpp",
+        MainFileLanguage::Cpp2 => "cpp2"
+      };
     },
     CreationProjectOutputType::Library(_) => {
-      extension_prefix = "h";
       file_name = project_name;
+      extension = match project_lang {
+        MainFileLanguage::C => "h",
+        MainFileLanguage::Cpp
+          | MainFileLanguage::Cpp2 => "hpp",
+      };
     }
   };
 
-  let extension_suffix = match *project_lang {
-    MainFileLanguage::C => "",
-    MainFileLanguage::Cpp => "pp"
-  };
 
-  return format!("{}.{}{}", file_name, extension_prefix, extension_suffix);
+  return format!("{}.{}", file_name, extension);
 }
 
 fn create_string_set<'a>(arr: impl IntoIterator<Item=&'a str>) -> Vec<String> {

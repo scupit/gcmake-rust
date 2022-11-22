@@ -11,7 +11,7 @@ if( NOT GCMAKE_PRE_BUILD_UTIL_HAS_BEEN_INCLUDED )
     )
 
     if( NOT GCMAKE_NODEJS_EXECUTABLE )
-      message( WARNING "GCMake Warning: Unable to find a NO_HTML executable on your system. Any executable pre-build scripts built by your project will not be run.")
+      message( WARNING "GCMake Warning: Unable to find a NodeJS executable on your system. Any executable pre-build scripts built by your project will not be run when using Emscripten." )
     endif()
   endif()
   
@@ -55,14 +55,6 @@ function( use_executable_prebuild_script
     PRE_BUILD
     COMMAND ${runnable_command}
     COMMENT "Running ${PROJECT_NAME} pre-build executable script"
-    # FIXME: Need to somehow run the node script in the CWD. Running
-    # it while it's in the binary dir results in an error.
-    # package error: [Error: ENOENT: no such file or directory, open 'D:\temp-builds\emscripten-basic\PRE_BUILD_SCRIPT_emscripten-basic.data'] {
-    # errno: -4058,
-    # code: 'ENOENT',
-    # syscall: 'open',
-    # path: 'D:\\temp-builds\\emscripten-basic\\PRE_BUILD_SCRIPT_emscripten-basic.data'
-}
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
   )
 endfunction()

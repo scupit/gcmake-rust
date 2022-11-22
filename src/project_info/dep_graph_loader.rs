@@ -374,13 +374,15 @@ pub fn load_graph(
         },
         AdditionalConfigValidationFailureReason::HasCpp2ButMissingCppfrontDependency { } => {
           return wrap_error_msg(format!(
-            "Project [{}] contains at least one {} file, but is missing the predefined dependency '{}'. '{}' is required to build .cpp2 files. Please list {} as one of the project root's {}. For example:\n\npredefined_dependencies:\n  cppfront:\n    git_tag: master",
+            "Project [{}] contains at least one {} file, but is missing the predefined dependency '{}'. '{}' is required to build .cpp2 files. Please list {} as one of the project root's {}. For example:\n\n{}:\n  {}:\n    git_tag: master",
             borrow_project(project).project_debug_name().yellow(),
             ".cpp2".green(),
             "cppfront".yellow(),
             "cppfront".yellow(),
             "cppfront".yellow(),
-            "predefined_dependecies".purple()
+            "predefined_dependecies".purple(),
+            "predefined_dependecies".purple(),
+            "cppfront".yellow()
           ))
         }
       },

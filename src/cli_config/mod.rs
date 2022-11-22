@@ -14,7 +14,8 @@ pub struct CLIProjectGenerationInfo {
   pub project_name: String,
   pub project_type: CLIProjectTypeGenerating,
   pub project_output_type: Option<CreationProjectOutputType>,
-  pub should_include_emscripten_support: bool
+  pub should_include_emscripten_support: bool,
+  pub should_use_cpp2_main_if_possible: bool
 }
 
 impl From<NewProjectSubcommand> for CLIProjectGenerationInfo {
@@ -22,22 +23,25 @@ impl From<NewProjectSubcommand> for CLIProjectGenerationInfo {
     match command {
       NewProjectSubcommand::RootProject(project_info) => {
         let language: Option<MainFileLanguage> =
-          if project_info.c         { Some(MainFileLanguage::C) }
-          else if project_info.cpp  { Some(MainFileLanguage::Cpp) }
-          else                      { None };
+          if project_info.cpp         { Some(MainFileLanguage::Cpp) }
+          else if project_info.cpp2   { Some(MainFileLanguage::Cpp2) }
+          else if project_info.c      { Some(MainFileLanguage::C) }
+          else                        { None };
 
         return CLIProjectGenerationInfo {
           project_name: project_info.new_project_name,
           language,
           project_type: CLIProjectTypeGenerating::RootProject,
           project_output_type: convert_given_project_type(&project_info.project_type),
-          should_include_emscripten_support: !project_info.no_emscripten
+          should_include_emscripten_support: !project_info.no_emscripten,
+          should_use_cpp2_main_if_possible: project_info.cpp2
         }
       },
       NewProjectSubcommand::Subproject(subproject_info) => {
         let language: Option<MainFileLanguage> =
-          if subproject_info.c          { Some(MainFileLanguage::C) }
-          else if subproject_info.cpp   { Some(MainFileLanguage::Cpp) }
+          if subproject_info.cpp        { Some(MainFileLanguage::Cpp) }
+          else if subproject_info.cpp2  { Some(MainFileLanguage::Cpp2) }
+          else if subproject_info.c     { Some(MainFileLanguage::C) }
           else                          { None };
         
         return CLIProjectGenerationInfo {
@@ -46,7 +50,8 @@ impl From<NewProjectSubcommand> for CLIProjectGenerationInfo {
           project_type: CLIProjectTypeGenerating::Subproject,
           project_output_type: convert_given_project_type(&subproject_info.subproject_type),
           // This will be ignored for subprojects
-          should_include_emscripten_support: false
+          should_include_emscripten_support: false,
+          should_use_cpp2_main_if_possible: subproject_info.cpp2
         }
       },
       NewProjectSubcommand::Test(test_project_info) =>  {
@@ -56,7 +61,8 @@ impl From<NewProjectSubcommand> for CLIProjectGenerationInfo {
           project_type: CLIProjectTypeGenerating::Test,
           project_output_type: Some(CreationProjectOutputType::Executable),
           // This will be ignored for test projects
-          should_include_emscripten_support: false
+          should_include_emscripten_support: false,
+          should_use_cpp2_main_if_possible: false
         }
       }
     }

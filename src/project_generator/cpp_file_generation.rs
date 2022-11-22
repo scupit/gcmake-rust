@@ -8,7 +8,14 @@ const CPP_EXE_MAIN: &'static str =
 "#include <iostream>
 
 int main(int argc, char** argv) {
-\tstd::cout << \"Hello World\" << std::endl;
+\tstd::cout << \"Hello World\\n\";
+\treturn EXIT_SUCCESS;
+}
+";
+
+const CPP2_EXE_MAIN: &'static str =
+"main: () -> int = {
+\tstd::cout << \"Hello World\\n\";
 \treturn EXIT_SUCCESS;
 }
 ";
@@ -53,7 +60,8 @@ pub fn generate_cpp_main<'a, T: AsRef<Path>>(
   project_output_type: &CreationProjectOutputType,
   test_init_info: Option<TestMainInitInfo<'a>>,
   full_include_prefix: &str,
-  target_name: &str
+  target_name: &str,
+  use_cpp2: bool
 ) -> io::Result<()> {
   let main_file = File::create(file_path)?;
 
@@ -64,7 +72,8 @@ pub fn generate_cpp_main<'a, T: AsRef<Path>>(
       project_output_type,
       test_init_info,
       full_include_prefix,
-      target_name
+      target_name,
+      use_cpp2
     )
   )?;
   
@@ -75,7 +84,8 @@ fn get_cpp_main_file_contents<'a>(
   project_output_type: &CreationProjectOutputType,
   test_init_info: Option<TestMainInitInfo<'a>>,
   full_include_prefix: &str,
-  target_name: &str
+  target_name: &str,
+  use_cpp2: bool
 ) -> String {
   return match test_init_info {
     Some(TestMainInitInfo { test_framework, requires_custom_main }) => match test_framework {
@@ -108,7 +118,14 @@ fn get_cpp_main_file_contents<'a>(
       let target_ident_upper: String = make_c_identifier(target_name).to_uppercase();
 
       match project_output_type {
-        CreationProjectOutputType::Executable => String::from(CPP_EXE_MAIN),
+        CreationProjectOutputType::Executable => {
+          if use_cpp2 {
+            String::from(CPP2_EXE_MAIN)
+          }
+          else {
+            String::from(CPP_EXE_MAIN)
+          }
+        },
         CreationProjectOutputType::Library(lib_type) => match lib_type {
           OutputLibType::HeaderOnly => {
             basic_configure_replace(

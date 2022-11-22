@@ -13,7 +13,8 @@ pub fn prompt_for_language() -> io::Result<MainFileLanguage> {
     "Choose Language",
     &[
       ("C", &ChoiceValue(MainFileLanguage::C)),
-      ("C++", &ChoiceValue(MainFileLanguage::Cpp))
+      ("C++", &ChoiceValue(MainFileLanguage::Cpp)),
+      ("C++2 (CppFront's EXPERIMENTAL .cpp2)", &ChoiceValue(MainFileLanguage::Cpp2))
     ]
   );
 }

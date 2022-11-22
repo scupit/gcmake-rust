@@ -2611,11 +2611,22 @@ impl<'a> CMakeListsWriter<'a> {
 
         for single_dep_info in link_info_list {
           let inner_expression: String = if single_dep_info.is_installed_with_project {
-            format!(
-              "$<BUILD_INTERFACE:{}>$<INSTALL_INTERFACE:${{LOCAL_TOPLEVEL_PROJECT_NAME}}::${{{}}}>",
+            let mut final_expression: String = format!(
+              "$<BUILD_INTERFACE:{}>",
               &single_dep_info.linkable_name,
-              &single_dep_info.unaliased_lib_var
-            )
+            );
+
+            // TODO: This is a hack. I'd rather have a way to specify that cppfront::artifacts
+            // can't be installed. However, for now I'll consider cppfront a "plugin" and this a
+            // special case. In the future this should be changed though.
+            if single_dep_info.linkable_name != "cppfront::artifacts" {
+              final_expression.push_str(&format!(
+                " $<INSTALL_INTERFACE:${{LOCAL_TOPLEVEL_PROJECT_NAME}}::${{{}}}>",
+                &single_dep_info.unaliased_lib_var
+              ));
+            }
+
+            final_expression
           }
           else {
             single_dep_info.linkable_name

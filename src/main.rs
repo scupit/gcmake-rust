@@ -90,7 +90,8 @@ fn main() {
                 CreateFilesCommand {
                   language: match new_project_info.project_lang {
                     MainFileLanguage::C => FileCreationLang::Cpp,
-                    MainFileLanguage::Cpp => FileCreationLang::Cpp
+                    MainFileLanguage::Cpp => FileCreationLang::Cpp,
+                    MainFileLanguage::Cpp2 => FileCreationLang::Cpp2
                   },
                   relative_file_names: vec![new_file_name],
                   which: String::from("hs"),

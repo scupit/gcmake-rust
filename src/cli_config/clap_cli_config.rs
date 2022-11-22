@@ -77,6 +77,11 @@ pub struct NewRootProjectCommand {
   #[arg(long)]
   pub cpp: bool,
 
+  /// Generates a C++ project, but uses .cpp2 files instead of .cpp.
+  /// This implies --cpp, so it also skips language prompt.
+  #[arg(long)]
+  pub cpp2: bool,
+
   // Specifies the initial project's output type (executable, shared library, etc.).
   #[arg(value_enum, short, long, name = "type")]
   pub project_type: Option<CLIProjectOutputTypeIn>,
@@ -100,6 +105,11 @@ pub struct NewSubprojectCommand {
   /// Generate a C++ project and skip language prompt.
   #[arg(long)]
   pub cpp: bool,
+
+  /// Generates a C++ project, but uses .cpp2 files instead of .cpp.
+  /// This implies --cpp, so it also skips language prompt.
+  #[arg(long)]
+  pub cpp2: bool,
 
   #[arg(value_enum, short, long, name = "type")]
   pub subproject_type: Option<CLIProjectOutputTypeIn>

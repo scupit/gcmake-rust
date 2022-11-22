@@ -180,7 +180,8 @@ pub fn create_project_at(
             requires_custom_main: requires_custom_main.unwrap()
           }),
           &folder_generation_include_prefix,
-          project_name
+          project_name,
+          false
         )?;
       },
       _ => {
@@ -193,13 +194,14 @@ pub fn create_project_at(
               project_name
             )?
           },
-          MainFileLanguage::Cpp => {
+          cpp_like_lang @ (MainFileLanguage::Cpp | MainFileLanguage::Cpp2) => {
             generate_cpp_main(
               main_file_path,
               &output_type_selection,
               None,
               &folder_generation_include_prefix,
-              project_name
+              project_name,
+              cpp_like_lang == MainFileLanguage::Cpp2
             )?
           }
         }
