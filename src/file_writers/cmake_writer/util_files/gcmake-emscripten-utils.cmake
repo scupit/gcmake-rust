@@ -1,3 +1,35 @@
+if( NOT ALREADY_CONFIGURED_EMSCRIPTEN_GCMAKE_UTIL )
+  if( USING_EMSCRIPTEN )
+    set( _using_ccache FALSE )
+    set( _ccache_path )
+
+    if( CMAKE_C_COMPILER_LAUNCHER )
+      cmake_path( GET CMAKE_C_COMPILER_LAUNCHER FILENAME _c_launcher_name )
+      if( _c_launcher_name MATCHES "ccache" )
+        # set( _ccache_path "${CMAKE_C_COMPILER_LAUNCHER}" )
+        # unset( CMAKE_C_COMPILER_LAUNCHER CACHE )
+        set( _using_ccache TRUE )
+      endif()
+    endif()
+
+    if( CMAKE_CXX_COMPILER_LAUNCHER )
+      cmake_path( GET CMAKE_CXX_COMPILER_LAUNCHER FILENAME _cxx_launcher_name )
+      if( _cxx_launcher_name MATCHES "ccache" )
+        # set( _ccache_path "${CMAKE_CXX_COMPILER_LAUNCHER}" )
+        # unset( CMAKE_CXX_COMPILER_LAUNCHER CACHE )
+        set( _using_ccache TRUE )
+      endif()
+    endif()
+
+    if( _using_ccache AND NOT GCMAKE_FORCE_USE_EMSCRIPTEN_CCACHE )
+      # set( ENV{_EMCC_CCACHE} "${_ccache_path}" )
+      message( FATAL_ERROR "CCache cannot be used when compiling a GCMake project with Emscripten. Theoretically it should work, however I haven't found a way to make it work when using the Emscripten CMake toolchain file. If you find a working Emscripten + GCMake + CCache setup, please file an issue at https://github.com/scupit/gcmake-rust. To force using CCache with Emscripten, set GCMAKE_FORCE_USE_EMSCRIPTEN_CCACHE cache variable to ON." )
+    endif()
+  endif()
+
+  set( ALREADY_CONFIGURED_EMSCRIPTEN_GCMAKE_UTIL TRUE )
+endif()
+
 function( apply_emscripten_specifics
   preload_flags_receiver
   actual_target
