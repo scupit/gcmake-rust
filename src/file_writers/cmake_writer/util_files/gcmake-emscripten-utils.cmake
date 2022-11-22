@@ -108,6 +108,10 @@ function( use_custom_emscripten_shell_file
   exe_target
   html_shell_file_path
 )
+  set_property( TARGET ${exe_target}
+    APPEND PROPERTY LINK_DEPENDS "${html_shell_file_path}"
+  )
+
   target_link_options( ${exe_target}
     PRIVATE
       "SHELL:--shell-file '${html_shell_file_path}'"
