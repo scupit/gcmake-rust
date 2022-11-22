@@ -55,6 +55,6 @@ level as *cmake_data.yaml*):
 | ---- | ----------- |
 | `pre_build.py` | `Python` pre-build script. This is recommended if your project is going to be cross-compiled. |
 | `pre_build.c` | `C` pre-build script. CMake will build and run an executable using the source file as an entry point. Can be configured with the [prebuild_config](cmake_data_config/properties/properties_list.md#prebuild_config) property. |
-| `pre_build.cpp` or `pre_build.cxx` | `C++` pre-build script. CMake will build and run an executable using the source file as an entry point. Can be configured with the [prebuild_config](cmake_data_config/properties/properties_list.md#prebuild_config) property. |
+| `pre_build.cpp` or `pre_build.cpp2` | `C++` or `CppFront's "C++2"` pre-build script. CMake will build and run an executable using the source file as an entry point. Can be configured with the [prebuild_config](cmake_data_config/properties/properties_list.md#prebuild_config) property. |
 
 After adding the file, re-run `gcmake-rust` to regenerate the CMake configuration and you're good to go!

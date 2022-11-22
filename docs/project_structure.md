@@ -19,7 +19,7 @@
 | File | Description |
 | ---- | ----------- |
 | `cmake_data.yaml` | This is the [GCMake configuration file](cmake_data_config/cmake_data.md). |
-| `pre_build.py` \| `pre_build.c` \| `pre_build.cpp` | **Optional** [pre-build script](pre_build_scripts.md) |
+| `pre_build.py` \| `pre_build.c` \| `pre_build.cpp` \| `pre_build.cpp2` | **Optional** [pre-build script](pre_build_scripts.md) |
 | `LICENSE` \| `LICENSE.md` \| `LICENSE.txt` | The file specifying the project's license. This will also be embedded in some graphical installers. |
 | `CMakeLists.txt` | **AUTO-CONFIGURED:** The file which facilitates CMake builds. This paired with the `cmake/` directory is what makes the magic happen. This should be committed in your source control. |
 | `Config.cmake.in` | **AUTO-CONFIGURED:** The configuration template for a CMake installation. This file allows CMake to discover an installation of your project, and as a result allows other CMake projects to use your project installation as a CMake dependency with just a single *find_package* call. This should be committed in your source control. |
