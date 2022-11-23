@@ -12,7 +12,7 @@ macro( gcmake_mark_for_enable
   associated_project_name
   feature_name
 )
-  list( APPEND ${associated_project_name}_MARKED_FOR_ENABLE ${feature_name} )
+  list( APPEND ${associated_project_name}_FEATURES ${feature_name} )
 endmacro()
 
 # gcmake_register_feature( NAME my-feature ENABLES some another noice )
@@ -51,7 +51,7 @@ macro( gcmake_enable_feature_if_marked
     message( FATAL_ERROR "Tried to enable feature \"${feature_name}\" in project \"${LOCAL_TOPLEVEL_PROJECT_NAME}\", but the project doesn't have a feature named\"${feature_name}\"")
   endif()
 
-  if( "${feature_name}" IN_LIST ${LOCAL_TOPLEVEL_PROJECT_NAME}_MARKED_FOR_ENABLE )
+  if( "${feature_name}" IN_LIST ${LOCAL_TOPLEVEL_PROJECT_NAME}_FEATURES )
     gcmake_enable_feature( ${feature_name} )
   endif()
 endmacro()

@@ -35,93 +35,109 @@ function( shared_lib_add_relative_install_rpath
   endif()
 endfunction()
 
-function( clean_list
-  content
-  output_var
-)
-  string( REGEX REPLACE "(^ *;)|(; *$)" "" cleaned_list_out "${content}" )
-  # string( REGEX REPLACE ";" " " cleaned_list_out "${cleaned_list_out}" )
-  set( ${output_var} "${cleaned_list_out}" PARENT_SCOPE )
-endfunction()
-
 # TODO: Refactor these two into one delegator function
-function( get_without_toplevel_dir_prefix
-  all_files
-  receiving_var
+function( gcmake_get_without_given_prefix
+  all_files_var
+  prefix_str
+  out_var
 )
-  string( REPLACE "${TOPLEVEL_PROJECT_DIR}/" "" with_removed_prefix "${all_files}" )
-  string( REPLACE "./" "" with_removed_prefix "${with_removed_prefix}" )
-  clean_list( "${with_removed_prefix}" with_removed_prefix )
-  set( ${receiving_var} "${with_removed_prefix}" PARENT_SCOPE )
+  list( TRANSFORM ${all_files_var}
+    REPLACE "${prefix_str}/?" ""
+    OUTPUT_VARIABLE with_removed_prefix
+  )
+
+  list( TRANSFORM with_removed_prefix
+    REPLACE "^\\./" ""
+    OUTPUT_VARIABLE with_removed_prefix
+  )
+
+  set( ${out_var} ${with_removed_prefix} PARENT_SCOPE )
 endfunction()
 
-function( get_without_source_dir_prefix
-  all_files
-  receiving_var
+function( gcmake_get_without_toplevel_dir_prefix
+  all_files_var
+  out_var
 )
-  string( REPLACE "${CMAKE_CURRENT_SOURCE_DIR}/" "" with_removed_prefix "${all_files}" )
-  string( REPLACE "./" "" with_removed_prefix "${with_removed_prefix}" )
-  clean_list( "${with_removed_prefix}" with_removed_prefix )
-  set( ${receiving_var} "${with_removed_prefix}" PARENT_SCOPE )
+  gcmake_get_without_given_prefix( ${all_files_var} "${TOPLEVEL_PROJECT_DIR}" with_removed_prefix )
+  set( ${out_var} ${with_removed_prefix} PARENT_SCOPE )
 endfunction()
 
-function( make_generators
-  for_build
-  for_install
-  var_name
+function( gcmake_get_without_current_source_dir_prefix
+  all_files_var
+  out_var
 )
-  foreach( file_for_build IN LISTS for_build )
-    set( ${var_name}_b "${${var_name}_b}" "$<BUILD_INTERFACE:${file_for_build}>" )
+  gcmake_get_without_given_prefix( ${all_files_var} "${CMAKE_CURRENT_SOURCE_DIR}" with_removed_prefix )
+  set( ${out_var} ${with_removed_prefix} PARENT_SCOPE )
+endfunction()
+
+function( _gcmake_wrap_files_in_generators_helper
+  build_files_list_var
+  prefix_removal_mode
+  out_var_build
+  out_var_install
+)
+  set( ${out_var_build} )
+  set( ${out_var_install} )
+
+  foreach( file_for_build IN LISTS ${build_files_list_var} )
+    list( APPEND ${out_var_build} "$<BUILD_INTERFACE:${file_for_build}>")
   endforeach()
 
-  foreach( file_for_install IN LISTS for_install )
-    set( ${var_name}_i "${${var_name}_i}" "$<INSTALL_INTERFACE:${file_for_install}>" )
+  if( prefix_removal_mode STREQUAL "SOURCE" )
+    gcmake_get_without_current_source_dir_prefix( ${build_files_list_var} files_for_install )
+  elseif( prefix_removal_mode STREQUAL "TOPLEVEL" )
+    gcmake_get_without_toplevel_dir_prefix( ${build_files_list_var} files_for_install )
+  else()
+    message( FATAL_ERROR "Invalid prefix_removal_mode \"${prefix_removal_mode}\"given to _gcmake_wrap_files_in_generators_helper. Must be either \"SOURCE\" or \"TOPLEVEL\" ")
+  endif()
+
+  foreach( file_for_install IN LISTS files_for_install )
+    list( APPEND ${out_var_install} "$<INSTALL_INTERFACE:${file_for_install}>")
   endforeach()
 
-  set( ${var_name}_b "${${var_name}_b}" PARENT_SCOPE )
-  set( ${var_name}_i "${${var_name}_i}" PARENT_SCOPE )
+  set( ${out_var_build} ${${out_var_build}} PARENT_SCOPE )
+  set( ${out_var_install} ${${out_var_install}} PARENT_SCOPE )
 endfunction()
 
-function( apply_exe_files
+macro( gcmake_wrap_files_in_generators
+  build_files_list_var
+  out_var_build
+  out_var_install
+)
+  _gcmake_wrap_files_in_generators_helper( ${build_files_list_var} "SOURCE" ${out_var_build} ${out_var_install} )
+endmacro()
+
+macro( gcmake_wrap_dep_files_in_generators
+  build_files_list_var
+  out_var_build
+  out_var_install
+)
+  _gcmake_wrap_files_in_generators_helper( ${build_files_list_var} "TOPLEVEL" ${out_var_build} ${out_var_install} )
+endmacro()
+
+function( gcmake_apply_exe_files
   exe_target
   receiver_target
   entry_file
-  sources
-  headers
+  source_list_var
+  header_list_var
 )
   set( receiver_interface_lib ${receiver_target} )
 
-  clean_list( "${entry_file}" entry_source )
-  get_without_source_dir_prefix( "${entry_source}" entry_source_install_interface )
-  make_generators( "${entry_source}" "${entry_source_install_interface}" entry_source_gens )
-  target_sources( ${exe_target} PRIVATE
-    ${entry_source_gens_b}
-    ${entry_source_gens_i}
-  )
+  gcmake_wrap_files_in_generators( entry_file entry_file_build entry_file_install )
+  target_sources( ${exe_target} PRIVATE "${entry_file_build}" )
 
-  # set( non_entry_sources ${entry_file};${sources} )
-  set( non_entry_sources ${sources} )
-  clean_list( "${non_entry_sources}" non_entry_sources )
-  get_without_source_dir_prefix( "${non_entry_sources}" all_sources_install_interface )
+  gcmake_wrap_files_in_generators( ${source_list_var} sources_build sources_install )
+  target_sources( ${receiver_interface_lib} INTERFACE ${sources_build} )
 
-  make_generators( "${non_entry_sources}" "${all_sources_install_interface}" source_gens )
-  target_sources( ${receiver_interface_lib} INTERFACE
-    ${source_gens_b}
-    ${source_gens_i}
-  )
+  list( LENGTH ${header_list_var} num_headers )
 
-  set( all_headers "${headers}" )
-  clean_list( "${all_headers}" all_headers )
-
-  if( NOT "${all_headers}" STREQUAL "" )
-    get_without_source_dir_prefix( "${all_headers}" all_headers_install_interface )
-
-    make_generators( "${all_headers}" "${all_headers_install_interface}" header_gens )
+  if( num_headers GREATER 0 )
+    gcmake_wrap_files_in_generators( ${header_list_var} headers_build headers_install )
     target_sources( ${receiver_interface_lib} INTERFACE
       FILE_SET HEADERS
         FILES
-          ${header_gens_b}
-          ${header_gens_i}
+          ${headers_build}
     )
   endif()
 endfunction()
@@ -132,28 +148,26 @@ function( get_entry_file_alias_dir
   set( ${out_var} "${CMAKE_BINARY_DIR}/aliased_entry_files/include" PARENT_SCOPE )
 endfunction()
 
-function( apply_lib_files
+function( gcmake_apply_lib_files
   lib_target
   lib_type_spec
   entry_file
-  sources
-  headers
+  source_list_var
+  header_list_var
 )
-  if( NOT "${lib_type_spec}" STREQUAL "COMPILED_LIB" AND NOT "${lib_type_spec}" STREQUAL "HEADER_ONLY_LIB" )
-    message( FATAL_ERROR "Invalid lib type spec '${lib_type_spec}' given to apply_lib_files(...)" )
+  set( _valid_lib_type_specs "COMPILED_LIB" "HEADER_ONLY_LIB" )
+  if( NOT lib_type_spec IN_LIST _valid_lib_type_specs )
+    message( FATAL_ERROR "Invalid lib type spec '${lib_type_spec}' given to gcmake_apply_lib_files(...)" )
   endif()
 
-  if( "${lib_type_spec}" STREQUAL "COMPILED_LIB" )
-    clean_list( "${sources}" non_entry_sources)
-
-    if( NOT "${non_entry_sources}" STREQUAL "" )
-      get_without_source_dir_prefix( "${non_entry_sources}" all_sources_install_interface )
-
-      make_generators( "${non_entry_sources}" "${all_sources_install_interface}" source_gens )
+  if( lib_type_spec STREQUAL "COMPILED_LIB" )
+    list( LENGTH ${source_list_var} num_non_entry_sources )
+    if( num_non_entry_sources GREATER 0 )
+      gcmake_wrap_files_in_generators( ${source_list_var} source_list_build source_list_install )
       target_sources( ${lib_target}
         PRIVATE
-          ${source_gens_b}
-          ${source_gens_i}
+          ${source_list_build}
+          ${source_list_install}
       )
     endif()
   endif()
@@ -163,14 +177,20 @@ function( apply_lib_files
   # Want to make sure entry files can be included with "TOPLEVEL_INCLUDE_PREFIX/entry_file_name.extension"
   # Both when building and after installation in order to eliminate possible include issues.
   get_entry_file_alias_dir( entry_file_alias_dir )
-  set( aliased_entry_file_path "${entry_file_alias_dir}/${TOPLEVEL_INCLUDE_PREFIX}/${entry_file_name}" )
-  file( MAKE_DIRECTORY "${entry_file_alias_dir}/${TOPLEVEL_INCLUDE_PREFIX}" )
-  file( CREATE_LINK "${entry_file}" "${aliased_entry_file_path}" COPY_ON_ERROR )
+  set( full_entry_file_alias_dir "${entry_file_alias_dir}/${TOPLEVEL_INCLUDE_PREFIX}")
+  set( aliased_entry_file_path "${full_entry_file_alias_dir}/${entry_file_name}" )
 
-  set( all_headers "${entry_file};${headers}" )
-  clean_list( "${all_headers}" all_headers )
+  # I can't make this a PRE_BUILD command for the target because the target might be a
+  # header-only library, and INTERFACE libraries can't have any associated build event
+  # commands. It's annoying, but makes sense since they aren't actually ever built.
+  add_custom_target( _${lib_target}_alias_file ALL
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${full_entry_file_alias_dir}"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different "${entry_file}" "${full_entry_file_alias_dir}"
+    DEPENDS "${entry_file}"
+    VERBATIM
+  )
 
-  get_without_source_dir_prefix( "${all_headers}" all_headers_install_interface )
+  add_dependencies( ${lib_target} _${lib_target}_alias_file )
 
   if( "${lib_type_spec}" STREQUAL "HEADER_ONLY_LIB" )
     set( header_inheritance_mode INTERFACE )
@@ -178,16 +198,25 @@ function( apply_lib_files
     set( header_inheritance_mode PUBLIC )
   endif()
 
-  make_generators( "${all_headers}" "${all_headers_install_interface}" header_gens )
+  # We don't actually add the aliased entry file to the build because it would mess up our installation
+  # structure. The aliased file is only there to allow a uniform inclusion path for library entry
+  # files when both building and after installing a library.
+  set( all_headers "${entry_file}" ${${header_list_var}} )
+  gcmake_wrap_files_in_generators( all_headers all_headers_build all_headers_install )
+
   target_sources( ${lib_target} ${header_inheritance_mode}
     FILE_SET HEADERS
       FILES
-        ${header_gens_b}
-        ${header_gens_i}
+        ${all_headers_install}
+        # The "build interface" headers don't need to be specified at all for the build
+        # to work because they will be found inside the library's "include directories".
+        # However, the headers won't be installed as part of the file set if they aren't specified
+        # here as part of the build interface. I'm not sure why that is.
+        ${all_headers_build}
   )
 endfunction()
 
-function( apply_include_dirs
+function( gcmake_apply_include_dirs
   target
   target_type
   project_include_dir
@@ -198,7 +227,7 @@ function( apply_include_dirs
   elseif( "${target_type}" STREQUAL "EXE_RECEIVER" OR "${target_type}")
     set( BUILD_INTERFACE_INCLUDE_DIRS "${project_include_dir}")
   else()
-    message( FATAL_ERROR "Invalid target_type '${target_type}' given to function 'apply_include_dirs'" )
+    message( FATAL_ERROR "Invalid target_type '${target_type}' given to function 'gcmake_apply_include_dirs'" )
   endif()
 
   if( "${target_type}" STREQUAL "HEADER_ONLY_LIB" )

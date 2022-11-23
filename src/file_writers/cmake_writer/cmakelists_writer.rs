@@ -403,7 +403,7 @@ impl<'a> CMakeListsWriter<'a> {
         }
         else if !subproject_data.is_test_project() {
           writeln!( &self.cmakelists_file,
-            "configure_subproject(\n\t\"${{CMAKE_CURRENT_SOURCE_DIR}}/{}\"\n)",
+            "gcmake_configure_subproject(\n\t\"${{CMAKE_CURRENT_SOURCE_DIR}}/{}\"\n)",
             relative_to_project_root(root_project_root_path, PathBuf::from(subproject_data.get_project_root_dir()))
           )?;
         }
@@ -2908,7 +2908,7 @@ impl<'a> CMakeListsWriter<'a> {
     self.write_newline()?;
 
     writeln!(&self.cmakelists_file,
-      "apply_lib_files( {} {} {} \"${{{}}}\" \"${{{}}}\" )",
+      "gcmake_apply_lib_files( {} {} {} {} {} )",
       target_name,
       lib_spec_string,
       self.cmake_absolute_entry_file_path(output_data.get_entry_file()),
@@ -2917,7 +2917,7 @@ impl<'a> CMakeListsWriter<'a> {
     )?;
 
     writeln!(&self.cmakelists_file,
-      "apply_include_dirs( {} {} \"${{{}}}\" )",
+      "gcmake_apply_include_dirs( {} {} \"${{{}}}\" )",
       target_name,
       lib_spec_string,
       &project_include_dir_varname
@@ -3035,13 +3035,13 @@ impl<'a> CMakeListsWriter<'a> {
       writeln!(&self.cmakelists_file, "endif()")?;
 
       writeln!(&self.cmakelists_file,
-        "apply_include_dirs( {} EXE_RECEIVER \"${{{}}}\" )",
+        "gcmake_apply_include_dirs( {} EXE_RECEIVER \"${{{}}}\" )",
         receiver_lib_name,
         &project_include_dir_varname
       )?;
 
       writeln!(&self.cmakelists_file,
-        "apply_exe_files( {} {} \n\t{}\n\t\"${{{}}}\"\n\t\"${{{}}}\"\n)",
+        "gcmake_apply_exe_files( {} {} \n\t{}\n\t{}\n\t{}\n)",
         target_name,
         receiver_lib_name,
         self.cmake_absolute_entry_file_path(output_data.get_entry_file()),
@@ -3121,17 +3121,6 @@ impl<'a> CMakeListsWriter<'a> {
   // See this page for help and a good example:
   // https://cmake.org/cmake/help/latest/guide/tutorial/Adding%20Export%20Configuration.html
   fn write_installation_and_exports(&self) -> io::Result<()> {
-    writeln!(&self.cmakelists_file, "clean_deb_list()")?;
-    writeln!(&self.cmakelists_file, "clean_minimal_installs()")?;
-    writeln!(&self.cmakelists_file, "clean_target_list()")?;
-    writeln!(&self.cmakelists_file, "clean_needed_bin_files_list()")?;
-    writeln!(&self.cmakelists_file, "clean_install_list()")?;
-    writeln!(&self.cmakelists_file, "clean_generated_export_headers_list()")?;
-    
-    if self.project_data.is_root_project() {
-      writeln!(&self.cmakelists_file, "clean_custom_find_modules_list()")?;
-    }
-
     let write_raise_functions: &dyn Fn(&str) -> io::Result<()> = &|spacer: &str| {
       writeln!(&self.cmakelists_file, "{}raise_deb_list()", spacer)?;
       writeln!(&self.cmakelists_file, "{}raise_minimal_installs()", spacer)?;

@@ -290,11 +290,6 @@ macro( initialize_generated_export_headers_list )
   set( MY_GENERATED_EXPORT_HEADERS_INSTALL_INTERFACE )
 endmacro()
 
-macro( clean_generated_export_headers_list )
-  clean_list( "${MY_GENERATED_EXPORT_HEADERS_BUILD_INTERFACE}" MY_GENERATED_EXPORT_HEADERS_BUILD_INTERFACE )
-  clean_list( "${MY_GENERATED_EXPORT_HEADERS_INSTALL_INTERFACE}" MY_GENERATED_EXPORT_HEADERS_INSTALL_INTERFACE )
-endmacro()
-
 macro( add_to_generated_export_headers_list_parent_scope
   build_interface_file
   install_interface_file
@@ -318,11 +313,6 @@ endmacro()
 macro( initialize_install_list )
   set( MY_ADDITIONAL_INSTALL_TARGETS "" )
   set( MY_ADDITIONAL_RELATIVE_DEP_PATHS "" )
-endmacro()
-
-macro( clean_install_list )
-  clean_list( "${MY_ADDITIONAL_INSTALL_TARGETS}" MY_ADDITIONAL_INSTALL_TARGETS )
-  clean_list( "${MY_ADDITIONAL_RELATIVE_DEP_PATHS}" MY_ADDITIONAL_RELATIVE_DEP_PATHS )
 endmacro()
 
 macro( add_to_install_list
@@ -351,10 +341,6 @@ macro( initialize_target_list )
   set( MY_INSTALLABLE_TARGETS "" )
 endmacro()
 
-macro( clean_target_list )
-  clean_list( "${MY_INSTALLABLE_TARGETS}" MY_INSTALLABLE_TARGETS )
-endmacro()
-
 macro( add_to_target_installation_list
   target_name
 )
@@ -371,10 +357,6 @@ endmacro()
 # ================================================================================
 macro( initialize_deb_list )
   set( MY_NEEDED_DEB_PACKAGES "" )
-endmacro()
-
-macro( clean_deb_list )
-  clean_list( "${MY_NEEDED_DEB_PACKAGES}" MY_NEEDED_DEB_PACKAGES )
 endmacro()
 
 macro( add_to_deb_list
@@ -394,10 +376,6 @@ endmacro()
 # ================================================================================
 macro( initialize_minimal_installs )
   set( MY_MINIMAL_INSTALLS "" )
-endmacro()
-
-macro( clean_minimal_installs )
-  clean_list( "${MY_MINIMAL_INSTALLS}" MY_MINIMAL_INSTALLS )
 endmacro()
 
 macro( add_to_minimal_installs
@@ -424,10 +402,6 @@ endmacro()
 # ================================================================================
 macro( initialize_needed_bin_files_list )
   set( MY_NEEDED_BIN_FILES "" )
-endmacro()
-
-macro( clean_needed_bin_files_list )
-  clean_list( "${MY_NEEDED_BIN_FILES}" MY_NEEDED_BIN_FILES )
 endmacro()
 
 macro( add_to_needed_bin_files_list
@@ -499,10 +473,6 @@ macro( initialize_custom_find_modules_list )
   set( MY_CUSTOM_FIND_MODULES "" )
 endmacro()
 
-macro( clean_custom_find_modules_list )
-  clean_list( "${MY_CUSTOM_FIND_MODULES}" MY_CUSTOM_FIND_MODULES )
-endmacro()
-
 macro( add_to_custom_find_modules_list
   dep_name
 )
@@ -514,98 +484,27 @@ macro( raise_custom_find_modules_list )
   set( LATEST_SUBPROJECT_CUSTOM_FIND_MODULES_LIST "${MY_CUSTOM_FIND_MODULES}" PARENT_SCOPE )
 endmacro()
 
-function( configure_subproject
+macro( _propagate_subproject_var
+  var_from_subproject
+  matching_current_scope_var
+)
+  set( combined_list ${${matching_current_scope_var}})
+  list( APPEND combined_list ${${var_from_subproject}} )
+  set( ${matching_current_scope_var} ${combined_list} PARENT_SCOPE )
+endmacro()
+
+function( gcmake_configure_subproject
   subproject_path
 )
   add_subdirectory( "${subproject_path}" )
 
-  if( NOT "${LATEST_SUBPROJECT_TARGET_LIST}" STREQUAL "" )
-    if( "${MY_INSTALLABLE_TARGETS}" STREQUAL "" )
-      set( combined_list "${LATEST_SUBPROJECT_TARGET_LIST}" )
-    else()
-      set( combined_list "${MY_INSTALLABLE_TARGETS}" "${LATEST_SUBPROJECT_TARGET_LIST}" )
-    endif()
-
-    set( MY_INSTALLABLE_TARGETS "${combined_list}" PARENT_SCOPE )
-  endif()
-
-  if( NOT "${LATEST_SUBPROJECT_NEEDED_BIN_FILES_LIST}" STREQUAL "" )
-    if( "${MY_NEEDED_BIN_FILES}" STREQUAL "" )
-      set( combined_list "${LATEST_SUBPROJECT_NEEDED_BIN_FILES_LIST}" )
-    else()
-      set( combined_list "${MY_NEEDED_BIN_FILES}" "${LATEST_SUBPROJECT_NEEDED_BIN_FILES_LIST}" )
-    endif()
-
-    set( MY_NEEDED_BIN_FILES "${combined_list}" PARENT_SCOPE )
-  endif()
-
-  if( NOT "${LATEST_SUBPROJECT_CUSTOM_FIND_MODULES_LIST}" STREQUAL "" )
-    if( "${MY_CUSTOM_FIND_MODULES}" STREQUAL "" )
-      set( combined_list "${LATEST_SUBPROJECT_CUSTOM_FIND_MODULES_LIST}" )
-    else()
-      set( combined_list "${MY_CUSTOM_FIND_MODULES}" "${LATEST_SUBPROJECT_CUSTOM_FIND_MODULES_LIST}" )
-    endif()
-
-    set( MY_CUSTOM_FIND_MODULES "${combined_list}" PARENT_SCOPE )
-  endif()
-
-  if( NOT "${LATEST_INSTALL_LIST}" STREQUAL "" )
-    if( "${MY_ADDITIONAL_INSTALL_TARGETS}" STREQUAL "" )
-      set( combined_list "${LATEST_INSTALL_LIST}" )
-    else()
-      set( combined_list "${MY_ADDITIONAL_INSTALL_TARGETS}" "${LATEST_INSTALL_LIST}" )
-    endif()
-
-    set( MY_ADDITIONAL_INSTALL_TARGETS "${combined_list}" PARENT_SCOPE )
-  endif()
-
-  if( NOT "${LATEST_RELATIVE_DEP_PATHS}" STREQUAL "" )
-    if( "${MY_ADDITIONAL_RELATIVE_DEP_PATHS}" STREQUAL "" )
-      set( combined_list "${LATEST_RELATIVE_DEP_PATHS}" )
-    else()
-      set( combined_list "${MY_ADDITIONAL_RELATIVE_DEP_PATHS}" "${LATEST_RELATIVE_DEP_PATHS}" )
-    endif()
-
-    set( MY_ADDITIONAL_RELATIVE_DEP_PATHS "${combined_list}" PARENT_SCOPE )
-  endif()
-
-  if( NOT "${LATEST_GENERATED_EXPORT_HEADERS_BUILD_INTERFACE_LIST}" STREQUAL "" )
-    if( "${MY_GENERATED_EXPORT_HEADERS_BUILD_INTERFACE}" STREQUAL "" )
-      set( combined_list "${LATEST_GENERATED_EXPORT_HEADERS_BUILD_INTERFACE_LIST}" )
-    else()
-      set( combined_list "${MY_GENERATED_EXPORT_HEADERS_BUILD_INTERFACE}" "${LATEST_GENERATED_EXPORT_HEADERS_BUILD_INTERFACE_LIST}" )
-    endif()
-
-    set( MY_GENERATED_EXPORT_HEADERS_BUILD_INTERFACE "${combined_list}" PARENT_SCOPE )
-  endif()
-
-  if( NOT "${LATEST_GENERATED_EXPORT_HEADERS_INSTALL_INTERFACE_LIST}" STREQUAL "" )
-    if( "${MY_GENERATED_EXPORT_HEADERS_INSTALL_INTERFACE}" STREQUAL "" )
-      set( combined_list "${LATEST_GENERATED_EXPORT_HEADERS_INSTALL_INTERFACE_LIST}" )
-    else()
-      set( combined_list "${MY_GENERATED_EXPORT_HEADERS_INSTALL_INTERFACE}" "${LATEST_GENERATED_EXPORT_HEADERS_INSTALL_INTERFACE_LIST}" )
-    endif()
-
-    set( MY_GENERATED_EXPORT_HEADERS_INSTALL_INTERFACE "${combined_list}" PARENT_SCOPE )
-  endif()
-
-  if( NOT "${LATEST_MINIMAL_INSTALLS_LIST}" STREQUAL "" )
-    if( "${MY_MINIMAL_INSTALLS}" STREQUAL "" )
-      set( combined_list "${LATEST_MINIMAL_INSTALLS_LIST}" )
-    else()
-      set( combined_list "${MY_MINIMAL_INSTALLS}" "${LATEST_MINIMAL_INSTALLS_LIST}" )
-    endif()
-
-    set( MY_MINIMAL_INSTALLS "${combined_list}" PARENT_SCOPE )
-  endif()
-
-  if( NOT "${LATEST_NEEDED_DEB_PACKAGE_LIST}" STREQUAL "" )
-    if( "${MY_NEEDED_DEB_PACKAGES}" STREQUAL "" )
-      set( combined_list "${LATEST_NEEDED_DEB_PACKAGE_LIST}" )
-    else()
-      set( combined_list "${MY_NEEDED_DEB_PACKAGES}" "${LATEST_NEEDED_DEB_PACKAGE_LIST}" )
-    endif()
-
-    set( MY_NEEDED_DEB_PACKAGES "${combined_list}" PARENT_SCOPE )
-  endif()
+  _propagate_subproject_var( LATEST_SUBPROJECT_TARGET_LIST MY_INSTALLABLE_TARGETS )
+  _propagate_subproject_var( LATEST_SUBPROJECT_NEEDED_BIN_FILES_LIST MY_NEEDED_BIN_FILES )
+  _propagate_subproject_var( LATEST_SUBPROJECT_CUSTOM_FIND_MODULES_LIST MY_CUSTOM_FIND_MODULES )
+  _propagate_subproject_var( LATEST_INSTALL_LIST MY_ADDITIONAL_INSTALL_TARGETS )
+  _propagate_subproject_var( LATEST_RELATIVE_DEP_PATHS MY_ADDITIONAL_RELATIVE_DEP_PATHS )
+  _propagate_subproject_var( LATEST_GENERATED_EXPORT_HEADERS_BUILD_INTERFACE_LIST MY_GENERATED_EXPORT_HEADERS_BUILD_INTERFACE )
+  _propagate_subproject_var( LATEST_GENERATED_EXPORT_HEADERS_INSTALL_INTERFACE_LIST MY_GENERATED_EXPORT_HEADERS_INSTALL_INTERFACE )
+  _propagate_subproject_var( LATEST_MINIMAL_INSTALLS_LIST MY_MINIMAL_INSTALLS )
+  _propagate_subproject_var( LATEST_NEEDED_DEB_PACKAGE_LIST MY_NEEDED_DEB_PACKAGES )
 endfunction()
