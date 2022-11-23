@@ -1,4 +1,4 @@
-use std::{collections::{HashMap, HashSet, BTreeMap, BTreeSet}, fs::File, io::{self, Write, ErrorKind}, path::{PathBuf, Path}, rc::Rc, cell::{RefCell, Ref}};
+use std::{collections::{HashMap, HashSet, BTreeMap }, fs::File, io::{self, Write, ErrorKind}, path::{PathBuf, Path}, rc::Rc, cell::{RefCell, Ref}};
 
 use crate::{project_info::{final_project_data::{FinalProjectData}, path_manipulation::{cleaned_path_str, relative_to_project_root}, final_dependencies::{GitRevisionSpecifier, PredefinedCMakeComponentsModuleDep, PredefinedSubdirDep, PredefinedCMakeModuleDep, FinalPredepInfo, GCMakeDependencyStatus, FinalPredefinedDependencyConfig, base64_encoded, PredefinedDepFunctionality, FinalDownloadMethod, FinalDebianPackagesConfig}, raw_data_in::{BuildType, BuildConfigCompilerSpecifier, SpecificCompilerSpecifier, OutputItemType, LanguageConfigMap, TargetSpecificBuildType, dependencies::internal_dep_config::{CMakeModuleType}, DefaultCompiledLibType}, FinalProjectType, CompiledOutputItem, PreBuildScript, LinkMode, FinalTestFramework, dependency_graph_mod::dependency_graph::{DependencyGraph, OrderedTargetInfo, ProjectWrapper, TargetNode, SimpleNodeOutputType, Link, EmscriptenLinkFlagInfo, ContainedItem}, SystemSpecifierWrapper, CompilerDefine, FinalBuildConfig, CompilerFlag, LinkerFlag, gcmake_constants::{SRC_DIR, INCLUDE_DIR}, platform_spec_parser::parse_leading_system_spec, CodeFileInfo, RetrievedCodeFileType}, file_writers::cmake_writer::cmake_writer_helpers::system_constraint_generator_expression};
 
@@ -2731,7 +2731,7 @@ impl<'a> CMakeListsWriter<'a> {
   fn write_properties_for_output(
     &self,
     output_name: &str,
-    property_map: &HashMap<String, String>
+    property_map: &BTreeMap<String, String>
   ) -> io::Result<()> {
     writeln!(&self.cmakelists_file,
       "set_target_properties( {} PROPERTIES",
@@ -2926,7 +2926,7 @@ impl<'a> CMakeListsWriter<'a> {
 
     self.write_properties_for_output(
       &target_name,
-      &HashMap::from([
+      &BTreeMap::from([
         (String::from("RUNTIME_OUTPUT_DIRECTORY"), String::from(RUNTIME_BUILD_DIR_VAR)),
         (String::from("LIBRARY_OUTPUT_DIRECTORY"), String::from(LIB_BUILD_DIR_VAR)),
         (String::from("ARCHIVE_OUTPUT_DIRECTORY"), String::from(LIB_BUILD_DIR_VAR)),
@@ -3054,7 +3054,7 @@ impl<'a> CMakeListsWriter<'a> {
     // TODO: Might need to write these for the receiver lib too. Not sure though.
     self.write_properties_for_output(
       target_name,
-      &HashMap::from([
+      &BTreeMap::from([
         (String::from("RUNTIME_OUTPUT_DIRECTORY"), String::from(RUNTIME_BUILD_DIR_VAR)),
         (String::from("C_EXTENSIONS"), String::from("OFF")),
         (String::from("CXX_EXTENSIONS"), String::from("OFF"))
