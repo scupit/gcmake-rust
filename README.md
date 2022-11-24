@@ -60,5 +60,5 @@ the *CMakeLists.txt* and *Config.cmake.in* files and re-run all validation check
 - [gcmake-test-project](https://github.com/scupit/gcmake-test-project): The 'test case' project for
     gcmake-rust which also acts as its working example.
 - [gcmake-dependency-configs](https://github.com/scupit/gcmake-dependency-configs): The
-    [dependency compatibility layer](predefined_dependency_doc.md) repository which allows non-gcmake
+    [dependency compatibility layer](docs/predefined_dependency_doc.md) repository which allows non-gcmake
     projects to be imported and consumed 'out of the box' by gcmake-rust.

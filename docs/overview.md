@@ -3,6 +3,10 @@
 This "project overview" page is essentially the same as the [README](/README.md).
 It's here to explain the basic functionality of this project and describe its common uses.
 
+## Documentation
+
+Documentation is found in [Docs_Home.md](./Docs_Home.md).
+
 ## Build Requirements
 
 - A [Rust toolchain](https://www.rust-lang.org/tools/install)
@@ -45,7 +49,7 @@ project tree (excluding subdirectories). **If no path is provided, the current w
 
 `gcmake <command> --help` for command-specific info.
 
-`gcmake dep-config update [--branch <branch>]` to download/update the dependency configuration repository.
+`gcmake dep-config update [--to-branch <branch>]` to download/update the dependency configuration repository.
 
 `gcmake new root-project <project-name>` steps you through the project initializer prompts and creates a new C/C++ project.
 
