@@ -244,9 +244,7 @@ pub fn print_tool_info(command: ToolInfoCommand) {
 
 pub fn print_predep_info(
   command: &PredepInfoCommand,
-  given_root_dir: &str,
-  dep_config: &AllRawPredefinedDependencies,
-  just_created_project_at: Option<String>
+  dep_config: &AllRawPredefinedDependencies
 ) {
   if command.selectors.is_empty() {
     let mut dep_names: Vec<&String> = dep_config.keys().collect();
@@ -444,7 +442,6 @@ pub fn do_new_project_subcommand(
       let maybe_general_new_project_info = handle_create_project(
         command,
         &maybe_project_info.map(|it| it.operating_on).flatten(),
-        given_root_dir,
         should_generate_cmakelists
       );
 

@@ -19,7 +19,7 @@ use crate::project_info::{platform_spec_parser::parse_leading_system_spec, parse
 
 use self::{final_target_map_common::FinalTargetConfigMap};
 
-use super::raw_data_in::dependencies::{internal_dep_config::{AllRawPredefinedDependencies, RawPredefinedDependencyInfo, PredefinedCMakeDepHookFile, RawSubdirectoryDependency, raw_dep_common::RawEmscriptenConfig, CMakeModuleType}, user_given_dep_config::UserGivenPredefinedDependencyConfig};
+use super::raw_data_in::dependencies::{internal_dep_config::{AllRawPredefinedDependencies, RawPredefinedDependencyInfo, PredefinedCMakeDepHookFile, raw_dep_common::RawEmscriptenConfig, CMakeModuleType}, user_given_dep_config::UserGivenPredefinedDependencyConfig};
 
 pub fn base64_encoded(some_url: &str) -> String{
   return Base64Url::encode_string(some_url.as_bytes());
@@ -243,10 +243,6 @@ impl FinalPredefinedDependencyConfig {
 
   pub fn predefined_dep_info(&self) -> &FinalPredepInfo {
     &self.predep_info
-  }
-
-  pub fn mut_predef_dep_info(&mut self) -> &mut FinalPredepInfo {
-    &mut self.predep_info
   }
 
   pub fn pre_load_script(&self) -> &HookScriptContainer {

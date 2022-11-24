@@ -1,8 +1,8 @@
-use std::{collections::{HashMap, HashSet, BTreeSet}};
+use std::{collections::{HashMap, HashSet}};
 
 use colored::Colorize;
 
-use crate::project_info::{raw_data_in::dependencies::{internal_dep_config::{RawSubdirectoryDependency, raw_dep_common::{RawPredepCommon, RawEmscriptenConfig}, RawExtensionsByPlatform}, user_given_dep_config::{UserGivenPredefinedDependencyConfig}}, parsers::{general_parser::alternatives_parse, version_parser::{ThreePartVersionTuple, ThreePartVersion, parse_version}, version_transform_parser::transform_version}, path_manipulation::without_leading_dot};
+use crate::project_info::{raw_data_in::dependencies::{internal_dep_config::{RawSubdirectoryDependency, raw_dep_common::{RawPredepCommon, RawEmscriptenConfig}, RawExtensionsByPlatform}, user_given_dep_config::{UserGivenPredefinedDependencyConfig}}, parsers::{version_parser::{parse_version}, version_transform_parser::transform_version}, path_manipulation::without_leading_dot};
 
 use super::{predep_module_common::{PredefinedDepFunctionality, FinalDebianPackagesConfig}, final_target_map_common::{FinalTargetConfigMap, make_final_target_config_map}};
 
@@ -282,10 +282,6 @@ impl PredefinedSubdirDep {
   pub fn get_yaml_linkable_target_name(&self, target_name: &str) -> Option<&str> {
     self.yaml_namespaced_target_map.get(target_name)
       .map(|str_ref| &str_ref[..])
-  }
-
-  pub fn has_target_named(&self, target_name: &str) -> bool {
-    self.target_map.get(target_name).is_some()
   }
 
   pub fn download_method(&self) -> &FinalDownloadMethod {

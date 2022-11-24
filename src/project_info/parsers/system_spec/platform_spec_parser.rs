@@ -35,10 +35,10 @@ impl SystemSpecifierWrapper {
     Self::All
   }
 
-  pub fn is_subset_of(&self, other: &SystemSpecifierWrapper) -> bool {
-    unimplemented!()
-    // return self.internal_explicit_set().is_subset(&other.internal_explicit_set());
-  }
+  // pub fn is_subset_of(&self, other: &SystemSpecifierWrapper) -> bool {
+  //   unimplemented!()
+  //   // return self.internal_explicit_set().is_subset(&other.internal_explicit_set());
+  // }
 
   pub fn unwrap_specific_ref(&self) -> &SystemSpecExpressionTree {
     match self {
@@ -74,12 +74,13 @@ impl SystemSpecifierWrapper {
     }
   }
 
+  // TODO: Make this more robust. Ideally it should return true if the specific expression is
+  // a tautology or simplifies to ALL. However, I haven't implemented that kind of analysis yet.
   pub fn includes_all(&self) -> bool {
-    unimplemented!()
-  }
-
-  pub fn omits_all(&self) -> bool {
-    unimplemented!()
+    match self {
+      Self::All => true,
+      _ => false
+    }
   }
 }
 

@@ -1,4 +1,4 @@
-use std::{io::{self, stdin, Write}, convert::TryInto};
+use std::{io::{self, stdin, Write}};
 
 pub fn prompt_until_custom<F, T>(prompt: &str, transforming_predicate: F) -> io::Result<T>
   where F: Fn(&str) -> Option<T>
@@ -37,10 +37,6 @@ pub fn prompt_until_custom_or_default<F, T: Clone>(
       }
     }
   )
-}
-
-pub fn prompt_once(prompt: &str) -> io::Result<String> {
-  prompt_until_satisfies(prompt, |_| true)
 }
 
 pub fn prompt_until_not_empty(prompt: &str) -> io::Result<String> {

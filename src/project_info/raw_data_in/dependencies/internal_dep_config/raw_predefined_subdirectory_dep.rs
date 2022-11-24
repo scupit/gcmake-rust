@@ -80,10 +80,6 @@ impl RawSubdirectoryDependency {
   pub fn get_url_info(&self) -> Option<&RawSubdirDepUrlDownloadConfig> {
     self.download_info.url_method.as_ref()
   }
-
-  pub fn get_git_info(&self) -> Option<&RawSubdirDepGitRepoConfig> {
-    self.download_info.git_method.as_ref()
-  }
 }
 
 impl RawPredepCommon for RawSubdirectoryDependency {

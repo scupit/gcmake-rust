@@ -29,10 +29,6 @@ pub enum SingleSystemSpec {
 }
 
 impl SingleSystemSpec {
-  fn is_valid_spec_str(spec_str: &str) -> bool {
-    return Self::from_str(spec_str).is_some();
-  }
-
   // TODO: Refactor these somehow
   fn from_str(spec_str: &str) -> Option<Self> {
     let valid_spec: Self = match spec_str {
@@ -126,6 +122,7 @@ impl SystemSpecExpressionTree {
     }
   }
 
+  // NOTE: Not dead code. Used in the tests.
   fn exactly_matches_structure(&self, other: &SystemSpecExpressionTree) -> bool {
     match (self, other) {
       (SystemSpecExpressionTree::Value(value), SystemSpecExpressionTree::Value(other_val)) => value == other_val,
@@ -397,7 +394,7 @@ fn parse_not_without_or<'a>(
 
 fn parse_value<'a>(
   s: &'a str,
-  options: &SystemSpecParseOptions
+  _options: &SystemSpecParseOptions
 ) -> SystemSpecParseResult<'a> {
   return match parse_token(s, true)? {
     None => Ok(None),

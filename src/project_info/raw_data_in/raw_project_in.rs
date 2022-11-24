@@ -126,10 +126,6 @@ impl RawProject {
     &self.name
   }
 
-  pub fn get_description(&self) -> &str {
-    &self.description
-  }
-
   pub fn get_version(&self) -> &str {
     &self.version
   }
@@ -140,22 +136,6 @@ impl RawProject {
 
   pub fn get_output_mut(&mut self) -> &mut HashMap<String, RawCompiledItem> {
     &mut self.output
-  }
-
-  pub fn get_build_configs(&self) -> &BuildConfigMap {
-    &self.build_configs
-  }
-
-  pub fn get_default_build_config(&self) -> &BuildType {
-    &self.default_build_type
-  }
-
-  pub fn get_langauge_info(&self) -> &LanguageConfigMap {
-    &self.languages
-  }
-
-  pub fn get_global_defines(&self) -> &Option<Vec<String>> {
-    &self.global_defines
   }
 }
 
@@ -344,32 +324,7 @@ pub struct RawCompiledItem {
 }
 
 impl RawCompiledItem {
-  pub fn get_entry_file(&self) -> &str {
-    return &self.entry_file;
-  }
-
   pub fn get_output_type(&self) -> &OutputItemType {
     return &self.output_type;
-  }
-
-  pub fn is_header_only_type(&self) -> bool {
-    self.output_type == OutputItemType::HeaderOnlyLib
-  }
-
-  pub fn is_library_type(&self) -> bool {
-    match self.output_type {
-      OutputItemType::CompiledLib
-      | OutputItemType::SharedLib
-      | OutputItemType::StaticLib
-      | OutputItemType::HeaderOnlyLib => true,
-      OutputItemType::Executable => false
-    }
-  }
-
-  pub fn is_executable_type(&self) -> bool {
-    match self.output_type {
-      OutputItemType::Executable => true,
-      _ => false
-    }
   }
 }

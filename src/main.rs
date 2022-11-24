@@ -17,7 +17,7 @@ use logger::exit_error_log;
 use program_actions::*;
 use project_generator::{DefaultProjectInfo};
 
-use crate::{project_info::{raw_data_in::dependencies::{all_raw_supported_dependency_configs, internal_dep_config::AllRawPredefinedDependencies}}, project_generator::configuration::{MainFileLanguage, CreationProjectOutputType}, cli_config::clap_cli_config::{Opts, SubCommandStruct, DepConfigSubCommand, CreateFilesCommand, FileCreationLang}, common::prompt};
+use crate::{project_info::{raw_data_in::dependencies::{all_raw_supported_dependency_configs, internal_dep_config::AllRawPredefinedDependencies}}, project_generator::configuration::{MainFileLanguage, CreationProjectOutputType}, cli_config::clap_cli_config::{Opts, SubCommandStruct, DepConfigSubCommand, CreateFilesCommand, FileCreationLang}};
 
 // fn print_project_info(project_data_group: UseableFinalProjectDataGroup) {
 //   println!("PROJECT INFORMATION\n----------------------------------------");
@@ -150,9 +150,7 @@ fn main() {
 
         print_predep_info(
           &command,
-          &given_root_dir,
-          &dep_config,
-          None
+          &dep_config
         );
       },
       SubCommandStruct::ToolInfo(command) => {

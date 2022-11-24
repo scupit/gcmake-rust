@@ -1,6 +1,6 @@
 use std::collections::{HashSet, HashMap};
 
-use crate::project_info::raw_data_in::dependencies::{internal_dep_config::{RawComponentsModuleDep, ComponentsFindModuleLinks, UsageMode, CMakeModuleType, raw_dep_common::{RawPredepCommon, RawEmscriptenConfig}}, user_given_dep_config::{UserGivenPredefinedDependencyConfig}};
+use crate::project_info::raw_data_in::dependencies::{internal_dep_config::{RawComponentsModuleDep, UsageMode, CMakeModuleType, raw_dep_common::{RawPredepCommon, RawEmscriptenConfig}}, user_given_dep_config::{UserGivenPredefinedDependencyConfig}};
 
 use super::{predep_module_common::{PredefinedDepFunctionality, FinalDebianPackagesConfig}, final_target_map_common::{FinalTargetConfigMap, make_final_target_config_map}};
 
@@ -26,10 +26,6 @@ impl PredefinedCMakeComponentsModuleDep {
 
   pub fn module_type(&self) -> &CMakeModuleType {
     &self.raw_dep.module_type
-  }
-
-  pub fn web_links(&self) -> &ComponentsFindModuleLinks {
-    &self.raw_dep.links
   }
 
   pub fn found_varname(&self) -> &str {

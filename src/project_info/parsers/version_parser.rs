@@ -1,5 +1,3 @@
-pub type ThreePartVersionTuple = (u32, u32, u32);
-
 pub struct ThreePartVersion {
   pub major: u32,
   pub minor: u32,
@@ -11,10 +9,6 @@ impl ThreePartVersion {
     let Self { major, minor, patch } = self;
 
     format!("{}.{}.{}", major, minor, patch)
-  }
-
-  pub fn as_tuple(&self) -> ThreePartVersionTuple {
-    return (self.major, self.minor, self.patch);
   }
 
   /*

@@ -75,7 +75,6 @@ impl ProjectTypeCreating {
 pub fn handle_create_project(
   generation_info: CLIProjectGenerationInfo,
   maybe_current_project: &Option<Rc<FinalProjectData>>,
-  project_root_dir: &str,
   should_generate_cmakelists: &mut bool
 ) -> Option<GeneralNewProjectInfo> {
   let project_creation_info: ProjectTypeCreating = ProjectTypeCreating::from_generation_config(

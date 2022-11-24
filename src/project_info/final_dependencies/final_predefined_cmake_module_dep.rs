@@ -35,10 +35,6 @@ impl PredefinedCMakeModuleDep {
     &self.raw_dep.found_var
   }
 
-  pub fn has_target_named(&self, target_name: &str) -> bool {
-    self.cmake_namespaced_target_map.contains_key(target_name)
-  }
-
   pub fn get_yaml_linkable_target_name(&self, target_name: &str) -> Option<&str> {
     self.yaml_namespaced_target_map.get(target_name)
       .map(|the_string| &the_string[..])

@@ -334,6 +334,9 @@ pub struct TargetNode<'a> {
 
   system_specifier_info: SystemSpecifierWrapper,
 
+  // TODO: Maybe remove this. Now that we do custom installs (where possible) for each used
+  // target based on how it must be propagated after installation, this field isn't needed.
+  // However, I'm keeping it for now because I feel like that information could be useful in the future.
   requires_custom_install_if_linked_to_output_lib: bool,
   is_linked_to_output_lib: bool,
 

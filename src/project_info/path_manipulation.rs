@@ -1,4 +1,4 @@
-use std::{path::{PathBuf, Path}, fs::{self, DirEntry}, io, env};
+use std::{path::{PathBuf, Path}, io, env};
 
 pub fn cleaned_path_str(file_path: &str) -> String {
   return path_clean::clean(&file_path.replace("\\", "/"));
@@ -57,26 +57,4 @@ pub fn absolute_path<T>(a_path: T) -> Result<PathBuf, String>
       err.to_string())
     )
   }
-}
-
-pub fn find_first_dir_named(
-  root: &Path,
-  looking_for: &str
-) -> io::Result<Option<PathBuf>> {
-  for entry in fs::read_dir(root)? {
-    let entry: DirEntry = entry?;
-    let entry_path: PathBuf = entry.path();
-
-    if entry_path.is_dir() {
-      if entry.file_name() == looking_for {
-        return Ok(Some(entry_path))
-      }
-
-      if let Some(matching_path) = find_first_dir_named(entry_path.as_path(), looking_for)? {
-        return Ok(Some(matching_path))
-      }
-    }
-  }
-
-  Ok(None)
 }

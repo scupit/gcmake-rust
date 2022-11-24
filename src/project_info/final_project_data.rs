@@ -1,4 +1,4 @@
-use std::{collections::{HashMap, HashSet, BTreeSet, BTreeMap}, path::{Path, PathBuf}, io, rc::Rc, fs::{self}, iter::FromIterator};
+use std::{collections::{HashMap, HashSet, BTreeMap}, path::{Path, PathBuf}, io, rc::Rc, fs::{self}, iter::FromIterator};
 
 use crate::project_info::path_manipulation::cleaned_pathbuf;
 
@@ -948,11 +948,7 @@ impl FinalProjectData {
         false
       )?;
 
-      self.ensure_valid_icon_config(
-        output_name,
-        output_item,
-        false
-      )?;
+      self.ensure_valid_icon_config(output_name, output_item)?;
     }
 
     if let Some(existing_script) = &self.prebuild_script {
@@ -972,11 +968,7 @@ impl FinalProjectData {
             true
           )?;
 
-          self.ensure_valid_icon_config(
-            &the_item_name,
-            script_exe_config,
-            true
-          )?;
+          self.ensure_valid_icon_config(&the_item_name, script_exe_config)?;
         },
         PreBuildScript::Python(_) => ()
       }
@@ -987,10 +979,10 @@ impl FinalProjectData {
     Ok(())
   }
 
-  pub fn shared_sources_contain_cpp2_grammar(&self) -> bool {
-    return self.src_files.iter()
-      .any(|code_file| code_file.uses_cpp2_grammar());
-  }
+  // pub fn shared_sources_contain_cpp2_grammar(&self) -> bool {
+  //   return self.src_files.iter()
+  //     .any(|code_file| code_file.uses_cpp2_grammar());
+  // }
 
   pub fn any_files_contain_cpp2_grammar(&self) -> bool {
     return !self.all_sources_by_grammar(true).is_empty();
@@ -1077,13 +1069,8 @@ impl FinalProjectData {
   fn ensure_valid_icon_config(
     &self,
     item_name: &str,
-    target: &CompiledOutputItem,
-    is_prebuild_script: bool
+    target: &CompiledOutputItem
   ) -> Result<(), String> {
-    let item_string: String = if is_prebuild_script
-      { String::from("prebuild script") }
-      else { format!("output item '{}'", item_name )};
-
     if !target.is_executable_type() && target.windows_icon_relative_to_root_project.is_some() {
       return Err(format!(
         "{} is not an executable, but specifies a windows_icon '{}'. Windows icons can only be specified for executables.",
@@ -1096,7 +1083,7 @@ impl FinalProjectData {
   }
 
   fn validate_installer_config(&self) -> Result<(), String> {
-    for (output_name, shortcut_config) in &self.installer_config.shortcuts {
+    for (output_name, _) in &self.installer_config.shortcuts {
       match self.find_output_in_whole_tree(output_name) {
         None => return Err(format!(
           "The installer config in project [{}] tries to create a shortcut for executable output '{}', but the project doesn't have an executable output named '{}'.",
@@ -1333,10 +1320,6 @@ impl FinalProjectData {
     &self.features
   }
 
-  pub fn has_features(&self) -> bool {
-    !self.features.is_empty()
-  }
-
   pub fn get_test_framework(&self) -> &Option<FinalTestFramework> {
     &self.test_framework
   }
@@ -1434,10 +1417,6 @@ impl FinalProjectData {
 
   pub fn get_global_defines(&self) -> &Vec<CompilerDefine> {
     &self.global_defines
-  }
-
-  pub fn get_global_properties(&self) -> Option<&FinalGlobalProperties> {
-    self.global_properties.as_ref()
   }
 
   pub fn get_default_compiled_lib_type(&self) -> DefaultCompiledLibType {

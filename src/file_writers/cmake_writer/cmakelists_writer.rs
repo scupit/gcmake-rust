@@ -102,8 +102,8 @@ enum FullCMakeDownloadMethodInfo {
     revision_spec_str: String
   },
   UrlMethod {
-    windows_url: String,
-    unix_url: String
+    _windows_url: String,
+    _unix_url: String
   }
 }
 
@@ -1303,8 +1303,8 @@ impl<'a> CMakeListsWriter<'a> {
         }
       },
       DownloadMethodInfo::UrlMethod { windows_url, unix_url } => FullCMakeDownloadMethodInfo::UrlMethod {
-        windows_url,
-        unix_url
+        _windows_url: windows_url,
+        _unix_url: unix_url
       }
     };
 
@@ -1475,15 +1475,10 @@ impl<'a> CMakeListsWriter<'a> {
           )?;
         }
         else {
-          let mut if_str: &str = "if";
-
           writeln!(&self.cmakelists_file,
-            "{}( \"${{PROJECT_{}_INSTALL_MODE}}\" STREQUAL \"FULL\" )",
-            if_str,
+            "if( \"${{PROJECT_{}_INSTALL_MODE}}\" STREQUAL \"FULL\" )",
             dep_name
           )?;
-
-          if_str = "elseif";
 
           self.set_basic_var(
             "\t",
@@ -1492,12 +1487,9 @@ impl<'a> CMakeListsWriter<'a> {
           )?;
 
           writeln!(&self.cmakelists_file,
-            "{}( \"${{PROJECT_{}_INSTALL_MODE}}\" STREQUAL \"MINIMAL\" )",
-            if_str,
+            "elseif( \"${{PROJECT_{}_INSTALL_MODE}}\" STREQUAL \"MINIMAL\" )",
             dep_name
           )?;
-
-          if_str = "elseif";
 
           self.set_basic_var(
             "\t",
