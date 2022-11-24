@@ -822,7 +822,7 @@ impl<'a> CMakeListsWriter<'a> {
     writeln!(&self.cmakelists_file, "initialize_minimal_installs()")?;
     writeln!(&self.cmakelists_file, "initialize_target_list()")?;
     writeln!(&self.cmakelists_file, "initialize_needed_bin_files_list()")?;
-    writeln!(&self.cmakelists_file, "initialize_install_list()")?;
+    writeln!(&self.cmakelists_file, "initialize_additional_dependency_install_list()")?;
     writeln!(&self.cmakelists_file, "initialize_generated_export_headers_list()")?;
     
     if self.project_data.is_root_project() {
@@ -2581,7 +2581,7 @@ impl<'a> CMakeListsWriter<'a> {
         for single_dep_info in link_info_list {
           if single_dep_info.is_installed_with_project {
             writeln!(&self.cmakelists_file,
-              "if( {} )\n\tunaliased_target_name( {} {} )\nendif()",
+              "if( {} )\n\tgcmake_unaliased_target_name( {} {} )\nendif()",
               system_contstraint_conditional_expression(&single_dep_info.link_constraint),
               single_dep_info.linkable_name,
               &single_dep_info.unaliased_lib_var
@@ -2696,7 +2696,7 @@ impl<'a> CMakeListsWriter<'a> {
           match &link_mode {
             LinkMode::Public | LinkMode::Interface => {
               writeln!(&self.cmakelists_file,
-                "\t\tadd_to_install_list( {} \"${{{}_RELATIVE_DEP_PATH}}\" )",
+                "\t\tadd_to_additional_dependency_install_list( {} \"${{{}_RELATIVE_DEP_PATH}}\" )",
                 namespaced_name,
                 base_name
               )?;
@@ -3118,7 +3118,7 @@ impl<'a> CMakeListsWriter<'a> {
       writeln!(&self.cmakelists_file, "{}raise_minimal_installs()", spacer)?;
       writeln!(&self.cmakelists_file, "{}raise_target_list()", spacer)?;
       writeln!(&self.cmakelists_file, "{}raise_needed_bin_files_list()", spacer)?;
-      writeln!(&self.cmakelists_file, "{}raise_install_list()", spacer)?;
+      writeln!(&self.cmakelists_file, "{}raise_additional_dependency_install_list()", spacer)?;
       writeln!(&self.cmakelists_file, "{}raise_generated_export_headers_list()", spacer)?;
       Ok(())
     };

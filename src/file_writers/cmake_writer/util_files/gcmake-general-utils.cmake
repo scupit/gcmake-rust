@@ -340,7 +340,7 @@ function( initialize_lib_type_options
   option( BUILD_STATIC_LIBS "${LOCAL_BUILD_STATIC_LIBS_DOC_STRING}" ${SHOULD_DEFAULT_TO_STATIC} )
 endfunction()
 
-function( unaliased_target_name
+function( gcmake_unaliased_target_name
   target_name
   out_var
 )

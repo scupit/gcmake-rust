@@ -13,7 +13,7 @@ endif()
 function( generate_rc_file_for_windows_exe
   target_name
 )
-  unaliased_target_name( ${target_name} TARGET_BASE_NAME )
+  gcmake_unaliased_target_name( ${target_name} TARGET_BASE_NAME )
   if( TARGET_SYSTEM_IS_WINDOWS AND NOT ${TARGET_BASE_NAME}_RC_ALREADY_GENERATED )
     set( optionalOneValueArgs ICON_PATH )
     cmake_parse_arguments( PARSE_ARGV 1 RC_CONFIG "" "${optionalOneValueArgs}" "" )

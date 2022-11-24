@@ -7,18 +7,15 @@ endif()
 function( configure_installation
   project_component_name_var
 )
-  set( targets_installing "${MY_INSTALLABLE_TARGETS}" )
-  set( bin_files_installing "${MY_NEEDED_BIN_FILES}" )
-
-  set( additional_installs "${MY_ADDITIONAL_INSTALL_TARGETS}" )
+  set( additional_installs ${MY_ADDITIONAL_DEPENDENCY_INSTALL_TARGETS} )
   list( REMOVE_DUPLICATES additional_installs )
 
-  set( additional_relative_dep_paths "${MY_ADDITIONAL_RELATIVE_DEP_PATHS}" )
+  set( additional_relative_dep_paths ${MY_ADDITIONAL_RELATIVE_DEP_PATHS} )
   list( TRANSFORM additional_relative_dep_paths PREPEND "${CMAKE_INSTALL_INCLUDEDIR}/" )
   list( REMOVE_DUPLICATES additional_relative_dep_paths )
 
-  list( LENGTH targets_installing has_targets_to_install )
-  list( LENGTH bin_files_installing has_files_to_install )
+  list( LENGTH MY_INSTALLABLE_TARGETS has_targets_to_install )
+  list( LENGTH MY_NEEDED_BIN_FILES has_files_to_install )
   list( LENGTH additional_installs has_additional_installs )
   list( LENGTH MY_MINIMAL_INSTALLS has_minimal_installs )
   list( LENGTH MY_GENERATED_EXPORT_HEADERS_BUILD_INTERFACE has_generated_export_headers )
@@ -41,9 +38,9 @@ function( configure_installation
     message( FATAL_ERROR "ERROR: This project (${PROJECT_NAME}) doesn't install any targets. It's likely that no project targets are being built with the current configuration settings." )
   endif()
 
-  foreach( project_output_to_install IN LISTS targets_installing )
+  foreach( project_output_to_install IN LISTS MY_INSTALLABLE_TARGETS )
     get_target_property( target_type ${project_output_to_install} TYPE )
-    unaliased_target_name( ${project_output_to_install} actual_output_name )
+    gcmake_unaliased_target_name( ${project_output_to_install} actual_output_name )
 
     if( target_type STREQUAL "EXECUTABLE" )
       install( TARGETS ${actual_output_name}
@@ -112,7 +109,7 @@ function( configure_installation
   endforeach()
 
   if( has_files_to_install )
-    install( FILES ${bin_files_installing}
+    install( FILES ${MY_NEEDED_BIN_FILES}
       DESTINATION ${CMAKE_INSTALL_BINDIR}
       COMPONENT ${project_component_name}
     )
@@ -218,9 +215,10 @@ function( generate_and_install_export_header
       "$<INSTALL_INTERFACE:${installed_header_location}>"
   )
 
-  add_to_generated_export_headers_list_parent_scope(
+  add_to_generated_export_headers_list(
     "${the_export_header_file}"
     "${installed_header_location}"
+    TRUE
   )
 endfunction()
 
@@ -290,83 +288,83 @@ macro( initialize_generated_export_headers_list )
   set( MY_GENERATED_EXPORT_HEADERS_INSTALL_INTERFACE )
 endmacro()
 
-macro( add_to_generated_export_headers_list_parent_scope
+macro( add_to_generated_export_headers_list
   build_interface_file
   install_interface_file
+  should_set_in_parent_scope
 )
-  set( MY_GENERATED_EXPORT_HEADERS_BUILD_INTERFACE "${MY_GENERATED_EXPORT_HEADERS_BUILD_INTERFACE}" ${build_interface_file} PARENT_SCOPE )
-  set( MY_GENERATED_EXPORT_HEADERS_INSTALL_INTERFACE "${MY_GENERATED_EXPORT_HEADERS_INSTALL_INTERFACE}" ${install_interface_file} PARENT_SCOPE )
+  list( APPEND MY_GENERATED_EXPORT_HEADERS_BUILD_INTERFACE "${build_interface_file}" )
+  list( APPEND MY_GENERATED_EXPORT_HEADERS_INSTALL_INTERFACE "${install_interface_file}" )
+
+  if( should_set_in_parent_scope )
+    set( MY_GENERATED_EXPORT_HEADERS_BUILD_INTERFACE ${MY_GENERATED_EXPORT_HEADERS_BUILD_INTERFACE} PARENT_SCOPE )
+    set( MY_GENERATED_EXPORT_HEADERS_INSTALL_INTERFACE ${MY_GENERATED_EXPORT_HEADERS_INSTALL_INTERFACE} PARENT_SCOPE )
+  endif()
 endmacro()
 
 macro( raise_generated_export_headers_list )
-  set( LATEST_GENERATED_EXPORT_HEADERS_BUILD_INTERFACE_LIST "${MY_GENERATED_EXPORT_HEADERS_BUILD_INTERFACE}" PARENT_SCOPE )
-  set( LATEST_GENERATED_EXPORT_HEADERS_INSTALL_INTERFACE_LIST "${MY_GENERATED_EXPORT_HEADERS_INSTALL_INTERFACE}" PARENT_SCOPE )
+  set( LATEST_GENERATED_EXPORT_HEADERS_BUILD_INTERFACE_LIST ${MY_GENERATED_EXPORT_HEADERS_BUILD_INTERFACE} PARENT_SCOPE )
+  set( LATEST_GENERATED_EXPORT_HEADERS_INSTALL_INTERFACE_LIST ${MY_GENERATED_EXPORT_HEADERS_INSTALL_INTERFACE} PARENT_SCOPE )
 endmacro()
 
 # ================================================================================
-# TODO: This name is misleading. Change the name to 'additional_dependency_install_targets'
-# or something similar
-# 
-# Install list: Non-GCMake dependency targets which must be listed in our install tree
-# because they are depended on by one of our project's library outputs.
+# Additional Dependency install list: Non-GCMake dependency targets which must be
+#   listed in our install tree because they are depended on by one of our project's
+#   library outputs.
 # ================================================================================
-macro( initialize_install_list )
-  set( MY_ADDITIONAL_INSTALL_TARGETS "" )
-  set( MY_ADDITIONAL_RELATIVE_DEP_PATHS "" )
+macro( initialize_additional_dependency_install_list )
+  set( MY_ADDITIONAL_DEPENDENCY_INSTALL_TARGETS )
+  # NOTE: Make sure MY_ADDITIONAL_RELATIVE_DEP_PATHS is the same as the one used by minimal installs.
+  set( MY_ADDITIONAL_RELATIVE_DEP_PATHS )
 endmacro()
 
-macro( add_to_install_list
+macro( add_to_additional_dependency_install_list
   target_name
   relative_dep_path
 )
-  get_target_property( unaliased_lib_name ${target_name} ALIASED_TARGET )
-
-  if( NOT unaliased_lib_name )
-    set( unaliased_lib_name ${target_name} )
-  endif()
-
-  set( MY_ADDITIONAL_INSTALL_TARGETS "${MY_ADDITIONAL_INSTALL_TARGETS}" ${unaliased_lib_name} )
-  set( MY_ADDITIONAL_RELATIVE_DEP_PATHS "${MY_ADDITIONAL_RELATIVE_DEP_PATHS}" "${relative_dep_path}" )
+  gcmake_unaliased_target_name( ${target_name} unaliased_target_name )
+  list( APPEND MY_ADDITIONAL_DEPENDENCY_INSTALL_TARGETS ${unaliased_target_name} )
+  list( APPEND MY_ADDITIONAL_RELATIVE_DEP_PATHS "${relative_dep_path}" )
 endmacro()
 
-macro( raise_install_list )
-  set( LATEST_INSTALL_LIST "${MY_ADDITIONAL_INSTALL_TARGETS}" PARENT_SCOPE )
-  set( LATEST_RELATIVE_DEP_PATHS "${MY_ADDITIONAL_RELATIVE_DEP_PATHS}" PARENT_SCOPE )
+macro( raise_additional_dependency_install_list )
+  set( LATEST_ADDITIONAL_DEPENDENCY_INSTALL_LIST ${MY_ADDITIONAL_DEPENDENCY_INSTALL_TARGETS} PARENT_SCOPE )
+  set( LATEST_RELATIVE_DEP_PATHS ${MY_ADDITIONAL_RELATIVE_DEP_PATHS} PARENT_SCOPE )
 endmacro()
 
 # ================================================================================
 # Target list: These are your project outputs
 # ================================================================================
 macro( initialize_target_list )
-  set( MY_INSTALLABLE_TARGETS "" )
+  set( MY_INSTALLABLE_TARGETS )
 endmacro()
 
 macro( add_to_target_installation_list
   target_name
 )
-  unaliased_target_name( ${target_name} actual_target_name )
-  set( MY_INSTALLABLE_TARGETS "${MY_INSTALLABLE_TARGETS}" "${actual_target_name}" )
+  gcmake_unaliased_target_name( ${target_name} unaliased_target_name )
+  list( APPEND MY_INSTALLABLE_TARGETS ${unaliased_target_name} )
 endmacro()
 
 macro( raise_target_list )
-  set( LATEST_SUBPROJECT_TARGET_LIST "${MY_INSTALLABLE_TARGETS}" PARENT_SCOPE )
+  set( LATEST_SUBPROJECT_TARGET_LIST ${MY_INSTALLABLE_TARGETS} PARENT_SCOPE )
 endmacro()
 
 # ================================================================================
 # Debian package names which the project depends on.
 # ================================================================================
 macro( initialize_deb_list )
-  set( MY_NEEDED_DEB_PACKAGES "" )
+  set( MY_NEEDED_DEB_PACKAGES )
 endmacro()
 
 macro( add_to_deb_list
   deb_package_name
 )
-  set( MY_NEEDED_DEB_PACKAGES "${MY_NEEDED_DEB_PACKAGES}" "${deb_package_name}" )
+  list( APPEND MY_NEEDED_DEB_PACKAGES "${deb_package_name}" )
 endmacro()
 
 macro( raise_deb_list )
-  set( LATEST_NEEDED_DEB_PACKAGE_LIST "${MY_NEEDED_DEB_PACKAGES}" PARENT_SCOPE )
+  set( LATEST_NEEDED_DEB_PACKAGE_LIST MY_NEEDED_DEB_PACKAGES PARENT_SCOPE )
 endmacro()
 
 # ================================================================================
@@ -375,25 +373,21 @@ endmacro()
 # only have the DLL runtime component installed.
 # ================================================================================
 macro( initialize_minimal_installs )
-  set( MY_MINIMAL_INSTALLS "" )
+  set( MY_MINIMAL_INSTALLS )
 endmacro()
 
 macro( add_to_minimal_installs
   target_name
   relative_dep_path
 )
-  get_target_property( unaliased_lib_name ${target_name} ALIASED_TARGET )
+  gcmake_unaliased_target_name( ${target_name} unaliased_target_name )
 
-  if( NOT unaliased_lib_name )
-    set( unaliased_lib_name ${target_name} )
-  endif()
-
-  set( MY_MINIMAL_INSTALLS "${MY_MINIMAL_INSTALLS}" ${unaliased_lib_name} )
-  set( MY_ADDITIONAL_RELATIVE_DEP_PATHS "${MY_ADDITIONAL_RELATIVE_DEP_PATHS}" "${relative_dep_path}" )
+  list( APPEND MY_MINIMAL_INSTALLS ${unaliased_target_name} )
+  list( APPEND MY_ADDITIONAL_RELATIVE_DEP_PATHS "${relative_dep_path}" )
 endmacro()
 
 macro( raise_minimal_installs )
-  set( LATEST_MINIMAL_INSTALLS_LIST "${MY_MINIMAL_INSTALLS}" PARENT_SCOPE )
+  set( LATEST_MINIMAL_INSTALLS_LIST ${MY_MINIMAL_INSTALLS} PARENT_SCOPE )
 endmacro()
 
 # ================================================================================
@@ -401,17 +395,17 @@ endmacro()
 # but must be distributed with the project (such as SDL2.dll or the WxWidgets DLLs).
 # ================================================================================
 macro( initialize_needed_bin_files_list )
-  set( MY_NEEDED_BIN_FILES "" )
+  set( MY_NEEDED_BIN_FILES )
 endmacro()
 
 macro( add_to_needed_bin_files_list
   needed_file
 )
-  set( MY_NEEDED_BIN_FILES "${MY_NEEDED_BIN_FILES}" "${needed_file}" )
+  list( APPEND MY_NEEDED_BIN_FILES "${needed_file}" )
 endmacro()
 
 macro( raise_needed_bin_files_list)
-  set( LATEST_SUBPROJECT_NEEDED_BIN_FILES_LIST "${MY_NEEDED_BIN_FILES}" PARENT_SCOPE )
+  set( LATEST_SUBPROJECT_NEEDED_BIN_FILES_LIST ${MY_NEEDED_BIN_FILES} PARENT_SCOPE )
 endmacro()
 
 macro( initialize_mingw_dll_install_options )
@@ -470,18 +464,17 @@ endmacro()
 # installed with the project.
 # ================================================================================
 macro( initialize_custom_find_modules_list )
-  set( MY_CUSTOM_FIND_MODULES "" )
+  set( MY_CUSTOM_FIND_MODULES )
 endmacro()
 
 macro( add_to_custom_find_modules_list
   dep_name
 )
-  set( MY_CUSTOM_FIND_MODULES "${MY_CUSTOM_FIND_MODULES}" "${needed_file}" )
   list( APPEND MY_CUSTOM_FIND_MODULES "${TOPLEVEL_PROJECT_DIR}/cmake/modules/Find${dep_name}.cmake" )
 endmacro()
 
 macro( raise_custom_find_modules_list )
-  set( LATEST_SUBPROJECT_CUSTOM_FIND_MODULES_LIST "${MY_CUSTOM_FIND_MODULES}" PARENT_SCOPE )
+  set( LATEST_SUBPROJECT_CUSTOM_FIND_MODULES_LIST ${MY_CUSTOM_FIND_MODULES} PARENT_SCOPE )
 endmacro()
 
 macro( _propagate_subproject_var
@@ -501,7 +494,7 @@ function( gcmake_configure_subproject
   _propagate_subproject_var( LATEST_SUBPROJECT_TARGET_LIST MY_INSTALLABLE_TARGETS )
   _propagate_subproject_var( LATEST_SUBPROJECT_NEEDED_BIN_FILES_LIST MY_NEEDED_BIN_FILES )
   _propagate_subproject_var( LATEST_SUBPROJECT_CUSTOM_FIND_MODULES_LIST MY_CUSTOM_FIND_MODULES )
-  _propagate_subproject_var( LATEST_INSTALL_LIST MY_ADDITIONAL_INSTALL_TARGETS )
+  _propagate_subproject_var( LATEST_ADDITIONAL_DEPENDENCY_INSTALL_LIST MY_ADDITIONAL_DEPENDENCY_INSTALL_TARGETS )
   _propagate_subproject_var( LATEST_RELATIVE_DEP_PATHS MY_ADDITIONAL_RELATIVE_DEP_PATHS )
   _propagate_subproject_var( LATEST_GENERATED_EXPORT_HEADERS_BUILD_INTERFACE_LIST MY_GENERATED_EXPORT_HEADERS_BUILD_INTERFACE )
   _propagate_subproject_var( LATEST_GENERATED_EXPORT_HEADERS_INSTALL_INTERFACE_LIST MY_GENERATED_EXPORT_HEADERS_INSTALL_INTERFACE )
