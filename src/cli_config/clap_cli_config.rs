@@ -12,7 +12,7 @@ pub enum CLIProjectOutputTypeIn {
 }
 
 #[derive(Parser)]
-#[command(version = "1.5.4", author = SKY)]
+#[command(version = "1.5.5", author = SKY)]
 pub struct Opts {
   #[arg(default_value = ".")]
   pub project_root: String,
