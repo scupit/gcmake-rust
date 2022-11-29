@@ -37,7 +37,8 @@ Executables build by test projects have a few additional properties:
 | [windows_icon](#windows_icon) | *Optional* | Relative file name (relative to root project) | Sets an executable's Windows icon. |
 | [emscripten_html_shell](#emscripten_html_shell) | *Optional* | Relative file name (relative to root project) | Sets a [custom HTML shell file](https://emscripten.org/docs/tools_reference/emcc.html#emcc-shell-file) for an executable when building with Emscripten. |
 | [link](#link) | *Optional* | `List<`[LinkSpecifier](../data_formats.md#link-specifier)`>` | This section is used to link libraries to your output. |
-| [build_config](#build_config) | *Optional* | Define additional build configuration which is specific to the output item only. |
+| [build_config](#build_config) | *Optional* | `Map` (see the property for more info.) | Define additional build configuration which is specific to the output item only. |
+| [defines](#defines) | *Optional* | `List<String>` | This is an 'alias' property for setting compiler defines for a target which are always applied (AllConfigs, AllCompilers). |
 | [requires_custom_main](#requires_custom_main) | *Optional* | boolean | **Applies to test executables only.** Dictates whether or not the test executable must provide its own main function. |
 
 ### output_type
@@ -262,6 +263,48 @@ output:
 build_configs:
   Debug: {}
   Release: {}
+```
+
+### defines
+
+> *Optional* `List<String>`
+
+This property is used to add compiler defines to the target which will always be used. This is essentially
+an 'alias' for *build_configs -> AllConfigs -> AllCompilers -> defines*.
+
+For example, this:
+
+``` yaml
+build_configs:
+  Debug: {}
+  Release: {}
+output:
+  my-exe:
+    output_type: Executable
+    entry_file: main.cpp
+    defines:
+      - (( msvc )) AM_I_USING_MSVC=1
+      - SOME_STRING_CONSTANT="This will always be used, but is specific to the target"
+```
+
+is equivalent to this:
+
+``` yaml
+build_configs:
+  Debug: {}
+  Release: {}
+output:
+  my-exe:
+    output_type: Executable
+    entry_file: main.cpp
+    build_config:
+      AllConfigs:
+        MSVC:
+          defines: 
+            - AM_I_USING_MSVC=1
+        AllCompilers:
+          defines:
+            - SOME_STRING_CONSTANT="This will always be used, but is specific to the target"
 ```
 
 ### requires_custom_main
