@@ -370,28 +370,9 @@ The gcmake_dependencies property is described in its own document
 
 > All project types
 >
-> **OPTIONAL** `ExecutableConfigurationObject`
+> **OPTIONAL** `PreBuildConfigObject`
 
-In the same way that executable outputs are configured, this property allows `link`s and `build_config`s
-to be specified for executable pre-build scripts. Only the `link` and `build_config` properties can
-be configured.
-
-**NOTE:** This configuration shouldn't be specified when using a Python pre-build script.
-
-Example (assuming the project contains a `pre_build.c` or `pre_build.cpp`):
-
-``` yaml
-predefined_dependencies:
-  OpenGL: { }
-prebuild_config:
-  link:
-    - OpenGL::OpenGL
-  build_config:
-    AllConfigs:
-      AllCompilers:
-        defines:
-          - NOICE="This is defined for the pre-build only."
-```
+This property has its own page at [prebuild_config.md](prebuild_config.md)
 
 ### test_framework
 

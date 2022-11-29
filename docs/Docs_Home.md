@@ -26,6 +26,7 @@ configuration work together.
 - [Cargo-like "features"](./cmake_data_config/properties/features.md)
 - [Optional/conditional dependencies](./cmake_data_config/linking.md#conditional-dependencies)
 - [CppFront (*.cpp2) Support](./cppfront_integration.md)
+- [Code generation using a pre-build script](pre_build_scripts.md#pre-build-code-generation)
 
 ## Important Concepts
 
