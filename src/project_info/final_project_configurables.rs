@@ -387,6 +387,40 @@ impl CompiledOutputItem {
     return Ok(output_links);
   }
 
+  fn resolve_full_build_config(
+    raw_output_item: &RawCompiledItem,
+    valid_feature_list: Option<&Vec<&str>>
+  ) -> Result<Option<FinalTargetBuildConfigMap>, String> {
+    match raw_output_item.defines.clone() {
+      None => {
+        return make_final_target_build_config(
+          raw_output_item.build_config.as_ref(),
+          valid_feature_list
+        );
+      },
+      Some(defines_list) => {
+        let mut cloned_build_config: TargetBuildConfigMap = raw_output_item.build_config.clone().unwrap_or(BTreeMap::new());
+        let all_configs_compilers_build_config: &mut RawBuildConfig = cloned_build_config
+          .entry(TargetSpecificBuildType::AllConfigs)
+          .or_insert(BTreeMap::new())
+          .entry(BuildConfigCompilerSpecifier::AllCompilers)
+          .or_insert(RawBuildConfig {
+            compiler_flags: None,
+            link_time_flags: None,
+            linker_flags: None,
+            defines: None
+          });
+
+        match &mut all_configs_compilers_build_config.defines {
+          Some(existing_defines) => existing_defines.extend(defines_list),
+          None => all_configs_compilers_build_config.defines = Some(defines_list)
+        };
+
+        return make_final_target_build_config(Some(&cloned_build_config), valid_feature_list);
+      }
+    }
+  }
+
   // root_directory must be absolute.
   pub fn make_from(
     output_name: &str,
@@ -401,11 +435,12 @@ impl CompiledOutputItem {
       links: OutputItemLinks::new_empty(),
       system_specifier: maybe_system_specifier.unwrap_or_default(),
       windows_icon_relative_to_root_project: raw_output_item.windows_icon.clone()
+        .clone()
         .map(PathBuf::from),
       emscripten_html_shell_relative_to_project_root: raw_output_item.emscripten_html_shell
         .clone()
         .map(PathBuf::from),
-      build_config: make_final_target_build_config(raw_output_item.build_config.as_ref(), valid_feature_list)?,
+      build_config: Self::resolve_full_build_config(raw_output_item, valid_feature_list)?,
       requires_custom_main: raw_output_item.requires_custom_main.unwrap_or(false)
     };
 

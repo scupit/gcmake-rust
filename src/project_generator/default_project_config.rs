@@ -307,6 +307,7 @@ pub fn get_default_project_config(
             OutputLibType::HeaderOnly => OutputItemType::HeaderOnlyLib
           }
         },
+        defines: None,
         windows_icon: None,
         emscripten_html_shell: None,
         link: None,

@@ -320,6 +320,7 @@ pub struct RawCompiledItem {
   pub entry_file: String,
   pub windows_icon: Option<String>, 
   pub emscripten_html_shell: Option<String>,
+  pub defines: Option<Vec<String>>,
   pub build_config: Option<TargetBuildConfigMap>,
   pub link: Option<LinkSection>
 }

@@ -68,6 +68,7 @@ fn resolve_prebuild_script(
           requires_custom_main: None,
           emscripten_html_shell: None,
           windows_icon: None,
+          defines: None,
           entry_file: relative_to_project_root(project_root, entry_file_pathbuf),
           build_config: pre_build_config.build_config.clone(),
           link: pre_build_config.link.clone().map(LinkSection::Uncategorized)
