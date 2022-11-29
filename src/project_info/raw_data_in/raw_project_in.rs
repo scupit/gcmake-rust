@@ -150,7 +150,8 @@ pub enum ImplementationLanguage {
 #[serde(deny_unknown_fields)]
 pub struct PreBuildConfigIn {
   pub link: Option<Vec<String>>,
-  pub build_config: Option<TargetBuildConfigMap>
+  pub build_config: Option<TargetBuildConfigMap>,
+  pub generated_code: Option<BTreeSet<String>>
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]

@@ -33,6 +33,7 @@ endfunction()
 
 function( use_executable_prebuild_script
   pre_build_executable_target
+  generated_files_var
 )
   if( USING_EMSCRIPTEN AND EMSCRIPTEN_MODE STREQUAL "WITH_HTML" AND GCMAKE_NODEJS_EXECUTABLE )
     # The WITH_HTML "executable" output file is a .html file. A runnable .js file is also guaranteed to
@@ -56,11 +57,14 @@ function( use_executable_prebuild_script
     COMMAND ${runnable_command}
     COMMENT "Running ${PROJECT_NAME} pre-build executable script"
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+    BYPRODUCTS ${${generated_files_var}}
+    COMMAND_EXPAND_LISTS
   )
 endfunction()
 
 function( use_python_prebuild_script
   python_prebuild_file
+  generated_files_var
 )
   include( FindPython3 )
   find_package( Python3 COMPONENTS Interpreter )
@@ -72,6 +76,8 @@ function( use_python_prebuild_script
       COMMAND Python3::Interpreter ${python_prebuild_file}
       COMMENT "Running ${PROJECT_NAME} pre-build python script"
       WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+      BYPRODUCTS ${${generated_files_var}}
+      COMMAND_EXPAND_LISTS
     )
   else()
     if( NOT ${Python3_Interpreter_FOUND} )

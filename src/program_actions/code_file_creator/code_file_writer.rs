@@ -123,7 +123,7 @@ fn write_header(
 ) -> io::Result<PathBuf> {
   // Ensure the directory structure exists
   let file_path = ensure_directory_structure(
-    project_info.get_include_dir(),
+    project_info.get_include_dir_relative_to_cwd(),
     file_info,
     extension_for(CodeFileType::Header(language.clone()))
   )?;
@@ -253,7 +253,7 @@ fn write_source(
 ) -> io::Result<PathBuf> {
   // Ensure the directory structure exists
   let file_path = ensure_directory_structure(
-    project_info.get_src_dir(),
+    project_info.get_src_dir_relative_to_cwd(),
     file_info,
     extension_for(CodeFileType::Source(language.clone()))
   )?;
@@ -303,7 +303,7 @@ fn write_template_impl(
 ) -> io::Result<PathBuf> {
   // Ensure the directory structure exists
   let file_path = ensure_directory_structure(
-    project_info.get_include_dir(),
+    project_info.get_include_dir_relative_to_cwd(),
     file_info,
     extension_for(CodeFileType::TemplateImpl(language.clone()))
   )?;

@@ -1,11 +1,11 @@
-use std::{path::{PathBuf, Path}, fs, io};
+use std::{path::{PathBuf, Path}, fs, io, collections::BTreeSet};
 
-use super::{raw_data_in::{RawProject, RawSubproject, OutputItemType, RawTestProject}, path_manipulation::cleaned_pathbuf, final_project_data::ProjectLoadFailureReason, CodeFileInfo};
+use super::{raw_data_in::{RawProject, RawSubproject, OutputItemType, RawTestProject}, path_manipulation::{cleaned_pathbuf, relative_to_project_root}, final_project_data::{ProjectLoadFailureReason, CppFileGrammar}, CodeFileInfo};
 
 #[derive(Clone)]
 pub enum RetrievedCodeFileType {
   Source {
-    uses_cpp2_grammar: bool
+    used_grammar: CppFileGrammar
   },
   Header,
   TemplateImpl,
@@ -27,6 +27,15 @@ impl RetrievedCodeFileType {
       _ => false
     }
   }
+
+  pub fn is_same_general_type_as(&self, other: &RetrievedCodeFileType) -> bool {
+    match (self, other) {
+      (Self::Source { .. }, Self::Source { .. }) => true,
+      (Self::Header, Self::Header) => true,
+      (Self::TemplateImpl, Self::TemplateImpl) => true,
+      _ => false
+    }
+  }
 }
 
 pub fn code_file_type(any_path_type: impl AsRef<Path>) -> RetrievedCodeFileType {
@@ -34,8 +43,8 @@ pub fn code_file_type(any_path_type: impl AsRef<Path>) -> RetrievedCodeFileType 
 
   return match the_path.extension() {
     Some(extension) => match extension.to_str().unwrap() {
-      "cpp2"                  => RetrievedCodeFileType::Source { uses_cpp2_grammar: true },
-      "c" | "cpp" | "cxx"     => RetrievedCodeFileType::Source { uses_cpp2_grammar: false },
+      "cpp2"                  => RetrievedCodeFileType::Source { used_grammar: CppFileGrammar::Cpp2 },
+      "c" | "cpp" | "cxx"     => RetrievedCodeFileType::Source { used_grammar: CppFileGrammar::Cpp1 },
       "h" | "hpp" | "hxx"     => RetrievedCodeFileType::Header,
       "tpp" | "txx" | "inl"   => RetrievedCodeFileType::TemplateImpl,
       _                       => RetrievedCodeFileType::Unknown
@@ -115,22 +124,30 @@ pub fn parse_test_project_data(project_root: &str) -> YamlParseResult<RawTestPro
   yaml_parse_helper(project_root)
 }
 
-pub fn populate_files<F>(
-  dir: &Path,
-  file_list: &mut Vec<CodeFileInfo>,
+pub fn populate_existing_files<F>(
+  root_dir: &Path,
+  current_dir_checking: &Path,
+  file_list: &mut BTreeSet<CodeFileInfo>,
   filter_func: &F
 ) -> io::Result<()>
   where F: Fn(&Path) -> bool
 {
-  if dir.is_dir() {
-    for dirent in fs::read_dir(dir)? {
-      let path = dirent?.path();
+  if current_dir_checking.is_dir() {
+    for dirent in fs::read_dir(current_dir_checking)? {
+      let path: PathBuf = dirent?.path();
 
       if path.is_dir() {
-        populate_files(&path, file_list, filter_func)?;
+        populate_existing_files(root_dir, &path, file_list, filter_func)?;
       }
       else if path.is_file() && filter_func(path.as_path()) {
-        file_list.push(CodeFileInfo::from_path(cleaned_pathbuf(path)));
+        let file_info: CodeFileInfo = CodeFileInfo::from_path(
+          cleaned_pathbuf(relative_to_project_root(root_dir.to_str().unwrap(), path.as_path())),
+          false
+        );
+
+        // Rust sets don't overwrite existing values. Since generated files are always added to
+        // file sets first, we don't ever overwrite the generated files.
+        file_list.insert(file_info);
       }
     }
   }

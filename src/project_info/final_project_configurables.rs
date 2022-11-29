@@ -1,26 +1,35 @@
 use std::{rc::Rc, collections::{HashMap, BTreeSet, BTreeMap}, path::{PathBuf, Path}};
 use std::hash::{ Hash, Hasher };
 
-use super::{raw_data_in::{OutputItemType, RawCompiledItem, TargetBuildConfigMap, LinkSection, BuildConfigCompilerSpecifier, BuildType, TargetSpecificBuildType, RawBuildConfig, BuildTypeOptionMap, BuildConfigMap, RawGlobalPropertyConfig, DefaultCompiledLibType, RawShortcutConfig, RawFeatureConfig}, final_dependencies::FinalPredefinedDependencyConfig, LinkSpecifier, parsers::{link_spec_parser::LinkAccessMode, general_parser::ParseSuccess}, SystemSpecifierWrapper, platform_spec_parser::parse_leading_system_spec, helpers::{RetrievedCodeFileType, code_file_type}};
+use super::{raw_data_in::{OutputItemType, RawCompiledItem, TargetBuildConfigMap, LinkSection, BuildConfigCompilerSpecifier, BuildType, TargetSpecificBuildType, RawBuildConfig, BuildTypeOptionMap, BuildConfigMap, RawGlobalPropertyConfig, DefaultCompiledLibType, RawShortcutConfig, RawFeatureConfig}, final_dependencies::FinalPredefinedDependencyConfig, LinkSpecifier, parsers::{link_spec_parser::LinkAccessMode, general_parser::ParseSuccess}, SystemSpecifierWrapper, platform_spec_parser::parse_leading_system_spec, helpers::{RetrievedCodeFileType, code_file_type}, path_manipulation::{absolute_path, cleaned_pathbuf}, final_project_data::CppFileGrammar};
 
+#[derive(Clone)]
 pub struct CodeFileInfo {
   pub file_path: PathBuf,
-  pub file_type: RetrievedCodeFileType
+  pub file_type: RetrievedCodeFileType,
+  pub is_generated: bool
 }
 
 impl CodeFileInfo {
-  pub fn from_path(given_path: impl AsRef<Path>) -> Self {
+  pub fn from_path(
+    given_path: impl AsRef<Path>,
+    is_generated: bool
+  ) -> Self {
     let path_ref: &Path = given_path.as_ref();
 
     Self {
-      file_path: PathBuf::from(path_ref),
-      file_type: code_file_type(path_ref)
+      file_path: cleaned_pathbuf(path_ref),
+      file_type: code_file_type(path_ref),
+      is_generated
     }
   }
 
   pub fn uses_cpp2_grammar(&self) -> bool {
     match &self.file_type {
-      RetrievedCodeFileType::Source { uses_cpp2_grammar } => *uses_cpp2_grammar,
+      RetrievedCodeFileType::Source { used_grammar } => match used_grammar {
+        CppFileGrammar::Cpp1 => false,
+        CppFileGrammar::Cpp2 => true,
+      },
       _ => false
     }
   }
@@ -136,7 +145,40 @@ pub struct FinalInstallerConfig {
   pub shortcuts: HashMap<String, FinalShortcutConfig>
 }
 
-pub enum PreBuildScript {
+pub struct PreBuildScript {
+  pub type_config: PreBuildScriptType,
+  pub generated_code: BTreeSet<CodeFileInfo>
+}
+
+impl PreBuildScript {
+  pub fn get_type(&self) -> &PreBuildScriptType {
+    return &self.type_config;
+  }
+
+  fn generated_files_by_type(&self, file_type: RetrievedCodeFileType) -> BTreeSet<&CodeFileInfo> {
+    return self.generated_code
+      .iter()
+      .filter(|code_file|  code_file.file_type.is_same_general_type_as(&file_type))
+      .collect();
+  }
+
+  pub fn generated_sources(&self) -> BTreeSet<&CodeFileInfo> {
+    self.generated_files_by_type(RetrievedCodeFileType::Source {
+      // The grammar value is ignored for the check.
+      used_grammar: CppFileGrammar::Cpp1
+    })
+  }
+
+  pub fn generated_headers(&self) -> BTreeSet<&CodeFileInfo> {
+    self.generated_files_by_type(RetrievedCodeFileType::Header)
+  }
+
+  pub fn generated_template_impls(&self) -> BTreeSet<&CodeFileInfo> {
+    self.generated_files_by_type(RetrievedCodeFileType::TemplateImpl)
+  }
+}
+
+pub enum PreBuildScriptType {
   Exe(CompiledOutputItem),
   Python(String)
 }
@@ -235,6 +277,12 @@ impl OutputItemLinks {
       cmake_interface: Vec::new()
     }
   }
+}
+
+pub struct FileRootGroup {
+  pub project_root: PathBuf,
+  pub src_root: PathBuf,
+  pub header_root: PathBuf
 }
 
 
@@ -339,6 +387,7 @@ impl CompiledOutputItem {
     return Ok(output_links);
   }
 
+  // root_directory must be absolute.
   pub fn make_from(
     output_name: &str,
     raw_output_item: &RawCompiledItem,
@@ -347,7 +396,8 @@ impl CompiledOutputItem {
   ) -> Result<CompiledOutputItem, String> {
     let mut final_output_item = CompiledOutputItem {
       output_type: raw_output_item.output_type,
-      entry_file: CodeFileInfo::from_path(&raw_output_item.entry_file),
+      // TODO: Constrain entry file to only the project root
+      entry_file: CodeFileInfo::from_path(&raw_output_item.entry_file, false),
       links: OutputItemLinks::new_empty(),
       system_specifier: maybe_system_specifier.unwrap_or_default(),
       windows_icon_relative_to_root_project: raw_output_item.windows_icon.clone()

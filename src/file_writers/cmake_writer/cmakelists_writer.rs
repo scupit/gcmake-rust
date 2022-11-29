@@ -1,6 +1,6 @@
-use std::{collections::{HashMap, HashSet, BTreeMap }, fs::File, io::{self, Write, ErrorKind}, path::{PathBuf, Path}, rc::Rc, cell::{RefCell, Ref}};
+use std::{collections::{HashMap, HashSet, BTreeMap, BTreeSet }, fs::File, io::{self, Write, ErrorKind}, path::{PathBuf, Path}, rc::Rc, cell::{RefCell, Ref}, iter::FromIterator};
 
-use crate::{project_info::{final_project_data::{FinalProjectData}, path_manipulation::{cleaned_path_str, relative_to_project_root}, final_dependencies::{GitRevisionSpecifier, PredefinedCMakeComponentsModuleDep, PredefinedSubdirDep, PredefinedCMakeModuleDep, FinalPredepInfo, GCMakeDependencyStatus, FinalPredefinedDependencyConfig, base64_encoded, PredefinedDepFunctionality, FinalDownloadMethod, FinalDebianPackagesConfig}, raw_data_in::{BuildType, BuildConfigCompilerSpecifier, SpecificCompilerSpecifier, OutputItemType, LanguageConfigMap, TargetSpecificBuildType, dependencies::internal_dep_config::{CMakeModuleType}, DefaultCompiledLibType}, FinalProjectType, CompiledOutputItem, PreBuildScript, LinkMode, FinalTestFramework, dependency_graph_mod::dependency_graph::{DependencyGraph, OrderedTargetInfo, ProjectWrapper, TargetNode, SimpleNodeOutputType, Link, EmscriptenLinkFlagInfo, ContainedItem}, SystemSpecifierWrapper, CompilerDefine, FinalBuildConfig, CompilerFlag, LinkerFlag, gcmake_constants::{SRC_DIR, INCLUDE_DIR}, platform_spec_parser::parse_leading_system_spec, CodeFileInfo, RetrievedCodeFileType}, file_writers::cmake_writer::cmake_writer_helpers::system_constraint_generator_expression};
+use crate::{project_info::{final_project_data::{FinalProjectData, CppFileGrammar}, path_manipulation::{cleaned_path_str, relative_to_project_root}, final_dependencies::{GitRevisionSpecifier, PredefinedCMakeComponentsModuleDep, PredefinedSubdirDep, PredefinedCMakeModuleDep, FinalPredepInfo, GCMakeDependencyStatus, FinalPredefinedDependencyConfig, base64_encoded, PredefinedDepFunctionality, FinalDownloadMethod, FinalDebianPackagesConfig}, raw_data_in::{BuildType, BuildConfigCompilerSpecifier, SpecificCompilerSpecifier, OutputItemType, LanguageConfigMap, TargetSpecificBuildType, dependencies::internal_dep_config::{CMakeModuleType}, DefaultCompiledLibType}, FinalProjectType, CompiledOutputItem, PreBuildScript, LinkMode, FinalTestFramework, dependency_graph_mod::dependency_graph::{DependencyGraph, OrderedTargetInfo, ProjectWrapper, TargetNode, SimpleNodeOutputType, Link, EmscriptenLinkFlagInfo, ContainedItem}, SystemSpecifierWrapper, CompilerDefine, FinalBuildConfig, CompilerFlag, LinkerFlag, gcmake_constants::{SRC_DIR, INCLUDE_DIR}, platform_spec_parser::parse_leading_system_spec, CodeFileInfo, RetrievedCodeFileType, PreBuildScriptType}, file_writers::cmake_writer::cmake_writer_helpers::system_constraint_generator_expression};
 
 use super::{cmake_utils_writer::{CMakeUtilFile, CMakeUtilWriter}, cmake_writer_helpers::system_contstraint_conditional_expression};
 use colored::*;
@@ -330,12 +330,6 @@ impl<'a> CMakeListsWriter<'a> {
 
     self.write_root_vars()?;
 
-    // Must be all dependencies are applied, since cppfront is imported as a predefined_dependency.
-    if self.project_data.any_files_contain_cpp2_grammar() {
-      self.write_section_header("CppFront File Transformation")?;
-      self.write_cppfront_transform()?
-    }
-
     if self.project_data.has_tests() {
       self.write_section_header("Tests Configuration")?;
       self.write_test_config_section()?;
@@ -366,7 +360,14 @@ impl<'a> CMakeListsWriter<'a> {
 
   fn write_pre_build_and_outputs(&self) -> io::Result<()> {
     self.write_section_header("Pre-build script configuration")?;
-    self.write_prebuild_script_use()?;
+    self.write_init_pre_build_step()?;
+
+    // Must be written after all dependencies are imported AND the pre-build script has
+    // been configured, since the pre-build script might generate files needed here.
+    if self.project_data.any_files_contain_cpp2_grammar() {
+      self.write_section_header("Transform .cpp2 files with CppFront")?;
+      self.write_cppfront_transform()?
+    }
 
     self.write_section_header("'resources' build-time directory copier")?;
     self.write_resource_dir_copier()?;
@@ -834,7 +835,7 @@ impl<'a> CMakeListsWriter<'a> {
     Ok(())
   }
 
-  fn write_prebuild_script_use(&self) -> io::Result<()> {
+  fn write_init_pre_build_step(&self) -> io::Result<()> {
     writeln!(
       &self.cmakelists_file,
       "initialize_prebuild_step( \"{}\" )\n",
@@ -842,12 +843,70 @@ impl<'a> CMakeListsWriter<'a> {
     )?;
     
     if let Some(prebuild_script) = self.project_data.get_prebuild_script() {
-      match prebuild_script {
-        PreBuildScript::Exe(exe_info) => {
+      self.set_code_file_collection(
+        "pre_build_generated_sources",
+        &self.project_data.get_src_dir_relative_to_project_root(),
+        &self.src_root_var,
+        &self.generated_src_root_var,
+        &prebuild_script.generated_sources(),
+        &CodeFileTransformOptions {
+          should_retain_cpp2_paths: true
+        }
+      )?;
+
+      self.set_code_file_collection(
+        "pre_build_generated_headers",
+        &self.project_data.get_include_dir_relative_to_project_root(),
+        &self.header_root_var,
+        &self.generated_src_root_var,
+        &prebuild_script.generated_headers(),
+        &CodeFileTransformOptions {
+          should_retain_cpp2_paths: true
+        }
+      )?;
+
+      self.set_code_file_collection(
+        "pre_build_generated_template_impls",
+        &self.project_data.get_include_dir_relative_to_project_root(),
+        &self.header_root_var,
+        &self.generated_src_root_var,
+        &prebuild_script.generated_template_impls(),
+        &CodeFileTransformOptions {
+          should_retain_cpp2_paths: true
+        }
+      )?;
+
+      self.set_basic_var(
+        "",
+        "pre_build_generated_files_list",
+        "${pre_build_generated_sources} ${pre_build_generated_headers} ${pre_build_generated_template_impls}"
+      )?;
+
+      match prebuild_script.get_type() {
+        PreBuildScriptType::Exe(exe_info) => {
           assert!(
             self.dep_graph_ref().get_pre_build_node().is_some(),
             "When a FinalProjectData contains a pre-build script, the matching dependency graph for the project must contain a pre-build script node."
           );
+          
+          let entry_file: &CodeFileInfo = exe_info.get_entry_file();
+
+          if entry_file.uses_cpp2_grammar() {
+            self.set_code_file_collection(
+              "pre_build_entry_dummy_list",
+              "./",
+              &self.entry_file_root_var,
+              &self.generated_src_root_var,
+              &BTreeSet::from_iter([entry_file]),
+              &CodeFileTransformOptions {
+                should_retain_cpp2_paths: true
+              }
+            )?;
+
+            writeln!(&self.cmakelists_file,
+              "gcmake_transform_cppfront_files( pre_build_entry_dummy_list )"
+            )?;
+          }
 
           let script_target_name: String = self.write_executable(
             exe_info,
@@ -859,13 +918,13 @@ impl<'a> CMakeListsWriter<'a> {
           )?;
 
           writeln!(&self.cmakelists_file,
-            "use_executable_prebuild_script( {} )",
+            "use_executable_prebuild_script( {} pre_build_generated_files_list )",
             script_target_name
           )?;
         },
-        PreBuildScript::Python(python_script_path) => {
+        PreBuildScriptType::Python(python_script_path) => {
           writeln!(&self.cmakelists_file,
-            "use_python_prebuild_script( ${{CMAKE_CURRENT_SOURCE_DIR}}/{} )",
+            "use_python_prebuild_script( \"${{CMAKE_CURRENT_SOURCE_DIR}}/{}\" pre_build_generated_files_list )",
             python_script_path
           )?;
         }
@@ -1059,10 +1118,9 @@ impl<'a> CMakeListsWriter<'a> {
   }
 
   fn write_cppfront_transform(&self) -> io::Result<()> {
-    let mut all_cpp2_source_list: Vec<&CodeFileInfo> = self.project_data.all_sources_by_grammar(true)
+    let all_cpp2_source_list: BTreeSet<&CodeFileInfo> = self.project_data.all_sources_by_grammar(CppFileGrammar::Cpp2, false)
       .into_iter()
       .collect();
-    all_cpp2_source_list.sort();
 
     self.set_code_file_collection(
       "all_cpp2_files",
@@ -1878,34 +1936,28 @@ impl<'a> CMakeListsWriter<'a> {
 
   fn cmake_absolute_code_file_path(
     &self,
-    cleaned_file_root: &str,
-    code_file_info: &CodeFileInfo,
-    cmake_location_prefix: &str,
-    generated_src_prefix: &str,
+    file_root_dir_str: &str,
+    code_file_info_in: &CodeFileInfo,
+    cmake_absolute_dir_prefix: &str,
+    cmake_generated_src_dir_prefix: &str,
     options: &CodeFileTransformOptions
   ) -> String {
-    let mut fixed_file_path: String = code_file_info.get_file_path()
+    let mut fixed_file_path: String = code_file_info_in.get_file_path()
       .to_str()
       .unwrap()
       .to_string();
 
-    // Due to how .cpp2 files are processed, their path must always be relative to the
-    // project root, not to their "src directory" if applicable.
-    let file_root_replacer: &str = if code_file_info.uses_cpp2_grammar()
-      { self.project_data.get_project_root_dir() }
-      else { cleaned_file_root };
-
-    if fixed_file_path.starts_with(file_root_replacer) {
-      fixed_file_path = fixed_file_path.replace(file_root_replacer, "");
+    if fixed_file_path.starts_with(file_root_dir_str) && !(code_file_info_in.uses_cpp2_grammar() && !options.should_retain_cpp2_paths) {
+      fixed_file_path = fixed_file_path.replace(file_root_dir_str, "");
     }
 
-    let used_path_prefix_var: &str = match code_file_info.code_file_type() {
-      RetrievedCodeFileType::Source { uses_cpp2_grammar: true } if !options.should_retain_cpp2_paths => {
+    let used_path_prefix_var: &str = match code_file_info_in.code_file_type() {
+      RetrievedCodeFileType::Source { used_grammar: CppFileGrammar::Cpp2 } if !options.should_retain_cpp2_paths => {
         // cppfront (.cpp2) generated files are always .cpp
         fixed_file_path = fixed_file_path.replace(".cpp2", ".cpp");
-        generated_src_prefix
+        cmake_generated_src_dir_prefix
       },
-      _ => cmake_location_prefix
+      _ => cmake_absolute_dir_prefix
     };
 
     let relative_path: &str = if fixed_file_path.starts_with('/')
@@ -1920,22 +1972,20 @@ impl<'a> CMakeListsWriter<'a> {
     var_name: &str,
     file_location_root: &str,
     cmake_location_prefix: &str,
-    generated_src_prefix: &str,
-    file_path_collection: &Vec<impl AsRef<CodeFileInfo>>,
+    cmake_generated_src_dir_prefix: &str,
+    file_path_collection: &BTreeSet<impl AsRef<CodeFileInfo>>,
     options: &CodeFileTransformOptions
   ) -> io::Result<()> {
-    let cleaned_file_root: String = cleaned_path_str(file_location_root);
-
     writeln!(&self.cmakelists_file, "set( {}", var_name)?;
     for code_file_info in file_path_collection {
       writeln!(
         &self.cmakelists_file,
         "\t{}",
         self.cmake_absolute_code_file_path(
-          &cleaned_file_root,
+          file_location_root,
           code_file_info.as_ref(),
           cmake_location_prefix,
-          generated_src_prefix,
+          cmake_generated_src_dir_prefix,
           &options
         )
       )?;
@@ -1966,7 +2016,7 @@ impl<'a> CMakeListsWriter<'a> {
 
     self.set_code_file_collection(
       &src_var_name,
-      self.project_data.get_src_dir(),
+      self.project_data.get_src_dir_relative_to_project_root(),
       &self.src_root_var,
       &self.generated_src_root_var,
       &self.project_data.src_files,
@@ -1976,7 +2026,7 @@ impl<'a> CMakeListsWriter<'a> {
 
     self.set_code_file_collection(
       &includes_var_name,
-      self.project_data.get_include_dir(),
+      self.project_data.get_include_dir_relative_to_project_root(),
       &self.header_root_var,
       &self.generated_src_root_var,
       &self.project_data.include_files,
@@ -1992,7 +2042,7 @@ impl<'a> CMakeListsWriter<'a> {
 
       self.set_code_file_collection(
         &template_impl_var_name,
-        self.project_data.get_include_dir(),
+        self.project_data.get_include_dir_relative_to_project_root(),
         &self.header_root_var,
         &self.generated_src_root_var,
         &self.project_data.template_impl_files,

@@ -1,6 +1,6 @@
 use std::{cell::{RefCell}, rc::{Rc, Weak}, hash::{Hash, Hasher}, collections::{HashMap, HashSet, VecDeque, BTreeSet}, borrow::Borrow, path::{Path, PathBuf}, iter::FromIterator};
 
-use crate::{project_info::{LinkMode, CompiledOutputItem, PreBuildScript, OutputItemLinks, final_project_data::FinalProjectData, final_dependencies::{FinalGCMakeDependency, FinalPredefinedDependencyConfig, GCMakeDependencyStatus, FinalRequirementSpecifier, FinalTargetConfig, FinalExternalRequirementSpecifier, FinalPredepInfo}, LinkSpecifier, FinalProjectType, parsers::{link_spec_parser::{LinkAccessMode, LinkSpecTargetList, LinkSpecifierTarget}, system_spec::platform_spec_parser::SystemSpecifierWrapper}, raw_data_in::{dependencies::internal_dep_config::raw_dep_common::RawEmscriptenConfig, OutputItemType}, FinalFeatureEnabler}};
+use crate::{project_info::{LinkMode, CompiledOutputItem, PreBuildScript, OutputItemLinks, final_project_data::FinalProjectData, final_dependencies::{FinalGCMakeDependency, FinalPredefinedDependencyConfig, GCMakeDependencyStatus, FinalRequirementSpecifier, FinalTargetConfig, FinalExternalRequirementSpecifier, FinalPredepInfo}, LinkSpecifier, FinalProjectType, parsers::{link_spec_parser::{LinkAccessMode, LinkSpecTargetList, LinkSpecifierTarget}, system_spec::platform_spec_parser::SystemSpecifierWrapper}, raw_data_in::{dependencies::internal_dep_config::raw_dep_common::RawEmscriptenConfig, OutputItemType}, FinalFeatureEnabler, PreBuildScriptType}};
 
 use super::hash_wrapper::RcRefcHashWrapper;
 use colored::*;
@@ -388,13 +388,13 @@ impl<'a> TargetNode<'a> {
           else { SimpleNodeOutputType::Executable };
         node_type = NodeType::ProjectOutput;
       },
-      ContainedItem::PreBuild(pre_build) => match pre_build {
-        PreBuildScript::Exe(pre_build_exe) => {
+      ContainedItem::PreBuild(pre_build) => match pre_build.get_type() {
+        PreBuildScriptType::Exe(pre_build_exe) => {
           raw_link_specifiers = Some(pre_build_exe.get_links().clone());
           output_type = SimpleNodeOutputType::Executable;
           node_type = NodeType::PreBuild;
         },
-        PreBuildScript::Python(_) => {
+        PreBuildScriptType::Python(_) => {
           raw_link_specifiers = None;
           // This is just a placeholder. Not sure if this will cause issues yet, but it shouldn't.
           output_type = SimpleNodeOutputType::Executable;
@@ -1074,8 +1074,8 @@ impl<'a> DependencyGraph<'a> {
 
         let output_executable: Option<&CompiledOutputItem> = match &target.contained_item {
           ContainedItem::PredefinedLibrary { .. } => None,
-          ContainedItem::PreBuild(pre_build) => match pre_build {
-            PreBuildScript::Exe(pre_build_exe) => Some(pre_build_exe),
+          ContainedItem::PreBuild(pre_build) => match pre_build.get_type() {
+            PreBuildScriptType::Exe(pre_build_exe) => Some(pre_build_exe),
             _ => None
           }
           ContainedItem::CompiledOutput(output) => match output.get_output_type() {
@@ -1427,7 +1427,10 @@ impl<'a> DependencyGraph<'a> {
       // Low priority.
       let target_requires_cppfront: bool = match target.get_contained_item() {
         ContainedItem::CompiledOutput(output) => output.get_entry_file().uses_cpp2_grammar(),
-        ContainedItem::PreBuild(PreBuildScript::Exe(pre_build_exe)) => pre_build_exe.entry_file.uses_cpp2_grammar(),
+        ContainedItem::PreBuild(pre_build_script) => match pre_build_script.get_type() {
+          PreBuildScriptType::Exe(pre_build_exe) => pre_build_exe.entry_file.uses_cpp2_grammar(),
+          _ => false
+        }
         _ => false
       };
 

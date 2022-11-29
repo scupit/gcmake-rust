@@ -21,6 +21,8 @@ Support for:
 - NVidia CUDA compiler?
 
 - [ ] Now that minimal installs are implemented, add ability to specify exactly which executables are installed.
+- [ ] Use CMake 3.25 ([Release Notes Here](https://cmake.org/cmake/help/v3.25/release/3.25.html)) for these features:
+  - *LINUX* and *CMAKE_HOST_LINUX* variables
 
 ### CLI TODO
 

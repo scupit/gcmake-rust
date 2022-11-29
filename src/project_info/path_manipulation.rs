@@ -4,8 +4,8 @@ pub fn cleaned_path_str(file_path: &str) -> String {
   return path_clean::clean(&file_path.replace("\\", "/"));
 }
 
-pub fn cleaned_pathbuf(file_path: PathBuf) -> PathBuf {
-  let replaced_path: String = cleaned_path_str(file_path.to_str().unwrap());
+pub fn cleaned_pathbuf(file_path: impl AsRef<Path>) -> PathBuf {
+  let replaced_path: String = cleaned_path_str(file_path.as_ref().to_str().unwrap());
   return PathBuf::from(replaced_path);
 }
 
@@ -20,7 +20,7 @@ pub fn without_leading_dot(some_path_or_extension: impl AsRef<str>) -> String {
   }
 }
 
-pub fn relative_to_project_root(project_root: &str, file_path: PathBuf) -> String {
+pub fn relative_to_project_root(project_root: &str, file_path: impl AsRef<Path>) -> String {
   let replacer: String = if project_root == "." {
     "./".to_owned()
   }
@@ -34,27 +34,23 @@ pub fn relative_to_project_root(project_root: &str, file_path: PathBuf) -> Strin
   };
 
   return file_path
+    .as_ref()
     .to_string_lossy()
     .to_string()
     .replace(&replacer, "");
 }
 
-fn absolute_path_internal<T>(a_path: &T) -> io::Result<PathBuf>
-  where T: AsRef<Path> + ToString
+fn absolute_path_internal(a_path: &Path) -> io::Result<PathBuf>
 {
   let abs_path: PathBuf = cleaned_pathbuf(env::current_dir()?.join(a_path));
   return Ok(abs_path);
 }
 
-pub fn absolute_path<T>(a_path: T) -> Result<PathBuf, String>
-  where T: AsRef<Path> + ToString
-{
-  match absolute_path_internal(&a_path) {
-    Ok(abs_pathbuf) => Ok(abs_pathbuf),
-    Err(err) => Err(format!(
+pub fn absolute_path(a_path: impl AsRef<Path>) -> Result<PathBuf, String> {
+  return absolute_path_internal(a_path.as_ref())
+    .map_err(|err| format!(
       "Failed to resolve absolute path from '{}'. More details: {}",
-      a_path.to_string(),
-      err.to_string())
-    )
-  }
+      a_path.as_ref().to_str().unwrap(),
+      err.to_string()
+    ));
 }

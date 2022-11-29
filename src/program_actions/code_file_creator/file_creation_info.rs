@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use crate::{project_info::path_manipulation::{relative_to_project_root, cleaned_path_str}, cli_config::clap_cli_config::FileCreationLang};
 
 use super::code_file_writer::CodeFileType;
@@ -73,7 +75,7 @@ impl SharedFileInfo {
   ) -> Self {
     let cleaned_given_path: String = relative_to_project_root(
       project_root,
-      cleaned_path_str(file_class_name).into()
+      PathBuf::from(cleaned_path_str(file_class_name))
     );
 
     return if let Some(last_slash_index) = cleaned_given_path.rfind('/') {

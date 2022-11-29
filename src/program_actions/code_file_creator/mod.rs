@@ -80,9 +80,9 @@ fn create_single_file_set(
     // (project_data.get_include_dir(), extension_for(CodeFileType::Header(command.language.clone()))),
     // (project_data.get_src_dir(), extension_for(CodeFileType::Source(command.language.clone()))),
     // (project_data.get_template_impl_dir(), extension_for(CodeFileType::TemplateImpl(command.language.clone()))),
-    (project_data.get_include_dir(), CodeFileType::Header(command.language.clone())),
-    (project_data.get_src_dir(), CodeFileType::Source(command.language.clone())),
-    (project_data.get_include_dir(), CodeFileType::TemplateImpl(command.language.clone()))
+    (project_data.get_include_dir_relative_to_cwd(), CodeFileType::Header(command.language.clone())),
+    (project_data.get_src_dir_relative_to_cwd(), CodeFileType::Source(command.language.clone())),
+    (project_data.get_include_dir_relative_to_cwd(), CodeFileType::TemplateImpl(command.language.clone()))
   ]
     .map(|(code_root, code_file_type)| {
       let file_name = format!(

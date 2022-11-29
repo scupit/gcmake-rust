@@ -1,8 +1,8 @@
-use std::{collections::{HashMap, HashSet, BTreeMap}, path::{Path, PathBuf}, io, rc::Rc, fs::{self}, iter::FromIterator};
+use std::{collections::{HashMap, HashSet, BTreeMap, BTreeSet}, path::{Path, PathBuf}, io, rc::Rc, fs::{self}, iter::FromIterator};
 
 use crate::project_info::path_manipulation::cleaned_pathbuf;
 
-use super::{path_manipulation::{cleaned_path_str, relative_to_project_root, absolute_path}, final_dependencies::{FinalGCMakeDependency, FinalPredefinedDependencyConfig}, raw_data_in::{RawProject, dependencies::internal_dep_config::AllRawPredefinedDependencies, BuildType, LanguageConfigMap, OutputItemType, PreBuildConfigIn, SpecificCompilerSpecifier, BuildConfigCompilerSpecifier, TargetSpecificBuildType, LinkSection, RawTestFramework, DefaultCompiledLibType}, final_project_configurables::{FinalProjectType}, CompiledOutputItem, helpers::{parse_subproject_data, parse_root_project_data, populate_files, find_prebuild_script, PrebuildScriptFile, validate_raw_project_outputs, ProjectOutputType, RetrievedCodeFileType, code_file_type, parse_test_project_data}, PreBuildScript, OutputItemLinks, FinalTestFramework, base_include_prefix_for_test, gcmake_constants::{SRC_DIR, INCLUDE_DIR, TESTS_DIR, SUBPROJECTS_DIR}, FinalInstallerConfig, CompilerDefine, FinalBuildConfigMap, make_final_target_build_config, make_final_build_config_map, FinalTargetBuildConfigMap, FinalGlobalProperties, FinalShortcutConfig, parsers::{version_parser::ThreePartVersion, general_parser::ParseSuccess}, platform_spec_parser::parse_leading_system_spec, SystemSpecifierWrapper, FinalFeatureConfig, FinalFeatureEnabler, CodeFileInfo};
+use super::{path_manipulation::{cleaned_path_str, relative_to_project_root, absolute_path}, final_dependencies::{FinalGCMakeDependency, FinalPredefinedDependencyConfig}, raw_data_in::{RawProject, dependencies::internal_dep_config::AllRawPredefinedDependencies, BuildType, LanguageConfigMap, OutputItemType, PreBuildConfigIn, SpecificCompilerSpecifier, BuildConfigCompilerSpecifier, TargetSpecificBuildType, LinkSection, RawTestFramework, DefaultCompiledLibType, RawCompiledItem}, final_project_configurables::{FinalProjectType}, CompiledOutputItem, helpers::{parse_subproject_data, parse_root_project_data, populate_existing_files, find_prebuild_script, PrebuildScriptFile, validate_raw_project_outputs, ProjectOutputType, RetrievedCodeFileType, code_file_type, parse_test_project_data}, PreBuildScript, OutputItemLinks, FinalTestFramework, base_include_prefix_for_test, gcmake_constants::{SRC_DIR, INCLUDE_DIR, TESTS_DIR, SUBPROJECTS_DIR}, FinalInstallerConfig, CompilerDefine, FinalBuildConfigMap, make_final_target_build_config, make_final_build_config_map, FinalTargetBuildConfigMap, FinalGlobalProperties, FinalShortcutConfig, parsers::{version_parser::ThreePartVersion, general_parser::ParseSuccess}, platform_spec_parser::parse_leading_system_spec, SystemSpecifierWrapper, FinalFeatureConfig, FinalFeatureEnabler, CodeFileInfo, FileRootGroup, PreBuildScriptType};
 use colored::*;
 
 const SUBPROJECT_JOIN_STR: &'static str = "_S_";
@@ -12,41 +12,87 @@ const TEST_TARGET_JOIN_STR: &'static str = "_T_";
 fn resolve_prebuild_script(
   project_root: &str,
   pre_build_config: &PreBuildConfigIn,
-  valid_feature_list: Option<&Vec<&str>>
+  valid_feature_list: Option<&Vec<&str>>,
+  file_root_group: &FileRootGroup
 ) -> Result<Option<PreBuildScript>, String> {
-  let merged_script_config = if let Some(script_file) = find_prebuild_script(project_root) {
-    Some(match script_file {
-      PrebuildScriptFile::Exe(entry_file_pathbuf) => {
-        PreBuildScript::Exe(CompiledOutputItem {
-          output_type: OutputItemType::Executable,
-          entry_file: CodeFileInfo::from_path(relative_to_project_root(project_root, entry_file_pathbuf)),
-          windows_icon_relative_to_root_project: None,
-          emscripten_html_shell_relative_to_project_root: None,
-          system_specifier: SystemSpecifierWrapper::default(),
-          links: match &pre_build_config.link {
-            Some(raw_links) => CompiledOutputItem::make_link_map(
-              &format!("Pre-build script"),
-              &OutputItemType::Executable,
-              &LinkSection::Uncategorized(raw_links.clone()),
-              valid_feature_list
-            )?,
-            None => OutputItemLinks::new_empty()
-          },
-          build_config: make_final_target_build_config(
-            pre_build_config.build_config.as_ref(),
-            valid_feature_list
-          )?,
-          requires_custom_main: false
-        })
-      },
-      PrebuildScriptFile::Python(python_file_pathbuf) => PreBuildScript::Python(
-        relative_to_project_root(project_root, python_file_pathbuf)
-      )
-    })
-  }
-  else { None };
+  let mut generated_file_set: BTreeSet<CodeFileInfo> = BTreeSet::new();
 
-  return Ok(merged_script_config);
+  if let Some(specified_set) = pre_build_config.generated_code.as_ref() {
+    let absolute_project_root: PathBuf = absolute_path(&file_root_group.project_root)?;
+
+    for single_generated_file in specified_set {
+      let relative_file_root: &Path = match code_file_type(single_generated_file) {
+        RetrievedCodeFileType::Source { .. } => file_root_group.src_root.as_path(),
+        RetrievedCodeFileType::Header
+          | RetrievedCodeFileType::TemplateImpl => file_root_group.header_root.as_path(),
+        _ => {
+          return Err(format!(
+            "Pre-build script specifies generated file \"{}\" which is not a Header, Source, or Template Implementation file. Only code (header, source, template-impl) can be explicitly listed as generated.",
+            single_generated_file
+          ));
+        }
+      };
+
+      let file_root: PathBuf = absolute_path(relative_file_root)?;
+      let absolute_file_path: PathBuf = absolute_path(file_root.join(single_generated_file))?;
+
+      assert!(
+        file_root.starts_with(&absolute_project_root),
+        "File root must be inside its project root directory."
+      );
+
+      if absolute_file_path.starts_with(&file_root) {
+        generated_file_set.insert(
+          CodeFileInfo::from_path(
+            absolute_file_path.strip_prefix(&absolute_project_root).unwrap(),
+            true
+          )
+        );
+      }
+      else {
+        return Err(format!(
+          "Pre-build script attempts to generate file \"{}\" which is outside its root directory \"{}\"." ,
+          absolute_file_path.to_str().unwrap(),
+          file_root.to_str().unwrap()
+        ));
+      }
+    }
+  }
+
+  match find_prebuild_script(project_root) {
+    None => return Ok(None),
+    Some(script_file) => match script_file {
+      PrebuildScriptFile::Exe(entry_file_pathbuf) => {
+        let raw_output_item = RawCompiledItem {
+          output_type: OutputItemType::Executable,
+          requires_custom_main: None,
+          emscripten_html_shell: None,
+          windows_icon: None,
+          entry_file: relative_to_project_root(project_root, entry_file_pathbuf),
+          build_config: pre_build_config.build_config.clone(),
+          link: pre_build_config.link.clone().map(LinkSection::Uncategorized)
+        };
+
+        return Ok(Some(PreBuildScript {
+          generated_code: generated_file_set,
+          type_config: PreBuildScriptType::Exe(CompiledOutputItem::make_from(
+            "Pre-build script",
+            &raw_output_item,
+            None,
+            valid_feature_list
+          )?)        
+        }));
+      },
+      PrebuildScriptFile::Python(python_file_pathbuf) => {
+        return Ok(Some(PreBuildScript {
+          generated_code: generated_file_set,
+          type_config: PreBuildScriptType::Python(
+            relative_to_project_root(project_root, python_file_pathbuf)
+          )
+        }))
+      }
+    }
+  }
 }
 
 fn feature_list_from(feature_map: &BTreeMap<String, FinalFeatureConfig>) -> Option<Vec<&str>> {
@@ -157,6 +203,12 @@ pub struct ProjectConstructorConfig {
   pub just_created_library_project_at: Option<String>
 }
 
+#[derive(PartialEq, Eq, Clone, Copy)]
+pub enum CppFileGrammar {
+  Cpp1,
+  Cpp2
+}
+
 // NOTE: Link validity is now checked using the DependencyGraph.
 pub struct FinalProjectData {
   project_type: FinalProjectType,
@@ -177,13 +229,19 @@ pub struct FinalProjectData {
   language_config_map: Rc<LanguageConfigMap>,
   global_defines: Vec<CompilerDefine>,
   global_properties: Option<FinalGlobalProperties>,
+
   base_include_prefix: String,
   full_include_prefix: String,
-  src_dir: String,
-  include_dir: String,
-  pub src_files: Vec<CodeFileInfo>,
-  pub include_files: Vec<CodeFileInfo>,
-  pub template_impl_files: Vec<CodeFileInfo>,
+
+  src_dir_relative_to_cwd: String,
+  src_dir_relative_to_project_root: String,
+  include_dir_relative_to_cwd: String,
+  include_dir_relative_to_project_root: String,
+
+  pub src_files: BTreeSet<CodeFileInfo>,
+  pub include_files: BTreeSet<CodeFileInfo>,
+  pub template_impl_files: BTreeSet<CodeFileInfo>,
+
   subprojects: SubprojectMap,
   test_framework: Option<FinalTestFramework>,
   tests: TestProjectMap,
@@ -454,28 +512,38 @@ impl FinalProjectData {
       }
     }
 
-    let project_root: String = cleaned_path_str(&unclean_project_root).to_string();
+    let project_root_relative_to_cwd: String = cleaned_path_str(&unclean_project_root).to_string();
     let project_vendor: String = raw_project.vendor.clone();
 
-    let project_src_dir = format!(
-      "{}/{}/{}",
-      &project_root,
+    let src_dir_relative_to_project_root: String = format!(
+      "{}/{}",
       SRC_DIR,
       &full_include_prefix
     );
 
-    let project_include_dir = format!(
-      "{}/{}/{}",
-      &project_root,
+    let src_dir_relative_to_cwd: String = format!(
+      "{}/{}",
+      &project_root_relative_to_cwd,
+      &src_dir_relative_to_project_root
+    );
+
+    let include_dir_relative_to_project_root: String = format!(
+      "{}/{}",
       INCLUDE_DIR,
       &full_include_prefix
+    );
+
+    let include_dir_relative_to_cwd: String = format!(
+      "{}/{}",
+      &project_root_relative_to_cwd,
+      &include_dir_relative_to_project_root
     );
 
     let mut test_project_map: SubprojectMap = SubprojectMap::new();
 
     let project_test_dir_path: PathBuf = PathBuf::from(format!(
       "{}/{}",
-      &project_root,
+      &project_root_relative_to_cwd,
       TESTS_DIR
     ));
 
@@ -528,7 +596,7 @@ impl FinalProjectData {
 
     let project_subproject_dir_path: PathBuf = PathBuf::from(format!(
       "{}/{}",
-      &project_root,
+      &project_root_relative_to_cwd,
       SUBPROJECTS_DIR
     ));
 
@@ -585,7 +653,7 @@ impl FinalProjectData {
 
     if let Some(gcmake_dep_map) = &raw_project.gcmake_dependencies {
       for (dep_name, dep_config) in gcmake_dep_map {
-        let dep_path: String = format!("{}/dep/{}", &project_root, &dep_name);
+        let dep_path: String = format!("{}/dep/{}", &project_root_relative_to_cwd, &dep_name);
 
         let maybe_dep_project: Option<Rc<FinalProjectData>> = if Path::new(&dep_path).exists() {
           Some(Rc::new(Self::create_new(
@@ -648,7 +716,12 @@ impl FinalProjectData {
 
       output_items.insert(
         actual_output_name.to_string(),
-        CompiledOutputItem::make_from(actual_output_name, raw_output_item, system_spec, valid_feature_list.as_ref())
+        CompiledOutputItem::make_from(
+          actual_output_name,
+          raw_output_item,
+          system_spec,
+          valid_feature_list.as_ref()
+        )
           .map_err(|err_message| ProjectLoadFailureReason::Other(
             format!("When creating output item named '{}':\n{}", output_name, err_message)
           ))?
@@ -680,13 +753,21 @@ impl FinalProjectData {
       }
     }
 
+    let file_root_group = FileRootGroup {
+      project_root: PathBuf::from(&project_root_relative_to_cwd),
+      header_root: PathBuf::from(&include_dir_relative_to_cwd),
+      src_root: PathBuf::from(&src_dir_relative_to_cwd)
+    };
+
     let prebuild_script = resolve_prebuild_script(
-      &project_root,
+      &project_root_relative_to_cwd,
       raw_project.prebuild_config.as_ref().unwrap_or(&PreBuildConfigIn {
         link: None,
-        build_config: None
+        build_config: None,
+        generated_code: None
       }),
-      valid_feature_list.as_ref()
+      valid_feature_list.as_ref(),
+      &file_root_group
     ).map_err(ProjectLoadFailureReason::Other)?;
 
     let maybe_version: Option<ThreePartVersion> = ThreePartVersion::from_str(raw_project.get_version());
@@ -756,14 +837,18 @@ impl FinalProjectData {
       supported_compilers: supported_compiler_set,
       project_type,
       project_output_type,
-      absolute_project_root: absolute_path(&project_root)
+      absolute_project_root: absolute_path(&project_root_relative_to_cwd)
         .map_err(ProjectLoadFailureReason::Other)?,
-      project_root_dir: project_root,
-      src_dir: project_src_dir,
-      include_dir: project_include_dir,
-      src_files: Vec::new(),
-      include_files: Vec::new(),
-      template_impl_files: Vec::new(),
+      project_root_dir: project_root_relative_to_cwd,
+
+      src_dir_relative_to_cwd,
+      src_dir_relative_to_project_root,
+      include_dir_relative_to_cwd,
+      include_dir_relative_to_project_root,
+
+      src_files: BTreeSet::new(),
+      include_files: BTreeSet::new(),
+      template_impl_files: BTreeSet::new(),
       subprojects,
       output: output_items,
       predefined_dependencies,
@@ -780,8 +865,27 @@ impl FinalProjectData {
       None => false
     };
 
-    populate_files(
-      Path::new(&finalized_project_data.src_dir),
+    if let Some(pre_build) = &finalized_project_data.prebuild_script {
+      for generated_code_file in &pre_build.generated_code {
+        let cloned_file_info: CodeFileInfo = generated_code_file.clone();
+
+        match generated_code_file.code_file_type() {
+          RetrievedCodeFileType::Source { .. } => {
+            finalized_project_data.src_files.insert(cloned_file_info);
+          },
+          RetrievedCodeFileType::Header | RetrievedCodeFileType::TemplateImpl => {
+            finalized_project_data.include_files.insert(cloned_file_info);
+          },
+          _ => ()
+        }
+      }
+    }
+
+    let usable_project_root = PathBuf::from(finalized_project_data.get_project_root_dir());
+
+    populate_existing_files(
+      usable_project_root.as_path(),
+      Path::new(&finalized_project_data.src_dir_relative_to_cwd),
       &mut finalized_project_data.src_files,
       &|file_path| match code_file_type(file_path) {
         RetrievedCodeFileType::Source { .. } => true,
@@ -790,8 +894,9 @@ impl FinalProjectData {
     )
       .map_err(|err| ProjectLoadFailureReason::Other(err.to_string()))?;
 
-    populate_files(
-      Path::new(&finalized_project_data.include_dir),
+    populate_existing_files(
+      usable_project_root.as_path(),
+      Path::new(&finalized_project_data.include_dir_relative_to_cwd),
       &mut finalized_project_data.include_files,
       &|file_path| match code_file_type(file_path) {
         RetrievedCodeFileType::Header => true,
@@ -800,8 +905,9 @@ impl FinalProjectData {
     )
       .map_err(|err| ProjectLoadFailureReason::Other(err.to_string()))?;
 
-    populate_files(
-      Path::new(&finalized_project_data.include_dir),
+    populate_existing_files(
+      usable_project_root.as_path(),
+      Path::new(&finalized_project_data.include_dir_relative_to_cwd),
       &mut finalized_project_data.template_impl_files,
       &|file_path| match code_file_type(file_path) {
         RetrievedCodeFileType::TemplateImpl => true,
@@ -952,8 +1058,8 @@ impl FinalProjectData {
     }
 
     if let Some(existing_script) = &self.prebuild_script {
-      match existing_script {
-        PreBuildScript::Exe(script_exe_config) => {
+      match existing_script.get_type() {
+        PreBuildScriptType::Exe(script_exe_config) => {
           let the_item_name: String = format!("{}'s pre-build script", self.get_project_base_name());
 
           self.validate_entry_file_type(
@@ -970,7 +1076,7 @@ impl FinalProjectData {
 
           self.ensure_valid_icon_config(&the_item_name, script_exe_config)?;
         },
-        PreBuildScript::Python(_) => ()
+        PreBuildScriptType::Python(_) => ()
       }
     }
 
@@ -985,12 +1091,27 @@ impl FinalProjectData {
   // }
 
   pub fn any_files_contain_cpp2_grammar(&self) -> bool {
-    return !self.all_sources_by_grammar(true).is_empty();
+    return !self.all_sources_by_grammar(CppFileGrammar::Cpp2, true).is_empty();
+  }
+
+  pub fn pre_build_entry_file(&self) -> Option<&CodeFileInfo> {
+    if let Some(pre_build) = self.get_prebuild_script() {
+      if let PreBuildScriptType::Exe(pre_build_exe) = pre_build.get_type() {
+        return Some(pre_build_exe.get_entry_file())
+      }
+    }
+    return None;
   }
 
   // Also includes entry files for output items and executable pre-build script.
-  pub fn all_sources_by_grammar(&self, cpp2_grammar: bool) -> HashSet<&CodeFileInfo> {
-    let mut all_regular_cpp_file_names: HashSet<&CodeFileInfo> = self.src_files.iter()
+  pub fn all_sources_by_grammar(
+    &self,
+    grammar: CppFileGrammar,
+    // Since the pre-build script is able to generate code files, we sometimes need the pre-build
+    // entry file to be transformed in a separate step from the rest of the project code.
+    should_include_pre_build_entry: bool
+  ) -> HashSet<&CodeFileInfo> {
+    let mut source_file_set: HashSet<&CodeFileInfo> = self.src_files.iter()
       .filter_map(|code_file_info|
         if code_file_info.uses_cpp2_grammar() {
           Some(code_file_info)
@@ -1002,32 +1123,37 @@ impl FinalProjectData {
       .collect();
 
     for (_, output) in &self.output {
-      if let RetrievedCodeFileType::Source { uses_cpp2_grammar } = output.entry_file.code_file_type() {
-        if uses_cpp2_grammar == cpp2_grammar {
-          all_regular_cpp_file_names.insert(output.get_entry_file());
+      if let RetrievedCodeFileType::Source { used_grammar } = output.entry_file.code_file_type() {
+        if grammar == used_grammar {
+          source_file_set.insert(output.get_entry_file());
         }
       }
     }
 
-    if let Some(PreBuildScript::Exe(pre_build_exe)) = &self.prebuild_script {
-      if let RetrievedCodeFileType::Source { uses_cpp2_grammar } = pre_build_exe.entry_file.code_file_type() {
-        if uses_cpp2_grammar == cpp2_grammar {
-          all_regular_cpp_file_names.insert(pre_build_exe.get_entry_file());
+    if should_include_pre_build_entry {
+      if let Some(pre_build_entry) = self.pre_build_entry_file() {
+        match (grammar, pre_build_entry.uses_cpp2_grammar()) {
+          (CppFileGrammar::Cpp1, false)
+          | (CppFileGrammar::Cpp2, true) =>
+          {
+            source_file_set.insert(pre_build_entry);
+          },
+          _ => ()
         }
       }
     }
 
-    return all_regular_cpp_file_names;
+    return source_file_set;
   }
 
   fn ensure_no_file_collision(&self) -> Result<(), String> {
-    let existing_normal_cpp_files: HashSet<&CodeFileInfo> = self.all_sources_by_grammar(false);
+    let existing_normal_cpp_files: HashSet<&CodeFileInfo> = self.all_sources_by_grammar(CppFileGrammar::Cpp1, true);
 
-    for cpp2_file_info in self.all_sources_by_grammar(true) {
+    for cpp2_file_info in self.all_sources_by_grammar(CppFileGrammar::Cpp2, true) {
       let cpp2_file: &Path = cpp2_file_info.get_file_path();
       let generated_file_name: PathBuf = cpp2_file.with_extension("").with_extension(".cpp");
 
-      if existing_normal_cpp_files.contains(&CodeFileInfo::from_path(generated_file_name.as_path())) {
+      if existing_normal_cpp_files.contains(&CodeFileInfo::from_path(generated_file_name.as_path(), false)) {
         return Err(format!(
           "Source file conflict! cpp2 file \"{}\" will be used to generate cpp file \"{}\" at build time, but the file \"{}\" already exists. Please rename one of the files to something else.",
           cpp2_file.to_str().unwrap().green(),
@@ -1384,12 +1510,20 @@ impl FinalProjectData {
     &self.vendor
   }
 
-  pub fn get_src_dir(&self) -> &str {
-    &self.src_dir
+  pub fn get_src_dir_relative_to_cwd(&self) -> &str {
+    &self.src_dir_relative_to_cwd
   }
 
-  pub fn get_include_dir(&self) -> &str {
-    &self.include_dir
+  pub fn get_src_dir_relative_to_project_root(&self) -> &str {
+    &self.src_dir_relative_to_project_root
+  }
+
+  pub fn get_include_dir_relative_to_cwd(&self) -> &str {
+    &self.include_dir_relative_to_cwd
+  }
+
+  pub fn get_include_dir_relative_to_project_root(&self) -> &str {
+    &self.include_dir_relative_to_project_root
   }
 
   pub fn get_build_configs(&self) -> &FinalBuildConfigMap {
