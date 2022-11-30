@@ -447,21 +447,19 @@ global_defines:
 >
 > **OPTIONAL** `Map<PropertyName, PropertyValue>`
 
-Overrides defaults global project properties. In the future, it
+Specify miscellaneous project-wide configuration options.
 
 | Property | Type | Default | Description |
 | -------- | ---- | ------- | ----------- |
 | `ipo_enabled_by_default` | boolean | `false` | Whether to enable interprocedural optimization for the entire build (dependencies and all) by default. When `true`, [CMAKE_INTERPROCEDURAL_OPTIMIZATION](https://cmake.org/cmake/help/latest/variable/CMAKE_INTERPROCEDURAL_OPTIMIZATION.html) will default to *ON*. |
+| `are_language_extensions_enabled` | boolean | `false` | Allows or disallows the use of C and C++ compiler language extensions. When `true`, [CXX_EXTENSIONS](https://cmake.org/cmake/help/latest/prop_tgt/CXX_EXTENSIONS.html) and [C_EXTENSIONS](https://cmake.org/cmake/help/latest/prop_tgt/C_EXTENSIONS.html) will be set to *ON* for each item built by your project. |
 | `default_compiled_lib_type` | `Static` \| `Shared` | `Shared` | The default type for any `CompiledLib` output created in the whole project tree, including dependencies. This value internally dictates the default value of *BUILD_STATIC_LIBS* and [BUILD_SHARED_LIBS](https://cmake.org/cmake/help/latest/variable/BUILD_SHARED_LIBS.html) variables. |
 
-In the future, I'd like to add a *features* section similar to
-[the one used by Cargo](https://doc.rust-lang.org/cargo/reference/features.html), however this is
-currently just a **TODO** item.
-
 ``` yaml
+# Example which overrides all the default values.
 global_properties:
-  # Overrides both defaults
   ipo_enabled_by_default: true
+  are_language_extensions_enabled: true
   default_compiled_lib_type: Static
 ```
 
