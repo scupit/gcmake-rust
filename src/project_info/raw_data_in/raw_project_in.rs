@@ -73,7 +73,8 @@ pub enum DefaultCompiledLibType {
 #[serde(deny_unknown_fields)]
 pub struct RawGlobalPropertyConfig {
   pub ipo_enabled_by_default: Option<bool>,
-  pub default_compiled_lib_type: Option<DefaultCompiledLibType>
+  pub default_compiled_lib_type: Option<DefaultCompiledLibType>,
+  pub are_language_extensions_enabled: Option<bool>
   // TODO: Add option for setting default Emscripten mode.
 }
 

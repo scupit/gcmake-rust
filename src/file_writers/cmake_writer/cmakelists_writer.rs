@@ -2966,14 +2966,16 @@ impl<'a> CMakeListsWriter<'a> {
     )?;
     self.write_newline()?;
 
+    let language_extensions_on_off: &str = on_or_off_str(self.project_data.are_language_extensions_enabled());
+
     self.write_properties_for_output(
       &target_name,
       &BTreeMap::from([
         (String::from("RUNTIME_OUTPUT_DIRECTORY"), String::from(RUNTIME_BUILD_DIR_VAR)),
         (String::from("LIBRARY_OUTPUT_DIRECTORY"), String::from(LIB_BUILD_DIR_VAR)),
         (String::from("ARCHIVE_OUTPUT_DIRECTORY"), String::from(LIB_BUILD_DIR_VAR)),
-        (String::from("C_EXTENSIONS"), String::from("OFF")),
-        (String::from("CXX_EXTENSIONS"), String::from("OFF"))
+        (String::from("C_EXTENSIONS"), String::from(language_extensions_on_off)),
+        (String::from("CXX_EXTENSIONS"), String::from(language_extensions_on_off))
       ])
     )?;
     self.write_newline()?;
@@ -3093,13 +3095,15 @@ impl<'a> CMakeListsWriter<'a> {
       self.write_newline()?;
     }
 
+    let language_extensions_on_off: &str = on_or_off_str(self.project_data.are_language_extensions_enabled());
+
     // TODO: Might need to write these for the receiver lib too. Not sure though.
     self.write_properties_for_output(
       target_name,
       &BTreeMap::from([
         (String::from("RUNTIME_OUTPUT_DIRECTORY"), String::from(RUNTIME_BUILD_DIR_VAR)),
-        (String::from("C_EXTENSIONS"), String::from("OFF")),
-        (String::from("CXX_EXTENSIONS"), String::from("OFF"))
+        (String::from("C_EXTENSIONS"), String::from(language_extensions_on_off)),
+        (String::from("CXX_EXTENSIONS"), String::from(language_extensions_on_off))
       ])
     )?;
     self.write_newline()?;

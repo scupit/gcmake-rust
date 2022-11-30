@@ -716,7 +716,8 @@ pub fn make_final_target_build_config(
 
 pub struct FinalGlobalProperties {
   pub ipo_enabled_by_default: bool,
-  pub default_compiled_lib_type: DefaultCompiledLibType
+  pub default_compiled_lib_type: DefaultCompiledLibType,
+  pub are_language_extensions_enabled: bool
 }
 
 impl FinalGlobalProperties {
@@ -724,7 +725,8 @@ impl FinalGlobalProperties {
     let final_property_config: Self = Self {
       ipo_enabled_by_default: raw_global_properties.ipo_enabled_by_default.clone().unwrap_or(false),
       default_compiled_lib_type: raw_global_properties.default_compiled_lib_type.clone()
-        .unwrap_or(DefaultCompiledLibType::Shared)
+        .unwrap_or(DefaultCompiledLibType::Shared),
+      are_language_extensions_enabled: raw_global_properties.are_language_extensions_enabled.unwrap_or(false)
     };
 
     return final_property_config;

@@ -1550,6 +1550,13 @@ impl FinalProjectData {
     }
   }
 
+  pub fn are_language_extensions_enabled(&self) -> bool {
+    match &self.global_properties {
+      None => false,
+      Some(global_properties) => global_properties.are_language_extensions_enabled
+    }
+  }
+
   pub fn get_global_defines(&self) -> &Vec<CompilerDefine> {
     &self.global_defines
   }

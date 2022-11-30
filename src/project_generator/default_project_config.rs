@@ -327,7 +327,8 @@ pub fn get_default_project_config(
     global_defines: global_defines_default(include_emscripten_support),
     global_properties: Some(RawGlobalPropertyConfig {
       default_compiled_lib_type: None,
-      ipo_enabled_by_default: None
+      ipo_enabled_by_default: None,
+      are_language_extensions_enabled: None
     }),
     test_framework: None
   }
