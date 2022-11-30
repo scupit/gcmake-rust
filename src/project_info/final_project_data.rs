@@ -69,7 +69,7 @@ fn resolve_prebuild_script(
           emscripten_html_shell: None,
           windows_icon: None,
           defines: None,
-          entry_file: relative_to_project_root(project_root, entry_file_pathbuf),
+          entry_file: relative_to_project_root(project_root, entry_file_pathbuf).to_str().unwrap().to_string(),
           build_config: pre_build_config.build_config.clone(),
           link: pre_build_config.link.clone().map(LinkSection::Uncategorized)
         };
@@ -1043,41 +1043,14 @@ impl FinalProjectData {
     self.validate_project_type_specific_info()?;
 
     for (output_name, output_item) in &self.output {
-      self.validate_entry_file_type(
-        output_name,
-        output_item,
-        false
-      )?;
-
-      self.validate_output_specific_build_config(
-        output_name,
-        output_item.get_build_config_map(),
-        false
-      )?;
-
-      self.ensure_valid_icon_config(output_name, output_item)?;
+      let the_item_name: String = format!("output \"{}\"", output_name);
+      self.validate_target_info(&the_item_name, output_item, false)?;
     }
 
     if let Some(existing_script) = &self.prebuild_script {
-      match existing_script.get_type() {
-        PreBuildScriptType::Exe(script_exe_config) => {
-          let the_item_name: String = format!("{}'s pre-build script", self.get_project_base_name());
-
-          self.validate_entry_file_type(
-            &the_item_name,
-            script_exe_config,
-            true
-          )?;
-
-          self.validate_output_specific_build_config(
-            &the_item_name,
-            script_exe_config.get_build_config_map(),
-            true
-          )?;
-
-          self.ensure_valid_icon_config(&the_item_name, script_exe_config)?;
-        },
-        PreBuildScriptType::Python(_) => ()
+      if let PreBuildScriptType::Exe(script_exe_config) = existing_script.get_type() {
+        let the_item_name: String = format!("pre-build script (for project [{}])", self.get_name_for_error_messages());
+        self.validate_target_info(&the_item_name, script_exe_config, true)?;
       }
     }
 
@@ -1085,11 +1058,6 @@ impl FinalProjectData {
 
     Ok(())
   }
-
-  // pub fn shared_sources_contain_cpp2_grammar(&self) -> bool {
-  //   return self.src_files.iter()
-  //     .any(|code_file| code_file.uses_cpp2_grammar());
-  // }
 
   pub fn any_files_contain_cpp2_grammar(&self) -> bool {
     return !self.all_sources_by_grammar(CppFileGrammar::Cpp2, true).is_empty();
@@ -1247,23 +1215,74 @@ impl FinalProjectData {
     return None;
   }
 
+  fn validate_entry_file_path(
+    &self,
+    item_name: &str,
+    output_item: &CompiledOutputItem
+  ) -> Result<(), String> {
+    println!("{}", self.get_project_root_dir());
+    let absolute_entry_file_path: PathBuf = absolute_path(
+      Path::new(self.get_project_root_dir())
+        .join(output_item.get_entry_file().get_file_path())
+    )?;
+    let entry_file_directory: &Path = absolute_entry_file_path.parent().unwrap();
+
+    if entry_file_directory != self.get_absolute_project_root() {
+      let is_in_subdirectory_of_root: bool = entry_file_directory.starts_with(self.get_absolute_project_root());
+
+      if is_in_subdirectory_of_root {
+        return Err(format!(
+          "The entry_file \"{}\" for {} is in a subdirectory of its project root \"{}\". Entry files can only be placed in the immediate root directory of the project which contains them.",
+          absolute_entry_file_path.to_str().unwrap().magenta(),
+          item_name.yellow(),
+          self.get_absolute_project_root().to_str().unwrap().magenta()
+        ));
+      }
+      else {
+        return Err(format!(
+          "The entry_file \"{}\" for {} is not in the project's root directory \"{}\". Entry files can only be placed in the immediate root directory of the project which contains them.",
+          absolute_entry_file_path.to_str().unwrap().magenta(),
+          item_name.yellow(),
+          self.get_absolute_project_root().to_str().unwrap().magenta()
+        ));
+      }
+    }
+
+    Ok(())
+  }
+
+  fn validate_target_info(
+    &self,
+    item_name: &str,
+    output_item: &CompiledOutputItem,
+    _is_prebuild_script: bool
+  ) -> Result<(), String> {
+    self.validate_entry_file_type(item_name, output_item)?;
+    self.validate_entry_file_path(item_name, output_item)?;
+
+    self.validate_output_specific_build_config(
+      item_name,
+      output_item.get_build_config_map()
+    )?;
+
+    self.ensure_valid_icon_config(item_name, output_item)?;
+
+    Ok(())
+  }
+
   fn validate_entry_file_type(
     &self,
-    output_name: &str,
-    output_item: &CompiledOutputItem,
-    is_prebuild_script: bool
+    item_name: &str,
+    output_item: &CompiledOutputItem
   ) -> Result<(), String> {
     let entry_file_type: RetrievedCodeFileType = output_item.get_entry_file().code_file_type();
-    let item_string: String = if is_prebuild_script
-      { String::from("prebuild script") }
-      else { format!("output item '{}'", output_name )};
 
     match *output_item.get_output_type() {
       OutputItemType::Executable => {
         if !entry_file_type.is_source() {
           return Err(format!(
-            "The entry_file for executable {} in project '{}' should be a source file, but isn't.",
-            item_string,
+            "The entry_file for {} executable in project '{}' should be a source file, but isn't.",
+            item_name,
             self.get_project_base_name()
           ));
         }
@@ -1275,8 +1294,8 @@ impl FinalProjectData {
       {
         if !entry_file_type.is_normal_header() {
           return Err(format!(
-            "The entry_file for library {} in project '{}' should be a header file, but isn't.",
-            item_string,
+            "The entry_file for {} library in project '{}' should be a header file, but isn't.",
+            item_name,
             self.get_project_base_name()
           ));
         }
@@ -1326,9 +1345,8 @@ impl FinalProjectData {
 
   fn validate_output_specific_build_config(
     &self,
-    output_name: &str,
-    maybe_build_config_map: &Option<FinalTargetBuildConfigMap>,
-    is_prebuild_script: bool
+    item_name: &str,
+    maybe_build_config_map: &Option<FinalTargetBuildConfigMap>
   ) -> Result<(), String> {
     if maybe_build_config_map.is_none() {
       return Ok(());
@@ -1336,9 +1354,6 @@ impl FinalProjectData {
 
     for (build_type_or_all, config_by_compiler) in maybe_build_config_map.as_ref().unwrap() {
       let build_type_name: &str = build_type_or_all.name_string();
-      let item_string: String = if is_prebuild_script
-        { String::from("prebuild script") }
-        else { format!("output item '{}'", output_name )};
 
       match build_type_or_all {
         TargetSpecificBuildType::AllConfigs => (),
@@ -1348,7 +1363,7 @@ impl FinalProjectData {
           if !self.build_config_map.contains_key(&build_type) {
             return Err(format!(
               "The {} in project '{}' contains a '{}' configuration, but no '{}' build configuration is provided by the toplevel project.",
-              &item_string,
+              item_name,
               self.get_project_base_name(),
               build_type_name,
               build_type_name
@@ -1369,7 +1384,7 @@ impl FinalProjectData {
               return Err(format!(
                 "The '{}' build_config for {} in project '{}' contains a configuration for '{}', but '{}' is not supported by the project. If it should be supported, add '{}' to the supported_compilers list in the toplevel project.",
                 build_type_name,
-                &item_string,
+                item_name,
                 self.get_project_base_name(),
                 specific_spec_name,
                 specific_spec_name,
@@ -1463,8 +1478,8 @@ impl FinalProjectData {
     &self.project_root_dir
   }
 
-  pub fn get_absolute_project_root(&self) -> &str {
-    &self.absolute_project_root.to_str().unwrap()
+  pub fn get_absolute_project_root(&self) -> &Path {
+    &self.absolute_project_root.as_path()
   }
 
   pub fn get_base_include_prefix(&self) -> &str {

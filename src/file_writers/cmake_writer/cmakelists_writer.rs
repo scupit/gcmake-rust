@@ -405,7 +405,7 @@ impl<'a> CMakeListsWriter<'a> {
         else if !subproject_data.is_test_project() {
           writeln!( &self.cmakelists_file,
             "gcmake_configure_subproject(\n\t\"${{CMAKE_CURRENT_SOURCE_DIR}}/{}\"\n)",
-            relative_to_project_root(root_project_root_path, PathBuf::from(subproject_data.get_project_root_dir()))
+            relative_to_project_root(root_project_root_path, PathBuf::from(subproject_data.get_project_root_dir())).to_str().unwrap()
           )?;
         }
       }
@@ -925,7 +925,7 @@ impl<'a> CMakeListsWriter<'a> {
         PreBuildScriptType::Python(python_script_path) => {
           writeln!(&self.cmakelists_file,
             "use_python_prebuild_script( \"${{CMAKE_CURRENT_SOURCE_DIR}}/{}\" pre_build_generated_files_list )",
-            python_script_path
+            python_script_path.to_str().unwrap()
           )?;
         }
       }

@@ -76,7 +76,7 @@ impl SharedFileInfo {
     let cleaned_given_path: String = relative_to_project_root(
       project_root,
       PathBuf::from(cleaned_path_str(file_class_name))
-    );
+    ).to_str().unwrap().to_string();
 
     return if let Some(last_slash_index) = cleaned_given_path.rfind('/') {
       let shared_name: String = String::from(&cleaned_given_path[last_slash_index + 1..]); 

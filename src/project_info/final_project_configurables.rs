@@ -180,7 +180,7 @@ impl PreBuildScript {
 
 pub enum PreBuildScriptType {
   Exe(CompiledOutputItem),
-  Python(String)
+  Python(PathBuf)
 }
 
 #[derive(Hash, PartialEq, Eq, PartialOrd, Ord)]

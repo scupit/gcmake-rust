@@ -113,7 +113,7 @@ fn create_single_file_set(
         .to_str()
         .unwrap()
         .replace(
-          &format!("{}/", project_data.get_absolute_project_root()),
+          &format!("{}/", project_data.get_absolute_project_root().to_str().unwrap()),
           ""
         );
 
@@ -155,7 +155,7 @@ fn create_single_file_set(
         for file_path in created_files {
           println!(
             "Created: {}",
-            relative_to_project_root(&project_data.get_project_root_dir(), file_path).cyan()
+            relative_to_project_root(&project_data.get_project_root_dir(), file_path).to_str().unwrap().cyan()
           );
         }
       }

@@ -20,7 +20,7 @@ pub fn without_leading_dot(some_path_or_extension: impl AsRef<str>) -> String {
   }
 }
 
-pub fn relative_to_project_root(project_root: &str, file_path: impl AsRef<Path>) -> String {
+pub fn relative_to_project_root(project_root: &str, file_path: impl AsRef<Path>) -> PathBuf {
   let replacer: String = if project_root == "." {
     "./".to_owned()
   }
@@ -33,11 +33,13 @@ pub fn relative_to_project_root(project_root: &str, file_path: impl AsRef<Path>)
     owned
   };
 
-  return file_path
-    .as_ref()
-    .to_string_lossy()
-    .to_string()
-    .replace(&replacer, "");
+  return cleaned_pathbuf(
+    file_path
+      .as_ref()
+      .to_string_lossy()
+      .to_string()
+      .replace(&replacer, "")
+  );
 }
 
 fn absolute_path_internal(a_path: &Path) -> io::Result<PathBuf>
