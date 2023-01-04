@@ -1,6 +1,6 @@
-use std::{collections::{HashMap, HashSet, BTreeMap, BTreeSet }, fs::File, io::{self, Write, ErrorKind}, path::{PathBuf, Path}, rc::Rc, cell::{RefCell, Ref}, iter::FromIterator};
+use std::{collections::{HashSet, BTreeMap, BTreeSet }, fs::File, io::{self, Write, ErrorKind}, path::{PathBuf, Path}, rc::Rc, cell::{RefCell, Ref}, iter::FromIterator};
 
-use crate::{project_info::{final_project_data::{FinalProjectData, CppFileGrammar}, path_manipulation::{cleaned_path_str, relative_to_project_root}, final_dependencies::{GitRevisionSpecifier, PredefinedCMakeComponentsModuleDep, PredefinedSubdirDep, PredefinedCMakeModuleDep, FinalPredepInfo, GCMakeDependencyStatus, FinalPredefinedDependencyConfig, base64_encoded, PredefinedDepFunctionality, FinalDownloadMethod, FinalDebianPackagesConfig}, raw_data_in::{BuildType, BuildConfigCompilerSpecifier, SpecificCompilerSpecifier, OutputItemType, LanguageConfigMap, TargetSpecificBuildType, dependencies::internal_dep_config::{CMakeModuleType}, DefaultCompiledLibType}, FinalProjectType, CompiledOutputItem, PreBuildScript, LinkMode, FinalTestFramework, dependency_graph_mod::dependency_graph::{DependencyGraph, OrderedTargetInfo, ProjectWrapper, TargetNode, SimpleNodeOutputType, Link, EmscriptenLinkFlagInfo, ContainedItem}, SystemSpecifierWrapper, CompilerDefine, FinalBuildConfig, CompilerFlag, LinkerFlag, gcmake_constants::{SRC_DIR, INCLUDE_DIR}, platform_spec_parser::parse_leading_system_spec, CodeFileInfo, RetrievedCodeFileType, PreBuildScriptType}, file_writers::cmake_writer::cmake_writer_helpers::system_constraint_generator_expression};
+use crate::{project_info::{final_project_data::{FinalProjectData, CppFileGrammar}, path_manipulation::{relative_to_project_root}, final_dependencies::{GitRevisionSpecifier, PredefinedCMakeComponentsModuleDep, PredefinedSubdirDep, PredefinedCMakeModuleDep, FinalPredepInfo, GCMakeDependencyStatus, FinalPredefinedDependencyConfig, base64_encoded, PredefinedDepFunctionality, FinalDownloadMethod, FinalDebianPackagesConfig}, raw_data_in::{BuildType, BuildConfigCompilerSpecifier, SpecificCompilerSpecifier, OutputItemType, LanguageConfigMap, TargetSpecificBuildType, dependencies::internal_dep_config::{CMakeModuleType}, DefaultCompiledLibType}, FinalProjectType, CompiledOutputItem, LinkMode, FinalTestFramework, dependency_graph_mod::dependency_graph::{DependencyGraph, OrderedTargetInfo, ProjectWrapper, TargetNode, SimpleNodeOutputType, Link, EmscriptenLinkFlagInfo, ContainedItem}, SystemSpecifierWrapper, CompilerDefine, FinalBuildConfig, CompilerFlag, LinkerFlag, gcmake_constants::{SRC_DIR, INCLUDE_DIR}, platform_spec_parser::parse_leading_system_spec, CodeFileInfo, RetrievedCodeFileType, PreBuildScriptType}, file_writers::cmake_writer::cmake_writer_helpers::system_constraint_generator_expression};
 
 use super::{cmake_utils_writer::{CMakeUtilFile, CMakeUtilWriter}, cmake_writer_helpers::system_contstraint_conditional_expression};
 use colored::*;
@@ -1800,7 +1800,7 @@ impl<'a> CMakeListsWriter<'a> {
           - defines
     */
 
-    let mut simplified_map: HashMap<SpecificCompilerSpecifier, HashMap<&BuildType, &FinalBuildConfig>> = HashMap::new();
+    let mut simplified_map: BTreeMap<SpecificCompilerSpecifier, BTreeMap<&BuildType, &FinalBuildConfig>> = BTreeMap::new();
 
     for (build_type, build_config) in self.project_data.get_build_configs() {
       for (build_config_compiler, specific_config) in build_config {
@@ -1813,7 +1813,7 @@ impl<'a> CMakeListsWriter<'a> {
         };
 
         if simplified_map.get(&converted_compiler_specifier).is_none() {
-          simplified_map.insert(converted_compiler_specifier, HashMap::new());
+          simplified_map.insert(converted_compiler_specifier, BTreeMap::new());
         }
 
         simplified_map.get_mut(&converted_compiler_specifier)
@@ -2280,8 +2280,8 @@ impl<'a> CMakeListsWriter<'a> {
           }
         }
 
-        let mut any_compiler_config: HashMap<BuildType, &FinalBuildConfig> = HashMap::new();
-        let mut by_compiler: HashMap<SpecificCompilerSpecifier, HashMap<TargetSpecificBuildType, &FinalBuildConfig>> = HashMap::new();
+        let mut any_compiler_config: BTreeMap<BuildType, &FinalBuildConfig> = BTreeMap::new();
+        let mut by_compiler: BTreeMap<SpecificCompilerSpecifier, BTreeMap<TargetSpecificBuildType, &FinalBuildConfig>> = BTreeMap::new();
 
         for (build_type, config_by_compiler) in build_config_map {
           for (compiler_or_all, build_config) in config_by_compiler {
@@ -2297,7 +2297,7 @@ impl<'a> CMakeListsWriter<'a> {
                 let specific_specifier: SpecificCompilerSpecifier = compiler_spec.to_specific().unwrap();
 
                 if by_compiler.get(&specific_specifier).is_none() {
-                  by_compiler.insert(specific_specifier.clone(), HashMap::new());
+                  by_compiler.insert(specific_specifier.clone(), BTreeMap::new());
                 }
 
                 by_compiler.get_mut(&specific_specifier)
@@ -2530,7 +2530,7 @@ impl<'a> CMakeListsWriter<'a> {
       // See this page:
       // https://github.com/emscripten-core/emscripten/blob/main/src/settings.js
       // for a list of -s flags. Example: -sUSE_SDL=2
-      let mut emscripten_link_flags_to_apply: HashMap<String, Vec<EmscriptenLinkFlagInfo>> = HashMap::new();
+      let mut emscripten_link_flags_to_apply: BTreeMap<String, Vec<EmscriptenLinkFlagInfo>> = BTreeMap::new();
 
       let mut additional_installs: Vec<(Rc<RefCell<TargetNode>>, SystemSpecifierWrapper, LinkMode)> = Vec::new();
       let mut libs_to_link: BTreeMap<LinkMode, Vec<NormalLinkInfo>> = BTreeMap::new();

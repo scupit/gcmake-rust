@@ -969,7 +969,12 @@ impl<'a> DependencyGraph<'a> {
         let current_platform_spec_str: String = match link_systems {
           SystemSpecifierWrapper::All => String::from(""),
           SystemSpecifierWrapper::Specific(current_platform_spec_tree) =>
-            format!("Current: {}", current_platform_spec_tree.to_string())
+            format!(
+              "\n\tExample: {} {}\n\tCurrently using specifier: {}",
+              current_platform_spec_tree.to_string(),
+              dependency.as_ref().borrow().get_yaml_namespaced_target_name(),
+              current_platform_spec_tree.to_string()
+            )
         };
 
         if let DependencyGraphWarningMode::All = warning_mode {
