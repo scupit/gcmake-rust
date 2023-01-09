@@ -3390,6 +3390,8 @@ impl<'a> CMakeListsWriter<'a> {
     graph_for_dependency: &Rc<RefCell<DependencyGraph<'a>>>
   ) -> UsageConditionalGroup<'a> {
     let root_dep_id = graph_for_dependency.as_ref().borrow().root_project_id();
+    
+    // TODO: Refactor this into something easier to read.
     let constraints_for_used_links: Vec<SingleUsageConditional> = self.sorted_target_info.all_targets_with_root_project_id(self.dep_graph_ref().root_project_id())
       .iter()
       .filter_map(|wrapped_project_target| {

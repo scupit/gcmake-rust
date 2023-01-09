@@ -3,7 +3,7 @@ pub mod user_given_dep_config;
 
 use std::{path::{PathBuf, Path}, fs::{DirEntry, self}, rc::Rc};
 
-use crate::program_actions::gcmake_dep_config_dir;
+use crate::{program_actions::gcmake_dep_config_dir, project_info::final_dependencies};
 
 use self::internal_dep_config::{AllRawPredefinedDependencies, SingleRawPredefinedDependencyConfigGroup, RawPredefinedDependencyInfo, PredefinedCMakeDepHookFile};
 use colored::*;
@@ -82,12 +82,14 @@ pub fn all_raw_supported_dependency_configs() -> Result<AllRawPredefinedDependen
           dep_dir_name.green(),
           err.to_string()
         ))?;
+
+      let find_module_base_name: &str = dep_configs.get_common()?.find_module_base_name().unwrap_or(dep_dir_name);
       
       let dep_config_container = RawPredefinedDependencyInfo {
         custom_find_module: load_hook_file(
           &entry_path,
-          dep_configs.get_common()?.find_module_base_name().unwrap_or(dep_dir_name),
-          format!("Find{}.cmake", dep_dir_name)
+          dep_dir_name,
+          format!("Find{}.cmake", find_module_base_name)
         )?,
         dep_configs,
         pre_load: load_hook_file(&entry_path, dep_dir_name, "pre_load.cmake")?,
