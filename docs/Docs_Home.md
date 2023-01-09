@@ -13,10 +13,11 @@ configuration work together.
 2. [Project Structure](project_structure.md)
 3. [cmake_data.yaml Configuration](cmake_data_config/cmake_data.md)
 4. [Predefined Dependency Compatibility Layer](predefined_dependency_doc.md)
-5. [The Configuration Directory](the_configuration_directory.md)
-6. [Cross Compilation](cross_compilation.md)
-7. [Compiler pitfalls](pitfall_list.md)
-8. [Project TODOs/Roadmap](TODO.md)
+5. [Updating dependencies](updating_dependency_repos.md)
+6. [The Configuration Directory](the_configuration_directory.md)
+7. [Cross Compilation](cross_compilation.md)
+8. [Compiler pitfalls](pitfall_list.md)
+9. [Project TODOs/Roadmap](TODO.md)
 
 ## Points of Interest
 
