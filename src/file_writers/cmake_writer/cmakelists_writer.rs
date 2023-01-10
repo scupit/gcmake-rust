@@ -1193,7 +1193,7 @@ impl<'a> CMakeListsWriter<'a> {
     writeln!(&self.cmakelists_file,
       "{}\tgcmake_config_file_add_contents( \"find_dependency( {} {} )\" )",
       indent,
-      dep_name,
+      dep_info.find_module_base_name(),
       search_type_spec
     )?;
     writeln!(&self.cmakelists_file,
@@ -1278,7 +1278,7 @@ impl<'a> CMakeListsWriter<'a> {
 
     writeln!(&self.cmakelists_file,
       "\tgcmake_config_file_add_contents( \"find_dependency( {} {} COMPONENTS {} )\" )",
-      dep_name,
+      dep_info.find_module_base_name(),
       search_type_spec,
       // For now, assume a components module will be installed with all components. Later, it would be nice
       // to only list the components which are transitively needed (i.e. PUBLIC or INTERFACE linked to an
