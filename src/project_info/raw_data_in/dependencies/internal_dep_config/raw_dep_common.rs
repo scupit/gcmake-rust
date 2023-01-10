@@ -26,6 +26,7 @@ pub trait RawPredepCommon {
   fn raw_target_map_in(&self) -> &RawPredefinedTargetMapIn;
   fn repo_url(&self) -> Option<&str>;
   fn github_url(&self) -> Option<&str>;
+  fn gcmake_readme_url(&self) -> Option<&str>;
   fn get_emscripten_config(&self) -> Option<&RawEmscriptenConfig>;
   fn supports_emscripten(&self) -> bool;
   fn is_internally_supported_by_emscripten(&self) -> bool;

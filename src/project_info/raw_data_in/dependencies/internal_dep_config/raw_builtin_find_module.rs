@@ -59,6 +59,10 @@ impl RawPredepCommon for RawModuleDep {
     None
   }
 
+  fn gcmake_readme_url(&self) -> Option<&str> {
+    Some(&self.links.gcmake_readme)
+  }
+
   fn get_emscripten_config(&self) -> Option<&RawEmscriptenConfig> {
     self.emscripten_config.as_ref()
   }

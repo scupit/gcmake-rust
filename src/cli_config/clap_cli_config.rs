@@ -260,8 +260,12 @@ pub struct PredepInfoCommand {
   pub show_can_trivially_cross_compile: bool,
 
   /// Show which download methods the dependency supports, if applicable
-  #[arg(short = 'd', long = "download-methods")]
+  #[arg(short = 'm', long = "download-methods")]
   pub show_supported_download_methods: bool,
+
+  /// Show which download methods the dependency supports, if applicable
+  #[arg(short = 'd', long = "doc-link")]
+  pub show_doc_link: bool,
 
   /// Prints whether the dependency supports can be compiled in a project which supports Emscripten
   #[arg(long = "supports-emscripten")]

@@ -1,3 +1,5 @@
+use std::borrow::Borrow;
+
 use serde::{Deserialize};
 
 use super::{raw_target_config_common::RawPredefinedTargetMapIn, RawMutualExclusionSet, raw_dep_common::{RawPredepCommon, RawEmscriptenConfig, RawDebianPackagesConfig}};
@@ -5,7 +7,8 @@ use super::{raw_target_config_common::RawPredefinedTargetMapIn, RawMutualExclusi
 #[derive(Deserialize, Clone)]
 #[serde(deny_unknown_fields)]
 pub struct RawSubdirDepLinks {
-  pub github: Option<String>
+  pub github: Option<String>,
+  pub gcmake_readme: Option<String>
 }
 
 #[derive(Deserialize, Clone)]
@@ -114,6 +117,13 @@ impl RawPredepCommon for RawSubdirectoryDependency {
     match &self.links {
       None => None,
       Some(links) => links.github.as_ref().map(|github_link| &github_link[..])
+    }
+  }
+
+  fn gcmake_readme_url(&self) -> Option<&str> {
+    match &self.links {
+      None => None,
+      Some(links) => links.gcmake_readme.as_ref().map(|gcmake_readme_link| &gcmake_readme_link[..])
     }
   }
 

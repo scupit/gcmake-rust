@@ -65,6 +65,10 @@ impl RawPredepCommon for RawComponentsModuleDep {
   fn github_url(&self) -> Option<&str> {
     None
   }
+
+  fn gcmake_readme_url(&self) -> Option<&str> {
+    Some(&self.links.gcmake_readme)
+  }
   
   fn supports_emscripten(&self) -> bool {
     false

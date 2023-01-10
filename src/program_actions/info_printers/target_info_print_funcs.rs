@@ -1,7 +1,6 @@
 use crate::project_info::{dependency_graph_mod::dependency_graph::{TargetNode, ContainedItem}, CompiledOutputItem};
 use colored::*;
 
-
 pub fn print_target_header(target: &TargetNode) {
   println!("\n========== {} ==========", target.get_yaml_namespaced_target_name().green());
 }

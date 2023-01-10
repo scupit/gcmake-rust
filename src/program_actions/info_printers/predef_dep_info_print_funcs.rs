@@ -1,4 +1,4 @@
-use crate::{project_info::raw_data_in::dependencies::internal_dep_config::raw_dep_common::RawPredepCommon};
+use crate::{project_info::raw_data_in::dependencies::internal_dep_config::raw_dep_common::RawPredepCommon, common};
 use colored::*;
 
 pub fn print_predef_dep_header(dep_name: &str) {
@@ -65,5 +65,12 @@ pub fn print_predep_supported_download_methods(common_info: &dyn RawPredepCommon
         download_method.cyan()
       );
     }
+  }
+}
+
+pub fn print_predep_doc_link(common_info: &dyn RawPredepCommon) {
+  match common_info.gcmake_readme_url() {
+    None => println!("Doesn't have a README"),
+    Some(gcmake_readme_url) => println!("{}", gcmake_readme_url)
   }
 }
