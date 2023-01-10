@@ -3,7 +3,7 @@ pub mod user_given_dep_config;
 
 use std::{path::{PathBuf, Path}, fs::{DirEntry, self}, rc::Rc};
 
-use crate::{program_actions::gcmake_dep_config_dir, project_info::final_dependencies};
+use crate::{program_actions::gcmake_dep_config_dir};
 
 use self::internal_dep_config::{AllRawPredefinedDependencies, SingleRawPredefinedDependencyConfigGroup, RawPredefinedDependencyInfo, PredefinedCMakeDepHookFile};
 use colored::*;

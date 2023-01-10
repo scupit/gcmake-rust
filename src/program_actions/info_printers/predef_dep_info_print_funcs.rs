@@ -1,4 +1,4 @@
-use crate::{project_info::raw_data_in::dependencies::internal_dep_config::raw_dep_common::RawPredepCommon, common};
+use crate::{project_info::raw_data_in::dependencies::internal_dep_config::raw_dep_common::RawPredepCommon};
 use colored::*;
 
 pub fn print_predef_dep_header(dep_name: &str) {

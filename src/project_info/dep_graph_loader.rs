@@ -200,7 +200,7 @@ pub fn load_graph(
           borrow_target(dependency).get_yaml_namespaced_target_name(),
         ));
       },
-      GraphLoadFailureReason::LinkSystemSubsetMismatch {
+      GraphLoadFailureReason::_LinkSystemSubsetMismatch {
         ref link_spec,
         link_system_spec_info: link_target_spec_info,
         ref link_spec_container_target,
@@ -244,7 +244,7 @@ pub fn load_graph(
           systems_string(borrowed_dependency.get_system_spec_info())
         ));
       },
-      GraphLoadFailureReason::LinkSystemRequirementImpossible {
+      GraphLoadFailureReason::_LinkSystemRequirementImpossible {
         ref target,
         ref target_container_project,
         ref link_system_spec_info,

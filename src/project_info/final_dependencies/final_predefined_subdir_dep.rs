@@ -7,19 +7,6 @@ use crate::project_info::{raw_data_in::dependencies::{internal_dep_config::{RawS
 use super::{predep_module_common::{PredefinedDepFunctionality, FinalDebianPackagesConfig}, final_target_map_common::{FinalTargetConfigMap, make_final_target_config_map}};
 
 #[derive(Clone)]
-pub struct FinalSubdirDepLinks {
-  github: Option<String>
-}
-
-impl FinalSubdirDepLinks {
-  pub fn new_empty() -> Self {
-    Self {
-      github: None
-    }
-  }
-}
-
-#[derive(Clone)]
 pub enum GitRevisionSpecifier {
   Tag(String),
   CommitHash(String)
@@ -239,9 +226,8 @@ pub struct PredefinedSubdirDep {
   _download_method: FinalDownloadMethod,
   installed_include_dir_name: Option<String>,
   // Unused for now, but may be used in the future to propagate installed DLLs from the gcmake project
-  // install dir on Windows.
-  // TODO: Do that, actually.
-  config_file_project_name: Option<String>,
+  // install dir on Windows. I'm not sure if that's a good idea or not.
+  _config_file_project_name: Option<String>,
   debian_packages: FinalDebianPackagesConfig,
   // Map of target base name to the namespaced target name used for linking.
   target_map: FinalTargetConfigMap,
@@ -249,7 +235,6 @@ pub struct PredefinedSubdirDep {
   yaml_namespaced_target_map: HashMap<String, String>,
   requires_custom_populate: bool,
   installation_details: Option<SubdirDepInstallationConfig>,
-  url_links: FinalSubdirDepLinks,
   raw_dep: RawSubdirectoryDependency
 }
 
@@ -264,10 +249,6 @@ impl PredefinedSubdirDep {
 
   pub fn custom_relative_include_dir_name(&self) -> &Option<String> {
     &self.installed_include_dir_name
-  }
-
-  pub fn different_config_file_project_name(&self) -> &Option<String> {
-    &self.config_file_project_name
   }
 
   pub fn requires_custom_fetchcontent_populate(&self) -> bool {
@@ -286,10 +267,6 @@ impl PredefinedSubdirDep {
 
   pub fn download_method(&self) -> &FinalDownloadMethod {
     &self._download_method
-  }
-
-  pub fn get_url_links(&self) -> &FinalSubdirDepLinks {
-    &self.url_links
   }
 
   pub fn from_subdir_dep(
@@ -352,21 +329,11 @@ impl PredefinedSubdirDep {
       _ => None
     };
 
-    let links_config: FinalSubdirDepLinks = match &subdir_dep.links {
-      None => FinalSubdirDepLinks::new_empty(),
-      Some(raw_links_config) => {
-        FinalSubdirDepLinks {
-          github: raw_links_config.github.clone()
-        }
-      }
-    };
-
     return Ok(
       Self {
-        url_links: links_config,
         _download_method: resolve_download_method(subdir_dep, user_given_config, dep_name)?,
         installed_include_dir_name: subdir_dep.installed_include_dir_name.clone(),
-        config_file_project_name: subdir_dep.config_file_project_name.clone(),
+        _config_file_project_name: subdir_dep.config_file_project_name.clone(),
         target_map,
         debian_packages: FinalDebianPackagesConfig::make_from(subdir_dep.raw_debian_packages_config()),
         cmake_namespaced_target_map,

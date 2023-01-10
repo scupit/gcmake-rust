@@ -104,13 +104,16 @@ pub enum GraphLoadFailureReason<'a> {
     dependency_project: Rc<RefCell<DependencyGraph<'a>>>,
     dependency: Rc<RefCell<TargetNode<'a>>>,
   },
-  LinkSystemRequirementImpossible {
+  // NOTE: These are currently never instantiated. However, they will be needed once the
+  // system specifier checks are implemented. See the commented-out portion
+  // of the "check_target_system_spec_links_are_valid" function later in this file.
+  _LinkSystemRequirementImpossible {
     target: Rc<RefCell<TargetNode<'a>>>,
     target_container_project: Rc<RefCell<DependencyGraph<'a>>>,
     link_system_spec_info: SystemSpecifierWrapper,
     dependency: Rc<RefCell<TargetNode<'a>>>
   },
-  LinkSystemSubsetMismatch {
+  _LinkSystemSubsetMismatch {
     link_spec: Option<LinkSpecifier>,
     link_system_spec_info: SystemSpecifierWrapper,
     link_spec_container_target: Rc<RefCell<TargetNode<'a>>>,
@@ -337,7 +340,7 @@ pub struct TargetNode<'a> {
   // TODO: Maybe remove this. Now that we do custom installs (where possible) for each used
   // target based on how it must be propagated after installation, this field isn't needed.
   // However, I'm keeping it for now because I feel like that information could be useful in the future.
-  requires_custom_install_if_linked_to_output_lib: bool,
+  _requires_custom_install_if_linked_to_output_lib: bool,
   is_linked_to_output_lib: bool,
 
   the_unique_id: TargetId,
@@ -415,7 +418,7 @@ impl<'a> TargetNode<'a> {
       namespaced_cmake_target_name: namespaced_output_target_name,
       namespaced_yaml_target_name,
 
-      requires_custom_install_if_linked_to_output_lib: should_install_if_linked_to_output_library,
+      _requires_custom_install_if_linked_to_output_lib: should_install_if_linked_to_output_library,
       is_linked_to_output_lib: false,
       
       contained_in_graph: parent_graph,
@@ -437,12 +440,12 @@ impl<'a> TargetNode<'a> {
     return self.output_type.clone();
   }
 
-  pub fn must_be_additionally_installed(&self) -> bool {
-    return self.requires_custom_install_if_linked_to_output_lib && self.is_linked_to_output_lib;
+  pub fn _must_be_additionally_installed(&self) -> bool {
+    return self._requires_custom_install_if_linked_to_output_lib && self.is_linked_to_output_lib;
   }
 
   // When targets are public/interface linked by libraries produced by the current project, 
-  pub fn should_be_searched_in_package_config(&self) -> bool {
+  pub fn _should_be_searched_in_package_config(&self) -> bool {
     return self.is_linked_to_output_lib;
   }
 

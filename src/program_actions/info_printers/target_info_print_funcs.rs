@@ -1,4 +1,4 @@
-use crate::project_info::{dependency_graph_mod::dependency_graph::{TargetNode, ContainedItem, SimpleNodeOutputType}, CompiledOutputItem, PreBuildScriptType};
+use crate::project_info::{dependency_graph_mod::dependency_graph::{TargetNode, ContainedItem}, CompiledOutputItem, PreBuildScriptType};
 use colored::*;
 
 pub fn print_target_header(target: &TargetNode) {

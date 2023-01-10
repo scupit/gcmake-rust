@@ -122,7 +122,7 @@ impl SystemSpecExpressionTree {
     }
   }
 
-  // NOTE: Not dead code. Used in the tests.
+  #[cfg(test)]
   fn exactly_matches_structure(&self, other: &SystemSpecExpressionTree) -> bool {
     match (self, other) {
       (SystemSpecExpressionTree::Value(value), SystemSpecExpressionTree::Value(other_val)) => value == other_val,
@@ -595,6 +595,7 @@ fn parse_token<'a>(
   }));
 }
 
+#[cfg(test)]
 struct ParserTestGroup<'a> {
   raw_expr: &'a str,
   expected_tree: Option<SystemSpecExpressionTree>
