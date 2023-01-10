@@ -25,7 +25,7 @@ The project overview is part of the documentation, and is found in [docs/overvie
 ## Usage Requirements
 
 - [Git](https://git-scm.com/) **1.6.5 or higher** must be installed on the system
-- [CMake](https://cmake.org/download/) **3.24** or higher
+- [CMake](https://cmake.org/download/) **3.24 or higher**
 
 ## Installation
 
@@ -33,7 +33,7 @@ For common use cases, see the [project overview](docs/overview.md) docs page.
 
 1. Clone the repository: `git clone --recurse-submodules git@github.com:scupit/gcmake-rust.git`
 2. `cd` into the cloned repository.
-3. Switch to the desired branch or release tag: `git checkout v1.5.6`.
+3. Switch to the desired branch or release tag: `git checkout v1.5.7`.
 4. Run `cargo install --path .` to create an optimized build and install the resulting gcmake-rust executable
   to `$HOME/.cargo/bin` (or `%USERPROFILE%\.cargo\bin` on Windows).
 5. Optionally, alias `gcmake-rust` to just `gcmake`.
