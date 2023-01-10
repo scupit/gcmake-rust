@@ -200,13 +200,18 @@ pub struct TargetInfoCommand {
   /// Select which targets to print info for. Can be in namespace format 'self::the-target'
   /// 'some-project::{ first-target, second-target }', or just a lone target name
   /// 'the-target'. Lone target names only select from targets in the project tree,
-  /// but namespaces are able to select dependency targets as well.
+  /// but namespaces are able to select dependency targets as well. use the name 'pre-build'
+  /// to select the project's pre-build script.
   #[arg(required = true)]
   pub selectors: Vec<String>,
 
   /// Print the include path of the auto-generated export header
   #[arg(short = 'e')]
-  pub export_header: bool
+  pub export_header: bool,
+
+  /// Prints a target's type (Executable, Static library, etc.).
+  #[arg(short = 't')]
+  pub item_type: bool
 }
 
 #[derive(Args)]
@@ -263,7 +268,7 @@ pub struct PredepInfoCommand {
   #[arg(short = 'm', long = "download-methods")]
   pub show_supported_download_methods: bool,
 
-  /// Show which download methods the dependency supports, if applicable
+  /// Prints a URL to the dependency's documentation README page if it has one
   #[arg(short = 'd', long = "doc-link")]
   pub show_doc_link: bool,
 

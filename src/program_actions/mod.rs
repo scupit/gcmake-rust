@@ -8,7 +8,7 @@ pub use code_file_creator::*;
 pub use manage_dependencies::*;
 use std::{io, path::PathBuf, fs, cell::RefCell, rc::Rc};
 
-use crate::{cli_config::{clap_cli_config::{UseFilesCommand, CreateFilesCommand, UpdateDependencyConfigsCommand, TargetInfoCommand, ProjectInfoCommand, PredepInfoCommand, ToolInfoCommand}, CLIProjectGenerationInfo, CLIProjectTypeGenerating}, common::{prompt::prompt_until_boolean}, logger::exit_error_log, project_info::{raw_data_in::dependencies::internal_dep_config::AllRawPredefinedDependencies, final_project_data::{UseableFinalProjectDataGroup, ProjectLoadFailureReason, FinalProjectData, ProjectConstructorConfig}, path_manipulation::absolute_path, dep_graph_loader::load_graph, dependency_graph_mod::dependency_graph::{DependencyGraphInfoWrapper, DependencyGraph, TargetNode, BasicTargetSearchResult, DependencyGraphWarningMode, BasicProjectSearchResult}, LinkSpecifier, validators::{is_valid_target_name, is_valid_project_name}}, file_writers::write_configurations, project_generator::GeneralNewProjectInfo, program_actions::info_printers::{target_info_print_funcs::{print_target_header, print_export_header_include_path}, project_info_print_funcs::{print_project_header, print_project_include_prefix, print_immediate_subprojects, print_project_repo_url, print_project_can_cross_compile, print_project_supports_emscripten}}};
+use crate::{cli_config::{clap_cli_config::{UseFilesCommand, CreateFilesCommand, UpdateDependencyConfigsCommand, TargetInfoCommand, ProjectInfoCommand, PredepInfoCommand, ToolInfoCommand}, CLIProjectGenerationInfo, CLIProjectTypeGenerating}, common::{prompt::prompt_until_boolean}, logger::exit_error_log, project_info::{raw_data_in::dependencies::internal_dep_config::AllRawPredefinedDependencies, final_project_data::{UseableFinalProjectDataGroup, ProjectLoadFailureReason, FinalProjectData, ProjectConstructorConfig}, path_manipulation::absolute_path, dep_graph_loader::load_graph, dependency_graph_mod::dependency_graph::{DependencyGraphInfoWrapper, DependencyGraph, TargetNode, BasicTargetSearchResult, DependencyGraphWarningMode, BasicProjectSearchResult}, LinkSpecifier, validators::{is_valid_target_name, is_valid_project_name}}, file_writers::write_configurations, project_generator::GeneralNewProjectInfo, program_actions::info_printers::{target_info_print_funcs::{print_target_header, print_export_header_include_path, print_target_type}, project_info_print_funcs::{print_project_header, print_project_include_prefix, print_immediate_subprojects, print_project_repo_url, print_project_can_cross_compile, print_project_supports_emscripten}}};
 
 use self::info_printers::predef_dep_info_print_funcs::{print_predef_dep_header, print_predep_targets, print_predep_repo_url, print_predep_github_url, print_predep_can_cross_compile, print_predep_supports_emscripten, print_predep_supported_download_methods, print_predep_doc_link};
 use colored::*;
@@ -132,11 +132,15 @@ pub fn print_target_info(
         },
         Some(target_rc) => {
           // All data printing is done here.
-          let target: &TargetNode = &target_rc.as_ref().borrow();
-          print_target_header(target);
+          let target_node: &TargetNode = &target_rc.as_ref().borrow();
+          print_target_header(target_node);
 
           if command.export_header {
-            print_export_header_include_path(target);
+            print_export_header_include_path(target_node);
+          }
+
+          if command.item_type {
+            print_target_type(target_node);
           }
         }
       }
