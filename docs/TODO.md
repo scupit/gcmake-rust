@@ -10,7 +10,6 @@ There are a whole bunch of things which need doing. This is the place to list th
 ## Priorities
 
 - [ ] Add CLI commands for cleaning and updating the dep-cache. Not exactly sure how updating should work yet.
-- [ ] Add `defines` property for outputs and executable pre-build script. It'll act as a shortcut for the annoying *build_configs.AllConfigs.AllCompilers.defines* chain.
 
 ## Configuration TODO
 

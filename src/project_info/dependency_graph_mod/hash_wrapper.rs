@@ -1,7 +1,7 @@
 use std::{ops::Deref, cell::RefCell, hash::{Hash, Hasher}, rc::Rc};
 
 pub struct RcRefcHashWrapper<T>(pub Rc<RefCell<T>>)
- where T: Hash + PartialEq + Eq;
+  where T: Hash + PartialEq + Eq;
 
 impl<T> RcRefcHashWrapper<T>
   where T: Hash + PartialEq + Eq
@@ -48,7 +48,20 @@ impl<T> PartialEq for RcRefcHashWrapper<T>
 
 impl<T> Eq for RcRefcHashWrapper<T>
   where T: Hash + PartialEq + Eq
-{
+{ }
 
+impl<T> Ord for RcRefcHashWrapper<T>
+  where T: Hash + PartialEq + Eq + Ord
+{
+  fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+    self.0.cmp(&other.0)
+  }
 }
 
+impl<T> PartialOrd for RcRefcHashWrapper<T>
+  where T: Hash + PartialEq + Eq + PartialOrd
+{
+  fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+    self.0.partial_cmp(&other.0)
+  }
+}

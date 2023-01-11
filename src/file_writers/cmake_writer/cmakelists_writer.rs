@@ -3275,7 +3275,7 @@ impl<'a> CMakeListsWriter<'a> {
       "if( ${{LOCAL_TOPLEVEL_PROJECT_NAME}}_BUILD_TESTS )"
     )?;
 
-    for (test_name, _) in self.project_data.get_test_projects() {
+    for (test_name, _) in self.dep_graph_ref().get_test_projects() {
       writeln!(&self.cmakelists_file,
         "\tadd_subdirectory( \"${{CMAKE_CURRENT_SOURCE_DIR}}/tests/{}\" )",
         test_name

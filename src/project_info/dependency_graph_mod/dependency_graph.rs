@@ -1,4 +1,4 @@
-use std::{cell::{RefCell}, rc::{Rc, Weak}, hash::{Hash, Hasher}, collections::{HashMap, HashSet, VecDeque, BTreeSet}, borrow::Borrow, path::{Path, PathBuf}, iter::FromIterator};
+use std::{cell::{RefCell}, rc::{Rc, Weak}, hash::{Hash, Hasher}, collections::{BTreeMap, BTreeSet, VecDeque}, borrow::Borrow, path::{Path, PathBuf}, iter::FromIterator, cmp::Ordering};
 
 use crate::{project_info::{LinkMode, CompiledOutputItem, PreBuildScript, OutputItemLinks, final_project_data::FinalProjectData, final_dependencies::{FinalGCMakeDependency, FinalPredefinedDependencyConfig, GCMakeDependencyStatus, FinalRequirementSpecifier, FinalTargetConfig, FinalExternalRequirementSpecifier, FinalPredepInfo}, LinkSpecifier, FinalProjectType, parsers::{link_spec_parser::{LinkAccessMode, LinkSpecTargetList, LinkSpecifierTarget}, system_spec::platform_spec_parser::SystemSpecifierWrapper}, raw_data_in::{dependencies::internal_dep_config::raw_dep_common::RawEmscriptenConfig, OutputItemType}, FinalFeatureEnabler, PreBuildScriptType}};
 
@@ -28,7 +28,7 @@ pub enum SimpleNodeOutputType {
 type TargetId = i32;
 type ProjectId = usize;
 
-#[derive(Clone, Hash, PartialEq, Eq)]
+#[derive(Clone, Hash, PartialEq, Eq, Ord, PartialOrd)]
 pub struct ProjectGroupId(usize);
 
 #[derive(Clone)]
@@ -236,6 +236,18 @@ impl<'a> PartialEq for Link<'a> {
 
 impl<'a> Eq for Link<'a> { }
 
+impl<'a> Ord for Link<'a> {
+  fn cmp(&self, other: &Self) -> Ordering {
+    self.linked_target().as_ref().borrow().cmp(&other.linked_target().as_ref().borrow())
+  }
+}
+
+impl<'a> PartialOrd for Link<'a> {
+  fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+    self.linked_target().as_ref().borrow().partial_cmp(&other.linked_target().as_ref().borrow())
+  }
+}
+
 #[derive(Clone)]
 pub enum ContainedItem<'a> {
   CompiledOutput(&'a CompiledOutputItem),
@@ -348,12 +360,27 @@ pub struct TargetNode<'a> {
   contained_in_graph: Weak<RefCell<DependencyGraph<'a>>>,
   output_type: SimpleNodeOutputType,
   visibility: LinkAccessMode,
-  // depends_on: HashSet<Link>,
-  depends_on: HashMap<TargetId, Link<'a>>,
+  // depends_on: BTreeSet<Link>,
+  depends_on: BTreeMap<TargetId, Link<'a>>,
   complex_requirements: Vec<NonOwningComplexTargetRequirement<'a>>,
   // TODO: This doesn't need to be a copy. This is just easier to use, for now.
   raw_link_specifiers: Option<OutputItemLinks>,
   contained_item: ContainedItem<'a>
+}
+
+impl<'a> Ord for TargetNode<'a> {
+  fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+    return match self.locator_name.cmp(&other.locator_name) {
+      Ordering::Equal => self.container_project().as_ref().borrow().project_debug_name().cmp(other.container_project().as_ref().borrow().project_debug_name()),
+      unequal_comparison => unequal_comparison
+    }
+  }
+}
+
+impl <'a> PartialOrd for TargetNode<'a> {
+  fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+    return Some(self.cmp(other));
+  }
 }
 
 impl<'a> TargetNode<'a> {
@@ -424,15 +451,15 @@ impl<'a> TargetNode<'a> {
       contained_in_graph: parent_graph,
       output_type,
       visibility,
-      // depends_on: HashSet::new(),
-      depends_on: HashMap::new(),
+      // depends_on: BTreeSet::new(),
+      depends_on: BTreeMap::new(),
       complex_requirements: Vec::new(),
       raw_link_specifiers,
       linked_to_count: 0
     }
   }
 
-  pub fn get_depends_on(&self) -> &HashMap<TargetId, Link<'a>> {
+  pub fn get_depends_on(&self) -> &BTreeMap<TargetId, Link<'a>> {
     &self.depends_on
   }
 
@@ -701,7 +728,7 @@ impl ProjectWrapper {
 
 enum CycleCheckResult<'a> {
   Cycle(Vec<RcRefcHashWrapper<TargetNode<'a>>>),
-  AllUsedTargets(HashSet<RcRefcHashWrapper<TargetNode<'a>>>)
+  AllUsedTargets(BTreeSet<RcRefcHashWrapper<TargetNode<'a>>>)
 }
 
 pub struct DependencyGraphInfoWrapper<'a> {
@@ -736,14 +763,14 @@ pub struct DependencyGraph<'a> {
   project_group_id: ProjectGroupId,
 
   _project_wrapper: ProjectWrapper,
-  targets: RefCell<HashMap<String, Rc<RefCell<TargetNode<'a>>>>>,
+  targets: RefCell<BTreeMap<String, Rc<RefCell<TargetNode<'a>>>>>,
   pre_build_wrapper: Option<Rc<RefCell<TargetNode<'a>>>>,
 
-  subprojects: HashMap<String, Rc<RefCell<DependencyGraph<'a>>>>,
-  test_projects: HashMap<String, Rc<RefCell<DependencyGraph<'a>>>>,
-  gcmake_deps: HashMap<String, Rc<RefCell<DependencyGraph<'a>>>>,
+  subprojects: BTreeMap<String, Rc<RefCell<DependencyGraph<'a>>>>,
+  test_projects: BTreeMap<String, Rc<RefCell<DependencyGraph<'a>>>>,
+  gcmake_deps: BTreeMap<String, Rc<RefCell<DependencyGraph<'a>>>>,
 
-  predefined_deps: HashMap<String, Rc<RefCell<DependencyGraph<'a>>>>
+  predefined_deps: BTreeMap<String, Rc<RefCell<DependencyGraph<'a>>>>
 }
 
 impl<'a> Hash for DependencyGraph<'a> {
@@ -759,6 +786,18 @@ impl<'a> PartialEq for DependencyGraph<'a> {
 }
 
 impl<'a> Eq for DependencyGraph<'a> { }
+
+impl<'a> Ord for DependencyGraph<'a> {
+  fn cmp(&self, other: &Self) -> Ordering {
+    self.project_debug_name().cmp(other.project_debug_name())
+  }
+}
+
+impl<'a> PartialOrd for DependencyGraph<'a> {
+  fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+    self.project_debug_name().partial_cmp(other.project_debug_name())
+  }
+}
 
 impl<'a> DependencyGraph<'a> {
   pub fn new_info_from_root(
@@ -785,7 +824,7 @@ impl<'a> DependencyGraph<'a> {
       borrowed_graph.do_additional_project_checks()?;
     }
 
-    let all_used_targets: HashSet<RcRefcHashWrapper<TargetNode>> = match full_graph.as_ref().borrow().find_cycle() {
+    let all_used_targets: BTreeSet<RcRefcHashWrapper<TargetNode>> = match full_graph.as_ref().borrow().find_cycle() {
       CycleCheckResult::AllUsedTargets(all_used) => all_used,
       CycleCheckResult::Cycle(cycle_vec) => {
         return Err(GraphLoadFailureReason::DependencyCycle(
@@ -843,19 +882,19 @@ impl<'a> DependencyGraph<'a> {
     &self.pre_build_wrapper
   }
 
-  pub fn get_test_projects(&self) -> &HashMap<String, Rc<RefCell<DependencyGraph<'a>>>> {
+  pub fn get_test_projects(&self) -> &BTreeMap<String, Rc<RefCell<DependencyGraph<'a>>>> {
     &self.test_projects
   }
 
-  pub fn get_gcmake_dependencies(&self) -> &HashMap<String, Rc<RefCell<DependencyGraph<'a>>>> {
+  pub fn get_gcmake_dependencies(&self) -> &BTreeMap<String, Rc<RefCell<DependencyGraph<'a>>>> {
     &self.gcmake_deps
   }
 
-  pub fn get_subprojects(&self) -> &HashMap<String, Rc<RefCell<DependencyGraph<'a>>>> {
+  pub fn get_subprojects(&self) -> &BTreeMap<String, Rc<RefCell<DependencyGraph<'a>>>> {
     &self.subprojects
   }
 
-  pub fn get_predefined_dependencies(&self) -> &HashMap<String, Rc<RefCell<DependencyGraph<'a>>>> {
+  pub fn get_predefined_dependencies(&self) -> &BTreeMap<String, Rc<RefCell<DependencyGraph<'a>>>> {
     unsafe {
       return &(*self.root_project().as_ptr()).predefined_deps
     }
@@ -868,7 +907,7 @@ impl<'a> DependencyGraph<'a> {
   // See the python prototype project for details.
   // D:\Personal_Projects\Coding\prototyping\python\dependency-graph-sorting
   fn find_cycle(&self) -> CycleCheckResult<'a> {
-    let mut visited: HashSet<RcRefcHashWrapper<TargetNode>> = HashSet::new();
+    let mut visited: BTreeSet<RcRefcHashWrapper<TargetNode>> = BTreeSet::new();
     let mut stack: Vec<RcRefcHashWrapper<TargetNode>> = Vec::new();
 
     if let Some(cycle_vec) = self.do_find_cycle(&mut visited, &mut stack) {
@@ -881,7 +920,7 @@ impl<'a> DependencyGraph<'a> {
 
   fn do_find_cycle(
     &self,
-    visited: &mut HashSet<RcRefcHashWrapper<TargetNode<'a>>>,
+    visited: &mut BTreeSet<RcRefcHashWrapper<TargetNode<'a>>>,
     stack: &mut Vec<RcRefcHashWrapper<TargetNode<'a>>>
   ) -> Option<Vec<RcRefcHashWrapper<TargetNode<'a>>>> {
     if let Some(pre_build) = &self.pre_build_wrapper {
@@ -924,7 +963,7 @@ impl<'a> DependencyGraph<'a> {
   fn do_find_cycle_helper(
     &self,
     node: &Rc<RefCell<TargetNode<'a>>>,
-    visited: &mut HashSet<RcRefcHashWrapper<TargetNode<'a>>>,
+    visited: &mut BTreeSet<RcRefcHashWrapper<TargetNode<'a>>>,
     stack: &mut Vec<RcRefcHashWrapper<TargetNode<'a>>>
   ) -> Option<Vec<RcRefcHashWrapper<TargetNode<'a>>>> {
     stack.push(RcRefcHashWrapper(Rc::clone(node)));
@@ -1184,9 +1223,9 @@ impl<'a> DependencyGraph<'a> {
 
   fn ensure_no_duplicate_identifiers(&self) -> Result<(), GraphLoadFailureReason<'a>> {
     return self.ensure_no_duplicate_identifiers_helper(
-      &mut HashMap::new(),
-      &mut HashMap::new(),
-      &mut HashMap::new()
+      &mut BTreeMap::new(),
+      &mut BTreeMap::new(),
+      &mut BTreeMap::new()
     );
   }
 
@@ -1194,8 +1233,8 @@ impl<'a> DependencyGraph<'a> {
   // when case-insensitive).
   fn err_if_target_ident_is_duplicate(
     target: &Rc<RefCell<TargetNode<'a>>>,
-    cmake_identifiers: &mut HashMap<String, Rc<RefCell<TargetNode<'a>>>>,
-    yaml_identifiers: &mut HashMap<String, Rc<RefCell<TargetNode<'a>>>>,
+    cmake_identifiers: &mut BTreeMap<String, Rc<RefCell<TargetNode<'a>>>>,
+    yaml_identifiers: &mut BTreeMap<String, Rc<RefCell<TargetNode<'a>>>>,
     is_predefined_dep_target: bool
   ) -> Result<(), GraphLoadFailureReason<'a>> {
     let borrowed_target = target.as_ref().borrow();
@@ -1266,7 +1305,7 @@ impl<'a> DependencyGraph<'a> {
   // when case-insensitive).
   fn err_if_root_project_ident_is_duplicate(
     &self, 
-    root_project_name_idents: &mut HashMap<String, Rc<RefCell<DependencyGraph<'a>>>>
+    root_project_name_idents: &mut BTreeMap<String, Rc<RefCell<DependencyGraph<'a>>>>
   ) -> Result<(), GraphLoadFailureReason<'a>> {
     match root_project_name_idents.get(self.project_identifier_name()) {
       Some(matching_project) => {
@@ -1315,9 +1354,9 @@ impl<'a> DependencyGraph<'a> {
 
   fn ensure_no_duplicate_identifiers_helper(
     &self,
-    cmake_identifiers: &mut HashMap<String, Rc<RefCell<TargetNode<'a>>>>,
-    yaml_identifiers: &mut HashMap<String, Rc<RefCell<TargetNode<'a>>>>,
-    root_project_name_idents: &mut HashMap<String, Rc<RefCell<DependencyGraph<'a>>>>
+    cmake_identifiers: &mut BTreeMap<String, Rc<RefCell<TargetNode<'a>>>>,
+    yaml_identifiers: &mut BTreeMap<String, Rc<RefCell<TargetNode<'a>>>>,
+    root_project_name_idents: &mut BTreeMap<String, Rc<RefCell<DependencyGraph<'a>>>>
   ) -> Result<(), GraphLoadFailureReason<'a>> {
     match self.project_wrapper() {
       ProjectWrapper::GCMakeDependencyRoot(_)
@@ -1545,8 +1584,8 @@ impl<'a> DependencyGraph<'a> {
 
       // This is necessary because adding links to the project target inside the loop could mess with
       // the list's iteration. 
-      let mut links_to_add: HashMap<TargetId, Link> = HashMap::new();
-      let mut all_checked_predef_targets: HashMap<TargetId, Rc<RefCell<TargetNode>>> = HashMap::new();
+      let mut links_to_add: BTreeMap<TargetId, Link> = BTreeMap::new();
+      let mut all_checked_predef_targets: BTreeMap<TargetId, Rc<RefCell<TargetNode>>> = BTreeMap::new();
     
       for (_, link) in &project_output_target.depends_on {
         let upgraded_target = Weak::upgrade(&link.target).unwrap();
@@ -1555,7 +1594,7 @@ impl<'a> DependencyGraph<'a> {
         let link_target_graph = upgraded_target_graph.as_ref().borrow();
 
         if let ProjectWrapper::PredefinedDependency(_) = &link_target_graph._project_wrapper {
-          let mut checked_predef_targets: HashMap<TargetId, Rc<RefCell<TargetNode>>> = HashMap::new();
+          let mut checked_predef_targets: BTreeMap<TargetId, Rc<RefCell<TargetNode>>> = BTreeMap::new();
           let mut predef_targets_checking_stack: Vec<(TargetId, Rc<RefCell<TargetNode>>)> = Vec::new();
 
           for (predef_target_id, predef_requirement_target) in &link_target.depends_on {
@@ -1830,7 +1869,7 @@ impl<'a> DependencyGraph<'a> {
     // let mut_target_node: &mut TargetNode = &mut target_container.as_ref().borrow_mut();
 
     if let Some(link_specs) = &mut_target_node.raw_link_specifiers.clone() {
-      let public_links: HashSet<Link> = self.resolve_links(
+      let public_links: BTreeSet<Link> = self.resolve_links(
         target_id_counter,
         &target_container,
         mut_target_node,
@@ -1844,7 +1883,7 @@ impl<'a> DependencyGraph<'a> {
         public_links
       )?;
 
-      let interface_links: HashSet<Link> = self.resolve_links(
+      let interface_links: BTreeSet<Link> = self.resolve_links(
         target_id_counter,
         &target_container,
         mut_target_node,
@@ -1858,7 +1897,7 @@ impl<'a> DependencyGraph<'a> {
         interface_links
       )?;
 
-      let private_links: HashSet<Link> = self.resolve_links(
+      let private_links: BTreeSet<Link> = self.resolve_links(
         target_id_counter,
         &target_container,
         mut_target_node,
@@ -1880,7 +1919,7 @@ impl<'a> DependencyGraph<'a> {
     &self,
     mut_target_node: &mut TargetNode<'a>,
     link_receiver_name: &str,
-    link_set: HashSet<Link<'a>>
+    link_set: BTreeSet<Link<'a>>
   ) -> Result<(), GraphLoadFailureReason<'a>> {
     let link_receiver = mut_target_node;
 
@@ -1926,7 +1965,7 @@ impl<'a> DependencyGraph<'a> {
     mut_target_node: &mut TargetNode<'a>,
     link_specs: &Vec<LinkSpecifier>,
     link_mode: &LinkMode
-  ) -> Result<HashSet<Link<'a>>, GraphLoadFailureReason<'a>> {
+  ) -> Result<BTreeSet<Link<'a>>, GraphLoadFailureReason<'a>> {
     /*
       Resolution scenarios:
         - root::{target, names}
@@ -1936,12 +1975,12 @@ impl<'a> DependencyGraph<'a> {
           -> 'dependency_name' is a placeholder for any string other than 'root' and 'parent'.
     */
 
-    let mut link_set: HashSet<Link> = HashSet::new();
+    let mut link_set: BTreeSet<Link> = BTreeSet::new();
 
     for link_spec in link_specs {
       let mut namespace_queue: VecDeque<String> = link_spec.get_namespace_queue().clone();
 
-      let resolved_links: HashSet<Link> = self.resolve_namespace_helper(
+      let resolved_links: BTreeSet<Link> = self.resolve_namespace_helper(
         link_spec,
         target_container,
         mut_target_node,
@@ -1988,9 +2027,9 @@ impl<'a> DependencyGraph<'a> {
     link_mode: &LinkMode,
     access_mode: &LinkAccessMode,
     is_outside_original_project_context: bool
-  ) -> Result<HashSet<Link<'a>>, GraphLoadFailureReason<'a>> {
+  ) -> Result<BTreeSet<Link<'a>>, GraphLoadFailureReason<'a>> {
     if namespace_queue.is_empty() {
-      let mut accumulated_link_set: HashSet<Link> = HashSet::new();
+      let mut accumulated_link_set: BTreeSet<Link> = BTreeSet::new();
 
       for link_target_spec in target_list {
         let resolved_link: Link = self.resolve_target_into_link(
@@ -2658,13 +2697,13 @@ impl<'a> DependencyGraph<'a> {
       current_graph_ref: Weak::new(),
 
       _project_wrapper: ProjectWrapper::NormalProject(Rc::clone(project)),
-      targets: RefCell::new(HashMap::new()),
+      targets: RefCell::new(BTreeMap::new()),
       pre_build_wrapper: None,
 
-      subprojects: HashMap::new(),
-      test_projects: HashMap::new(),
-      predefined_deps: HashMap::new(),
-      gcmake_deps: HashMap::new()
+      subprojects: BTreeMap::new(),
+      test_projects: BTreeMap::new(),
+      predefined_deps: BTreeMap::new(),
+      gcmake_deps: BTreeMap::new()
     }));
 
     *graph_id_counter += 1;
@@ -2704,7 +2743,7 @@ impl<'a> DependencyGraph<'a> {
         )))
       });
 
-    let target_map: HashMap<String, Rc<RefCell<TargetNode>>> = project.get_outputs()
+    let target_map: BTreeMap<String, Rc<RefCell<TargetNode>>> = project.get_outputs()
       .iter()
       .map(|(target_name, output_item)| {
         let access_mode: LinkAccessMode = if output_item.is_executable_type()
@@ -2821,11 +2860,11 @@ impl<'a> DependencyGraph<'a> {
       current_graph_ref: Weak::new(),
       _project_wrapper: ProjectWrapper::PredefinedDependency(Rc::clone(predef_dep)),
       pre_build_wrapper: None,
-      gcmake_deps: HashMap::new(),
-      predefined_deps: HashMap::new(),
-      subprojects: HashMap::new(),
-      test_projects: HashMap::new(),
-      targets: RefCell::new(HashMap::new())
+      gcmake_deps: BTreeMap::new(),
+      predefined_deps: BTreeMap::new(),
+      subprojects: BTreeMap::new(),
+      test_projects: BTreeMap::new(),
+      targets: RefCell::new(BTreeMap::new())
     }));
 
     *graph_id_counter += 1;
@@ -2835,7 +2874,7 @@ impl<'a> DependencyGraph<'a> {
     mut_graph.toplevel = Rc::downgrade(&graph);
     mut_graph.current_graph_ref = Rc::downgrade(&graph);
 
-    let targets: HashMap<String, Rc<RefCell<TargetNode>>> = predef_dep.get_target_config_map()
+    let targets: BTreeMap<String, Rc<RefCell<TargetNode>>> = predef_dep.get_target_config_map()
       .iter()
       .map(|(target_name, target_config)| {
         
@@ -2955,10 +2994,10 @@ impl<'a> DependencyGraph<'a> {
           current_graph_ref: Weak::new(),
           _project_wrapper: ProjectWrapper::GCMakeDependencyRoot(Rc::clone(gcmake_dep)),
           pre_build_wrapper: None,
-          gcmake_deps: HashMap::new(),
-          predefined_deps: HashMap::new(),
-          subprojects: HashMap::new(),
-          test_projects: HashMap::new(),
+          gcmake_deps: BTreeMap::new(),
+          predefined_deps: BTreeMap::new(),
+          subprojects: BTreeMap::new(),
+          test_projects: BTreeMap::new(),
           // Targets are added on the fly during the link assignment step.
           // Links to an unavailable gcmake dependency project may be incorrect,
           // however we have no way of knowing that since the project isn't available
@@ -2967,7 +3006,7 @@ impl<'a> DependencyGraph<'a> {
           // document in the project-local .gcmake/ dir. Essentially, this would be a small yaml
           // file which describes the dependency information and lists its targets, just like
           // the regular predefined dependency files.
-          targets: RefCell::new(HashMap::new())
+          targets: RefCell::new(BTreeMap::new())
         }));
 
         let mut mut_graph = graph.as_ref().borrow_mut();
@@ -2988,8 +3027,8 @@ impl<'a> DependencyGraph<'a> {
 struct DAGSubGraph<'a> {
   // Head nodes are not depended on by any other nodes. At least one of these is guaranteed
   // to exist in a graph which has no cycles.
-  pub head_nodes: HashSet<RcRefcHashWrapper<TargetNode<'a>>>,
-  pub _all_member_nodes: HashSet<RcRefcHashWrapper<TargetNode<'a>>>
+  pub head_nodes: BTreeSet<RcRefcHashWrapper<TargetNode<'a>>>,
+  pub _all_member_nodes: BTreeSet<RcRefcHashWrapper<TargetNode<'a>>>
 }
 
 pub struct OrderedTargetInfo<'a> {
@@ -3000,7 +3039,7 @@ pub struct OrderedTargetInfo<'a> {
 impl<'a> OrderedTargetInfo<'a> {
   // Assumes the vec of targets is already correctly sorted.
   pub fn from_ordered(ordered_targets: Vec<RcRefcHashWrapper<TargetNode<'a>>>) -> Self {
-    let mut project_indices: HashMap<RcRefcHashWrapper<DependencyGraph>, usize> = HashMap::new();
+    let mut project_indices: BTreeMap<RcRefcHashWrapper<DependencyGraph>, usize> = BTreeMap::new();
 
     for (target_index, target) in ordered_targets.iter().enumerate() {
       project_indices.entry(RcRefcHashWrapper(target.as_ref().borrow().container_project()))
@@ -3069,8 +3108,8 @@ impl<'a> OrderedTargetInfo<'a> {
       .collect();
   }
 
-  pub fn regular_dependencies_by_mode(&self, dependent_target: &Rc<RefCell<TargetNode<'a>>>) -> HashMap<LinkMode, Vec<RcRefcHashWrapper<TargetNode<'a>>>> {
-    let dependencies: HashMap<RcRefcHashWrapper<TargetNode>, LinkMode> = dependent_target.as_ref().borrow().depends_on
+  pub fn regular_dependencies_by_mode(&self, dependent_target: &Rc<RefCell<TargetNode<'a>>>) -> BTreeMap<LinkMode, Vec<RcRefcHashWrapper<TargetNode<'a>>>> {
+    let dependencies: BTreeMap<RcRefcHashWrapper<TargetNode>, LinkMode> = dependent_target.as_ref().borrow().depends_on
       .iter()
       .map(|(_, link)| {
         (
@@ -3081,7 +3120,7 @@ impl<'a> OrderedTargetInfo<'a> {
       .filter(|(node, _)| node.as_ref().borrow().is_regular_node())
       .collect();
 
-    let mut link_map: HashMap<LinkMode, Vec<RcRefcHashWrapper<TargetNode>>> = HashMap::new();
+    let mut link_map: BTreeMap<LinkMode, Vec<RcRefcHashWrapper<TargetNode>>> = BTreeMap::new();
     
     for some_target in &self.targets_in_build_order {
       if let Some((dependency_target, link_mode)) = dependencies.get_key_value(some_target) {
@@ -3095,20 +3134,20 @@ impl<'a> OrderedTargetInfo<'a> {
   }
 }
 
-type DepMap<'a> = HashMap<
+type DepMap<'a> = BTreeMap<
   RcRefcHashWrapper<TargetNode<'a>>,
-  HashSet<RcRefcHashWrapper<TargetNode<'a>>>
+  BTreeSet<RcRefcHashWrapper<TargetNode<'a>>>
 >;
 
-type InverseDepMap<'a> = HashMap<
+type InverseDepMap<'a> = BTreeMap<
   RcRefcHashWrapper<TargetNode<'a>>,
-  HashSet<RcRefcHashWrapper<TargetNode<'a>>>
+  BTreeSet<RcRefcHashWrapper<TargetNode<'a>>>
 >;
 
-type GroupIdMappedTargets<'a> = HashMap<ProjectGroupId, HashSet<RcRefcHashWrapper<TargetNode<'a>>>>;
+type GroupIdMappedTargets<'a> = BTreeMap<ProjectGroupId, BTreeSet<RcRefcHashWrapper<TargetNode<'a>>>>;
 
 fn make_dep_map<'a>(
-  all_used_targets: &HashSet<RcRefcHashWrapper<TargetNode<'a>>>
+  all_used_targets: &BTreeSet<RcRefcHashWrapper<TargetNode<'a>>>
 ) -> DepMap<'a> {
   let mut dep_map: DepMap = DepMap::new();
 
@@ -3117,12 +3156,12 @@ fn make_dep_map<'a>(
     .map(|wrapped_target| wrapped_target.clone())
     .collect();
 
-  let mut visited_targets: HashSet<RcRefcHashWrapper<TargetNode>> = HashSet::new();
+  let mut visited_targets: BTreeSet<RcRefcHashWrapper<TargetNode>> = BTreeSet::new();
 
   while let Some(target_node) = unvisited_targets.pop() {
     visited_targets.insert(target_node.clone());
     let entry = dep_map.entry(target_node.clone())
-      .or_insert(HashSet::new());
+      .or_insert(BTreeSet::new());
 
     for (_, dependency_link) in &target_node.as_ref().borrow().depends_on {
       let dependency_target: Rc<RefCell<TargetNode>> = Weak::upgrade(&dependency_link.target).unwrap();
@@ -3167,7 +3206,7 @@ fn make_dep_map<'a>(
 }
 
 fn make_inverse_dep_map<'a>(
-  all_used_targets: &HashSet<RcRefcHashWrapper<TargetNode<'a>>>,
+  all_used_targets: &BTreeSet<RcRefcHashWrapper<TargetNode<'a>>>,
   dep_map: &DepMap<'a>
 ) -> InverseDepMap<'a> {
   // target -> nodes which depend on target
@@ -3179,16 +3218,16 @@ fn make_inverse_dep_map<'a>(
         .and_modify(|dependent_target_set| {
           dependent_target_set.insert(dependent_target.clone());
         })
-        .or_insert(HashSet::from([dependent_target.clone()]));
+        .or_insert(BTreeSet::from([dependent_target.clone()]));
     }
   }
 
-  let map_key_set: HashSet<RcRefcHashWrapper<TargetNode>> = inverse_map.keys()
+  let map_key_set: BTreeSet<RcRefcHashWrapper<TargetNode>> = inverse_map.keys()
     .map(|key| key.clone())
     .collect();
 
   for unused_key in all_used_targets.difference(&map_key_set) {
-    inverse_map.insert(unused_key.clone(), HashSet::new());
+    inverse_map.insert(unused_key.clone(), BTreeSet::new());
   }
 
   assert!(
@@ -3200,7 +3239,7 @@ fn make_inverse_dep_map<'a>(
 }
 
 fn nodes_mapped_by_project_group_id<'a>(
-  all_used_targets: &HashSet<RcRefcHashWrapper<TargetNode<'a>>>
+  all_used_targets: &BTreeSet<RcRefcHashWrapper<TargetNode<'a>>>
 ) -> GroupIdMappedTargets<'a> {
   let mut the_map: GroupIdMappedTargets = GroupIdMappedTargets::new();
 
@@ -3212,7 +3251,7 @@ fn nodes_mapped_by_project_group_id<'a>(
       .and_modify(|node_set| {
         node_set.insert(node_ref_clone);
       })
-      .or_insert(HashSet::from([owned_node_ref]));
+      .or_insert(BTreeSet::from([owned_node_ref]));
   }
 
   return the_map;
@@ -3221,15 +3260,15 @@ fn nodes_mapped_by_project_group_id<'a>(
 // NOTE: When sorting, use 'dep_map' and 'inverse_dep_map' to resolve node dependencies instead of
 // node.depends_on. The dep maps may contain nodes which are optionally required by targets, but are
 // not found in node.depends_on.
-fn sorted_target_info<'a>(all_used_targets: &HashSet<RcRefcHashWrapper<TargetNode<'a>>>) -> OrderedTargetInfo<'a> {
-  let dep_map: DepMap = make_dep_map(&all_used_targets);
-  let inverse_dep_map: InverseDepMap = make_inverse_dep_map(&all_used_targets, &dep_map);
-  let nodes_by_project: GroupIdMappedTargets = nodes_mapped_by_project_group_id(&all_used_targets);
+fn sorted_target_info<'a>(all_used_targets: &BTreeSet<RcRefcHashWrapper<TargetNode<'a>>>) -> OrderedTargetInfo<'a> {
+  let dep_map: DepMap = make_dep_map(all_used_targets);
+  let inverse_dep_map: InverseDepMap = make_inverse_dep_map(all_used_targets, &dep_map);
+  let nodes_by_project: GroupIdMappedTargets = nodes_mapped_by_project_group_id(all_used_targets);
 
   let mut sorted_node_list: Vec<RcRefcHashWrapper<TargetNode>> = Vec::new();
-  let mut visited: HashSet<RcRefcHashWrapper<TargetNode>> = HashSet::new();
+  let mut visited: BTreeSet<RcRefcHashWrapper<TargetNode>> = BTreeSet::new();
 
-  for dag_subgraph in find_all_dag_subgraphs(&all_used_targets, &inverse_dep_map) {
+  for dag_subgraph in find_all_dag_subgraphs(all_used_targets, &inverse_dep_map) {
     for head_node in dag_subgraph.head_nodes {
       recurse_sort_select(
         &head_node,
@@ -3253,7 +3292,7 @@ fn sorted_target_info<'a>(all_used_targets: &HashSet<RcRefcHashWrapper<TargetNod
 fn recurse_sort_select<'a>(
   node_checking: &RcRefcHashWrapper<TargetNode<'a>>,
   sorted_node_list: &mut Vec<RcRefcHashWrapper<TargetNode<'a>>>,
-  visited: &mut HashSet<RcRefcHashWrapper<TargetNode<'a>>>,
+  visited: &mut BTreeSet<RcRefcHashWrapper<TargetNode<'a>>>,
   dep_map: &DepMap<'a>,
   inverse_dep_map: &InverseDepMap<'a>,
   used_nodes_by_project: &GroupIdMappedTargets<'a>
@@ -3293,7 +3332,7 @@ fn traverse_sort_nodes<'a>(
   // 'node' is guaranteed to be an uppermost unvisited node in the project.
   node: &RcRefcHashWrapper<TargetNode<'a>>,
   sorted_node_list: &mut Vec<RcRefcHashWrapper<TargetNode<'a>>>,
-  visited: &mut HashSet<RcRefcHashWrapper<TargetNode<'a>>>,
+  visited: &mut BTreeSet<RcRefcHashWrapper<TargetNode<'a>>>,
   dep_map: &DepMap<'a>,
   inverse_dep_map: &InverseDepMap<'a>,
   nodes_by_project: &GroupIdMappedTargets<'a>
@@ -3331,15 +3370,15 @@ fn traverse_sort_nodes<'a>(
 }
 
 fn find_all_dag_subgraphs<'a>(
-  all_used_targets: &HashSet<RcRefcHashWrapper<TargetNode<'a>>>,
+  all_used_targets: &BTreeSet<RcRefcHashWrapper<TargetNode<'a>>>,
   inverse_dep_map: &InverseDepMap<'a>
 ) -> Vec<DAGSubGraph<'a>> {
-  let mut all_visited: HashSet<RcRefcHashWrapper<TargetNode>> = HashSet::new();
+  let mut all_visited: BTreeSet<RcRefcHashWrapper<TargetNode>> = BTreeSet::new();
   let mut dag_list: Vec<DAGSubGraph> = Vec::new();
 
   for node in all_used_targets {
     if !all_visited.contains(node) {
-      let mut local_visited: HashSet<RcRefcHashWrapper<TargetNode>> = HashSet::new();
+      let mut local_visited: BTreeSet<RcRefcHashWrapper<TargetNode>> = BTreeSet::new();
       let mut stack: Vec<RcRefcHashWrapper<TargetNode>> = vec![node.clone()];
 
       while let Some(node_checking) = stack.pop() {
