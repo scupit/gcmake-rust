@@ -228,6 +228,10 @@ pub struct ProjectInfoCommand {
   #[arg(short = 't', long = "list-targets")]
   pub list_targets: bool,
 
+  /// List all project dependencies
+  #[arg(short = 'd', long = "list-deps")]
+  pub list_dependencies: bool,
+
   /// List immediate subprojects
   #[arg(short = 's', long = "subprojects")]
   pub show_subprojects: bool,

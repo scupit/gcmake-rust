@@ -1,5 +1,3 @@
-use std::borrow::Borrow;
-
 use crate::project_info::{dependency_graph_mod::dependency_graph::{DependencyGraph, ProjectWrapper}, final_dependencies::FinalPredepInfo};
 use colored::*;
 
@@ -172,4 +170,37 @@ fn print_single_project_outputs(
   }
 
   println!("}}");
+}
+
+pub fn print_project_dependencies(
+  project_graph: &DependencyGraph
+) {
+  let root_project_rc = project_graph.root_project();
+  let root_project_graph: &DependencyGraph = &root_project_rc.as_ref().borrow();
+
+  print!("GCMake dependencies:");
+
+  if root_project_graph.get_gcmake_dependencies().is_empty() {
+    println!(" None");
+  }
+  else {
+    println!();
+  }
+
+  for (dep_name, _) in root_project_graph.get_gcmake_dependencies() {
+    println!("   - {}", dep_name);
+  }
+
+  print!("Predefined dependencies:");
+
+  if root_project_graph.get_predefined_dependencies().is_empty() {
+    println!(" None");
+  }
+  else {
+    println!();
+  }
+
+  for (dep_name, _) in root_project_graph.get_predefined_dependencies() {
+    println!("   - {}", dep_name);
+  }
 }
