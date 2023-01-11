@@ -1,3 +1,5 @@
+use std::borrow::Borrow;
+
 use crate::project_info::{dependency_graph_mod::dependency_graph::{DependencyGraph, ProjectWrapper}, final_dependencies::FinalPredepInfo};
 use colored::*;
 
@@ -114,4 +116,60 @@ pub fn print_project_supports_emscripten(project_graph: &DependencyGraph) {
   else {
     println!(" (Can't accurately determine, since the project hasn't been downloaded yet)");
   }
+}
+
+struct TargetResolutionOptions {
+  should_recurse: bool,
+  include_tests: bool,
+  include_pre_build: bool
+}
+
+pub fn print_project_output_list(project_graph: &DependencyGraph) {
+  print_project_output_list_helper(
+    project_graph,
+    &TargetResolutionOptions {
+      should_recurse: true,
+      include_pre_build: true,
+      include_tests: true
+    }
+  )
+}
+
+fn print_project_output_list_helper(
+  project_graph: &DependencyGraph,
+  options: &TargetResolutionOptions
+) {
+  print_single_project_outputs(project_graph, options);
+
+  if options.include_tests {
+    for (_, test_project) in project_graph.get_test_projects() {
+      print_project_output_list_helper(&test_project.as_ref().borrow(), options);
+    }
+  }
+
+  if options.should_recurse {
+    for (_, subproject) in project_graph.get_subprojects() {
+      print_project_output_list_helper(&subproject.as_ref().borrow(), options);
+    }
+  }
+}
+
+fn print_single_project_outputs(
+  project_graph: &DependencyGraph,
+  options: &TargetResolutionOptions
+) {
+  println!("\n{}::{{", project_graph.project_debug_name().magenta());
+
+  if options.include_pre_build && project_graph.get_pre_build_node().is_some() {
+    println!("   {}", "pre-build".bright_cyan());
+  }
+
+  for (_, output_item) in project_graph.get_this_target_map().borrow().iter() {
+    println!(
+      "   {}",
+      output_item.as_ref().borrow().get_name()
+    );
+  }
+
+  println!("}}");
 }

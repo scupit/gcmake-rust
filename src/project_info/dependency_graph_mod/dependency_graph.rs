@@ -894,6 +894,10 @@ impl<'a> DependencyGraph<'a> {
     &self.subprojects
   }
 
+  pub fn get_this_target_map(&self) -> &RefCell<BTreeMap<String, Rc<RefCell<TargetNode<'a>>>>> {
+    &self.targets
+  }
+
   pub fn get_predefined_dependencies(&self) -> &BTreeMap<String, Rc<RefCell<DependencyGraph<'a>>>> {
     unsafe {
       return &(*self.root_project().as_ptr()).predefined_deps

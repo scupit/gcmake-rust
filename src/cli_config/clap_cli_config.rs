@@ -224,6 +224,10 @@ pub struct ProjectInfoCommand {
   #[arg(short = 'i', long = "include-prefix")]
   pub show_include_prefix: bool,
 
+  /// Recursively list all project targets, including pre-build script and tests
+  #[arg(short = 't', long = "list-targets")]
+  pub list_targets: bool,
+
   /// List immediate subprojects
   #[arg(short = 's', long = "subprojects")]
   pub show_subprojects: bool,
