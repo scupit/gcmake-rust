@@ -9,7 +9,14 @@ pub fn warn(message: impl AsRef<str>) {
   );
 }
 
+pub fn block(closure: impl FnOnce()) {
+  closure();
+  println!("----------------------------------------");
+}
+
 pub fn exit_error_log(error_message: impl AsRef<str>) -> ! {
-  eprintln!("{}", error_message.as_ref());
+  block(|| {
+    eprintln!("{}", error_message.as_ref());
+  });
   exit(0);
 }

@@ -971,6 +971,23 @@ impl FinalProjectData {
       standard => return Err(format!("C++ Language standard must be one of [98, 11, 14, 17, 20, 23], but {} was given", standard))
     }
 
+    if self.any_files_contain_cpp2_grammar() && ![20, 23].contains(&cpp.standard) {
+      logger::block(|| {
+        logger::warn(format!(
+          "Project [{}] contains .cpp2 files, but its C++ standard is currently set to {}. cppfront (.cpp2) requires C++20 or higher. Please set the Cpp language standard to {} or {} in cmake_data.yaml. Example:\n",
+          self.get_name_for_error_messages().yellow(),
+          cpp.standard.to_string().red(),
+          "20".green(),
+          "23".green()
+        ));
+
+        println!(
+          "languages:\n  Cpp:\n    standard: {}",
+          "20".green()
+        );
+      })
+    }
+
     Ok(())
   }
 
@@ -998,23 +1015,6 @@ impl FinalProjectData {
   }
 
   fn validate_correctness(&self) -> Result<(), String> {
-    let current_cpp_standard = &self.get_language_info().cpp.standard;
-
-    if self.any_files_contain_cpp2_grammar() && ![20, 23].contains(current_cpp_standard) {
-      logger::warn(format!(
-        "Project [{}] contains .cpp2 files, but its C++ standard is currently set to {}. cppfront (.cpp2) requires C++20 or higher. Please set the Cpp language standard to {} or {} in cmake_data.yaml. Example:\n",
-        self.get_name_for_error_messages().yellow(),
-        current_cpp_standard.to_string().red(),
-        "20".green(),
-        "23".green()
-      ));
-
-      println!(
-        "languages:\n  Cpp:\n    standard: {}",
-        "20".green()
-      );
-    }
-
     if self.get_project_base_name().contains(' ') {
       return Err(format!(
         "Project name cannot contain spaces, but does. (Currently: {})",
