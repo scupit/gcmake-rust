@@ -44,3 +44,10 @@ If your MinGW bin directory is path of your system PATH on Windows, globally ins
 My workaround for this issue was to uninstall Strawberry Perl, then use a
 [portable install](https://strawberryperl.com/releases.html) instead. Instead of adding
 it to PATH, I just made a `perl.ps1` script act as an alias to Perl's `portableshell.bat`.
+
+## Configuration fails because a dependency repository can't be cloned
+
+Sometimes dependency repositories become corrupted or are rendered invalid somehow.
+To fix, read the documentation section on
+[managing dependency repositories](managing_dependency_repos.md) then try following the suggestions
+for [handling corrupted or invalid dependency repositories](managing_dependency_repos.md#handling-corrupted-or-invalid-repositories).
