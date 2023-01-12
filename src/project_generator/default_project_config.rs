@@ -248,6 +248,33 @@ fn global_defines_default(include_emscripten_support: bool) -> Option<Vec<String
     else { Some(defines_list) };
 }
 
+fn needed_predefined_dependencies(requires_cppfront: bool) -> Option<HashMap<String, UserGivenPredefinedDependencyConfig>> {
+  return if requires_cppfront {
+    Some(HashMap::from_iter(
+      [(
+        String::from("cppfront"),
+        UserGivenPredefinedDependencyConfig {
+          git_tag: Some(String::from("master")),
+          commit_hash: None,
+          file_version: None,
+          repo_url: None
+        }
+      )]
+    ))
+  }
+  else {
+    None
+  }
+}
+
+fn default_cpp_standard(requires_cppfront: bool) -> i8 {
+  return if requires_cppfront
+    { 17 }
+    // To ensure cppfront works properly, we must compiler using c++20.
+    // See https://github.com/hsutter/cppfront#how-do-i-build-cppfront
+    else { 20 };
+}
+
 pub fn get_default_project_config(
   project_name: &str,
   include_prefix: &str,
@@ -260,21 +287,9 @@ pub fn get_default_project_config(
 ) -> RawProject {
   let include_emscripten_support: bool = should_support_emscripten(project_type_creating);
 
-  let predefined_dependencies: Option<HashMap<String, UserGivenPredefinedDependencyConfig>> = match project_lang {
-    MainFileLanguage::Cpp2 => {
-      Some(HashMap::from_iter(
-        [(
-          String::from("cppfront"),
-          UserGivenPredefinedDependencyConfig {
-            git_tag: Some(String::from("master")),
-            commit_hash: None,
-            file_version: None,
-            repo_url: None
-          }
-        )]
-      ))
-    },
-    _ => None
+  let requires_cppfront: bool = match project_lang {
+    MainFileLanguage::Cpp2 => true,
+    _ => false
   };
 
   RawProject {
@@ -292,7 +307,7 @@ pub fn get_default_project_config(
         standard: 11
       },
       cpp: SingleLanguageConfig {
-        standard: 17
+        standard: default_cpp_standard(requires_cppfront)
       }
     },
     output: HashMap::from_iter([
@@ -315,7 +330,7 @@ pub fn get_default_project_config(
         requires_custom_main
       })
     ]),
-    predefined_dependencies,
+    predefined_dependencies: needed_predefined_dependencies(requires_cppfront),
     gcmake_dependencies: None,
     build_configs: BTreeMap::from_iter([
       (BuildType::Debug, build_configs_debug_default(include_emscripten_support)),
