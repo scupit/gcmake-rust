@@ -222,17 +222,17 @@ supported_compilers:
 Describes the language features required by the project. At present, `standard` is the only property
 that can be configured for each language.
 
-**NOTE:** Currently both `C` and `Cpp` must be configured even if the project doesn't use both C and C++.
+**NOTE:** Currently both `c` and `cpp` must be configured even if the project doesn't use both C and C++.
 
-| Property  |  C  |  Cpp |
+| Property  |  c  |  cpp |
 | --------- | --- | ---- |
 | `standard` | `90` \| `99` \| `11` \| `17` \| `23` | `98` \| `11` \| `14` \| `17` \| `20` \| `23` |
 
 ``` yaml
 languages:
-  C:
+  c:
     standard: 99
-  Cpp:
+  cpp:
     standard: 17
 ```
 
@@ -499,9 +499,9 @@ version: 0.0.1
 default_build_type: Release
 
 languages:
-  C:
+  c:
     standard: 11
-  Cpp:
+  cpp:
     standard: 17
 
 supported_compilers:
