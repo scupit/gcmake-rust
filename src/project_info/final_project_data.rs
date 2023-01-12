@@ -1,6 +1,6 @@
 use std::{collections::{HashMap, HashSet, BTreeMap, BTreeSet}, path::{Path, PathBuf}, io, rc::Rc, fs::{self}, iter::FromIterator};
 
-use crate::project_info::path_manipulation::cleaned_pathbuf;
+use crate::{project_info::path_manipulation::cleaned_pathbuf, logger};
 
 use super::{path_manipulation::{cleaned_path_str, relative_to_project_root, absolute_path}, final_dependencies::{FinalGCMakeDependency, FinalPredefinedDependencyConfig}, raw_data_in::{RawProject, dependencies::internal_dep_config::AllRawPredefinedDependencies, BuildType, LanguageConfigMap, OutputItemType, PreBuildConfigIn, SpecificCompilerSpecifier, BuildConfigCompilerSpecifier, TargetSpecificBuildType, LinkSection, RawTestFramework, DefaultCompiledLibType, RawCompiledItem}, final_project_configurables::{FinalProjectType}, CompiledOutputItem, helpers::{parse_subproject_data, parse_root_project_data, populate_existing_files, find_prebuild_script, PrebuildScriptFile, validate_raw_project_outputs, ProjectOutputType, RetrievedCodeFileType, code_file_type, parse_test_project_data}, PreBuildScript, FinalTestFramework, base_include_prefix_for_test, gcmake_constants::{SRC_DIR, INCLUDE_DIR, TESTS_DIR, SUBPROJECTS_DIR}, FinalInstallerConfig, CompilerDefine, FinalBuildConfigMap, make_final_build_config_map, FinalTargetBuildConfigMap, FinalGlobalProperties, FinalShortcutConfig, parsers::{version_parser::ThreePartVersion, general_parser::ParseSuccess}, platform_spec_parser::parse_leading_system_spec, SystemSpecifierWrapper, FinalFeatureConfig, FinalFeatureEnabler, CodeFileInfo, FileRootGroup, PreBuildScriptType};
 use colored::*;
@@ -998,6 +998,23 @@ impl FinalProjectData {
   }
 
   fn validate_correctness(&self) -> Result<(), String> {
+    let current_cpp_standard = &self.get_language_info().cpp.standard;
+
+    if self.any_files_contain_cpp2_grammar() && ![20, 23].contains(current_cpp_standard) {
+      logger::warn(format!(
+        "Project [{}] contains .cpp2 files, but its C++ standard is currently set to {}. cppfront (.cpp2) requires C++20 or higher. Please set the Cpp language standard to {} or {} in cmake_data.yaml. Example:\n",
+        self.get_name_for_error_messages().yellow(),
+        current_cpp_standard.to_string().red(),
+        "20".green(),
+        "23".green()
+      ));
+
+      println!(
+        "languages:\n  Cpp:\n    standard: {}",
+        "20".green()
+      );
+    }
+
     if self.get_project_base_name().contains(' ') {
       return Err(format!(
         "Project name cannot contain spaces, but does. (Currently: {})",
