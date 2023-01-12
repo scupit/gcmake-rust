@@ -269,10 +269,10 @@ fn needed_predefined_dependencies(requires_cppfront: bool) -> Option<HashMap<Str
 
 fn default_cpp_standard(requires_cppfront: bool) -> i8 {
   return if requires_cppfront
-    { 17 }
     // To ensure cppfront works properly, we must compiler using c++20.
     // See https://github.com/hsutter/cppfront#how-do-i-build-cppfront
-    else { 20 };
+    { 20 }
+    else { 17 };
 }
 
 pub fn get_default_project_config(
