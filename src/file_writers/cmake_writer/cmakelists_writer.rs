@@ -1,6 +1,6 @@
 use std::{collections::{HashSet, BTreeMap, BTreeSet }, fs::File, io::{self, Write, ErrorKind}, path::{PathBuf, Path}, rc::Rc, cell::{RefCell, Ref}, iter::FromIterator};
 
-use crate::{project_info::{final_project_data::{FinalProjectData, CppFileGrammar}, path_manipulation::{relative_to_project_root}, final_dependencies::{GitRevisionSpecifier, PredefinedCMakeComponentsModuleDep, PredefinedSubdirDep, PredefinedCMakeModuleDep, FinalPredepInfo, GCMakeDependencyStatus, FinalPredefinedDependencyConfig, base64_encoded, PredefinedDepFunctionality, FinalDownloadMethod, FinalDebianPackagesConfig}, raw_data_in::{BuildType, BuildConfigCompilerSpecifier, SpecificCompilerSpecifier, OutputItemType, LanguageConfigMap, TargetSpecificBuildType, dependencies::internal_dep_config::{CMakeModuleType}, DefaultCompiledLibType}, FinalProjectType, CompiledOutputItem, LinkMode, FinalTestFramework, dependency_graph_mod::dependency_graph::{DependencyGraph, OrderedTargetInfo, ProjectWrapper, TargetNode, SimpleNodeOutputType, Link, EmscriptenLinkFlagInfo, ContainedItem}, SystemSpecifierWrapper, CompilerDefine, FinalBuildConfig, CompilerFlag, LinkerFlag, gcmake_constants::{SRC_DIR, INCLUDE_DIR}, platform_spec_parser::parse_leading_system_spec, CodeFileInfo, RetrievedCodeFileType, PreBuildScriptType}, file_writers::cmake_writer::cmake_writer_helpers::system_constraint_generator_expression};
+use crate::{project_info::{final_project_data::{FinalProjectData, CppFileGrammar}, path_manipulation::{relative_to_project_root}, final_dependencies::{GitRevisionSpecifier, PredefinedCMakeComponentsModuleDep, PredefinedSubdirDep, PredefinedCMakeModuleDep, FinalPredepInfo, GCMakeDependencyStatus, FinalPredefinedDependencyConfig, base64_encoded, PredefinedDepFunctionality, FinalDownloadMethod, FinalDebianPackagesConfig}, raw_data_in::{BuildType, BuildConfigCompilerSpecifier, SpecificCompilerSpecifier, OutputItemType, LanguageConfigMap, TargetSpecificBuildType, dependencies::internal_dep_config::{CMakeModuleType}, DefaultCompiledLibType}, FinalProjectType, CompiledOutputItem, LinkMode, FinalTestFramework, dependency_graph_mod::dependency_graph::{DependencyGraph, OrderedTargetInfo, ProjectWrapper, TargetNode, SimpleNodeOutputType, Link, EmscriptenLinkFlagInfo, ContainedItem}, SystemSpecifierWrapper, CompilerDefine, FinalBuildConfig, CompilerFlag, LinkerFlag, gcmake_constants::{SRC_DIR, INCLUDE_DIR}, platform_spec_parser::parse_leading_system_spec, CodeFileInfo, RetrievedCodeFileType, PreBuildScriptType, FinalDocGenerator}, file_writers::cmake_writer::cmake_writer_helpers::system_constraint_generator_expression};
 
 use super::{cmake_utils_writer::{CMakeUtilFile, CMakeUtilWriter}, cmake_writer_helpers::system_contstraint_conditional_expression};
 use colored::*;
@@ -345,6 +345,9 @@ impl<'a> CMakeListsWriter<'a> {
     }
 
     if !self.project_data.is_test_project() {
+      self.write_section_header("Documentation Generation")?;
+      self.write_documentation_generation()?;
+
       self.write_section_header("Installation and Export configuration")?;
       writeln!(&self.cmakelists_file, "gcmake_end_config_file()")?;
       self.write_installation_and_exports()?;
@@ -568,7 +571,9 @@ impl<'a> CMakeListsWriter<'a> {
       "Build the testing tree for all non-GCMake projects. Testing trees for GCMake projects are enabled per-project. For example, this project uses the ${LOCAL_TOPLEVEL_PROJECT_NAME}_BUILD_TESTS variable."
     )?;
 
+    // These CMake functions are defined in gcmake-general-utils.cmake.
     writeln!(&self.cmakelists_file, "\ninitialize_build_tests_var()")?;
+    writeln!(&self.cmakelists_file, "\ngcmake_initialize_build_docs_var()")?;
 
     let config_names: Vec<&'static str> = self.project_data.get_build_configs()
       .iter()
@@ -825,6 +830,7 @@ impl<'a> CMakeListsWriter<'a> {
     writeln!(&self.cmakelists_file, "initialize_needed_bin_files_list()")?;
     writeln!(&self.cmakelists_file, "initialize_additional_dependency_install_list()")?;
     writeln!(&self.cmakelists_file, "initialize_generated_export_headers_list()")?;
+    writeln!(&self.cmakelists_file, "gcmake_init_documentable_files_list()")?;
     
     if self.project_data.is_root_project() {
       writeln!(&self.cmakelists_file, "initialize_uncached_dep_list()")?;
@@ -2058,7 +2064,6 @@ impl<'a> CMakeListsWriter<'a> {
       )?;
     }
 
-
     // for output_target in self.sorted_target_info.targets_with_project_id(self.dep_graph_ref().project_id()) {
     for output_target in self.sorted_target_info.regular_targets_with_project_id(self.dep_graph_ref().project_id()) {
       // let output_name: String = borrowed_target.get_name().to_string();
@@ -3163,6 +3168,33 @@ impl<'a> CMakeListsWriter<'a> {
     return Ok(target_name.to_string());
   }
 
+  fn write_documentation_generation(&self) -> io::Result<()> {
+    for files_var in ["${PROJECT_BASE_NAME}_SOURCES", "${PROJECT_BASE_NAME}_HEADERS"] {
+      writeln!(&self.cmakelists_file,
+        "gcmake_add_to_documentable_files_list( {} )",
+        files_var
+      )?;
+    }
+
+    if !self.project_data.is_root_project() && !self.project_data.is_test_project() {
+      writeln!(&self.cmakelists_file, "gcmake_raise_documentable_files_list()")?;
+    }
+
+    writeln!(&self.cmakelists_file, "if( ${{PROJECT_NAME}}_BUILD_DOCS )")?;
+
+    if self.project_data.is_root_project() {
+      if let Some(doc_generator) = self.project_data.get_doc_generator() {
+        match doc_generator {
+          FinalDocGenerator::Doxygen => {
+            writeln!(&self.cmakelists_file, "gcmake_use_doxygen( DOCUMENTABLE_FILES )")?;
+          }
+        }
+      }
+    }
+
+    writeln!(&self.cmakelists_file, "endif()")?;
+    Ok(())
+  }
 
   // See this page for help and a good example:
   // https://cmake.org/cmake/help/latest/guide/tutorial/Adding%20Export%20Configuration.html
@@ -3174,6 +3206,8 @@ impl<'a> CMakeListsWriter<'a> {
       writeln!(&self.cmakelists_file, "{}raise_needed_bin_files_list()", spacer)?;
       writeln!(&self.cmakelists_file, "{}raise_additional_dependency_install_list()", spacer)?;
       writeln!(&self.cmakelists_file, "{}raise_generated_export_headers_list()", spacer)?;
+      // NOTE: The call to gcmake_raise_documentable_files_list(...) is done in the
+      // write_documentation_generator(...) function in this file.
       Ok(())
     };
 

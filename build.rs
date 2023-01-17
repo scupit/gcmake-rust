@@ -16,7 +16,8 @@ fn main() {
     "gcmake-cpack-utils",
     "gcmake-config-file-writer",
     "gcmake-features-util",
-    "gcmake-cppfront-utils"
+    "gcmake-cppfront-utils",
+    "gcmake-doxygen-utils",
   ];
 
   match combine_cmake_util_files(ordered_cmake_util_names) {

@@ -116,6 +116,10 @@ impl FinalTestFramework {
   }
 }
 
+pub enum FinalDocGenerator {
+  Doxygen
+}
+
 pub enum FinalProjectType {
   Root,
   Subproject {

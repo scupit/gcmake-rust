@@ -10,6 +10,15 @@ There are a whole bunch of things which need doing. This is the place to list th
 ## Priorities
 
 - [ ] Add CLI commands for cleaning and updating the dep-cache. Not exactly sure how updating should work yet.
+- [ ] Basic documentation generation support:
+  - [x] Documentation with [Doxygen](https://www.doxygen.nl/index.html)
+  - [ ] Document library entry files.
+  - [ ] Ability to use a dummy *.hpp* file for home page generation
+  - [ ] Ability to document just the header files.
+  - [ ] Validator to ensure certain important/required lines are present in *Doxyfile.in*, such as `PROJECT_NAME = @PROJECT_NAME@`
+  - [ ] Default *Doxyfile.in* generator command. Something like `gen-default doxyfile`.
+  - [Doxygen + Sphinx + Breathe + read-the-docs](https://devblogs.microsoft.com/cppblog/clear-functional-c-documentation-with-sphinx-breathe-doxygen-cmake/) documentation system
+  - [ ] Additional markdown page usage with sphinx
 
 ## Configuration TODO
 
@@ -23,6 +32,7 @@ Support for:
 - [ ] Now that minimal installs are implemented, add ability to specify exactly which executables are installed.
 - [ ] Use CMake 3.25 ([Release Notes Here](https://cmake.org/cmake/help/v3.25/release/3.25.html)) for these features:
   - *LINUX* and *CMAKE_HOST_LINUX* variables
+- [ ] Maybe support cppfront *.h2* headers, once they become a little more "stable".
 
 ### CLI TODO
 

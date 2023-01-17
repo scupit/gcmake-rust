@@ -26,6 +26,13 @@ pub enum RawTestFramework {
   DocTest(UserGivenPredefinedDependencyConfig),
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(deny_unknown_fields)]
+pub enum RawDocumentationGeneratorConfig {
+  Doxygen,
+  // Sphinx
+}
+
 impl RawTestFramework {
   pub fn lib_config(&self) -> &UserGivenPredefinedDependencyConfig {
     match self {
@@ -97,6 +104,7 @@ pub struct RawProject {
   pub installer_config: Option<RawInstallerConfig>,
   pub default_build_type: BuildType,
   pub languages: LanguageConfigMap,
+  pub doc_generator: Option<RawDocumentationGeneratorConfig>,
   pub features: Option<HashMap<String, RawFeatureConfig>>,
   pub prebuild_config: Option<PreBuildConfigIn>,
   pub supported_compilers: BTreeSet<SpecificCompilerSpecifier>,

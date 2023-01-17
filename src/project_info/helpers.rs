@@ -75,6 +75,15 @@ pub enum PrebuildScriptFile {
   Python(PathBuf)
 }
 
+pub fn find_doxyfile_in(project_docs_dir: &str) -> Option<PathBuf> {
+  for possible_doxyfile in file_variants(project_docs_dir, "Doxyfile", vec!["in"]) {
+    if possible_doxyfile.exists() {
+      return Some(possible_doxyfile);
+    }
+  }
+  return None;
+}
+
 pub fn find_prebuild_script(project_root: &str) -> Option<PrebuildScriptFile> {
   let pre_build_file_base_name: &str = "pre_build";
 
