@@ -108,12 +108,12 @@ pub fn validate_doxyfile_in(doxyfile_in_path: &Path) -> Result<(), String> {
 
   // TODO: Make this "search" more efficient.
   for (field_name, required_text) in at_replacements {
-    let finder_regex_string: String = format!(r"(?m)^\s*{}\s*=\s*{}\s*$", field_name, required_text);
+    let finder_regex_string: String = format!(r"(?m)^\s*{}\s*=\s*{}\s*", field_name, required_text);
     let finder_regex: Regex = Regex::new(&finder_regex_string).unwrap();
 
     if !finder_regex.is_match(&doxyfile_in_contents) {
       return Err(format!(
-        "Doxyfile.in ({}) is missing the line `{}`, which is required for it to work properly with CMake.",
+        "{} is missing the line `{}`, which is required for it to work properly with CMake.",
         doxyfile_in_path.to_str().unwrap().yellow(),
         format!("{} = {}", field_name, required_text).bright_green()
       ));

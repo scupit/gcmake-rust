@@ -16,7 +16,7 @@ There are a whole bunch of things which need doing. This is the place to list th
   - [ ] Ability to use a dummy *.hpp* file for home page generation
   - [x] Ability to document just the header files.
   - [x] Validator to ensure certain important/required lines are present in *Doxyfile.in*, such as `PROJECT_NAME = @PROJECT_NAME@`
-  - [ ] Default *Doxyfile.in* generator command. Something like `gen-default doxyfile`.
+  - [x] Default *Doxyfile.in* generator command. Something like `gen-default doxyfile`.
   - [Doxygen + Sphinx + Breathe + read-the-docs](https://devblogs.microsoft.com/cppblog/clear-functional-c-documentation-with-sphinx-breathe-doxygen-cmake/) documentation system
   - [ ] Additional markdown page usage with sphinx
   - [ ] Make docs/ dir part of CMake installation
