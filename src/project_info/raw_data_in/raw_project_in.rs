@@ -28,9 +28,16 @@ pub enum RawTestFramework {
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(deny_unknown_fields)]
-pub enum RawDocumentationGeneratorConfig {
+pub enum RawDocGeneratorName {
   Doxygen,
   // Sphinx
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(deny_unknown_fields)]
+pub struct RawDocumentationGeneratorConfig {
+  pub generator: RawDocGeneratorName,
+  pub headers_only: Option<bool>
 }
 
 impl RawTestFramework {
@@ -104,7 +111,7 @@ pub struct RawProject {
   pub installer_config: Option<RawInstallerConfig>,
   pub default_build_type: BuildType,
   pub languages: LanguageConfigMap,
-  pub doc_generator: Option<RawDocumentationGeneratorConfig>,
+  pub documentation: Option<RawDocumentationGeneratorConfig>,
   pub features: Option<HashMap<String, RawFeatureConfig>>,
   pub prebuild_config: Option<PreBuildConfigIn>,
   pub supported_compilers: BTreeSet<SpecificCompilerSpecifier>,

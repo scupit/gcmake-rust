@@ -116,8 +116,13 @@ impl FinalTestFramework {
   }
 }
 
-pub enum FinalDocGenerator {
+pub enum FinalDocGeneratorName {
   Doxygen
+}
+
+pub struct FinalDocumentationInfo {
+  pub generator: FinalDocGeneratorName,
+  pub headers_only: bool
 }
 
 pub enum FinalProjectType {

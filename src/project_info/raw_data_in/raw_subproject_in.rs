@@ -39,7 +39,7 @@ impl Into<RawProject> for RawSubproject {
       version: self.version,
       features: None,
       installer_config: None,
-      doc_generator: None,
+      documentation: None,
       // NOTE: This language config is only a placeholder. Subprojects will inherit
       // language info from their parent project.
       languages: LanguageConfigMap {

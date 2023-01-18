@@ -2,7 +2,7 @@ use std::{collections::{HashMap, HashSet, BTreeMap, BTreeSet}, path::{Path, Path
 
 use crate::{project_info::path_manipulation::cleaned_pathbuf, logger};
 
-use super::{path_manipulation::{cleaned_path_str, relative_to_project_root, absolute_path}, final_dependencies::{FinalGCMakeDependency, FinalPredefinedDependencyConfig}, raw_data_in::{RawProject, dependencies::internal_dep_config::AllRawPredefinedDependencies, BuildType, LanguageConfigMap, OutputItemType, PreBuildConfigIn, SpecificCompilerSpecifier, BuildConfigCompilerSpecifier, TargetSpecificBuildType, LinkSection, RawTestFramework, DefaultCompiledLibType, RawCompiledItem, RawDocumentationGeneratorConfig}, final_project_configurables::{FinalProjectType}, CompiledOutputItem, helpers::{parse_subproject_data, parse_root_project_data, populate_existing_files, find_prebuild_script, PrebuildScriptFile, validate_raw_project_outputs, ProjectOutputType, RetrievedCodeFileType, code_file_type, parse_test_project_data, find_doxyfile_in}, PreBuildScript, FinalTestFramework, base_include_prefix_for_test, gcmake_constants::{SRC_DIR, INCLUDE_DIR, TESTS_DIR, SUBPROJECTS_DIR, DOCS_DIR}, FinalInstallerConfig, CompilerDefine, FinalBuildConfigMap, make_final_build_config_map, FinalTargetBuildConfigMap, FinalGlobalProperties, FinalShortcutConfig, parsers::{version_parser::ThreePartVersion, general_parser::ParseSuccess}, platform_spec_parser::parse_leading_system_spec, SystemSpecifierWrapper, FinalFeatureConfig, FinalFeatureEnabler, CodeFileInfo, FileRootGroup, PreBuildScriptType, FinalDocGenerator};
+use super::{path_manipulation::{cleaned_path_str, relative_to_project_root, absolute_path}, final_dependencies::{FinalGCMakeDependency, FinalPredefinedDependencyConfig}, raw_data_in::{RawProject, dependencies::internal_dep_config::AllRawPredefinedDependencies, BuildType, LanguageConfigMap, OutputItemType, PreBuildConfigIn, SpecificCompilerSpecifier, BuildConfigCompilerSpecifier, TargetSpecificBuildType, LinkSection, RawTestFramework, DefaultCompiledLibType, RawCompiledItem, RawDocumentationGeneratorConfig, RawDocGeneratorName}, final_project_configurables::{FinalProjectType}, CompiledOutputItem, helpers::{parse_subproject_data, parse_root_project_data, populate_existing_files, find_prebuild_script, PrebuildScriptFile, validate_raw_project_outputs, ProjectOutputType, RetrievedCodeFileType, code_file_type, parse_test_project_data, find_doxyfile_in}, PreBuildScript, FinalTestFramework, base_include_prefix_for_test, gcmake_constants::{SRC_DIR, INCLUDE_DIR, TESTS_DIR, SUBPROJECTS_DIR, DOCS_DIR}, FinalInstallerConfig, CompilerDefine, FinalBuildConfigMap, make_final_build_config_map, FinalTargetBuildConfigMap, FinalGlobalProperties, FinalShortcutConfig, parsers::{version_parser::ThreePartVersion, general_parser::ParseSuccess}, platform_spec_parser::parse_leading_system_spec, SystemSpecifierWrapper, FinalFeatureConfig, FinalFeatureEnabler, CodeFileInfo, FileRootGroup, PreBuildScriptType, FinalDocGeneratorName, FinalDocumentationInfo};
 use colored::*;
 
 const SUBPROJECT_JOIN_STR: &'static str = "_S_";
@@ -230,7 +230,7 @@ pub struct FinalProjectData {
   language_config_map: Rc<LanguageConfigMap>,
   global_defines: Vec<CompilerDefine>,
   global_properties: Option<FinalGlobalProperties>,
-  doc_generator: Option<FinalDocGenerator>,
+  documentation: Option<FinalDocumentationInfo>,
 
   base_include_prefix: String,
   full_include_prefix: String,
@@ -840,9 +840,7 @@ impl FinalProjectData {
       full_include_prefix,
       base_include_prefix: raw_project.get_include_prefix().to_string(),
       global_defines: global_defines,
-      doc_generator: raw_project.doc_generator.map(|doc_generator| match doc_generator {
-        RawDocumentationGeneratorConfig::Doxygen => FinalDocGenerator::Doxygen
-      }),
+      documentation: Self::finalized_doc_generator_info(raw_project.documentation.as_ref()),
       docs_dir_relative_to_cwd,
       docs_dir_relative_to_project_root,
       features,
@@ -1008,6 +1006,22 @@ impl FinalProjectData {
     Ok(())
   }
 
+  fn finalized_doc_generator_info(info: Option<&RawDocumentationGeneratorConfig>) -> Option<FinalDocumentationInfo> {
+    match info {
+      None => None,
+      Some(raw_doc_generator_info) => {
+        let generator: FinalDocGeneratorName = match &raw_doc_generator_info.generator {
+          RawDocGeneratorName::Doxygen => FinalDocGeneratorName::Doxygen
+        };
+
+        return Some(FinalDocumentationInfo {
+          generator,
+          headers_only: raw_doc_generator_info.headers_only.unwrap_or(true)
+        });
+      }
+    }
+  }
+
   fn ensure_build_config_correctness(&self) -> Result<(), String> {
     for (build_type, by_compiler_map) in self.get_build_configs() {
       for (config_compiler, _) in by_compiler_map {
@@ -1095,9 +1109,9 @@ impl FinalProjectData {
   }
 
   fn ensure_doc_generator_correctness(&self) -> Result<(), String> {
-    if let Some(doc_generator) = &self.doc_generator {
-      match doc_generator {
-        FinalDocGenerator::Doxygen => {
+    if let Some(doc_generator) = &self.documentation {
+      match &doc_generator.generator {
+        FinalDocGeneratorName::Doxygen => {
           if find_doxyfile_in(&self.docs_dir_relative_to_cwd).is_none() {
             return Err(format!(
               "Project [{}] set documentation generator to {}, but is missing its {}. Please create {} in '{}'.",
@@ -1526,8 +1540,8 @@ impl FinalProjectData {
     &self.output
   }
 
-  pub fn get_doc_generator(&self) -> Option<&FinalDocGenerator> {
-    self.doc_generator.as_ref()
+  pub fn get_documentation_config(&self) -> Option<&FinalDocumentationInfo> {
+    self.documentation.as_ref()
   }
 
   pub fn get_prebuild_script(&self) -> &Option<PreBuildScript> {

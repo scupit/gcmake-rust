@@ -1,6 +1,6 @@
 use std::{collections::{HashSet, BTreeMap, BTreeSet }, fs::File, io::{self, Write, ErrorKind}, path::{PathBuf, Path}, rc::Rc, cell::{RefCell, Ref}, iter::FromIterator};
 
-use crate::{project_info::{final_project_data::{FinalProjectData, CppFileGrammar}, path_manipulation::{relative_to_project_root}, final_dependencies::{GitRevisionSpecifier, PredefinedCMakeComponentsModuleDep, PredefinedSubdirDep, PredefinedCMakeModuleDep, FinalPredepInfo, GCMakeDependencyStatus, FinalPredefinedDependencyConfig, base64_encoded, PredefinedDepFunctionality, FinalDownloadMethod, FinalDebianPackagesConfig}, raw_data_in::{BuildType, BuildConfigCompilerSpecifier, SpecificCompilerSpecifier, OutputItemType, LanguageConfigMap, TargetSpecificBuildType, dependencies::internal_dep_config::{CMakeModuleType}, DefaultCompiledLibType}, FinalProjectType, CompiledOutputItem, LinkMode, FinalTestFramework, dependency_graph_mod::dependency_graph::{DependencyGraph, OrderedTargetInfo, ProjectWrapper, TargetNode, SimpleNodeOutputType, Link, EmscriptenLinkFlagInfo, ContainedItem}, SystemSpecifierWrapper, CompilerDefine, FinalBuildConfig, CompilerFlag, LinkerFlag, gcmake_constants::{SRC_DIR, INCLUDE_DIR}, platform_spec_parser::parse_leading_system_spec, CodeFileInfo, RetrievedCodeFileType, PreBuildScriptType, FinalDocGenerator}, file_writers::cmake_writer::cmake_writer_helpers::system_constraint_generator_expression};
+use crate::{project_info::{final_project_data::{FinalProjectData, CppFileGrammar}, path_manipulation::{relative_to_project_root}, final_dependencies::{GitRevisionSpecifier, PredefinedCMakeComponentsModuleDep, PredefinedSubdirDep, PredefinedCMakeModuleDep, FinalPredepInfo, GCMakeDependencyStatus, FinalPredefinedDependencyConfig, base64_encoded, PredefinedDepFunctionality, FinalDownloadMethod, FinalDebianPackagesConfig}, raw_data_in::{BuildType, BuildConfigCompilerSpecifier, SpecificCompilerSpecifier, OutputItemType, LanguageConfigMap, TargetSpecificBuildType, dependencies::internal_dep_config::{CMakeModuleType}, DefaultCompiledLibType}, FinalProjectType, CompiledOutputItem, LinkMode, FinalTestFramework, dependency_graph_mod::dependency_graph::{DependencyGraph, OrderedTargetInfo, ProjectWrapper, TargetNode, SimpleNodeOutputType, Link, EmscriptenLinkFlagInfo, ContainedItem}, SystemSpecifierWrapper, CompilerDefine, FinalBuildConfig, CompilerFlag, LinkerFlag, gcmake_constants::{SRC_DIR, INCLUDE_DIR}, platform_spec_parser::parse_leading_system_spec, CodeFileInfo, RetrievedCodeFileType, PreBuildScriptType, FinalDocGeneratorName}, file_writers::cmake_writer::cmake_writer_helpers::system_constraint_generator_expression};
 
 use super::{cmake_utils_writer::{CMakeUtilFile, CMakeUtilWriter}, cmake_writer_helpers::system_contstraint_conditional_expression};
 use colored::*;
@@ -2954,11 +2954,24 @@ impl<'a> CMakeListsWriter<'a> {
     )?;
     self.write_newline()?;
 
+    let entry_file_varname: String = format!("{}_ENTRY_FILE", target_name);
+
+    self.set_basic_var(
+      "",
+      &entry_file_varname,
+      &self.cmake_absolute_entry_file_path(output_data.get_entry_file())
+    )?;
+
     writeln!(&self.cmakelists_file,
-      "gcmake_apply_lib_files( {} {} {} {} {} )",
+      "gcmake_add_to_documentable_files_list( {} )",
+      entry_file_varname
+    )?;
+
+    writeln!(&self.cmakelists_file,
+      "gcmake_apply_lib_files( {} {} \"${{{}}}\" {} {} )",
       target_name,
       lib_spec_string,
-      self.cmake_absolute_entry_file_path(output_data.get_entry_file()),
+      entry_file_varname,
       src_var_name,
       includes_var_name
     )?;
@@ -3183,9 +3196,9 @@ impl<'a> CMakeListsWriter<'a> {
     writeln!(&self.cmakelists_file, "if( ${{PROJECT_NAME}}_BUILD_DOCS )")?;
 
     if self.project_data.is_root_project() {
-      if let Some(doc_generator) = self.project_data.get_doc_generator() {
-        match doc_generator {
-          FinalDocGenerator::Doxygen => {
+      if let Some(doc_info) = self.project_data.get_documentation_config() {
+        match &doc_info.generator {
+          FinalDocGeneratorName::Doxygen => {
             writeln!(&self.cmakelists_file, "gcmake_use_doxygen( DOCUMENTABLE_FILES )")?;
           }
         }
