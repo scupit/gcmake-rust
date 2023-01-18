@@ -574,6 +574,15 @@ impl<'a> CMakeListsWriter<'a> {
     // These CMake functions are defined in gcmake-general-utils.cmake.
     writeln!(&self.cmakelists_file, "\ninitialize_build_tests_var()")?;
     writeln!(&self.cmakelists_file, "\ngcmake_initialize_build_docs_var()")?;
+    
+    if let Some(doc_config) = self.project_data.get_documentation_config() {
+      self.set_basic_option(
+        "",
+        "${PROJECT_NAME}_DOCUMENT_HEADERS_ONLY",
+        on_or_off_str(doc_config.headers_only),
+        "When ON, only header files are documented. When OFF, implementation like .c and .cpp will also be documented."
+      )?;
+    }
 
     let config_names: Vec<&'static str> = self.project_data.get_build_configs()
       .iter()
@@ -3182,20 +3191,23 @@ impl<'a> CMakeListsWriter<'a> {
   }
 
   fn write_documentation_generation(&self) -> io::Result<()> {
-    for files_var in ["${PROJECT_BASE_NAME}_SOURCES", "${PROJECT_BASE_NAME}_HEADERS"] {
-      writeln!(&self.cmakelists_file,
-        "gcmake_add_to_documentable_files_list( {} )",
-        files_var
-      )?;
-    }
+    writeln!(&self.cmakelists_file,
+      "gcmake_add_to_documentable_files_list( ${{PROJECT_BASE_NAME}}_HEADERS )",
+    )?;
+
+    writeln!(&self.cmakelists_file, "if( NOT ${{LOCAL_TOPLEVEL_PROJECT_NAME}}_DOCUMENT_HEADERS_ONLY )")?;
+    writeln!(&self.cmakelists_file,
+      "gcmake_add_to_documentable_files_list( ${{PROJECT_BASE_NAME}}_SOURCES )",
+    )?;
+    writeln!(&self.cmakelists_file, "endif()\n")?;
 
     if !self.project_data.is_root_project() && !self.project_data.is_test_project() {
       writeln!(&self.cmakelists_file, "gcmake_raise_documentable_files_list()")?;
     }
 
-    writeln!(&self.cmakelists_file, "if( ${{PROJECT_NAME}}_BUILD_DOCS )")?;
-
     if self.project_data.is_root_project() {
+      writeln!(&self.cmakelists_file, "if( ${{PROJECT_NAME}}_BUILD_DOCS )")?;
+
       if let Some(doc_info) = self.project_data.get_documentation_config() {
         match &doc_info.generator {
           FinalDocGeneratorName::Doxygen => {
@@ -3203,9 +3215,10 @@ impl<'a> CMakeListsWriter<'a> {
           }
         }
       }
+
+      writeln!(&self.cmakelists_file, "endif()")?;
     }
 
-    writeln!(&self.cmakelists_file, "endif()")?;
     Ok(())
   }
 

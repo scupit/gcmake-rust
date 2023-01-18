@@ -241,7 +241,7 @@ pub struct FinalProjectData {
   include_dir_relative_to_project_root: String,
 
   docs_dir_relative_to_cwd: String,
-  docs_dir_relative_to_project_root: String,
+  _docs_dir_relative_to_project_root: String,
 
   pub src_files: BTreeSet<CodeFileInfo>,
   pub include_files: BTreeSet<CodeFileInfo>,
@@ -842,7 +842,7 @@ impl FinalProjectData {
       global_defines: global_defines,
       documentation: Self::finalized_doc_generator_info(raw_project.documentation.as_ref()),
       docs_dir_relative_to_cwd,
-      docs_dir_relative_to_project_root,
+      _docs_dir_relative_to_project_root: docs_dir_relative_to_project_root,
       features,
       global_properties: raw_project.global_properties
         .as_ref()
