@@ -1,4 +1,7 @@
-use std::{path::{PathBuf, Path}, fs, io, collections::BTreeSet};
+use std::{path::{PathBuf, Path}, fs::{self, File}, io::{self, Read}, collections::BTreeSet};
+
+use colored::Colorize;
+use regex::Regex;
 
 use super::{raw_data_in::{RawProject, RawSubproject, OutputItemType, RawTestProject}, path_manipulation::{cleaned_pathbuf, relative_to_project_root}, final_project_data::{ProjectLoadFailureReason, CppFileGrammar}, CodeFileInfo};
 
@@ -82,6 +85,42 @@ pub fn find_doxyfile_in(project_docs_dir: &str) -> Option<PathBuf> {
     }
   }
   return None;
+}
+
+pub fn validate_doxyfile_in(doxyfile_in_path: &Path) -> Result<(), String> {
+  let mut doxyfile_in_contents = String::new();
+
+  {
+    File::open(doxyfile_in_path)
+      .map_err(|err| err.to_string())?
+      .read_to_string(&mut doxyfile_in_contents)
+      .map_err(|err| err.to_string())?;
+  }
+
+  // Map Doxyfile fields to variables provided in the CMakeLists.txt.
+  let at_replacements = [
+    ("PROJECT_NAME", "\"@PROJECT_NAME@\""),
+    ("PROJECT_NUMBER", "\"@PROJECT_VERSION@\""),
+    ("PROJECT_BRIEF", "\"@PROJECT_DESCRIPTION@\""),
+    ("OUTPUT_DIRECTORY", "\"@DOXYGEN_OUTPUT_DIR@\""),
+    ("INPUT", "@DOXYGEN_INPUTS@"),
+  ];
+
+  // TODO: Make this "search" more efficient.
+  for (field_name, required_text) in at_replacements {
+    let finder_regex_string: String = format!(r"(?m)^\s*{}\s*=\s*{}\s*$", field_name, required_text);
+    let finder_regex: Regex = Regex::new(&finder_regex_string).unwrap();
+
+    if !finder_regex.is_match(&doxyfile_in_contents) {
+      return Err(format!(
+        "Doxyfile.in ({}) is missing the line `{}`, which is required for it to work properly with CMake.",
+        doxyfile_in_path.to_str().unwrap().yellow(),
+        format!("{} = {}", field_name, required_text).bright_green()
+      ));
+    }
+  }
+
+  Ok(())
 }
 
 pub fn find_prebuild_script(project_root: &str) -> Option<PrebuildScriptFile> {

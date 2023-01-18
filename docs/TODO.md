@@ -12,13 +12,14 @@ There are a whole bunch of things which need doing. This is the place to list th
 - [ ] Add CLI commands for cleaning and updating the dep-cache. Not exactly sure how updating should work yet.
 - [ ] Basic documentation generation support:
   - [x] Documentation with [Doxygen](https://www.doxygen.nl/index.html)
-  - [ ] Document library entry files.
+  - [x] Document library entry files.
   - [ ] Ability to use a dummy *.hpp* file for home page generation
-  - [ ] Ability to document just the header files.
-  - [ ] Validator to ensure certain important/required lines are present in *Doxyfile.in*, such as `PROJECT_NAME = @PROJECT_NAME@`
+  - [x] Ability to document just the header files.
+  - [x] Validator to ensure certain important/required lines are present in *Doxyfile.in*, such as `PROJECT_NAME = @PROJECT_NAME@`
   - [ ] Default *Doxyfile.in* generator command. Something like `gen-default doxyfile`.
   - [Doxygen + Sphinx + Breathe + read-the-docs](https://devblogs.microsoft.com/cppblog/clear-functional-c-documentation-with-sphinx-breathe-doxygen-cmake/) documentation system
   - [ ] Additional markdown page usage with sphinx
+  - [ ] Documentation for the new `documentation` configuration options.
 
 ## Configuration TODO
 
