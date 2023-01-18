@@ -1,4 +1,4 @@
-use std::{io::{self, Write}, path::PathBuf, fs::File,};
+use std::{io::{self, Write}, path::{PathBuf, Path}, fs::{File, self},};
 
 use colored::Colorize;
 
@@ -29,6 +29,12 @@ pub fn write_default_doxyfile(
   }
 
   if should_write_doxyfile {
+    let doxyfile_in_dir: &Path = doxyfile_in_path.parent().unwrap();
+
+    if !doxyfile_in_dir.exists() {
+      fs::create_dir_all(doxyfile_in_dir)?;
+    }
+
     let doxyfile_in: File = File::create(&doxyfile_in_path)?;
     writeln!(&doxyfile_in, "{}", DEFAULT_DOXYFILE)?;
     println!("{} generated successfully!", doxyfile_in_path.to_str().unwrap().bright_green());

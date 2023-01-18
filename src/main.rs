@@ -117,8 +117,7 @@ fn main() {
         let file_copy_result = copy_default_file(
           &command,
           &given_root_dir,
-          &dep_config,
-          None
+          &dep_config
         );
 
         if let Err(err) = file_copy_result {
@@ -129,8 +128,7 @@ fn main() {
         let file_copy_result = generate_default_file(
           &command,
           &given_root_dir,
-          &dep_config,
-          None
+          &dep_config
         );
 
         if let Err(err) = file_copy_result {
@@ -143,8 +141,7 @@ fn main() {
         print_target_info(
           &command,
           &given_root_dir,
-          &dep_config,
-          None
+          &dep_config
         );
       },
       SubCommandStruct::ProjectInfo(command) => {
@@ -153,8 +150,7 @@ fn main() {
         print_project_info(
           &command,
           &given_root_dir,
-          &dep_config,
-          None
+          &dep_config
         );
       },
       SubCommandStruct::PredepInfo(command) => {
@@ -179,8 +175,7 @@ fn main() {
   if should_generate_cmakelists {
     do_generate_project_configs(
       &given_root_dir,
-      &dep_config,
-      None
+      &dep_config
     );
   }
 

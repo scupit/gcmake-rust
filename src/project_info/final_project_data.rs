@@ -200,8 +200,18 @@ struct NeededParseInfoFromParent {
   inherited_features: Rc<BTreeMap<String, FinalFeatureConfig>>
 }
 
-pub struct ProjectConstructorConfig {
+pub struct FinalProjectLoadContext {
+  pub about_to_generate_doxyfile: bool,
   pub just_created_library_project_at: Option<String>
+}
+
+impl Default for FinalProjectLoadContext {
+  fn default() -> Self {
+    Self {
+      about_to_generate_doxyfile: false,
+      just_created_library_project_at: None
+    }
+  }
 }
 
 #[derive(PartialEq, Eq, Clone, Copy)]
@@ -265,7 +275,7 @@ impl FinalProjectData {
   pub fn new(
     unclean_given_root: &str,
     dep_config: &AllRawPredefinedDependencies,
-    constructor_config: ProjectConstructorConfig
+    project_load_context: FinalProjectLoadContext
   ) -> Result<UseableFinalProjectDataGroup, ProjectLoadFailureReason> {
     let cleaned_given_root: String = cleaned_path_str(unclean_given_root);
 
@@ -297,11 +307,12 @@ impl FinalProjectData {
       real_project_root_using.to_str().unwrap(),
       None,
       dep_config,
-      &constructor_config.just_created_library_project_at
+      &project_load_context.just_created_library_project_at
+        .clone()
         .map(|creation_root| absolute_path(creation_root).unwrap())
     )?);
 
-    root_project.validate_correctness()
+    root_project.validate_correctness(&project_load_context)
       .map_err(ProjectLoadFailureReason::Other)?;
 
     return Ok(UseableFinalProjectDataGroup {
@@ -1045,7 +1056,7 @@ impl FinalProjectData {
     Ok(())
   }
 
-  fn validate_correctness(&self) -> Result<(), String> {
+  fn validate_correctness(&self, project_load_context: &FinalProjectLoadContext) -> Result<(), String> {
     if self.get_project_base_name().contains(' ') {
       return Err(format!(
         "Project name cannot contain spaces, but does. (Currently: {})",
@@ -1067,12 +1078,12 @@ impl FinalProjectData {
     }
 
     self.validate_features()?;
-    self.ensure_doc_generator_correctness()?;
+    self.ensure_doc_generator_correctness(project_load_context.about_to_generate_doxyfile)?;
     self.ensure_no_file_collision()?;
 
     for (_, test_project) in &self.tests {
       if let ProjectOutputType::ExeProject = &test_project.project_output_type {
-        test_project.validate_correctness()?;
+        test_project.validate_correctness(&project_load_context)?;
       }
       else {
         return Err(format!(
@@ -1084,7 +1095,7 @@ impl FinalProjectData {
     }
 
     for (_, subproject) in &self.subprojects {
-      subproject.validate_correctness()?;
+      subproject.validate_correctness(&project_load_context)?;
     }
 
     self.ensure_language_config_correctness()?;
@@ -1108,7 +1119,7 @@ impl FinalProjectData {
     Ok(())
   }
 
-  fn ensure_doc_generator_correctness(&self) -> Result<(), String> {
+  fn ensure_doc_generator_correctness(&self, is_missing_doxyfile_okay: bool) -> Result<(), String> {
     if let Some(doc_generator) = &self.documentation {
       match &doc_generator.generator {
         FinalDocGeneratorName::Doxygen => match find_doxyfile_in(&self.docs_dir_relative_to_cwd) {
@@ -1116,14 +1127,16 @@ impl FinalProjectData {
             validate_doxyfile_in(&doxyfile_in_pathbuf)?;
           },
           None => {
-            return Err(format!(
-              "Project [{}] set documentation generator to {}, but is missing its {}. Please create {} in '{}'.",
-              self.get_name_for_error_messages(),
-              "Doxygen".yellow(),
-              "docs/Doxyfile.in".cyan(),
-              "Doxyfile.in".cyan(),
-              self.docs_dir_relative_to_cwd.yellow()
-            ));
+            if !is_missing_doxyfile_okay {
+              return Err(format!(
+                "Project [{}] set documentation generator to {}, but is missing its {}. Please create {} in '{}'.",
+                self.get_name_for_error_messages(),
+                "Doxygen".yellow(),
+                "docs/Doxyfile.in".cyan(),
+                "Doxyfile.in".cyan(),
+                self.docs_dir_relative_to_cwd.yellow()
+              ));
+            }
           }
         }
       }
