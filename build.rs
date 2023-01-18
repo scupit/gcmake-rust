@@ -30,6 +30,34 @@ fn main() {
   if let Err(io_error) = write_test_mains() {
     panic!("IO Error when writing test_mains: \"{}\"", io_error.to_string());
   }
+
+  let doxyfile_write_result = write_default_doxyfile(
+    Path::new("./src/program_actions/default_file_creator/doxygen/Doxyfile.in"),
+    Path::new("./src/program_actions/default_file_creator/doxygen/mod.rs")
+  );
+
+  if let Err(io_error) = doxyfile_write_result {
+    panic!("IO error when writing default Doxyfile.in to string: {}", io_error.to_string())
+  }
+}
+
+// ==================================================
+// Helper functions
+// ==================================================
+
+fn write_contents_to_var_in_file(
+  var_name: impl AsRef<str>,
+  in_file_path: &Path,
+  out_file: &mut File
+) -> io::Result<()> {
+  writeln!(out_file,
+    "pub const {}: &'static str =\n\"{}\";\n",
+    var_name.as_ref(),
+    fs::read_to_string(&in_file_path)?
+      .replace('"', "\\\"")
+  )?;
+
+  Ok(())
 }
 
 // ==================================================
@@ -42,7 +70,7 @@ fn write_test_mains() -> io::Result<()> {
   let mut output_file_path: PathBuf = mains_root_dir.clone();
   output_file_path.push("test_mains.rs");
 
-  let output_file: File = File::create(&output_file_path)?;
+  let mut output_file: File = File::create(&output_file_path)?;
 
   let main_group = [
     ("auto_main.cpp", "AUTO_MAIN"),
@@ -56,12 +84,10 @@ fn write_test_mains() -> io::Result<()> {
     for (main_file_name, main_type_name) in &main_group {
       main_file_path.push(main_file_name);
 
-      writeln!(&output_file,
-        "pub const {}_{}: &'static str =\n\"{}\";\n",
-        test_file_dir_name.to_uppercase(),
-        main_type_name,
-        fs::read_to_string(&main_file_path)?
-          .replace('"', "\\\"")
+      write_contents_to_var_in_file(
+        format!("{}_{}", test_file_dir_name.to_uppercase(), main_type_name),
+        &main_file_path,
+        &mut output_file
       )?;
 
       main_file_path.pop();
@@ -71,6 +97,24 @@ fn write_test_mains() -> io::Result<()> {
   Ok(())
 }
 
+
+// ==================================================
+// Write default files (for generation) into strings
+// ==================================================
+
+fn write_default_doxyfile(
+  in_path: &Path,
+  out_path: &Path
+) -> io::Result<()> {
+  let mut out_file: File = File::create(out_path)?;
+  write_contents_to_var_in_file(
+    "DEFAULT_DOXYFILE",
+    in_path,
+    &mut out_file
+  )?;
+
+  Ok(())
+}
 
 // ==================================================
 // Write CMake util files into strings

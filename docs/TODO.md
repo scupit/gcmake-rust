@@ -19,6 +19,7 @@ There are a whole bunch of things which need doing. This is the place to list th
   - [ ] Default *Doxyfile.in* generator command. Something like `gen-default doxyfile`.
   - [Doxygen + Sphinx + Breathe + read-the-docs](https://devblogs.microsoft.com/cppblog/clear-functional-c-documentation-with-sphinx-breathe-doxygen-cmake/) documentation system
   - [ ] Additional markdown page usage with sphinx
+  - [ ] Make docs/ dir part of CMake installation
   - [ ] Documentation for the new `documentation` configuration options.
 
 ## Configuration TODO

@@ -1619,6 +1619,10 @@ impl FinalProjectData {
     &self.include_dir_relative_to_project_root
   }
 
+  pub fn get_docs_dir_relative_to_cwd(&self) -> &str {
+    &self.docs_dir_relative_to_cwd
+  }
+
   pub fn get_build_configs(&self) -> &FinalBuildConfigMap {
     &self.build_config_map
   }

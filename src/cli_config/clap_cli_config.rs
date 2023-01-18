@@ -37,6 +37,10 @@ pub enum SubCommandStruct {
   /// Copy a default file from ~/.gcmake into the project root.
   UseFile(UseFilesCommand),
 
+  /// Generate a "default file", such as docs/Doxyfile.in. This is similar to use-file,
+  /// but generates the file from scratch instead of copying an existing one.
+  GenDefault(CreateDefaultFilesCommand),
+
   /// Select and print information about project outputs and pre-build script.
   TargetInfo(TargetInfoCommand),
   
@@ -175,7 +179,10 @@ pub enum UseFileOption {
   ClangFormat,
 
   #[value(name = "gitignore")]
-  GitIgnore
+  GitIgnore,
+
+  #[value(name = "doxyfile")]
+  Doxyfile
 }
 
 impl UseFileOption {
@@ -183,7 +190,22 @@ impl UseFileOption {
     match self {
       Self::ClangTidy => ".clang-tidy",
       Self::ClangFormat => ".clang-format",
-      Self::GitIgnore => ".gitignore"
+      Self::GitIgnore => ".gitignore",
+      Self::Doxyfile => "Doxyfile.in"
+    }
+  }
+}
+
+#[derive(ValueEnum, Clone, Copy)]
+pub enum CreateDefaultFileOption {
+  #[value(name = "doxyfile")]
+  Doxyfile
+}
+
+impl CreateDefaultFileOption {
+  pub fn to_file_name(&self) -> &str {
+    match self {
+      Self::Doxyfile => "Doxyfile.in"
     }
   }
 }
@@ -193,6 +215,14 @@ pub struct UseFilesCommand {
   /// The file to copy, without the leading '.'
   #[arg(value_enum)]
   pub file: UseFileOption
+}
+
+#[derive(Args)]
+pub struct CreateDefaultFilesCommand {
+  /// The project "default" file to generate. Instead of copying a file from ~/.gcmake/,
+  /// this actually generates a new file.
+  #[arg(value_enum)]
+  pub file: CreateDefaultFileOption
 }
 
 #[derive(Args)]
