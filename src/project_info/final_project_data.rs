@@ -251,7 +251,7 @@ pub struct FinalProjectData {
   include_dir_relative_to_project_root: String,
 
   docs_dir_relative_to_cwd: String,
-  _docs_dir_relative_to_project_root: String,
+  docs_dir_relative_to_project_root: String,
 
   pub src_files: BTreeSet<CodeFileInfo>,
   pub include_files: BTreeSet<CodeFileInfo>,
@@ -853,7 +853,7 @@ impl FinalProjectData {
       global_defines: global_defines,
       documentation: Self::finalized_doc_generator_info(raw_project.documentation.as_ref()),
       docs_dir_relative_to_cwd,
-      _docs_dir_relative_to_project_root: docs_dir_relative_to_project_root,
+      docs_dir_relative_to_project_root,
       features,
       global_properties: raw_project.global_properties
         .as_ref()
@@ -1120,9 +1120,23 @@ impl FinalProjectData {
   }
 
   fn ensure_doc_generator_correctness(&self, is_missing_doxyfile_okay: bool) -> Result<(), String> {
-    if let Some(doc_generator) = &self.documentation {
-      match &doc_generator.generator {
-        FinalDocGeneratorName::Doxygen => match find_doxyfile_in(&self.docs_dir_relative_to_cwd) {
+    let doxyfile_in_search_result: Option<PathBuf> = find_doxyfile_in(&self.docs_dir_relative_to_cwd);
+
+    match &self.documentation {
+      None => {
+        if doxyfile_in_search_result.is_some() {
+          logger::warn(format!(
+            "Project [{}] contains file {}, but hasn't enabled a documentation generator in its cmake_data.yaml. If this is intended, just ignore this warning. Otherwise, enable the {} documentation generator in cmake_data.yaml like this:\n\n{}:\n   generator: {}",
+            self.get_name_for_error_messages().yellow(),
+            format!("{}/{}", self.docs_dir_relative_to_project_root, "Doxyfile.in").yellow(),
+            "Doxygen".green(),
+            "documentation".purple(),
+            "Doxygen".green()
+          ))
+        }
+      },
+      Some(doc_generator) => match doc_generator.generator {
+        FinalDocGeneratorName::Doxygen => match doxyfile_in_search_result {
           Some(doxyfile_in_pathbuf) => {
             validate_doxyfile_in(&doxyfile_in_pathbuf)?;
           },
@@ -1139,6 +1153,7 @@ impl FinalProjectData {
             }
           }
         }
+
       }
     }
 
