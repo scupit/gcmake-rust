@@ -11,7 +11,7 @@ use std::{io, path::PathBuf, fs, cell::RefCell, rc::Rc};
 
 use crate::{cli_config::{clap_cli_config::{UseFilesCommand, CreateFilesCommand, UpdateDependencyConfigsCommand, TargetInfoCommand, ProjectInfoCommand, PredepInfoCommand, ToolInfoCommand, CreateDefaultFilesCommand, CreateDefaultFileOption}, CLIProjectGenerationInfo, CLIProjectTypeGenerating}, common::{prompt::prompt_until_boolean}, logger::exit_error_log, project_info::{raw_data_in::dependencies::internal_dep_config::AllRawPredefinedDependencies, final_project_data::{UseableFinalProjectDataGroup, ProjectLoadFailureReason, FinalProjectData, FinalProjectLoadContext}, path_manipulation::absolute_path, dep_graph_loader::load_graph, dependency_graph_mod::dependency_graph::{DependencyGraphInfoWrapper, DependencyGraph, TargetNode, BasicTargetSearchResult, DependencyGraphWarningMode, BasicProjectSearchResult}, LinkSpecifier, validators::{is_valid_target_name, is_valid_project_name}}, file_writers::write_configurations, project_generator::GeneralNewProjectInfo, program_actions::info_printers::{target_info_print_funcs::{print_target_header, print_export_header_include_path, print_target_type}, project_info_print_funcs::{print_project_header, print_project_include_prefix, print_immediate_subprojects, print_project_repo_url, print_project_can_cross_compile, print_project_supports_emscripten, print_project_output_list, print_project_dependencies}}};
 
-use self::{info_printers::predef_dep_info_print_funcs::{print_predef_dep_header, print_predep_targets, print_predep_repo_url, print_predep_github_url, print_predep_can_cross_compile, print_predep_supports_emscripten, print_predep_supported_download_methods, print_predep_doc_link}, default_file_creator::write_default_doxyfile};
+use self::{info_printers::predef_dep_info_print_funcs::{print_predef_dep_header, print_predep_targets, print_predep_repo_url, print_predep_github_url, print_predep_can_cross_compile, print_predep_supports_emscripten, print_predep_supported_download_methods, print_predep_doc_link}, default_file_creator::{write_default_doxyfile, write_default_sphinx_files}};
 use colored::*;
 
 fn parse_project_info(
@@ -394,7 +394,13 @@ pub fn generate_default_file(
   dep_config: &AllRawPredefinedDependencies
 ) -> io::Result<()> {
   let about_to_generate_doxyfile: bool = match command.file {
-    CreateDefaultFileOption::Doxyfile => true
+    CreateDefaultFileOption::Doxyfile => true,
+    _ => false
+  };
+
+  let about_to_generate_sphinx_files: bool = match command.file {
+    CreateDefaultFileOption::SphinxConfig => true,
+    _ => false
   };
 
   let project_data_group: UseableFinalProjectDataGroup = get_project_info_or_exit(
@@ -402,13 +408,21 @@ pub fn generate_default_file(
     &dep_config,
     FinalProjectLoadContext {
       about_to_generate_doxyfile,
+      about_to_generate_sphinx_files,
       just_created_library_project_at: None
     }
   );
   
   match &command.file {
     CreateDefaultFileOption::Doxyfile => {
-      write_default_doxyfile(command.file.to_file_name(), &project_data_group)?;
+      write_default_doxyfile("Doxyfile.in", &project_data_group)?;
+    },
+    CreateDefaultFileOption::SphinxConfig => {
+      write_default_sphinx_files(
+        "index.rst",
+        "conf.py.in",
+        &project_data_group
+      )?;
     }
   }
 
@@ -465,6 +479,7 @@ pub fn do_new_files_subcommand(
     &dep_config,
     FinalProjectLoadContext {
       about_to_generate_doxyfile: false,
+      about_to_generate_sphinx_files: false,
       just_created_library_project_at
     }
   );

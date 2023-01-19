@@ -199,15 +199,9 @@ impl UseFileOption {
 #[derive(ValueEnum, Clone, Copy)]
 pub enum CreateDefaultFileOption {
   #[value(name = "doxyfile")]
-  Doxyfile
-}
-
-impl CreateDefaultFileOption {
-  pub fn to_file_name(&self) -> &str {
-    match self {
-      Self::Doxyfile => "Doxyfile.in"
-    }
-  }
+  Doxyfile,
+  #[value(name = "sphinx-config")]
+  SphinxConfig
 }
 
 #[derive(Args)]

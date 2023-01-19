@@ -38,7 +38,20 @@ fn main() {
   );
 
   if let Err(io_error) = doxyfile_write_result {
-    panic!("IO error when writing default Doxyfile.in to string: {}", io_error.to_string())
+    panic!("IO error when writing default Doxyfile.in to string: {}", io_error.to_string());
+  }
+
+  let sphinx_write_result = write_default_sphinx_files(
+    Path::new("./src/program_actions/default_file_creator/sphinx/conf.py.in"),
+    Path::new("./src/program_actions/default_file_creator/sphinx/index.rst"),
+    Path::new("./src/program_actions/default_file_creator/sphinx/mod.rs")
+  );
+
+  if let Err(io_error) = sphinx_write_result {
+    panic!(
+      "IO error when writing default Sphinx files 'conf.py.in' and 'index.rst' to string: {}",
+      io_error.to_string()
+    );
   }
 }
 
@@ -109,8 +122,30 @@ fn write_default_doxyfile(
 ) -> io::Result<()> {
   let mut out_file: File = File::create(out_path)?;
   write_contents_to_var_in_file(
-    "DEFAULT_DOXYFILE",
+    "DEFAULT_DOXYFILE_IN_CONTENTS",
     in_path,
+    &mut out_file
+  )?;
+
+  Ok(())
+}
+
+fn write_default_sphinx_files(
+  conf_py_in_path: &Path,
+  index_rst_path: &Path,
+  out_path: &Path
+) -> io::Result<()> {
+  let mut out_file: File = File::create(out_path)?;
+
+  write_contents_to_var_in_file(
+    "DEFAULT_SPHINX_CONF_PY_IN_CONTENTS",
+    conf_py_in_path,
+    &mut out_file
+  )?;
+
+  write_contents_to_var_in_file(
+    "DEFAULT_SPHINX_INDEX_RST_CONTENTS",
+    index_rst_path,
     &mut out_file
   )?;
 

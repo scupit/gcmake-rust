@@ -202,6 +202,7 @@ struct NeededParseInfoFromParent {
 
 pub struct FinalProjectLoadContext {
   pub about_to_generate_doxyfile: bool,
+  pub about_to_generate_sphinx_files: bool,
   pub just_created_library_project_at: Option<String>
 }
 
@@ -209,6 +210,7 @@ impl Default for FinalProjectLoadContext {
   fn default() -> Self {
     Self {
       about_to_generate_doxyfile: false,
+      about_to_generate_sphinx_files: false,
       just_created_library_project_at: None
     }
   }
@@ -1079,7 +1081,7 @@ impl FinalProjectData {
     }
 
     self.validate_features()?;
-    self.ensure_doc_generator_correctness(project_load_context.about_to_generate_doxyfile)?;
+    self.ensure_doc_generator_correctness(project_load_context)?;
     self.ensure_no_file_collision()?;
 
     for (_, test_project) in &self.tests {
@@ -1151,7 +1153,7 @@ impl FinalProjectData {
     ));
   }
 
-  fn ensure_doc_generator_correctness(&self, is_missing_doxyfile_okay: bool) -> Result<(), String> {
+  fn ensure_doc_generator_correctness(&self, project_load_context: &FinalProjectLoadContext) -> Result<(), String> {
     let doxyfile_in_search_result: Option<PathBuf> = find_doxyfile_in(&self.docs_dir_relative_to_cwd);
     let sphinx_files_search_result: SphinxConfigFiles = find_sphinx_files(&self.docs_dir_relative_to_cwd);
 
@@ -1174,7 +1176,8 @@ impl FinalProjectData {
           doc_config,
           doxyfile_in_search_result,
           sphinx_files_search_result,
-          is_missing_doxyfile_okay
+          project_load_context.about_to_generate_doxyfile,
+          project_load_context.about_to_generate_sphinx_files
         )
       }
     }
@@ -1187,7 +1190,8 @@ impl FinalProjectData {
     doc_config: &FinalDocumentationInfo,
     doxyfile_in_search_result: Option<PathBuf>,
     sphinx_files_search_result: SphinxConfigFiles,
-    is_missing_doxyfile_okay: bool
+    is_missing_doxyfile_okay: bool,
+    are_missing_sphix_files_okay: bool
   ) -> Result<(), String> {
     // For now, the only two supported documentation generators are Doxygen and Sphinx.
     // Since both require a Doxyfile.in, it's fine to move this check out.
@@ -1206,10 +1210,20 @@ impl FinalProjectData {
       FinalDocGeneratorName::Doxygen => return Ok(()),
       FinalDocGeneratorName::Sphinx => match sphinx_files_search_result {
         SphinxConfigFiles { conf_py_in: None, .. } => {
-          self.err_for_missing_doc_config_file(&doc_config.generator, "conf.py.in")
+          if !are_missing_sphix_files_okay {
+            self.err_for_missing_doc_config_file(&doc_config.generator, "conf.py.in")
+          }
+          else {
+            Ok(())
+          }
         },
         SphinxConfigFiles { index_rst: None, .. } => {
-          self.err_for_missing_doc_config_file(&doc_config.generator, "index.rst")
+          if !are_missing_sphix_files_okay {
+            self.err_for_missing_doc_config_file(&doc_config.generator, "index.rst")
+          }
+          else {
+            Ok(())
+          }
         },
         SphinxConfigFiles { conf_py_in, .. } => {
           validate_conf_py_in(&conf_py_in.unwrap())
