@@ -13,7 +13,7 @@ There are a whole bunch of things which need doing. This is the place to list th
 - [ ] Basic documentation generation support:
   - [x] Documentation with [Doxygen](https://www.doxygen.nl/index.html)
   - [x] Document library entry files.
-  - [ ] Ability to use a dummy *.hpp* file for home page generation
+  - [x] Ability to use a dummy *.hpp* file for home page generation
   - [x] Ability to document just the header files.
   - [x] Validator to ensure certain important/required lines are present in *Doxyfile.in*, such as `PROJECT_NAME = @PROJECT_NAME@`
   - [x] Default *Doxyfile.in* generator command. Something like `gen-default doxyfile`.

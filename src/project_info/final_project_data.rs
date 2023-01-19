@@ -2,7 +2,7 @@ use std::{collections::{HashMap, HashSet, BTreeMap, BTreeSet}, path::{Path, Path
 
 use crate::{project_info::path_manipulation::cleaned_pathbuf, logger};
 
-use super::{path_manipulation::{cleaned_path_str, relative_to_project_root, absolute_path}, final_dependencies::{FinalGCMakeDependency, FinalPredefinedDependencyConfig}, raw_data_in::{RawProject, dependencies::internal_dep_config::AllRawPredefinedDependencies, BuildType, LanguageConfigMap, OutputItemType, PreBuildConfigIn, SpecificCompilerSpecifier, BuildConfigCompilerSpecifier, TargetSpecificBuildType, LinkSection, RawTestFramework, DefaultCompiledLibType, RawCompiledItem, RawDocumentationGeneratorConfig, RawDocGeneratorName}, final_project_configurables::{FinalProjectType}, CompiledOutputItem, helpers::{parse_subproject_data, parse_root_project_data, populate_existing_files, find_prebuild_script, PrebuildScriptFile, validate_raw_project_outputs, ProjectOutputType, RetrievedCodeFileType, code_file_type, parse_test_project_data, find_doxyfile_in, validate_doxyfile_in}, PreBuildScript, FinalTestFramework, base_include_prefix_for_test, gcmake_constants::{SRC_DIR, INCLUDE_DIR, TESTS_DIR, SUBPROJECTS_DIR, DOCS_DIR}, FinalInstallerConfig, CompilerDefine, FinalBuildConfigMap, make_final_build_config_map, FinalTargetBuildConfigMap, FinalGlobalProperties, FinalShortcutConfig, parsers::{version_parser::ThreePartVersion, general_parser::ParseSuccess}, platform_spec_parser::parse_leading_system_spec, SystemSpecifierWrapper, FinalFeatureConfig, FinalFeatureEnabler, CodeFileInfo, FileRootGroup, PreBuildScriptType, FinalDocGeneratorName, FinalDocumentationInfo};
+use super::{path_manipulation::{cleaned_path_str, relative_to_project_root, absolute_path}, final_dependencies::{FinalGCMakeDependency, FinalPredefinedDependencyConfig}, raw_data_in::{RawProject, dependencies::internal_dep_config::AllRawPredefinedDependencies, BuildType, LanguageConfigMap, OutputItemType, PreBuildConfigIn, SpecificCompilerSpecifier, BuildConfigCompilerSpecifier, TargetSpecificBuildType, LinkSection, RawTestFramework, DefaultCompiledLibType, RawCompiledItem, RawDocumentationGeneratorConfig, RawDocGeneratorName}, final_project_configurables::{FinalProjectType}, CompiledOutputItem, helpers::{parse_subproject_data, parse_root_project_data, populate_existing_files, find_prebuild_script, PrebuildScriptFile, validate_raw_project_outputs, ProjectOutputType, RetrievedCodeFileType, code_file_type, parse_test_project_data, find_doxyfile_in, validate_doxyfile_in, SphinxConfigFiles, find_sphinx_files, validate_conf_py_in}, PreBuildScript, FinalTestFramework, base_include_prefix_for_test, gcmake_constants::{SRC_DIR, INCLUDE_DIR, TESTS_DIR, SUBPROJECTS_DIR, DOCS_DIR}, FinalInstallerConfig, CompilerDefine, FinalBuildConfigMap, make_final_build_config_map, FinalTargetBuildConfigMap, FinalGlobalProperties, FinalShortcutConfig, parsers::{version_parser::ThreePartVersion, general_parser::ParseSuccess}, platform_spec_parser::parse_leading_system_spec, SystemSpecifierWrapper, FinalFeatureConfig, FinalFeatureEnabler, CodeFileInfo, FileRootGroup, PreBuildScriptType, FinalDocGeneratorName, FinalDocumentationInfo};
 use colored::*;
 
 const SUBPROJECT_JOIN_STR: &'static str = "_S_";
@@ -1022,7 +1022,8 @@ impl FinalProjectData {
       None => None,
       Some(raw_doc_generator_info) => {
         let generator: FinalDocGeneratorName = match &raw_doc_generator_info.generator {
-          RawDocGeneratorName::Doxygen => FinalDocGeneratorName::Doxygen
+          RawDocGeneratorName::Doxygen => FinalDocGeneratorName::Doxygen,
+          RawDocGeneratorName::Sphinx => FinalDocGeneratorName::Sphinx
         };
 
         return Some(FinalDocumentationInfo {
@@ -1119,45 +1120,102 @@ impl FinalProjectData {
     Ok(())
   }
 
+  fn warn_unused_doc_config_file(
+    &self,
+    doc_generator: FinalDocGeneratorName,
+    file_relative_to_cwd: impl AsRef<Path>
+  ) {
+    let config_tool_name: &str = doc_generator.to_str();
+
+    logger::warn(format!(
+      "Project [{}] contains file {}, but hasn't enabled a documentation generator in its cmake_data.yaml. If this is intended, just ignore this warning. Otherwise, enable the {} documentation generator in cmake_data.yaml like this:\n\n{}:\n   generator: {}",
+      self.get_name_for_error_messages().yellow(),
+      file_relative_to_cwd.as_ref().to_str().unwrap(),
+      config_tool_name.green(),
+      "documentation".purple(),
+      config_tool_name.green()
+    ));
+  }
+
+  fn err_for_missing_doc_config_file(
+    &self,
+    doc_generator: &FinalDocGeneratorName,
+    needed_file_name: &str
+  ) -> Result<(), String> {
+    return Err(format!(
+      "Project [{}] set documentation generator to {}, but is missing its '{}'. Please create '{}'.",
+      self.get_name_for_error_messages(),
+      doc_generator.to_str().yellow(),
+      format!("{}/{}", self.docs_dir_relative_to_project_root, needed_file_name).yellow(),
+      format!("{}/{}", self.docs_dir_relative_to_cwd, needed_file_name).yellow(),
+    ));
+  }
+
   fn ensure_doc_generator_correctness(&self, is_missing_doxyfile_okay: bool) -> Result<(), String> {
     let doxyfile_in_search_result: Option<PathBuf> = find_doxyfile_in(&self.docs_dir_relative_to_cwd);
+    let sphinx_files_search_result: SphinxConfigFiles = find_sphinx_files(&self.docs_dir_relative_to_cwd);
 
     match &self.documentation {
       None => {
-        if doxyfile_in_search_result.is_some() {
-          logger::warn(format!(
-            "Project [{}] contains file {}, but hasn't enabled a documentation generator in its cmake_data.yaml. If this is intended, just ignore this warning. Otherwise, enable the {} documentation generator in cmake_data.yaml like this:\n\n{}:\n   generator: {}",
-            self.get_name_for_error_messages().yellow(),
-            format!("{}/{}", self.docs_dir_relative_to_project_root, "Doxyfile.in").yellow(),
-            "Doxygen".green(),
-            "documentation".purple(),
-            "Doxygen".green()
-          ))
+        if let Some(doxyfile_path) = &doxyfile_in_search_result {
+          self.warn_unused_doc_config_file(FinalDocGeneratorName::Doxygen, doxyfile_path);
         }
-      },
-      Some(doc_generator) => match doc_generator.generator {
-        FinalDocGeneratorName::Doxygen => match doxyfile_in_search_result {
-          Some(doxyfile_in_pathbuf) => {
-            validate_doxyfile_in(&doxyfile_in_pathbuf)?;
-          },
-          None => {
-            if !is_missing_doxyfile_okay {
-              return Err(format!(
-                "Project [{}] set documentation generator to {}, but is missing its {}. Please create {} in '{}'.",
-                self.get_name_for_error_messages(),
-                "Doxygen".yellow(),
-                "docs/Doxyfile.in".cyan(),
-                "Doxyfile.in".cyan(),
-                self.docs_dir_relative_to_cwd.yellow()
-              ));
-            }
-          }
+        
+        if let Some(index_rst_path) = &sphinx_files_search_result.index_rst {
+          self.warn_unused_doc_config_file(FinalDocGeneratorName::Sphinx, index_rst_path);
         }
 
+        if let Some(conf_py_path) = &sphinx_files_search_result.conf_py_in {
+          self.warn_unused_doc_config_file(FinalDocGeneratorName::Sphinx, conf_py_path);
+        }
+      },
+      Some(doc_config) => {
+        return self.validate_existing_doc_generator_config(
+          doc_config,
+          doxyfile_in_search_result,
+          sphinx_files_search_result,
+          is_missing_doxyfile_okay
+        )
       }
     }
 
     Ok(())
+  }
+
+  fn validate_existing_doc_generator_config(
+    &self,
+    doc_config: &FinalDocumentationInfo,
+    doxyfile_in_search_result: Option<PathBuf>,
+    sphinx_files_search_result: SphinxConfigFiles,
+    is_missing_doxyfile_okay: bool
+  ) -> Result<(), String> {
+    // For now, the only two supported documentation generators are Doxygen and Sphinx.
+    // Since both require a Doxyfile.in, it's fine to move this check out.
+    match doxyfile_in_search_result {
+      Some(doxyfile_in_pathbuf) => {
+        validate_doxyfile_in(&doxyfile_in_pathbuf)?;
+      },
+      None => {
+        if !is_missing_doxyfile_okay {
+          return self.err_for_missing_doc_config_file(&doc_config.generator, "Doxyfile.in");
+        }
+      }
+    }
+
+    return match doc_config.generator {
+      FinalDocGeneratorName::Doxygen => return Ok(()),
+      FinalDocGeneratorName::Sphinx => match sphinx_files_search_result {
+        SphinxConfigFiles { conf_py_in: None, .. } => {
+          self.err_for_missing_doc_config_file(&doc_config.generator, "conf.py.in")
+        },
+        SphinxConfigFiles { index_rst: None, .. } => {
+          self.err_for_missing_doc_config_file(&doc_config.generator, "index.rst")
+        },
+        SphinxConfigFiles { conf_py_in, .. } => {
+          validate_conf_py_in(&conf_py_in.unwrap())
+        }
+      }
+    }
   }
 
   pub fn any_files_contain_cpp2_grammar(&self) -> bool {

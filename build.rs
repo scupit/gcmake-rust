@@ -2,6 +2,7 @@ use std::{path::{Path, PathBuf}, fs::{self, File}, io::{self, Write}, collection
 
 fn main() {
   let ordered_cmake_util_names: Vec<&str> = vec![
+    "FindSphinx",
     "gcmake-variables",
     "gcmake-cross-compilation-utils",
     "gcmake-emscripten-utils",
@@ -17,7 +18,7 @@ fn main() {
     "gcmake-config-file-writer",
     "gcmake-features-util",
     "gcmake-cppfront-utils",
-    "gcmake-doxygen-utils",
+    "gcmake-documentation-utils"
   ];
 
   match combine_cmake_util_files(ordered_cmake_util_names) {

@@ -187,6 +187,15 @@ function( configure_installation
     COMPONENT ${project_component_name}
   )
 
+  if( ${PROJECT_NAME}_BUILD_DOCS )
+    install( DIRECTORY
+      # PROJECT_DOCS_OUTPUT_DIR is set in the write_documentation_generation(...)
+      # function inside cmakelists_writer.rs.
+      "${PROJECT_DOCS_OUTPUT_DIR}"
+      DESTINATION "${CMAKE_INSTALL_DOCDIR}"
+    )
+  endif()
+
   export( EXPORT ${PROJECT_NAME}Targets
     FILE "${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}Targets.cmake"
     NAMESPACE "${PROJECT_NAME}::"
@@ -296,7 +305,7 @@ macro( add_to_generated_export_headers_list
   list( APPEND MY_GENERATED_EXPORT_HEADERS_BUILD_INTERFACE "${build_interface_file}" )
   list( APPEND MY_GENERATED_EXPORT_HEADERS_INSTALL_INTERFACE "${install_interface_file}" )
 
-  if( should_set_in_parent_scope )
+  if( ${should_set_in_parent_scope} )
     set( MY_GENERATED_EXPORT_HEADERS_BUILD_INTERFACE ${MY_GENERATED_EXPORT_HEADERS_BUILD_INTERFACE} PARENT_SCOPE )
     set( MY_GENERATED_EXPORT_HEADERS_INSTALL_INTERFACE ${MY_GENERATED_EXPORT_HEADERS_INSTALL_INTERFACE} PARENT_SCOPE )
   endif()

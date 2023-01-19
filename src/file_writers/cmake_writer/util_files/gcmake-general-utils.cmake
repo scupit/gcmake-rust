@@ -268,12 +268,11 @@ endfunction()
 
 function( gcmake_initialize_build_docs_var )
   set( option_description "Whether to build documentation for the \"${PROJECT_NAME}\" project tree." )
-
-  if( CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR )
-    option( ${LOCAL_TOPLEVEL_PROJECT_NAME}_BUILD_DOCS "${option_description}" ON )
-  else()
-    option( ${LOCAL_TOPLEVEL_PROJECT_NAME}_BUILD_DOCS "${option_description}" OFF )
-  endif()
+  # It would be nice to build docs by default. However, since building the docs requires external tools
+  # (Doxygen, maybe Sphinx, Breathe, Exhale, etc.) I think it's better to let the consumer of a project
+  # manually specify that the docs should be built. This allows a quick project build to work by default
+  # without requiring any additional documentation tools.
+  option( ${LOCAL_TOPLEVEL_PROJECT_NAME}_BUILD_DOCS "${option_description}" OFF )
 endfunction()
 
 macro( initialize_build_config_vars )

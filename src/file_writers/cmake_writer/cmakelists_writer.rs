@@ -1,8 +1,8 @@
 use std::{collections::{HashSet, BTreeMap, BTreeSet }, fs::File, io::{self, Write, ErrorKind}, path::{PathBuf, Path}, rc::Rc, cell::{RefCell, Ref}, iter::FromIterator};
 
-use crate::{project_info::{final_project_data::{FinalProjectData, CppFileGrammar}, path_manipulation::{relative_to_project_root}, final_dependencies::{GitRevisionSpecifier, PredefinedCMakeComponentsModuleDep, PredefinedSubdirDep, PredefinedCMakeModuleDep, FinalPredepInfo, GCMakeDependencyStatus, FinalPredefinedDependencyConfig, base64_encoded, PredefinedDepFunctionality, FinalDownloadMethod, FinalDebianPackagesConfig}, raw_data_in::{BuildType, BuildConfigCompilerSpecifier, SpecificCompilerSpecifier, OutputItemType, LanguageConfigMap, TargetSpecificBuildType, dependencies::internal_dep_config::{CMakeModuleType}, DefaultCompiledLibType}, FinalProjectType, CompiledOutputItem, LinkMode, FinalTestFramework, dependency_graph_mod::dependency_graph::{DependencyGraph, OrderedTargetInfo, ProjectWrapper, TargetNode, SimpleNodeOutputType, Link, EmscriptenLinkFlagInfo, ContainedItem}, SystemSpecifierWrapper, CompilerDefine, FinalBuildConfig, CompilerFlag, LinkerFlag, gcmake_constants::{SRC_DIR, INCLUDE_DIR}, platform_spec_parser::parse_leading_system_spec, CodeFileInfo, RetrievedCodeFileType, PreBuildScriptType, FinalDocGeneratorName}, file_writers::cmake_writer::cmake_writer_helpers::system_constraint_generator_expression};
+use crate::{project_info::{final_project_data::{FinalProjectData, CppFileGrammar}, path_manipulation::{relative_to_project_root}, final_dependencies::{GitRevisionSpecifier, PredefinedCMakeComponentsModuleDep, PredefinedSubdirDep, PredefinedCMakeModuleDep, FinalPredepInfo, GCMakeDependencyStatus, FinalPredefinedDependencyConfig, base64_encoded, PredefinedDepFunctionality, FinalDownloadMethod, FinalDebianPackagesConfig}, raw_data_in::{BuildType, BuildConfigCompilerSpecifier, SpecificCompilerSpecifier, OutputItemType, LanguageConfigMap, TargetSpecificBuildType, dependencies::internal_dep_config::{CMakeModuleType}, DefaultCompiledLibType}, FinalProjectType, CompiledOutputItem, LinkMode, FinalTestFramework, dependency_graph_mod::dependency_graph::{DependencyGraph, OrderedTargetInfo, ProjectWrapper, TargetNode, SimpleNodeOutputType, Link, EmscriptenLinkFlagInfo, ContainedItem}, SystemSpecifierWrapper, CompilerDefine, FinalBuildConfig, CompilerFlag, LinkerFlag, gcmake_constants::{SRC_DIR, INCLUDE_DIR}, platform_spec_parser::parse_leading_system_spec, CodeFileInfo, RetrievedCodeFileType, PreBuildScriptType}, file_writers::cmake_writer::cmake_writer_helpers::system_constraint_generator_expression};
 
-use super::{cmake_utils_writer::{CMakeUtilFile, CMakeUtilWriter}, cmake_writer_helpers::system_contstraint_conditional_expression};
+use super::{cmake_utils_writer::{CMakeUtilWriter}, cmake_writer_helpers::system_contstraint_conditional_expression};
 use colored::*;
 
 const RUNTIME_BUILD_DIR_VAR: &'static str = "${MY_RUNTIME_OUTPUT_DIR}";
@@ -438,6 +438,8 @@ impl<'a> CMakeListsWriter<'a> {
 
   fn write_toplevel_tweaks(&self) -> io::Result<()> {
     self.set_basic_var("", "IN_GCMAKE_CONTEXT", "TRUE")?;
+    self.set_basic_var("", "PROJECT_VENDOR", self.project_data.get_vendor())?;
+
     writeln!(&self.cmakelists_file, "ensure_gcmake_config_dirs_exist()")?;
 
     let project_supports_emscripten: bool = self.project_data.supports_emscripten();
@@ -825,11 +827,13 @@ impl<'a> CMakeListsWriter<'a> {
         "A CMakeListsWriter for a root project should always have a util_writer."
       );
 
-      for CMakeUtilFile { util_name, .. } in self.util_writer.as_ref().unwrap().get_utils() {
-        writeln!(&self.cmakelists_file,
-          "include( cmake/{}.cmake )",
-          util_name
-        )?;
+      for util_data in self.util_writer.as_ref().unwrap().get_utils() {
+        if !util_data.is_find_module() {
+          writeln!(&self.cmakelists_file,
+            "include( cmake/{}.cmake )",
+            util_data.util_name
+          )?;
+        }
       }
     }
 
@@ -3206,17 +3210,20 @@ impl<'a> CMakeListsWriter<'a> {
     }
 
     if self.project_data.is_root_project() {
-      writeln!(&self.cmakelists_file, "if( ${{PROJECT_NAME}}_BUILD_DOCS )")?;
+      let docs_output_dir_varname: &str = "PROJECT_DOCS_OUTPUT_DIR";
+      self.set_basic_var("", docs_output_dir_varname, "")?;
 
-      if let Some(doc_info) = self.project_data.get_documentation_config() {
-        match &doc_info.generator {
-          FinalDocGeneratorName::Doxygen => {
-            writeln!(&self.cmakelists_file, "gcmake_use_doxygen( DOCUMENTABLE_FILES )")?;
-          }
-        }
+      if let Some(doc_config) = self.project_data.get_documentation_config() {
+        writeln!(&self.cmakelists_file, "if( ${{PROJECT_NAME}}_BUILD_DOCS )")?;
+        writeln!(&self.cmakelists_file,
+          // PROJECT_DOCS_OUTPUT_DIR will be populated with a directory if the project
+          // is set to build documentation.
+          "\tgcmake_configure_documentation( {} MY_GENERATED_EXPORT_HEADERS_BUILD_INTERFACE DOCUMENTABLE_FILES {} )",
+          doc_config.generator.to_str(),
+          docs_output_dir_varname
+        )?;
+        writeln!(&self.cmakelists_file, "endif()")?;
       }
-
-      writeln!(&self.cmakelists_file, "endif()")?;
     }
 
     Ok(())
@@ -3273,8 +3280,7 @@ impl<'a> CMakeListsWriter<'a> {
       .join(";");
 
     writeln!(&self.cmakelists_file,
-      "\tgcmake_configure_cpack(\n\t\tVENDOR \"{}\"\n\t\tPROJECT_COMPONENT ${{LOCAL_PROJECT_COMPONENT_NAME}}\n\t\tINSTALLER_TITLE \"{}\"\n\t\tINSTALLER_DESCRIPTION \"{}\"\n\t\tINSTALLER_EXE_PREFIX \"{}\"\n\t\tSHORTCUT_MAP \"{}\"\n\t)",
-      self.project_data.get_vendor(),
+      "\tgcmake_configure_cpack(\n\t\tVENDOR \"${{PROJECT_VENDOR}}\"\n\t\tPROJECT_COMPONENT ${{LOCAL_PROJECT_COMPONENT_NAME}}\n\t\tINSTALLER_TITLE \"{}\"\n\t\tINSTALLER_DESCRIPTION \"{}\"\n\t\tINSTALLER_EXE_PREFIX \"{}\"\n\t\tSHORTCUT_MAP \"{}\"\n\t)",
       self.project_data.get_installer_title(),
       self.project_data.get_installer_description(),
       self.project_data.get_installer_name_prefix(),

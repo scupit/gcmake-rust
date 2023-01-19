@@ -1,4 +1,4 @@
-use std::{path::{PathBuf, Path}, fs::{self, File}, io::{self, Read}, collections::BTreeSet};
+use std::{path::{PathBuf, Path}, fs::{self}, io::{self}, collections::BTreeSet};
 
 use colored::Colorize;
 use regex::Regex;
@@ -69,6 +69,16 @@ fn file_variants(
     .collect();
 }
 
+fn first_existing_variant(
+  project_root: &str,
+  file_name_no_extensions: &str,
+  possible_extensions: Vec<&str>
+) -> Option<PathBuf> {
+  return file_variants(project_root, file_name_no_extensions, possible_extensions)
+    .into_iter()
+    .find(|possible_file| possible_file.exists());
+}
+
 pub fn yaml_names_from_dir(project_root: &str) -> Vec<PathBuf> {
   return file_variants(project_root, "cmake_data", vec!["yaml"]);
 }
@@ -79,48 +89,97 @@ pub enum PrebuildScriptFile {
 }
 
 pub fn find_doxyfile_in(project_docs_dir: &str) -> Option<PathBuf> {
-  for possible_doxyfile in file_variants(project_docs_dir, "Doxyfile", vec!["in"]) {
-    if possible_doxyfile.exists() {
-      return Some(possible_doxyfile);
-    }
-  }
-  return None;
+  return first_existing_variant(project_docs_dir, "Doxyfile", vec!["in"])
 }
 
-pub fn validate_doxyfile_in(doxyfile_in_path: &Path) -> Result<(), String> {
-  let mut doxyfile_in_contents = String::new();
+pub struct SphinxConfigFiles {
+  pub index_rst: Option<PathBuf>,
+  pub conf_py_in: Option<PathBuf>
+}
 
-  {
-    File::open(doxyfile_in_path)
-      .map_err(|err| err.to_string())?
-      .read_to_string(&mut doxyfile_in_contents)
-      .map_err(|err| err.to_string())?;
-  }
+pub fn find_sphinx_files(project_docs_dir: &str) -> SphinxConfigFiles {
+  return SphinxConfigFiles {
+    index_rst: first_existing_variant(project_docs_dir, "index", vec!["rst"]),
+    conf_py_in: first_existing_variant(project_docs_dir, "conf", vec!["py.in"]),
+  };
+}
 
-  // Map Doxyfile fields to variables provided in the CMakeLists.txt.
-  let at_replacements = [
-    ("PROJECT_NAME", "\"@PROJECT_NAME@\""),
-    ("PROJECT_NUMBER", "\"@PROJECT_VERSION@\""),
-    ("PROJECT_BRIEF", "\"@PROJECT_DESCRIPTION@\""),
-    ("OUTPUT_DIRECTORY", "\"@DOXYGEN_OUTPUT_DIR@\""),
-    ("INPUT", "@DOXYGEN_INPUTS@"),
-  ];
+type AssignmentCheckGroup<'a> = (&'a str, &'a str);
 
+fn validate_assignments_in_contents(
+  file_path: &Path,
+  file_contents: &str,
+  at_replacements: Vec<AssignmentCheckGroup>
+) -> Result<(), String> {
   // TODO: Make this "search" more efficient.
   for (field_name, required_text) in at_replacements {
     let finder_regex_string: String = format!(r"(?m)^\s*{}\s*=\s*{}\s*", field_name, required_text);
     let finder_regex: Regex = Regex::new(&finder_regex_string).unwrap();
 
-    if !finder_regex.is_match(&doxyfile_in_contents) {
+    if !finder_regex.is_match(&file_contents) {
       return Err(format!(
         "{} is missing the line `{}`, which is required for it to work properly with CMake.",
-        doxyfile_in_path.to_str().unwrap().yellow(),
+        file_path.to_str().unwrap().yellow(),
         format!("{} = {}", field_name, required_text).bright_green()
       ));
     }
   }
 
-  Ok(())
+  return Ok(())
+}
+
+pub fn validate_conf_py_in(conf_py_in_path: &Path) -> Result<(), String> {
+  let conf_py_in_contents: String = fs::read_to_string(conf_py_in_path)
+    .map_err(|err| format!(
+      "Error reading {}: {}",
+      conf_py_in_path.to_str().unwrap(),
+      err.to_string()
+    ))?;
+
+  let assignment_pairs: Vec<AssignmentCheckGroup> = vec![
+    ("project", "\"@PROJECT_NAME@\""),
+    ("author", "\"@PROJECT_VENDOR@\""),
+    ("release", "\"@PROJECT_VERSION@\""),
+    ("breathe_default_project", "\"@PROJECT_NAME@\""),
+  ];
+
+  return validate_assignments_in_contents(
+    conf_py_in_path,
+    &conf_py_in_contents,
+    assignment_pairs
+  );
+}
+
+pub fn validate_doxyfile_in(doxyfile_in_path: &Path) -> Result<(), String> {
+  let doxyfile_in_contents: String = fs::read_to_string(doxyfile_in_path)
+    .map_err(|err| format!(
+      "Error reading {}: {}",
+      doxyfile_in_path.to_str().unwrap(),
+      err.to_string()
+    ))?;
+
+  // Map Doxyfile fields to variables provided in the CMakeLists.txt.
+  let at_replacements: Vec<AssignmentCheckGroup> = vec![
+    ("PROJECT_NAME", "\"@PROJECT_NAME@\""),
+    ("PROJECT_NUMBER", "\"@PROJECT_VERSION@\""),
+    ("PROJECT_BRIEF", "\"@PROJECT_DESCRIPTION@\""),
+    ("OUTPUT_DIRECTORY", "\"@DOXYGEN_OUTPUT_DIR@\""),
+    ("INPUT", "@DOXYGEN_INPUTS@"),
+    ("GENERATE_HTML", "YES"),
+    ("HTML_OUTPUT", "html/"),
+    ("HTML_FILE_EXTENSION", ".html"),
+    ("GENERATE_XML", "YES"),
+    ("XML_OUTPUT", "xml/"),
+    ("ENABLE_PREPROCESSING", "YES"),
+    ("MACRO_EXPANSION", "YES"),
+    ("PREDEFINED", "@DOXYGEN_PREDEFINED_MACROS@"),
+  ];
+
+  return validate_assignments_in_contents(
+    doxyfile_in_path,
+    &doxyfile_in_contents,
+    at_replacements
+  );
 }
 
 pub fn find_prebuild_script(project_root: &str) -> Option<PrebuildScriptFile> {

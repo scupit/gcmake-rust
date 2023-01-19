@@ -30,7 +30,7 @@ pub enum RawTestFramework {
 #[serde(deny_unknown_fields)]
 pub enum RawDocGeneratorName {
   Doxygen,
-  // Sphinx
+  Sphinx
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]

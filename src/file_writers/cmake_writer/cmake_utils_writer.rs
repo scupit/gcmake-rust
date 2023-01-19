@@ -2,9 +2,17 @@ use std::{fs::{self}, io, path::{PathBuf, Path}};
 
 use super::ordered_utils;
 
+const CMAKE_FIND_MODULES_DIRNAME: &'static str = "modules";
+
 pub struct CMakeUtilFile {
   pub util_name: &'static str,
   pub util_contents: &'static str
+}
+
+impl CMakeUtilFile {
+  pub fn is_find_module(&self) -> bool {
+    self.util_name.starts_with("Find")
+  }
 }
 
 pub struct CMakeUtilWriter {
@@ -16,10 +24,8 @@ pub struct CMakeUtilWriter {
 impl CMakeUtilWriter {
   pub fn new(cmake_utils_path: PathBuf) -> Self {
     return Self {
-      custom_find_modules_path: cmake_utils_path.join("modules"),
+      custom_find_modules_path: cmake_utils_path.join(CMAKE_FIND_MODULES_DIRNAME),
       cmake_utils_path,
-      // TODO: Make all these their own *.cmake files, so they are easier to maintain.
-      // Load them here using a pre-build script.
       utils: ordered_utils::ordered_utils_vec()
     }
   }
@@ -33,14 +39,19 @@ impl CMakeUtilWriter {
       fs::create_dir(&self.custom_find_modules_path)?;
     }
 
-    // for (util_name, util_contents) in &self.utils {
-    for CMakeUtilFile {util_name, util_contents} in &self.utils {
-      let mut util_file_path = self.cmake_utils_path.join(util_name);
+    for util_config in &self.utils {
+      let mut util_file_path: PathBuf = self.cmake_utils_path.clone();
+
+      if util_config.is_find_module() {
+        util_file_path.push(CMAKE_FIND_MODULES_DIRNAME);
+      }
+
+      util_file_path.push(util_config.util_name);
       util_file_path.set_extension("cmake");
 
       fs::write(
         util_file_path,
-        util_contents
+        util_config.util_contents
       )?;
     }
 

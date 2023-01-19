@@ -117,7 +117,17 @@ impl FinalTestFramework {
 }
 
 pub enum FinalDocGeneratorName {
-  Doxygen
+  Doxygen,
+  Sphinx
+}
+
+impl FinalDocGeneratorName {
+  pub fn to_str(&self) -> &str {
+    match self {
+      Self::Doxygen => "Doxygen",
+      Self::Sphinx => "Sphinx"
+    }
+  }
 }
 
 pub struct FinalDocumentationInfo {
