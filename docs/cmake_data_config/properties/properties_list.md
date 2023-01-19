@@ -29,6 +29,7 @@ supported for a specific project type.
 | [supported_compilers](#supported_compilers) | A list of compilers which are known to successfully compile the project |
 | [languages](#languages) | Configuration metadata (such as language standard) for the C and C++ languages |
 | [default_build_type](#default_build_type) | Selects the project's default build configuration |
+| [documentation](#documentation) | Options for docmenting the project, such as which documentation generator the project will use. |
 | [features](#features) | Configure a set of high-level project "features" which can be used as constraints throughout the yaml configuration. Inspired by [Rust's Cargo "features"](https://doc.rust-lang.org/cargo/reference/features.html). |
 | [predefined_dependencies](#predefined_dependencies) | Imports a non-GCMake dependency into the project. Only [pre-configured dependencies](../../predefined_dependency_doc.md) with a directory in the [predefined dependency configuration repository](/gcmake-dependency-configs/) are supported. |
 | [gcmake_dependencies](#gcmake_dependencies) | Imports other GCMake projects as dependencies into the build. |
@@ -234,6 +235,46 @@ languages:
     standard: 99
   cpp:
     standard: 17
+```
+
+### documentation
+
+> *Root project only*
+>
+> **OPTIONAL** `DocumentationConfigObject`
+
+Configures documentation-related options for the project. This is mainly useful for setting
+the project's documentation generator. For an explanation on actually documenting the project
+plus examples for configuring each supported generator, see
+[documenting_your_project.md](../../documenting_your_project.md).
+
+| Field | Type | Default | Description |
+| ----- | ---- | ------- | ----------- |
+| `generator` | Generator name *String* (`Doxygen` or `Sphinx`) | *No default* | Specifies which documentation generator the project will use. |
+| `headers_only` | *boolean* | `true` | Whether to only document header files. When `false`, implementation files ( *.c*, *.cpp*, etc.) will also be processed by the documentation generator. |
+
+#### Doxygen Example
+
+``` yaml
+documentation:
+  generator: Doxygen
+```
+
+#### Sphinx Example
+
+``` yaml
+documentation:
+  generator: Sphinx
+```
+
+#### Example which also includes cpp files
+
+``` yaml
+documentation:
+  generator: Doxygen
+  # Also include .c and .cpp files in documentation.
+  # This is not recommended.
+  headers_only: false
 ```
 
 ### default_build_type

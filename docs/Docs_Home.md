@@ -12,12 +12,13 @@ configuration work together.
 1. [Project Overview](overview.md)
 2. [Project Structure](project_structure.md)
 3. [cmake_data.yaml Configuration](cmake_data_config/cmake_data.md)
-4. [Predefined Dependency Compatibility Layer](predefined_dependency_doc.md)
-5. [Managing Dependency Repositories](managing_dependency_repos.md)
-6. [The Configuration Directory](the_configuration_directory.md)
-7. [Cross Compilation](cross_compilation.md)
-8. [Compiler pitfalls](pitfall_list.md)
-9. [Project TODOs/Roadmap](TODO.md)
+4. [Documenting Your Project](documenting_your_project.md)
+5. [Predefined Dependency Compatibility Layer](predefined_dependency_doc.md)
+6. [Managing Dependency Repositories](managing_dependency_repos.md)
+7. [The Configuration Directory](the_configuration_directory.md)
+8. [Cross Compilation](cross_compilation.md)
+9. [Compiler pitfalls](pitfall_list.md)
+10. [Project TODOs/Roadmap](TODO.md)
 
 ## Points of Interest
 
@@ -28,6 +29,7 @@ configuration work together.
 - [Optional/conditional dependencies](./cmake_data_config/linking.md#conditional-dependencies)
 - [CppFront (*.cpp2) Support](./cppfront_integration.md)
 - [Code generation using a pre-build script](pre_build_scripts.md#pre-build-code-generation)
+- [Using documentation generators](documenting_your_project.md)
 
 ## Important Concepts
 
@@ -59,6 +61,7 @@ configuration work together.
 - [Emscripten Usage and Caveats](./emscripten.md)
 - [Using a custom Emscripten HTML shell file](./emscripten.md#using-a-custom-html-shell-file)
 - [Using CppFront with your project](./cppfront_integration.md#using-cppfront-in-a-gcmake-project)
+- [Using documentation generators](documenting_your_project.md)
 
 ## GCMake Repository Links
 
