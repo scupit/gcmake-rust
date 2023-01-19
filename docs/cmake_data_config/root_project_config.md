@@ -10,7 +10,7 @@
 - [gcmake_dependencies](properties/properties_list.md#gcmake_dependencies)
 - [global_defines](properties/properties_list.md#global_defines)
 - [global_properties](properties/properties_list.md#global_properties)
-- [global_properties](properties/properties_list.md#documentation)
+- [documentation](properties/properties_list.md#documentation)
 - [features](properties/properties_list.md#features)
 - [include_prefix](properties/properties_list.md#include_prefix)
 - [installer_config](properties/properties_list.md#installer_config)

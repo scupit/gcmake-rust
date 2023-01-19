@@ -10,16 +10,9 @@ There are a whole bunch of things which need doing. This is the place to list th
 ## Priorities
 
 - [ ] Add CLI commands for cleaning and updating the dep-cache. Not exactly sure how updating should work yet.
-- [ ] Basic documentation generation support:
-  - [x] Documentation with [Doxygen](https://www.doxygen.nl/index.html)
-  - [x] Document library entry files.
-  - [x] Ability to use a dummy *.hpp* file for home page generation
-  - [x] Ability to document just the header files.
-  - [x] Validator to ensure certain important/required lines are present in *Doxyfile.in*, such as `PROJECT_NAME = @PROJECT_NAME@`
-  - [x] Default *Doxyfile.in* generator command. Something like `gen-default doxyfile`.
-  - [Doxygen + Sphinx + Breathe + read-the-docs](https://devblogs.microsoft.com/cppblog/clear-functional-c-documentation-with-sphinx-breathe-doxygen-cmake/) documentation system
-  - [x] Make docs/ dir part of CMake installation
-  - [ ] Documentation for the new `documentation` configuration options.
+- [ ] Have documentation generation depend on all handwritten .rst and .h(pp) files in *docs/*, that way
+  CMake knows to rebuild documentation when they change. This is already the case for index.rst, but should
+  probably also include the other rst files.
 
 ## Configuration TODO
 
