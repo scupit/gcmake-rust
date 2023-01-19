@@ -81,17 +81,16 @@ function( gcmake_configure_documentation
     # TODO: Change these to add_custom_command so they aren't re-run every pass.
     # An idea is to create an empty custom target called ${PROJECT_NAME}-docs which depends
     # on the output of the anonymous custom commands.
-    add_custom_target( ${PROJECT_NAME}-docs ALL
+    add_custom_command(
       COMMAND Doxygen::doxygen "${DOXYFILE_OUT}"
+      OUTPUT
+        "${DOXYGEN_OUTPUT_DIR}/html/index.html"
+        "${DOXYGEN_OUTPUT_DIR}/xml/index.xml"
       WORKING_DIRECTORY "${DOCS_CONFIG_DIR}"
       DEPENDS
         "${DOXYFILE_OUT}"
         "${DOXYFILE_IN}"
         ${DOXYGEN_INPUT_FILES}
-      # Main output file
-      BYPRODUCTS
-        "${DOXYGEN_OUTPUT_DIR}/html/index.html"
-        "${DOXYGEN_OUTPUT_DIR}/xml/index.xml"
       COMMENT "Generating Doxygen documentation for project \"${PROJECT_NAME}\""
       COMMAND_EXPAND_LISTS
       VERBATIM
@@ -107,12 +106,13 @@ function( gcmake_configure_documentation
       configure_file( "${SPHINX_PY_CONFIG_IN}" "${SPHINX_PY_CONFIG_OUT}" @ONLY )
       set( ${out_var_docs_output_dir} "${SPHINX_OUTPUT_DIR}" PARENT_SCOPE )
 
-      add_custom_target( ${PROJECT_NAME}-docs-sphinx ALL
+      add_custom_command(
         COMMAND Sphinx::executable -b html
           "-Dbreathe_projects.${PROJECT_NAME}=${DOXYGEN_OUTPUT_DIR}/xml"
           "${DOCS_CONFIG_DIR}"
           "${SPHINX_OUTPUT_DIR}"
-        BYPRODUCTS "${SPHINX_OUTPUT_DIR}/index.html"
+        OUTPUT
+          "${SPHINX_OUTPUT_DIR}/index.html"
         DEPENDS
           "${DOXYGEN_OUTPUT_DIR}/xml/index.xml"   # Just in case the target dependency fails for some reason, ensure we have the output xml file. This check might not be necessary. 
           "${SPHINX_INDEX_RST}"
@@ -123,7 +123,16 @@ function( gcmake_configure_documentation
         VERBATIM
       )
 
-      add_dependencies( ${PROJECT_NAME}-docs-sphinx ${PROJECT_NAME}-docs )
+      add_custom_target( ${PROJECT_NAME}-docs ALL
+        DEPENDS
+          "${SPHINX_OUTPUT_DIR}/index.html"
+      )
+    else()
+      add_custom_target( ${PROJECT_NAME}-docs ALL
+        DEPENDS
+          "${DOXYGEN_OUTPUT_DIR}/html/index.html"
+          "${DOXYGEN_OUTPUT_DIR}/xml/index.xml"
+      )
     endif()
   endif()
 endfunction()
