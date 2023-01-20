@@ -56,7 +56,7 @@ function( gcmake_configure_documentation
   )
 
   list( PREPEND DOXYGEN_PREDEFINED_MACROS "__declspec(x)" "__attribute__(x)" )
-  list( TRANSFORM DOXYGEN_PREDEFINED_MACROS APPEND " = ")
+  list( TRANSFORM DOXYGEN_PREDEFINED_MACROS APPEND "= ")
   list( JOIN DOXYGEN_PREDEFINED_MACROS "\\\n\t\t" DOXYGEN_PREDEFINED_MACROS )
 
   set( DOXYGEN_INPUT_FILES ${${all_documentable_files_var}} )
@@ -71,6 +71,11 @@ function( gcmake_configure_documentation
   set( DOCS_CONFIG_DIR "${CMAKE_CURRENT_SOURCE_DIR}/docs" )
 
   set( DOXYGEN_OUTPUT_DIR "${CMAKE_BINARY_DIR}/docs/${PROJECT_NAME}/doxygen")
+
+  if( NOT IS_DIRECTORY DOXYGEN_OUTPUT_DIR )
+    file( MAKE_DIRECTORY "${DOXYGEN_OUTPUT_DIR}" )
+  endif()
+
   set( DOXYFILE_IN "${DOCS_CONFIG_DIR}/Doxyfile.in" )
   set( DOXYFILE_OUT "${DOCS_CONFIG_DIR}/Doxyfile" )
 
@@ -88,6 +93,7 @@ function( gcmake_configure_documentation
         "${DOXYGEN_OUTPUT_DIR}/xml/index.xml"
       WORKING_DIRECTORY "${DOCS_CONFIG_DIR}"
       DEPENDS
+        "${DOXYGEN_OUTPUT_DIR}"
         "${DOXYFILE_OUT}"
         "${DOXYFILE_IN}"
         ${DOXYGEN_INPUT_FILES}
@@ -98,6 +104,10 @@ function( gcmake_configure_documentation
 
     if( doc_generator STREQUAL "Sphinx" )
       set( SPHINX_OUTPUT_DIR "${CMAKE_BINARY_DIR}/docs/${PROJECT_NAME}/sphinx" )
+
+      if( NOT IS_DIRECTORY SPHINX_OUTPUT_DIR )
+        file( MAKE_DIRECTORY "${SPHINX_OUTPUT_DIR}" )
+      endif()
 
       set( SPHINX_PY_CONFIG_IN "${DOCS_CONFIG_DIR}/conf.py.in" )
       set( SPHINX_PY_CONFIG_OUT "${DOCS_CONFIG_DIR}/conf.py" )
@@ -114,6 +124,7 @@ function( gcmake_configure_documentation
         OUTPUT
           "${SPHINX_OUTPUT_DIR}/index.html"
         DEPENDS
+          "${SPHINX_OUTPUT_DIR}"
           "${DOXYGEN_OUTPUT_DIR}/xml/index.xml"   # Just in case the target dependency fails for some reason, ensure we have the output xml file. This check might not be necessary. 
           "${SPHINX_INDEX_RST}"
           "${SPHINX_PY_CONFIG_IN}"
