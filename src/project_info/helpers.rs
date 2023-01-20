@@ -173,6 +173,7 @@ pub fn validate_doxyfile_in(doxyfile_in_path: &Path) -> Result<(), String> {
     ("ENABLE_PREPROCESSING", "YES"),
     ("MACRO_EXPANSION", "YES"),
     ("PREDEFINED", "@DOXYGEN_PREDEFINED_MACROS@"),
+    ("STRIP_FROM_PATH", "\"..\""),
   ];
 
   return validate_assignments_in_contents(
