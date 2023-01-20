@@ -395,7 +395,7 @@ pub fn generate_default_file(
 ) -> io::Result<()> {
   let about_to_generate_doxyfile: bool = match command.file {
     CreateDefaultFileOption::Doxyfile => true,
-    _ => false
+    CreateDefaultFileOption::SphinxConfig => true
   };
 
   let about_to_generate_sphinx_files: bool = match command.file {
@@ -412,12 +412,15 @@ pub fn generate_default_file(
       just_created_library_project_at: None
     }
   );
+
+  let doxyfile_name: &str = "Doxyfile.in";
   
   match &command.file {
     CreateDefaultFileOption::Doxyfile => {
-      write_default_doxyfile("Doxyfile.in", &project_data_group)?;
+      write_default_doxyfile(doxyfile_name, &project_data_group)?;
     },
     CreateDefaultFileOption::SphinxConfig => {
+      write_default_doxyfile(doxyfile_name, &project_data_group)?;
       write_default_sphinx_files(
         "index.rst",
         "conf.py.in",
