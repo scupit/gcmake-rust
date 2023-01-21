@@ -132,7 +132,8 @@ impl FinalDocGeneratorName {
 
 pub struct FinalDocumentationInfo {
   pub generator: FinalDocGeneratorName,
-  pub headers_only: bool
+  pub headers_only: bool,
+  pub include_private_headers: bool
 }
 
 pub enum FinalProjectType {

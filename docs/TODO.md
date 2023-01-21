@@ -16,7 +16,7 @@ There are a whole bunch of things which need doing. This is the place to list th
   the project.
   - [x] Private headers in *src/\<FULL_INCLUDE_PREFIX>* with the name *\<some-header-name>.private.h(pp)*.
   - [ ] Add *include_private_headers* option to documentation options.
-  - [ ] `gen-file --private` should be able to specially generate private files. Headers and template-impl files will have the special modified extension, while sources will stay the same.
+  - [x] `gen-file --private` should be able to specially generate private files. Headers and template-impl files will have the special modified extension, while sources will stay the same.
 - [ ] Have documentation generation depend on all handwritten .rst and .h(pp) files in *docs/*, that way
   CMake knows to rebuild documentation when they change. This is already the case for index.rst, but should
   probably also include the other rst files.

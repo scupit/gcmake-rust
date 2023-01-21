@@ -590,6 +590,13 @@ impl<'a> CMakeListsWriter<'a> {
         on_or_off_str(doc_config.headers_only),
         "When ON, only header files are documented. When OFF, implementation like .c and .cpp will also be documented."
       )?;
+
+      self.set_basic_option(
+        "",
+        "${PROJECT_NAME}_DOCUMENT_PRIVATE_HEADERS",
+        on_or_off_str(doc_config.include_private_headers),
+        "When ON, private header files are also documented alongside the project."
+      )?;
     }
 
     let config_names: Vec<&'static str> = self.project_data.get_build_configs()
@@ -2055,7 +2062,7 @@ impl<'a> CMakeListsWriter<'a> {
       self.project_data.get_src_dir_relative_to_project_root(),
       &self.src_root_var,
       &self.generated_src_root_var,
-      &self.project_data.src_files,
+      &self.project_data.private_headers,
       &CodeFileTransformOptions::default()
     )?;
     self.write_newline()?;
@@ -3217,7 +3224,13 @@ impl<'a> CMakeListsWriter<'a> {
 
     writeln!(&self.cmakelists_file, "if( NOT ${{LOCAL_TOPLEVEL_PROJECT_NAME}}_DOCUMENT_HEADERS_ONLY )")?;
     writeln!(&self.cmakelists_file,
-      "gcmake_add_to_documentable_files_list( ${{PROJECT_BASE_NAME}}_SOURCES )",
+      "\ngcmake_add_to_documentable_files_list( ${{PROJECT_BASE_NAME}}_SOURCES )",
+    )?;
+    writeln!(&self.cmakelists_file, "endif()\n")?;
+
+    writeln!(&self.cmakelists_file, "if( ${{LOCAL_TOPLEVEL_PROJECT_NAME}}_DOCUMENT_PRIVATE_HEADERS )")?;
+    writeln!(&self.cmakelists_file,
+      "\ngcmake_add_to_documentable_files_list( ${{PROJECT_BASE_NAME}}_PRIVATE_HEADERS )",
     )?;
     writeln!(&self.cmakelists_file, "endif()\n")?;
 

@@ -37,7 +37,8 @@ pub enum RawDocGeneratorName {
 #[serde(deny_unknown_fields)]
 pub struct RawDocumentationGeneratorConfig {
   pub generator: RawDocGeneratorName,
-  pub headers_only: Option<bool>
+  pub headers_only: Option<bool>,
+  pub include_private_headers: Option<bool>
 }
 
 impl RawTestFramework {

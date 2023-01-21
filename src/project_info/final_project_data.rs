@@ -1048,7 +1048,8 @@ impl FinalProjectData {
 
         return Some(FinalDocumentationInfo {
           generator,
-          headers_only: raw_doc_generator_info.headers_only.unwrap_or(true)
+          headers_only: raw_doc_generator_info.headers_only.unwrap_or(true),
+          include_private_headers: raw_doc_generator_info.include_private_headers.unwrap_or(false)
         });
       }
     }
