@@ -2,7 +2,7 @@ use std::{collections::{HashMap, HashSet, BTreeMap, BTreeSet}, path::{Path, Path
 
 use crate::{project_info::path_manipulation::cleaned_pathbuf, logger};
 
-use super::{path_manipulation::{cleaned_path_str, relative_to_project_root, absolute_path}, final_dependencies::{FinalGCMakeDependency, FinalPredefinedDependencyConfig}, raw_data_in::{RawProject, dependencies::internal_dep_config::AllRawPredefinedDependencies, BuildType, LanguageConfigMap, OutputItemType, PreBuildConfigIn, SpecificCompilerSpecifier, BuildConfigCompilerSpecifier, TargetSpecificBuildType, LinkSection, RawTestFramework, DefaultCompiledLibType, RawCompiledItem, RawDocumentationGeneratorConfig, RawDocGeneratorName}, final_project_configurables::{FinalProjectType}, CompiledOutputItem, helpers::{parse_subproject_data, parse_root_project_data, populate_existing_files, find_prebuild_script, PrebuildScriptFile, validate_raw_project_outputs, ProjectOutputType, RetrievedCodeFileType, code_file_type, parse_test_project_data, find_doxyfile_in, validate_doxyfile_in, SphinxConfigFiles, find_sphinx_files, validate_conf_py_in}, PreBuildScript, FinalTestFramework, base_include_prefix_for_test, gcmake_constants::{SRC_DIR, INCLUDE_DIR, TESTS_DIR, SUBPROJECTS_DIR, DOCS_DIR}, FinalInstallerConfig, CompilerDefine, FinalBuildConfigMap, make_final_build_config_map, FinalTargetBuildConfigMap, FinalGlobalProperties, FinalShortcutConfig, parsers::{version_parser::ThreePartVersion, general_parser::ParseSuccess}, platform_spec_parser::parse_leading_system_spec, SystemSpecifierWrapper, FinalFeatureConfig, FinalFeatureEnabler, CodeFileInfo, FileRootGroup, PreBuildScriptType, FinalDocGeneratorName, FinalDocumentationInfo};
+use super::{path_manipulation::{cleaned_path_str, relative_to_project_root, absolute_path}, final_dependencies::{FinalGCMakeDependency, FinalPredefinedDependencyConfig}, raw_data_in::{RawProject, dependencies::internal_dep_config::AllRawPredefinedDependencies, BuildType, LanguageConfigMap, OutputItemType, PreBuildConfigIn, SpecificCompilerSpecifier, BuildConfigCompilerSpecifier, TargetSpecificBuildType, LinkSection, RawTestFramework, DefaultCompiledLibType, RawCompiledItem, RawDocumentationGeneratorConfig, RawDocGeneratorName}, final_project_configurables::{FinalProjectType}, CompiledOutputItem, helpers::{parse_subproject_data, parse_root_project_data, populate_existing_files, find_prebuild_script, PrebuildScriptFile, validate_raw_project_outputs, ProjectOutputType, RetrievedCodeFileType, code_file_type, parse_test_project_data, find_doxyfile_in, validate_doxyfile_in, SphinxConfigFiles, find_sphinx_files, validate_conf_py_in}, PreBuildScript, FinalTestFramework, base_include_prefix_for_test, gcmake_constants::{SRC_DIR_NAME, INCLUDE_DIR_NAME, TESTS_DIR_NAME, SUBPROJECTS_DIR_NAME, DOCS_DIR_NAME}, FinalInstallerConfig, CompilerDefine, FinalBuildConfigMap, make_final_build_config_map, FinalTargetBuildConfigMap, FinalGlobalProperties, FinalShortcutConfig, parsers::{version_parser::ThreePartVersion, general_parser::ParseSuccess}, platform_spec_parser::parse_leading_system_spec, SystemSpecifierWrapper, FinalFeatureConfig, FinalFeatureEnabler, CodeFileInfo, FileRootGroup, PreBuildScriptType, FinalDocGeneratorName, FinalDocumentationInfo};
 use colored::*;
 
 const SUBPROJECT_JOIN_STR: &'static str = "_S_";
@@ -255,8 +255,13 @@ pub struct FinalProjectData {
   docs_dir_relative_to_cwd: String,
   docs_dir_relative_to_project_root: String,
 
+  // src/FULL_INCLUDE_PREFIX/*.c(pp(2))
   pub src_files: BTreeSet<CodeFileInfo>,
+  // src/FULL_INCLUDE_PREFIX/*.private.h(pp)
+  pub private_headers: BTreeSet<CodeFileInfo>,
+  // include/FULL_INCLUDE_PREFIX/*.h(pp)
   pub include_files: BTreeSet<CodeFileInfo>,
+  // include/FULL_INCLUDE_PREFIX/*.{inl|tpp}
   pub template_impl_files: BTreeSet<CodeFileInfo>,
 
   subprojects: SubprojectMap,
@@ -535,7 +540,7 @@ impl FinalProjectData {
 
     let src_dir_relative_to_project_root: String = format!(
       "{}/{}",
-      SRC_DIR,
+      SRC_DIR_NAME,
       &full_include_prefix
     );
 
@@ -547,7 +552,7 @@ impl FinalProjectData {
 
     let include_dir_relative_to_project_root: String = format!(
       "{}/{}",
-      INCLUDE_DIR,
+      INCLUDE_DIR_NAME,
       &full_include_prefix
     );
 
@@ -557,7 +562,7 @@ impl FinalProjectData {
       &include_dir_relative_to_project_root
     );
 
-    let docs_dir_relative_to_project_root: String = String::from(DOCS_DIR);
+    let docs_dir_relative_to_project_root: String = String::from(DOCS_DIR_NAME);
 
     let docs_dir_relative_to_cwd: String = format!(
       "{}/{}",
@@ -570,7 +575,7 @@ impl FinalProjectData {
     let project_test_dir_path: PathBuf = PathBuf::from(format!(
       "{}/{}",
       &project_root_relative_to_cwd,
-      TESTS_DIR
+      TESTS_DIR_NAME
     ));
 
     if project_test_dir_path.is_dir() {
@@ -623,7 +628,7 @@ impl FinalProjectData {
     let project_subproject_dir_path: PathBuf = PathBuf::from(format!(
       "{}/{}",
       &project_root_relative_to_cwd,
-      SUBPROJECTS_DIR
+      SUBPROJECTS_DIR_NAME
     ));
 
     let mut subprojects: SubprojectMap = SubprojectMap::new();
@@ -876,6 +881,7 @@ impl FinalProjectData {
       include_dir_relative_to_project_root,
 
       src_files: BTreeSet::new(),
+      private_headers: BTreeSet::new(),
       include_files: BTreeSet::new(),
       template_impl_files: BTreeSet::new(),
       subprojects,
@@ -918,6 +924,17 @@ impl FinalProjectData {
       &mut finalized_project_data.src_files,
       &|file_path| match code_file_type(file_path) {
         RetrievedCodeFileType::Source { .. } => true,
+        _ => false
+      }
+    )
+      .map_err(|err| ProjectLoadFailureReason::Other(err.to_string()))?;
+
+    populate_existing_files(
+      usable_project_root.as_path(),
+      Path::new(&finalized_project_data.src_dir_relative_to_cwd),
+      &mut finalized_project_data.private_headers,
+      &|file_path| match code_file_type(file_path) {
+        RetrievedCodeFileType::Header => true,
         _ => false
       }
     )
@@ -1081,6 +1098,7 @@ impl FinalProjectData {
     }
 
     self.validate_features()?;
+    self.validate_header_names()?;
     self.ensure_doc_generator_correctness(project_load_context)?;
     self.ensure_no_file_collision()?;
 
@@ -1151,6 +1169,48 @@ impl FinalProjectData {
       format!("{}/{}", self.docs_dir_relative_to_project_root, needed_file_name).yellow(),
       format!("{}/{}", self.docs_dir_relative_to_cwd, needed_file_name).yellow(),
     ));
+  }
+
+  fn validate_header_names(&self) -> Result<(), String> {
+    if let ProjectOutputType::HeaderOnlyLibProject = &self.project_output_type {
+      if !self.private_headers.is_empty() {
+        return Err(format!(
+          "Project [{}] creates a header-only library, but contains private header files. A header-only library can't have private headers. To fix, remove all headers in the project's {}/ directory ({}).",
+          self.get_name_for_error_messages().yellow(),
+          SRC_DIR_NAME,
+          self.src_dir_relative_to_cwd.yellow()
+        ));
+      }
+    }
+
+    for private_header in &self.private_headers {
+      let path_without_header_extension: PathBuf = private_header.get_file_path().with_extension("");
+      
+      if let Some(extension) = path_without_header_extension.extension() {
+        if extension != "private" {
+          let current_header_path_str: &str = private_header.get_file_path().to_str().unwrap();
+          let correct_private_header_path: PathBuf = path_without_header_extension
+            .with_extension(format!(
+              "private.{}",
+              private_header.get_file_path().extension().unwrap().to_str().unwrap()
+            ));
+
+          return Err(format!(
+            "Project [{}] has a private header file \"{}\" which is missing the '{}' part of its extension. Private files are required to have '{}' before the actual header extension (.h, .hpp, etc.). Try changing the file path like this:\n   From: {}\n   To: {}",
+            self.get_name_for_error_messages().yellow(),
+            current_header_path_str.yellow(),
+            ".private".purple(),
+            ".private".purple(),
+            current_header_path_str.red(),
+            correct_private_header_path.to_str().unwrap().green()
+          ));
+        }
+      }
+    }
+
+    // TODO: Ensure public headers don't contain a '.private' extension.
+
+    Ok(())
   }
 
   fn ensure_doc_generator_correctness(&self, project_load_context: &FinalProjectLoadContext) -> Result<(), String> {

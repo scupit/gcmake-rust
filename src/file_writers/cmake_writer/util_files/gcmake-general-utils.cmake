@@ -167,7 +167,9 @@ function( gcmake_apply_lib_files
       target_sources( ${lib_target}
         PRIVATE
           ${source_list_build}
-          ${source_list_install}
+          # TODO: I don't think this one is needed since source files are never part of an installation.
+          # However, CMake might require it. I'll have to test.
+          # ${source_list_install}
       )
     endif()
   endif()
@@ -220,6 +222,8 @@ function( gcmake_apply_include_dirs
   target
   target_type
   project_include_dir
+  # Private headers are stored in src/
+  project_src_dir
 )
   if( "${target_type}" STREQUAL "COMPILED_LIB" OR "${target_type}" STREQUAL "HEADER_ONLY_LIB" )
     get_entry_file_alias_dir( entry_file_alias_dir )
@@ -254,6 +258,19 @@ function( gcmake_apply_include_dirs
       # This allows targets to access include files for libraries which hardcode their installation dir.
       "$<INSTALL_INTERFACE:include>"
   )
+
+  if( NOT "${target_type}" STREQUAL "HEADER_ONLY_LIB" )
+    if( "${target_type}" STREQUAL "EXE_RECEIVER" )
+      set( private_include_dir_inheritance_mode INTERFACE )
+    else()
+      set( private_include_dir_inheritance_mode PRIVATE )
+    endif()
+
+    target_include_directories( ${target}
+      ${private_include_dir_inheritance_mode}
+        "$<BUILD_INTERFACE:${project_src_dir}>"
+    )
+  endif()
 endfunction()
 
 function( initialize_build_tests_var )

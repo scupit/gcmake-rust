@@ -10,6 +10,11 @@ There are a whole bunch of things which need doing. This is the place to list th
 ## Priorities
 
 - [ ] Add CLI commands for cleaning and updating the dep-cache. Not exactly sure how updating should work yet.
+- [ ] Private header support. Currently, all headers must be public and placed somewhere in
+  *include/\<FULL_INCLUDE_PREFIX>* (except for library entry files, which are still always public.).
+  private headers will be used when compiling any executables/libraries, but will not be installed with
+  the project.
+  - [ ] Private headers in *src/\<FULL_INCLUDE_PREFIX>* with the name *\<some-header-name>.private.h(pp)*.
 - [ ] Have documentation generation depend on all handwritten .rst and .h(pp) files in *docs/*, that way
   CMake knows to rebuild documentation when they change. This is already the case for index.rst, but should
   probably also include the other rst files.

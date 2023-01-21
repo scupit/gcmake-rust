@@ -1,6 +1,6 @@
 use std::{collections::{HashSet, BTreeMap, BTreeSet }, fs::File, io::{self, Write, ErrorKind}, path::{PathBuf, Path}, rc::Rc, cell::{RefCell, Ref}, iter::FromIterator};
 
-use crate::{project_info::{final_project_data::{FinalProjectData, CppFileGrammar}, path_manipulation::{relative_to_project_root}, final_dependencies::{GitRevisionSpecifier, PredefinedCMakeComponentsModuleDep, PredefinedSubdirDep, PredefinedCMakeModuleDep, FinalPredepInfo, GCMakeDependencyStatus, FinalPredefinedDependencyConfig, base64_encoded, PredefinedDepFunctionality, FinalDownloadMethod, FinalDebianPackagesConfig}, raw_data_in::{BuildType, BuildConfigCompilerSpecifier, SpecificCompilerSpecifier, OutputItemType, LanguageConfigMap, TargetSpecificBuildType, dependencies::internal_dep_config::{CMakeModuleType}, DefaultCompiledLibType}, FinalProjectType, CompiledOutputItem, LinkMode, FinalTestFramework, dependency_graph_mod::dependency_graph::{DependencyGraph, OrderedTargetInfo, ProjectWrapper, TargetNode, SimpleNodeOutputType, Link, EmscriptenLinkFlagInfo, ContainedItem}, SystemSpecifierWrapper, CompilerDefine, FinalBuildConfig, CompilerFlag, LinkerFlag, gcmake_constants::{SRC_DIR, INCLUDE_DIR}, platform_spec_parser::parse_leading_system_spec, CodeFileInfo, RetrievedCodeFileType, PreBuildScriptType}, file_writers::cmake_writer::cmake_writer_helpers::system_constraint_generator_expression};
+use crate::{project_info::{final_project_data::{FinalProjectData, CppFileGrammar}, path_manipulation::{relative_to_project_root}, final_dependencies::{GitRevisionSpecifier, PredefinedCMakeComponentsModuleDep, PredefinedSubdirDep, PredefinedCMakeModuleDep, FinalPredepInfo, GCMakeDependencyStatus, FinalPredefinedDependencyConfig, base64_encoded, PredefinedDepFunctionality, FinalDownloadMethod, FinalDebianPackagesConfig}, raw_data_in::{BuildType, BuildConfigCompilerSpecifier, SpecificCompilerSpecifier, OutputItemType, LanguageConfigMap, TargetSpecificBuildType, dependencies::internal_dep_config::{CMakeModuleType}, DefaultCompiledLibType}, FinalProjectType, CompiledOutputItem, LinkMode, FinalTestFramework, dependency_graph_mod::dependency_graph::{DependencyGraph, OrderedTargetInfo, ProjectWrapper, TargetNode, SimpleNodeOutputType, Link, EmscriptenLinkFlagInfo, ContainedItem}, SystemSpecifierWrapper, CompilerDefine, FinalBuildConfig, CompilerFlag, LinkerFlag, gcmake_constants::{SRC_DIR_NAME, INCLUDE_DIR_NAME}, platform_spec_parser::parse_leading_system_spec, CodeFileInfo, RetrievedCodeFileType, PreBuildScriptType}, file_writers::cmake_writer::cmake_writer_helpers::system_constraint_generator_expression};
 
 use super::{cmake_utils_writer::{CMakeUtilWriter}, cmake_writer_helpers::system_contstraint_conditional_expression};
 use colored::*;
@@ -217,9 +217,14 @@ struct CMakeListsWriter<'a> {
   util_writer: Option<CMakeUtilWriter>,
   cmakelists_file: File,
 
-  include_dir_var: String,
+  public_include_dir_var: String,
+  private_include_dir_var: String,
 
   src_root_var: String,
+  // "Header root" is the first directory where headers can actually be stored.
+  // it is not the same as the project "include dir".
+  //    Include dir:  include/
+  //    Header root:  include/FULL/PROJECT/INCLUDE_PREFIX
   header_root_var: String,
   generated_src_root_var: String,
   entry_file_root_var: String
@@ -265,7 +270,8 @@ impl<'a> CMakeListsWriter<'a> {
 
     Ok(Self {
       src_root_var: format!("{}_SRC_ROOT", project_name),
-      include_dir_var: format!("{}_INCLUDE_DIR", project_name),
+      public_include_dir_var: format!("{}_INCLUDE_DIR", project_name),
+      private_include_dir_var: format!("{}_PRIVATE_INCLUDE_DIR", project_name),
       header_root_var: format!("{}_HEADER_ROOT", project_name),
       entry_file_root_var: format!("{}_ENTRY_ROOT", project_name),
       // Make sure this is the same in gcmake-cppfront-utils.cmake::gcmake_transform_cppfront_files
@@ -931,7 +937,6 @@ impl<'a> CMakeListsWriter<'a> {
             exe_info,
             self.dep_graph_ref().get_pre_build_node().as_ref().unwrap(),
             &self.project_data.prebuild_script_name(),
-            "UNUSED",
             "UNUSED",
             "UNUSED"
           )?;
@@ -1776,10 +1781,11 @@ impl<'a> CMakeListsWriter<'a> {
     // src_root path always has to be prefixed inside the entry file root for gcmake_copy_mirrored to work
     // when transforming cppfront (.cpp2) files. Luckily, this is always the case since entry files are
     // always in the project root.
-    self.set_basic_var("", &self.src_root_var, &format!("\"${{{}}}/{}/${{PROJECT_INCLUDE_PREFIX}}\"", self.entry_file_root_var, SRC_DIR))?;
+    self.set_basic_var("", &self.src_root_var, &format!("\"${{{}}}/{}/${{PROJECT_INCLUDE_PREFIX}}\"", self.entry_file_root_var, SRC_DIR_NAME))?;
     self.set_basic_var("", &self.generated_src_root_var, &format!("\"${{CMAKE_CURRENT_BINARY_DIR}}/GENERATED_SOURCES\""))?;
-    self.set_basic_var("", &self.header_root_var, &format!("\"${{CMAKE_CURRENT_SOURCE_DIR}}/{}/${{PROJECT_INCLUDE_PREFIX}}\"", INCLUDE_DIR))?;
-    self.set_basic_var("", &self.include_dir_var, &format!("\"${{CMAKE_CURRENT_SOURCE_DIR}}/{}\"", INCLUDE_DIR))?;
+    self.set_basic_var("", &self.header_root_var, &format!("\"${{CMAKE_CURRENT_SOURCE_DIR}}/{}/${{PROJECT_INCLUDE_PREFIX}}\"", INCLUDE_DIR_NAME))?;
+    self.set_basic_var("", &self.public_include_dir_var, &format!("\"${{CMAKE_CURRENT_SOURCE_DIR}}/{}\"", INCLUDE_DIR_NAME))?;
+    self.set_basic_var("", &self.private_include_dir_var, &format!("\"${{CMAKE_CURRENT_SOURCE_DIR}}/{}\"", SRC_DIR_NAME))?;
 
     self.write_newline()?;
 
@@ -2029,7 +2035,8 @@ impl<'a> CMakeListsWriter<'a> {
     let project_name: &str = self.project_data.get_project_base_name();
 
     let src_var_name: String = format!("{}_SOURCES", project_name);
-    let includes_var_name: String = format!("{}_HEADERS", project_name);
+    let private_headers_var_name: String = format!("{}_PRIVATE_HEADERS", project_name);
+    let public_includes_var_name: String = format!("{}_HEADERS", project_name);
 
     self.write_newline()?;
 
@@ -2044,7 +2051,23 @@ impl<'a> CMakeListsWriter<'a> {
     self.write_newline()?;
 
     self.set_code_file_collection(
-      &includes_var_name,
+      &private_headers_var_name,
+      self.project_data.get_src_dir_relative_to_project_root(),
+      &self.src_root_var,
+      &self.generated_src_root_var,
+      &self.project_data.src_files,
+      &CodeFileTransformOptions::default()
+    )?;
+    self.write_newline()?;
+
+    writeln!(&self.cmakelists_file,
+      "list( APPEND {} ${{{}}} )",
+      src_var_name,
+      private_headers_var_name
+    )?;
+
+    self.set_code_file_collection(
+      &public_includes_var_name,
       self.project_data.get_include_dir_relative_to_project_root(),
       &self.header_root_var,
       &self.generated_src_root_var,
@@ -2072,7 +2095,7 @@ impl<'a> CMakeListsWriter<'a> {
       // Template-impl files are now treated as part of the header files list.
       writeln!(&self.cmakelists_file,
         "list( APPEND {} ${{{}}} )",
-        includes_var_name,
+        public_includes_var_name,
         template_impl_var_name
       )?;
     }
@@ -2130,8 +2153,7 @@ impl<'a> CMakeListsWriter<'a> {
             &unwrapped_target,
             &output_name,
             &src_var_name,
-            &includes_var_name,
-            &self.include_dir_var
+            &public_includes_var_name
           )?;
         },
         OutputItemType::StaticLib
@@ -2143,8 +2165,7 @@ impl<'a> CMakeListsWriter<'a> {
             &unwrapped_target,
             &output_name,
             &src_var_name,
-            &includes_var_name,
-            &self.include_dir_var
+            &public_includes_var_name
           )?;
         },
         OutputItemType::CompiledLib => {
@@ -2153,8 +2174,7 @@ impl<'a> CMakeListsWriter<'a> {
             &unwrapped_target,
             &output_name,
             &src_var_name,
-            &includes_var_name,
-            &self.include_dir_var
+            &public_includes_var_name
           )?;
         }
       }
@@ -2834,8 +2854,7 @@ impl<'a> CMakeListsWriter<'a> {
     output_target_node: &Rc<RefCell<TargetNode<'a>>>,
     output_name: &str,
     src_var_name: &str,
-    includes_var_name: &str,
-    project_include_dir_varname: &str
+    includes_var_name: &str
   ) -> io::Result<()> {
     self.write_output_title(output_name)?;
 
@@ -2863,7 +2882,6 @@ impl<'a> CMakeListsWriter<'a> {
       output_data,
       output_target_node,
       output_name,
-      project_include_dir_varname,
       includes_var_name,
       src_var_name
     )?;
@@ -2877,8 +2895,7 @@ impl<'a> CMakeListsWriter<'a> {
     output_target_node: &Rc<RefCell<TargetNode<'a>>>,
     output_name: &str,
     src_var_name: &str,
-    includes_var_name: &str,
-    project_include_dir_varname: &str
+    includes_var_name: &str
   ) -> io::Result<()> {
     self.write_output_title(output_name)?;
 
@@ -2894,7 +2911,6 @@ impl<'a> CMakeListsWriter<'a> {
       output_data,
       output_target_node,
       output_name,
-      project_include_dir_varname,
       includes_var_name,
       src_var_name
     )?;
@@ -2907,7 +2923,6 @@ impl<'a> CMakeListsWriter<'a> {
     output_data: &CompiledOutputItem,
     output_target_node: &Rc<RefCell<TargetNode<'a>>>,
     output_name: &str,
-    project_include_dir_varname: &str,
     includes_var_name: &str,
     src_var_name: &str
   ) -> io::Result<()> {
@@ -2990,10 +3005,11 @@ impl<'a> CMakeListsWriter<'a> {
     )?;
 
     writeln!(&self.cmakelists_file,
-      "gcmake_apply_include_dirs( {} {} \"${{{}}}\" )",
+      "gcmake_apply_include_dirs( {} {} \"${{{}}}\" \"${{{}}}\" )",
       target_name,
       lib_spec_string,
-      &project_include_dir_varname
+      &self.public_include_dir_var,
+      &self.private_include_dir_var
     )?;
     self.write_newline()?;
 
@@ -3029,8 +3045,7 @@ impl<'a> CMakeListsWriter<'a> {
     output_target_node: &Rc<RefCell<TargetNode<'a>>>,
     output_name: &str,
     src_var_name: &str,
-    includes_var_name: &str,
-    project_include_dir_varname: &str
+    includes_var_name: &str
   ) -> io::Result<String> {
     let borrowed_node: &TargetNode = &output_target_node.as_ref().borrow();
     let target_name: &str = borrowed_node.get_cmake_target_base_name();
@@ -3110,9 +3125,10 @@ impl<'a> CMakeListsWriter<'a> {
       writeln!(&self.cmakelists_file, "endif()")?;
 
       writeln!(&self.cmakelists_file,
-        "gcmake_apply_include_dirs( {} EXE_RECEIVER \"${{{}}}\" )",
+        "gcmake_apply_include_dirs( {} EXE_RECEIVER \"${{{}}}\" \"${{{}}}\" )",
         receiver_lib_name,
-        &project_include_dir_varname
+        self.public_include_dir_var,
+        self.private_include_dir_var
       )?;
 
       writeln!(&self.cmakelists_file,
