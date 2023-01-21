@@ -252,6 +252,7 @@ plus examples for configuring each supported generator, see
 | ----- | ---- | ------- | ----------- |
 | `generator` | Generator name *String* (`Doxygen` or `Sphinx`) | *No default* | Specifies which documentation generator the project will use. |
 | `headers_only` | *boolean* | `true` | Whether to only document header files. When `false`, implementation files ( *.c*, *.cpp*, etc.) will also be processed by the documentation generator. |
+| `include_private_headers` | *boolean* | `false` | Whether to document private headers. When `true`, private header and template-implementation files will also be processed by the documentation generator. |
 
 #### Doxygen Example
 

@@ -32,6 +32,8 @@ then generate the default *docs/Doxyfile.in* with `gcmake-rust gen-default doxyf
 If you already have a *docs/Doxyfile.in*, just reconfigure the project with `gcmake-rust`
 so it knows to use Doxygen.
 
+#### Dummy homepage hpp file
+
 Some projects may want to use some *dummy.hpp* file to generate a custom home page with Doxygen.
 For example, [SFML does just that](https://github.com/SFML/SFML/blob/master/doc/mainpage.hpp)
 with a mainpage.hpp file. See [gcmake-test-project/basic-tests](/gcmake-test-project/basic-tests/)
