@@ -10,7 +10,6 @@ There are a whole bunch of things which need doing. This is the place to list th
 ## Priorities
 
 - [ ] Add CLI commands for cleaning and updating the dep-cache. Not exactly sure how updating should work yet.
-- [ ] *GCMAKE_SANITIZER_FLAGS*, *GCMAKE_ADDITIONAL_COMPILER_FLAGS*, *GCMAKE_ADDITIONAL_LINKER_FLAGS*, and *GCMAKE_ADDITIONAL_LINK_TIME_FLAGS* already exist. Add the same options per-project.
 - [ ] Have documentation generation depend on all handwritten .rst and .h(pp) files in *docs/*, that way
   CMake knows to rebuild documentation when they change. This is already the case for index.rst, but should
   probably also include the other rst files.
