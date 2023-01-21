@@ -61,6 +61,18 @@ pub enum FileGuardStyle {
   PragmaOnce
 }
 
+impl FileGuardStyle {
+  pub fn map_ident(
+    &self,
+    mapper_func: impl FnOnce(&str) -> String
+  ) -> Self {
+    return match self {
+      Self::PragmaOnce => Self::PragmaOnce,
+      Self::IncludeGuard(ident) => Self::IncludeGuard(mapper_func(ident))
+    }
+  }
+}
+
 pub struct SharedFileInfo {
   pub shared_name: String,
   pub shared_name_c_ident: String,

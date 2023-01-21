@@ -95,7 +95,8 @@ fn main() {
                   },
                   relative_file_names: vec![new_file_name],
                   which: String::from("hs"),
-                  use_pragma_guards: false
+                  use_pragma_guards: false,
+                  should_files_be_private: false
                 },
                 &new_project_info.project_root,
                 &dep_config,

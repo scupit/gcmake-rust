@@ -46,11 +46,11 @@ pub fn code_file_type(any_path_type: impl AsRef<Path>) -> RetrievedCodeFileType 
 
   return match the_path.extension() {
     Some(extension) => match extension.to_str().unwrap() {
-      "cpp2"                      => RetrievedCodeFileType::Source { used_grammar: CppFileGrammar::Cpp2 },
-      "c" | "cc"| "cpp" | "cxx"   => RetrievedCodeFileType::Source { used_grammar: CppFileGrammar::Cpp1 },
-      "h" | "hh" | "hpp" | "hxx"  => RetrievedCodeFileType::Header,
-      "tpp" | "txx" | "inl"       => RetrievedCodeFileType::TemplateImpl,
-      _                           => RetrievedCodeFileType::Unknown
+      "cpp2"                          => RetrievedCodeFileType::Source { used_grammar: CppFileGrammar::Cpp2 },
+      "c" | "cc"| "cpp" | "cxx"       => RetrievedCodeFileType::Source { used_grammar: CppFileGrammar::Cpp1 },
+      "h" | "hh" | "hpp" | "hxx"      => RetrievedCodeFileType::Header,
+      "tpp" | "tcc" | "txx" | "inl"   => RetrievedCodeFileType::TemplateImpl,
+      _                               => RetrievedCodeFileType::Unknown
     },
     None => RetrievedCodeFileType::Unknown
   }

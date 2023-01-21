@@ -152,7 +152,11 @@ pub struct CreateFilesCommand {
 
   /// Use '#pragma once' instead of include guards.
   #[arg(short = 'p', long = "use-pragma")]
-  pub use_pragma_guards: bool
+  pub use_pragma_guards: bool,
+
+  /// Generate "private" files instead of public ones.
+  #[arg(long = "private")]
+  pub should_files_be_private: bool
 }
 
 #[derive(Subcommand)]

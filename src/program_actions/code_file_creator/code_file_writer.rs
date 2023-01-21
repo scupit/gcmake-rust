@@ -8,7 +8,8 @@ pub fn write_code_files(
   shared_file_info: &SharedFileInfo,
   file_guard: &FileGuardStyle,
   project_info: &FinalProjectData,
-  language: &FileCreationLang
+  language: &FileCreationLang,
+  is_private: bool
 ) -> io::Result<Vec<PathBuf>> {
   let mut maybe_template_impl: Option<PathBuf> = None;
   let mut maybe_header: Option<PathBuf> = None;
@@ -18,8 +19,10 @@ pub fn write_code_files(
     maybe_template_impl = Some(
       write_template_impl(
         project_info,
+        &file_guard.map_ident(|ident| format!("T_IMPL_{}", ident)),
         shared_file_info,
-        language
+        language,
+        is_private
       )?
     );
   }
@@ -31,7 +34,8 @@ pub fn write_code_files(
         file_guard,
         shared_file_info,
         language,
-        &maybe_template_impl
+        &maybe_template_impl,
+        is_private
       )?
     );
   }
@@ -42,7 +46,8 @@ pub fn write_code_files(
         project_info,
         shared_file_info,
         language,
-        &maybe_header
+        &maybe_header,
+        is_private
       )?
     );
   }
@@ -86,12 +91,18 @@ pub enum CodeFileType {
   TemplateImpl(FileCreationLang)
 }
 
-pub fn extension_for(file_type: CodeFileType) -> &'static str {
+pub fn extension_for(file_type: CodeFileType, is_private: bool) -> &'static str {
   match file_type {
     CodeFileType::Header(lang) => match lang {
-      FileCreationLang::C => ".h",
+      FileCreationLang::C => {
+        if is_private { ".private.h" }
+        else { ".h" }
+      },
       FileCreationLang::Cpp
-        | FileCreationLang::Cpp2 => ".hpp"
+        | FileCreationLang::Cpp2 => {
+        if is_private { ".private.hpp" }
+        else { ".hpp" }
+      }
     },
     CodeFileType::Source(lang) => match lang {
       FileCreationLang::C => ".c",
@@ -99,9 +110,12 @@ pub fn extension_for(file_type: CodeFileType) -> &'static str {
       FileCreationLang::Cpp2 => ".cpp2"
     },
     CodeFileType::TemplateImpl(lang) => match lang {
-      FileCreationLang::C => ".tpp",
+      FileCreationLang::C => "IGNORED",
       FileCreationLang::Cpp
-        | FileCreationLang::Cpp2 => ".tpp"
+        | FileCreationLang::Cpp2 => {
+        if is_private { ".private.tpp" }
+        else { ".tpp" }
+      }
     }
   }
 }
@@ -119,32 +133,22 @@ fn write_header(
   file_guard: &FileGuardStyle,
   file_info: &SharedFileInfo,
   language: &FileCreationLang,
-  maybe_template_impl: &Option<PathBuf>
+  maybe_template_impl: &Option<PathBuf>,
+  is_private: bool
 ) -> io::Result<PathBuf> {
+  let container_dir: &str = if is_private
+    { project_info.get_src_dir_relative_to_cwd() }
+    else { project_info.get_include_dir_relative_to_cwd() };
+
   // Ensure the directory structure exists
   let file_path = ensure_directory_structure(
-    project_info.get_include_dir_relative_to_cwd(),
+    container_dir,
     file_info,
-    extension_for(CodeFileType::Header(language.clone()))
+    extension_for(CodeFileType::Header(language.clone()), is_private)
   )?;
 
   let mut header_file: File = File::create(&file_path)?;
-
-  match file_guard {
-    FileGuardStyle::IncludeGuard(specifier) => {
-      writeln!(
-        &header_file,
-        "#ifndef {}\n#define {}",
-        specifier,
-        specifier
-      )?;
-    },
-    FileGuardStyle::PragmaOnce => {
-      writeln!(&header_file, "#pragma once")?;
-    }
-  }
-
-  writeln!(&header_file, "")?;
+  write_include_guard_begin(&mut header_file, file_guard)?;
 
   match project_info.get_project_output_type() {
     ProjectOutputType::CompiledLibProject => {
@@ -152,7 +156,8 @@ fn write_header(
         project_info,
         file_info,
         language,
-        &mut header_file
+        &mut header_file,
+        is_private
       )?;
     },
     ProjectOutputType::ExeProject | ProjectOutputType::HeaderOnlyLibProject => match language {
@@ -188,9 +193,7 @@ fn write_header(
     )?;
   }
 
-  if let FileGuardStyle::IncludeGuard(_) = file_guard {
-    writeln!(&header_file, "#endif")?;
-  }
+  write_include_guard_end(&mut header_file, file_guard)?;
 
   Ok(file_path)
 }
@@ -199,27 +202,32 @@ fn write_compiled_lib_header_section(
   project_info: &FinalProjectData,
   file_info: &SharedFileInfo,
   language: &FileCreationLang,
-  header_file: &mut File
+  header_file: &mut File,
+  is_private: bool
 ) -> io::Result<()> {
   // This is guaranteed to work because library projects can only build one library.
   let (output_name, _) = project_info.get_outputs().iter().nth(0).unwrap();
 
-  writeln!(
-    header_file,
-    "\n#include \"{}\"",
-    CompiledOutputItem::export_macro_header_include_path(
-      project_info.get_full_include_prefix(),
-      output_name
-    )
-  )?;
+  if !is_private {
+    writeln!(
+      header_file,
+      "#include \"{}\"",
+      CompiledOutputItem::export_macro_header_include_path(
+        project_info.get_full_include_prefix(),
+        output_name
+      )
+    )?;
+  }
 
-  let export_macro: String = CompiledOutputItem::str_export_macro(output_name);
+  let export_macro: String = if is_private
+    { String::from("") }
+    else { format!("{} ", CompiledOutputItem::str_export_macro(output_name)) };
 
   match language {
     FileCreationLang::C => {
       writeln!(
         header_file,
-        "\n{} int placeholder_{}(void);\n",
+        "\n{}int placeholder_{}(void);\n",
         export_macro,
         &file_info.shared_name_c_ident
       )?;
@@ -227,7 +235,7 @@ fn write_compiled_lib_header_section(
     FileCreationLang::Cpp => {
       writeln!(
         header_file,
-        "\nclass {} {}\n{{\n\tpublic:\n\t\tvoid printName();\n}};\n",
+        "\nclass {}{}\n{{\n\tpublic:\n\t\tvoid printName();\n}};\n",
         export_macro,
         &file_info.shared_name_c_ident
       )?;
@@ -235,7 +243,7 @@ fn write_compiled_lib_header_section(
     FileCreationLang::Cpp2 => {
       writeln!(
         header_file,
-        "\n{} int placeholder_{}(const int);\n",
+        "\n{}int placeholder_{}(const int);\n",
         export_macro,
         &file_info.shared_name_c_ident
       )?;
@@ -249,13 +257,14 @@ fn write_source(
   project_info: &FinalProjectData,
   file_info: &SharedFileInfo,
   language: &FileCreationLang,
-  maybe_header: &Option<PathBuf>
+  maybe_header: &Option<PathBuf>,
+  is_private: bool
 ) -> io::Result<PathBuf> {
   // Ensure the directory structure exists
   let file_path = ensure_directory_structure(
     project_info.get_src_dir_relative_to_cwd(),
     file_info,
-    extension_for(CodeFileType::Source(language.clone()))
+    extension_for(CodeFileType::Source(language.clone()), is_private)
   )?;
 
   let source_file = File::create(&file_path)?;
@@ -298,23 +307,64 @@ fn write_source(
 
 fn write_template_impl(
   project_info: &FinalProjectData,
+  file_guard: &FileGuardStyle,
   file_info: &SharedFileInfo,
-  language: &FileCreationLang
+  language: &FileCreationLang,
+  is_private: bool
 ) -> io::Result<PathBuf> {
+  let container_dir: &str = if is_private
+    { project_info.get_src_dir_relative_to_cwd() }
+    else { project_info.get_include_dir_relative_to_cwd() };
+
   // Ensure the directory structure exists
   let file_path = ensure_directory_structure(
-    project_info.get_include_dir_relative_to_cwd(),
+    container_dir,
     file_info,
-    extension_for(CodeFileType::TemplateImpl(language.clone()))
+    extension_for(CodeFileType::TemplateImpl(language.clone()), is_private)
   )?;
 
-  let source_file = File::create(&file_path)?;
+  let mut template_impl_file = File::create(&file_path)?;
+  write_include_guard_begin(&mut template_impl_file, file_guard)?;
 
   writeln!(
-    &source_file,
+    &template_impl_file,
     "// Implement the template in {} here",
     file_path.to_str().unwrap()
   )?;
 
+  write_include_guard_end(&mut template_impl_file, file_guard)?;
+
   Ok(file_path)
+}
+
+fn write_include_guard_begin(
+  out_file: &mut File,
+  file_guard: &FileGuardStyle
+) -> io::Result<()> {
+  match file_guard {
+    FileGuardStyle::IncludeGuard(specifier) => {
+      writeln!(
+        out_file,
+        "#ifndef {}\n#define {}\n",
+        specifier,
+        specifier
+      )?;
+    },
+    FileGuardStyle::PragmaOnce => {
+      writeln!(out_file, "#pragma once\n")?;
+    }
+  }
+
+  Ok(())
+}
+
+fn write_include_guard_end(
+  out_file: &mut File,
+  file_guard: &FileGuardStyle
+) -> io::Result<()> {
+  if let FileGuardStyle::IncludeGuard(_) = file_guard {
+    writeln!(out_file, "#endif")?;
+  }
+
+  Ok(())
 }

@@ -76,13 +76,17 @@ fn create_single_file_set(
     FileGuardStyle::IncludeGuard(guard_specifier_string)
   };
 
+  let used_include_path: &str = if command.should_files_be_private
+    { project_data.get_src_dir_relative_to_cwd() }
+    else { project_data.get_include_dir_relative_to_cwd() };
+
   let maybe_existing_files = [
     // (project_data.get_include_dir(), extension_for(CodeFileType::Header(command.language.clone()))),
     // (project_data.get_src_dir(), extension_for(CodeFileType::Source(command.language.clone()))),
     // (project_data.get_template_impl_dir(), extension_for(CodeFileType::TemplateImpl(command.language.clone()))),
-    (project_data.get_include_dir_relative_to_cwd(), CodeFileType::Header(command.language.clone())),
+    (used_include_path, CodeFileType::Header(command.language.clone())),
     (project_data.get_src_dir_relative_to_cwd(), CodeFileType::Source(command.language.clone())),
-    (project_data.get_include_dir_relative_to_cwd(), CodeFileType::TemplateImpl(command.language.clone()))
+    (used_include_path, CodeFileType::TemplateImpl(command.language.clone()))
   ]
     .map(|(code_root, code_file_type)| {
       let file_name = format!(
@@ -90,7 +94,7 @@ fn create_single_file_set(
         code_root,
         &shared_file_info.leading_dir_path,
         &shared_file_info.shared_name,
-        extension_for(code_file_type.clone())
+        extension_for(code_file_type.clone(), command.should_files_be_private)
       );
 
       (file_name, code_file_type)
@@ -118,7 +122,7 @@ fn create_single_file_set(
         );
 
       let local_collision_mode: FileCollisionHandleOption = prompt_until_custom(
-        &format!("\nFile '{}' already exists.\n[s]kip it, [o]verwrite it, [c]ancel rest, or replace [a]ll?", file_path_relative_to_working_dir),
+        &format!("\nFile '{}' already exists.\n[s]kip it, [o]verwrite it, [c]ancel rest, or replace [a]ll?", file_path_relative_to_working_dir.yellow()),
         |value| match value {
           "s" => Some(FileCollisionHandleOption::SkipOne),
           "o" => Some(FileCollisionHandleOption::OverwriteOne),
@@ -147,7 +151,8 @@ fn create_single_file_set(
       &shared_file_info,
       &file_guard,
       &project_data,
-      &command.language
+      &command.language,
+      command.should_files_be_private
     );
 
     match writer_result {

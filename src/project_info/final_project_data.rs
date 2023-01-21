@@ -934,7 +934,8 @@ impl FinalProjectData {
       Path::new(&finalized_project_data.src_dir_relative_to_cwd),
       &mut finalized_project_data.private_headers,
       &|file_path| match code_file_type(file_path) {
-        RetrievedCodeFileType::Header => true,
+        RetrievedCodeFileType::Header
+          | RetrievedCodeFileType::TemplateImpl => true,
         _ => false
       }
     )
