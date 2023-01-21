@@ -517,6 +517,22 @@ impl<'a> CMakeListsWriter<'a> {
       "set( GCMAKE_ADDITIONAL_LINKER_FLAGS \"\" CACHE STRING \"SEMICOLON SEPARATED list of additional linker flags to build the project with\" )"
     )?;
 
+    writeln!(&self.cmakelists_file,
+      "set( ${{PROJECT_NAME}}_SANITIZER_FLAGS \"\" CACHE STRING \"SEMICOLON SEPARATED list of sanitizer flags to build project '${{PROJECT_NAME}}' with. These are included in both compiler flags and linker flags\" )"
+    )?;
+
+    writeln!(&self.cmakelists_file,
+      "set( ${{PROJECT_NAME}}_ADDITIONAL_COMPILER_FLAGS \"\" CACHE STRING \"SEMICOLON SEPARATED list of additional compiler flags to build project '${{PROJECT_NAME}}' with. Useful for static analyzers or flags like -march which shouldn't be included by default\" )"
+    )?;
+
+    writeln!(&self.cmakelists_file,
+      "set( ${{PROJECT_NAME}}_ADDITIONAL_LINK_TIME_FLAGS \"\" CACHE STRING \"SEMICOLON SEPARATED list of additional link-time flags to build project '${{PROJECT_NAME}}' with\" )"
+    )?;
+
+    writeln!(&self.cmakelists_file,
+      "set( ${{PROJECT_NAME}}_ADDITIONAL_LINKER_FLAGS \"\" CACHE STRING \"SEMICOLON SEPARATED list of additional linker flags to build project '${{PROJECT_NAME}}' with\" )"
+    )?;
+
     // Change the default install COMPONENT to play nice with NSIS installers.
     self.set_basic_var(
       "",
