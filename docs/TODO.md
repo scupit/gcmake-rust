@@ -9,6 +9,8 @@ There are a whole bunch of things which need doing. This is the place to list th
 
 ## Priorities
 
+- [ ] Warn when files exist inside *include/* or *src/*, but aren't inside the dir with the include prefix
+  (like *include/MY_INCLUDE_PREXIX* or *src/MY_INCLUDE_PREFIX*).
 - [ ] Add CLI commands for cleaning and updating the dep-cache. Not exactly sure how updating should work yet.
 - [ ] Have documentation generation depend on all handwritten .rst and .h(pp) files in *docs/*, that way
   CMake knows to rebuild documentation when they change. This is already the case for index.rst, but should

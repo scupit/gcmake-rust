@@ -1455,7 +1455,6 @@ impl FinalProjectData {
     item_name: &str,
     output_item: &CompiledOutputItem
   ) -> Result<(), String> {
-    // println!("{}", self.get_project_root_dir());
     let absolute_entry_file_path: PathBuf = absolute_path(
       Path::new(self.get_project_root_dir())
         .join(output_item.get_entry_file().get_file_path())
@@ -1481,6 +1480,18 @@ impl FinalProjectData {
           self.get_absolute_project_root().to_str().unwrap().magenta()
         ));
       }
+    }
+    else if !absolute_entry_file_path.exists() {
+      let without_filename: &str = absolute_entry_file_path.parent().unwrap().to_str().unwrap();
+      let file_name: &str = absolute_entry_file_path.file_name().unwrap().to_str().unwrap();
+
+      return Err(format!(
+        "The entry_file \"{}\" given for {} doesn't exist. Is the file missing or named something else?\n   Expected file at: \"{}/{}\"",
+        file_name.magenta(),
+        item_name.yellow(),
+        without_filename,
+        file_name.magenta()
+      ));
     }
 
     Ok(())
