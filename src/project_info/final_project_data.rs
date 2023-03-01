@@ -2,7 +2,7 @@ use std::{collections::{HashMap, HashSet, BTreeMap, BTreeSet}, path::{Path, Path
 
 use crate::{project_info::path_manipulation::cleaned_pathbuf, logger};
 
-use super::{path_manipulation::{cleaned_path_str, relative_to_project_root, absolute_path}, final_dependencies::{FinalGCMakeDependency, FinalPredefinedDependencyConfig}, raw_data_in::{RawProject, dependencies::internal_dep_config::AllRawPredefinedDependencies, BuildType, LanguageConfigMap, OutputItemType, PreBuildConfigIn, SpecificCompilerSpecifier, BuildConfigCompilerSpecifier, TargetSpecificBuildType, LinkSection, RawTestFramework, DefaultCompiledLibType, RawCompiledItem, RawDocumentationGeneratorConfig, RawDocGeneratorName}, final_project_configurables::{FinalProjectType}, CompiledOutputItem, helpers::{parse_subproject_data, parse_root_project_data, populate_existing_files, find_prebuild_script, PrebuildScriptFile, validate_raw_project_outputs, ProjectOutputType, RetrievedCodeFileType, code_file_type, parse_test_project_data, find_doxyfile_in, validate_doxyfile_in, SphinxConfigFiles, find_sphinx_files, validate_conf_py_in}, PreBuildScript, FinalTestFramework, base_include_prefix_for_test, gcmake_constants::{SRC_DIR_NAME, INCLUDE_DIR_NAME, TESTS_DIR_NAME, SUBPROJECTS_DIR_NAME, DOCS_DIR_NAME}, FinalInstallerConfig, CompilerDefine, FinalBuildConfigMap, make_final_build_config_map, FinalTargetBuildConfigMap, FinalGlobalProperties, FinalShortcutConfig, parsers::{version_parser::ThreePartVersion, general_parser::ParseSuccess}, platform_spec_parser::parse_leading_system_spec, SystemSpecifierWrapper, FinalFeatureConfig, FinalFeatureEnabler, CodeFileInfo, FileRootGroup, PreBuildScriptType, FinalDocGeneratorName, FinalDocumentationInfo};
+use super::{path_manipulation::{cleaned_path_str, relative_to_project_root, absolute_path}, final_dependencies::{FinalGCMakeDependency, FinalPredefinedDependencyConfig}, raw_data_in::{RawProject, dependencies::internal_dep_config::AllRawPredefinedDependencies, BuildType, LanguageConfigMap, OutputItemType, PreBuildConfigIn, SpecificCompilerSpecifier, BuildConfigCompilerSpecifier, TargetSpecificBuildType, LinkSection, RawTestFramework, DefaultCompiledLibType, RawCompiledItem, RawDocumentationGeneratorConfig, RawDocGeneratorName}, final_project_configurables::{FinalProjectType}, CompiledOutputItem, helpers::{parse_subproject_data, parse_root_project_data, populate_existing_files, find_prebuild_script, PrebuildScriptFile, validate_raw_project_outputs, ProjectOutputType, RetrievedCodeFileType, code_file_type, parse_test_project_data, find_doxyfile_in, validate_doxyfile_in, SphinxConfigFiles, find_sphinx_files, validate_conf_py_in}, PreBuildScript, FinalTestFramework, base_include_prefix_for_test, gcmake_constants::{SRC_DIR_NAME, INCLUDE_DIR_NAME, TESTS_DIR_NAME, SUBPROJECTS_DIR_NAME, DOCS_DIR_NAME}, FinalInstallerConfig, CompilerDefine, FinalBuildConfigMap, make_final_build_config_map, FinalTargetBuildConfigMap, FinalGlobalProperties, FinalShortcutConfig, parsers::{version_parser::ThreePartVersion, general_parser::ParseSuccess}, platform_spec_parser::parse_leading_system_spec, SystemSpecifierWrapper, FinalFeatureConfig, FinalFeatureEnabler, CodeFileInfo, FileRootGroup, PreBuildScriptType, FinalDocGeneratorName, FinalDocumentationInfo, CodeFileLang};
 use colored::*;
 
 const SUBPROJECT_JOIN_STR: &'static str = "_S_";
@@ -23,7 +23,7 @@ fn resolve_prebuild_script(
     for single_generated_file in specified_set {
       let relative_file_root: &Path = match code_file_type(single_generated_file) {
         RetrievedCodeFileType::Source { .. } => file_root_group.src_root.as_path(),
-        RetrievedCodeFileType::Header
+        RetrievedCodeFileType::Header(_)
           | RetrievedCodeFileType::TemplateImpl => file_root_group.header_root.as_path(),
         _ => {
           return Err(format!(
@@ -198,6 +198,30 @@ struct NeededParseInfoFromParent {
   language_config_map: Rc<LanguageConfigMap>,
   supported_compilers: Rc<HashSet<SpecificCompilerSpecifier>>,
   inherited_features: Rc<BTreeMap<String, FinalFeatureConfig>>
+}
+
+struct CodeFileStats {
+  num_cpp2_files: i32,
+  num_cpp_files: i32,
+  num_c_files: i32
+}
+
+impl CodeFileStats {
+  pub fn new() -> Self {
+    return Self {
+      num_cpp2_files: 0,
+      num_cpp_files: 0,
+      num_c_files: 0
+    };
+  }
+
+  pub fn requires_cpp(&self) -> bool {
+    self.num_cpp2_files + self.num_cpp_files > 0
+  }
+
+  pub fn requires_c(&self) -> bool {
+    self.num_c_files > 0
+  }
 }
 
 pub struct FinalProjectLoadContext {
@@ -904,11 +928,14 @@ impl FinalProjectData {
       for generated_code_file in &pre_build.generated_code {
         let cloned_file_info: CodeFileInfo = generated_code_file.clone();
 
+        // NOTE: All generated files will already be listed as part of the project's files.
+        // This is fine because is_generated == true for each of these files, so we can tell
+        // that they might not exist on the file system already.
         match generated_code_file.code_file_type() {
           RetrievedCodeFileType::Source { .. } => {
             finalized_project_data.src_files.insert(cloned_file_info);
           },
-          RetrievedCodeFileType::Header | RetrievedCodeFileType::TemplateImpl => {
+          RetrievedCodeFileType::Header(_) | RetrievedCodeFileType::TemplateImpl => {
             finalized_project_data.include_files.insert(cloned_file_info);
           },
           _ => ()
@@ -934,7 +961,7 @@ impl FinalProjectData {
       Path::new(&finalized_project_data.src_dir_relative_to_cwd),
       &mut finalized_project_data.private_headers,
       &|file_path| match code_file_type(file_path) {
-        RetrievedCodeFileType::Header
+        RetrievedCodeFileType::Header(_)
           | RetrievedCodeFileType::TemplateImpl => true,
         _ => false
       }
@@ -946,7 +973,7 @@ impl FinalProjectData {
       Path::new(&finalized_project_data.include_dir_relative_to_cwd),
       &mut finalized_project_data.include_files,
       &|file_path| match code_file_type(file_path) {
-        RetrievedCodeFileType::Header => true,
+        RetrievedCodeFileType::Header(_) => true,
         _ => false
       }
     )
@@ -1004,24 +1031,75 @@ impl FinalProjectData {
     None
   }
 
+  // TODO: Return an iterator instead of using a callback.
+  fn iter_all_code_files(&self, mut callback: &mut dyn FnMut(&CodeFileInfo)) {
+    let file_sets: Vec<&BTreeSet<CodeFileInfo>> = vec![
+      &self.private_headers,
+      &self.include_files,
+      &self.src_files,
+      &self.template_impl_files
+    ];
+
+    for file_set in file_sets {
+      for code_file in file_set {
+        callback(code_file);
+      }
+    }
+
+    if let Some(pre_build_config) = self.prebuild_script.as_ref() {
+      // NOTE: We can ignore generated_code files listed in the pre-build script because those
+      // are appended to the project's files.
+      if let PreBuildScriptType::Exe(exe_pre_build) = pre_build_config.get_type() {
+        callback(exe_pre_build.get_entry_file());
+      }
+    }
+
+    for (_, target_config) in self.get_outputs() {
+      callback(target_config.get_entry_file());
+    }
+
+    for (_, subproject_config) in self.get_subprojects() {
+      subproject_config.iter_all_code_files(&mut callback);
+    }
+
+    for (_, test_project_config) in self.get_test_projects() {
+      test_project_config.iter_all_code_files(&mut callback);
+    }
+  }
+
+  fn get_code_file_stats(&self) -> CodeFileStats {
+    let mut file_stats = CodeFileStats::new();
+
+    self.iter_all_code_files(&mut |code_file| {
+      match code_file.language().unwrap() {
+        CodeFileLang::C => file_stats.num_c_files += 1,
+        CodeFileLang::Cpp { used_grammar } => match used_grammar {
+          CppFileGrammar::Cpp1 => file_stats.num_cpp_files += 1,
+          CppFileGrammar::Cpp2 => file_stats.num_cpp2_files += 1
+        }
+      }
+    });
+
+    return file_stats;
+  }
+ 
   fn ensure_language_config_correctness(&self) -> Result<(), String> {
     let language_config = self.get_language_info();
+    let code_file_stats: CodeFileStats = self.get_code_file_stats();
     
-    // TODO: Determine this using file extensions. 
-    let uses_cpp: bool = true; // Any headers or sources make use of C++ or Cpp2
+    let project_uses_cpp: bool = code_file_stats.requires_cpp();
+    let project_uses_c: bool = code_file_stats.requires_c();
 
-    // TODO: Determine this using file extensions.
-    let uses_c: bool = true; // Any headers or sources 
-
-    if uses_c {
+    if project_uses_c {
       // Maybe make this a global if needed. It may be useful to print a list of supported language
       // standard "versions".
       let allowed_c_standards = [90, 99, 11, 17, 23];
 
       match language_config.c.as_ref() {
         None => return Err(format!(
-          "Project [{}] makes use of C, but has not specified any C language configuration. Fix by adding a C language configuration to cmake_data.yaml:\n\nlanguage_config:\n  {}:\n    standard: 11",
+          "Project [{}] makes use of C, but has not specified any C language configuration. Fix by adding a C language configuration to cmake_data.yaml:\n\n{}:\n  {}:\n    standard: 11",
           self.get_name_for_error_messages().yellow(),
+          "languages".purple(),
           "c".green()
         )),
         Some(c_config) => {
@@ -1035,13 +1113,14 @@ impl FinalProjectData {
       }
     }
 
-    if uses_cpp {
+    if project_uses_cpp {
       let allowed_cpp_standards = [98, 11, 14, 17, 20, 23];
 
       match language_config.cpp.as_ref() {
         None => return Err(format!(
-          "Project [{}] makes use of C++, but has not specified any C++ language configuration. Fix by adding a C++ language configuration to cmake_data.yaml:\n\nlanguage_config:\n  {}:\n    standard: 17",
+          "Project [{}] makes use of C++, but has not specified any C++ language configuration. Fix by adding a C++ language configuration to cmake_data.yaml:\n\n{}:\n  {}:\n    standard: 17",
           self.get_name_for_error_messages().yellow(),
+          "languages".purple(),
           "cpp".green()
         )),
         Some(cpp_config) => {
@@ -1333,7 +1412,7 @@ impl FinalProjectData {
   }
 
   pub fn any_files_contain_cpp2_grammar(&self) -> bool {
-    return !self.all_sources_by_grammar(CppFileGrammar::Cpp2, true).is_empty();
+    return !self.all_cpp_sources_by_grammar(CppFileGrammar::Cpp2, true).is_empty();
   }
 
   pub fn pre_build_entry_file(&self) -> Option<&CodeFileInfo> {
@@ -1346,7 +1425,7 @@ impl FinalProjectData {
   }
 
   // Also includes entry files for output items and executable pre-build script.
-  pub fn all_sources_by_grammar(
+  pub fn all_cpp_sources_by_grammar(
     &self,
     grammar: CppFileGrammar,
     // Since the pre-build script is able to generate code files, we sometimes need the pre-build
@@ -1365,7 +1444,7 @@ impl FinalProjectData {
       .collect();
 
     for (_, output) in &self.output {
-      if let RetrievedCodeFileType::Source { used_grammar } = output.entry_file.code_file_type() {
+      if let RetrievedCodeFileType::Source(CodeFileLang::Cpp { used_grammar }) = output.entry_file.code_file_type() {
         if grammar == used_grammar {
           source_file_set.insert(output.get_entry_file());
         }
@@ -1389,9 +1468,9 @@ impl FinalProjectData {
   }
 
   fn ensure_no_file_collision(&self) -> Result<(), String> {
-    let existing_normal_cpp_files: HashSet<&CodeFileInfo> = self.all_sources_by_grammar(CppFileGrammar::Cpp1, true);
+    let existing_normal_cpp_files: HashSet<&CodeFileInfo> = self.all_cpp_sources_by_grammar(CppFileGrammar::Cpp1, true);
 
-    for cpp2_file_info in self.all_sources_by_grammar(CppFileGrammar::Cpp2, true) {
+    for cpp2_file_info in self.all_cpp_sources_by_grammar(CppFileGrammar::Cpp2, true) {
       let cpp2_file: &Path = cpp2_file_info.get_file_path();
       let generated_file_name: PathBuf = cpp2_file.with_extension("").with_extension(".cpp");
 

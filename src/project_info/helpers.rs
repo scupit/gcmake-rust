@@ -6,11 +6,17 @@ use regex::Regex;
 use super::{raw_data_in::{RawProject, RawSubproject, OutputItemType, RawTestProject}, path_manipulation::{cleaned_pathbuf, relative_to_project_root}, final_project_data::{ProjectLoadFailureReason, CppFileGrammar}, CodeFileInfo};
 
 #[derive(Clone)]
-pub enum RetrievedCodeFileType {
-  Source {
+pub enum CodeFileLang {
+  C,
+  Cpp {
     used_grammar: CppFileGrammar
-  },
-  Header,
+  }
+}
+
+#[derive(Clone)]
+pub enum RetrievedCodeFileType {
+  Source(CodeFileLang),
+  Header(CodeFileLang),
   TemplateImpl,
   // Module (when implemented in compilers and build systems)
   Unknown
@@ -26,7 +32,7 @@ impl RetrievedCodeFileType {
 
   pub fn is_normal_header(&self) -> bool {
     match self {
-      Self::Header => true,
+      Self::Header(_) => true,
       _ => false
     }
   }
@@ -34,7 +40,7 @@ impl RetrievedCodeFileType {
   pub fn is_same_general_type_as(&self, other: &RetrievedCodeFileType) -> bool {
     match (self, other) {
       (Self::Source { .. }, Self::Source { .. }) => true,
-      (Self::Header, Self::Header) => true,
+      (Self::Header(_), Self::Header(_)) => true,
       (Self::TemplateImpl, Self::TemplateImpl) => true,
       _ => false
     }
@@ -46,9 +52,14 @@ pub fn code_file_type(any_path_type: impl AsRef<Path>) -> RetrievedCodeFileType 
 
   return match the_path.extension() {
     Some(extension) => match extension.to_str().unwrap() {
-      "cpp2"                          => RetrievedCodeFileType::Source { used_grammar: CppFileGrammar::Cpp2 },
-      "c" | "cc"| "cpp" | "cxx"       => RetrievedCodeFileType::Source { used_grammar: CppFileGrammar::Cpp1 },
-      "h" | "hh" | "hpp" | "hxx"      => RetrievedCodeFileType::Header,
+      "cpp2"                          => RetrievedCodeFileType::Source(CodeFileLang::Cpp { used_grammar: CppFileGrammar::Cpp2 }),
+      "c"                             => RetrievedCodeFileType::Source(CodeFileLang::C),
+      "cc"| "cpp" | "cxx"             => RetrievedCodeFileType::Source(CodeFileLang::Cpp { used_grammar: CppFileGrammar::Cpp1 }),
+      // NOTE: I'm treating ".h" headers as C only. Any C++ projects which use ".h" for
+      // C++ headers will also contain C++ source files (therefore requiring a C++ language configuration
+      // for the project), so this shouldn't cause any errors.
+      "h"                             => RetrievedCodeFileType::Header(CodeFileLang::C),
+      "hh" | "hpp" | "hxx"            => RetrievedCodeFileType::Header(CodeFileLang::Cpp { used_grammar: CppFileGrammar::Cpp1 }),
       "tpp" | "tcc" | "txx" | "inl"   => RetrievedCodeFileType::TemplateImpl,
       _                               => RetrievedCodeFileType::Unknown
     },
