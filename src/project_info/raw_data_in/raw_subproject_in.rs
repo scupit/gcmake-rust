@@ -43,12 +43,12 @@ impl Into<RawProject> for RawSubproject {
       // NOTE: This language config is only a placeholder. Subprojects will inherit
       // language info from their parent project.
       languages: LanguageConfigMap {
-        c: SingleLanguageConfig {
+        c: Some(SingleLanguageConfig {
           standard: 11
-        },
-        cpp: SingleLanguageConfig {
+        }),
+        cpp: Some(SingleLanguageConfig {
           standard: 17
-        }
+        })
       },
       // Placeholder, no meaning
       test_framework: None,

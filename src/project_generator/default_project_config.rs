@@ -304,12 +304,12 @@ pub fn get_default_project_config(
     documentation: None,
     features: None,
     languages: LanguageConfigMap {
-      c: SingleLanguageConfig {
+      c: Some(SingleLanguageConfig {
         standard: 11
-      },
-      cpp: SingleLanguageConfig {
+      }),
+      cpp: Some(SingleLanguageConfig {
         standard: default_cpp_standard(requires_cppfront)
-      }
+      })
     },
     output: HashMap::from_iter([
       (format!("{}", project_name), RawCompiledItem {

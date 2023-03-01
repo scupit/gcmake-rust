@@ -1005,33 +1005,71 @@ impl FinalProjectData {
   }
 
   fn ensure_language_config_correctness(&self) -> Result<(), String> {
-    let LanguageConfigMap { c, cpp } = self.get_language_info();
+    let language_config = self.get_language_info();
+    
+    // TODO: Determine this using file extensions. 
+    let uses_cpp: bool = true; // Any headers or sources make use of C++ or Cpp2
 
-    match c.standard {
-      90 | 99 | 11 | 17 | 23 => (),
-      standard => return Err(format!("C Language standard must be one of [90, 99, 11, 17, 23], but {} was given", standard))
-    }
+    // TODO: Determine this using file extensions.
+    let uses_c: bool = true; // Any headers or sources 
 
-    match cpp.standard {
-      98 | 11 | 14 | 17 | 20 | 23 => (),
-      standard => return Err(format!("C++ Language standard must be one of [98, 11, 14, 17, 20, 23], but {} was given", standard))
-    }
+    if uses_c {
+      // Maybe make this a global if needed. It may be useful to print a list of supported language
+      // standard "versions".
+      let allowed_c_standards = [90, 99, 11, 17, 23];
 
-    if self.any_files_contain_cpp2_grammar() && ![20, 23].contains(&cpp.standard) {
-      logger::block(|| {
-        logger::warn(format!(
-          "Project [{}] contains .cpp2 files, but its C++ standard is currently set to {}. cppfront (.cpp2) requires C++20 or higher. Please set the Cpp language standard to {} or {} in cmake_data.yaml. Example:\n",
+      match language_config.c.as_ref() {
+        None => return Err(format!(
+          "Project [{}] makes use of C, but has not specified any C language configuration. Fix by adding a C language configuration to cmake_data.yaml:\n\nlanguage_config:\n  {}:\n    standard: 11",
           self.get_name_for_error_messages().yellow(),
-          cpp.standard.to_string().red(),
-          "20".green(),
-          "23".green()
-        ));
+          "c".green()
+        )),
+        Some(c_config) => {
+          if !allowed_c_standards.contains(&c_config.standard) {
+            return Err(format!(
+              "C Language standard must be one of [90, 99, 11, 17, 23], but {} was given",
+              c_config.standard.to_string().red()
+            ));
+          }
+        }
+      }
+    }
 
-        println!(
-          "languages:\n  Cpp:\n    standard: {}",
-          "20".green()
-        );
-      })
+    if uses_cpp {
+      let allowed_cpp_standards = [98, 11, 14, 17, 20, 23];
+
+      match language_config.cpp.as_ref() {
+        None => return Err(format!(
+          "Project [{}] makes use of C++, but has not specified any C++ language configuration. Fix by adding a C++ language configuration to cmake_data.yaml:\n\nlanguage_config:\n  {}:\n    standard: 17",
+          self.get_name_for_error_messages().yellow(),
+          "cpp".green()
+        )),
+        Some(cpp_config) => {
+          if !allowed_cpp_standards.contains(&cpp_config.standard) {
+            return Err(format!(
+              "C++ Language standard must be one of [98, 11, 14, 17, 20, 23], but {} was given",
+              cpp_config.standard.to_string().red()
+            ));
+          }
+
+          if self.any_files_contain_cpp2_grammar() && ![20, 23].contains(&cpp_config.standard) {
+            logger::block(|| {
+              logger::warn(format!(
+                "Project [{}] contains .cpp2 files, but its C++ standard is currently set to {}. cppfront (.cpp2) requires C++20 or higher. Please set the Cpp language standard to {} or {} in cmake_data.yaml. Example:\n",
+                self.get_name_for_error_messages().yellow(),
+                cpp_config.standard.to_string().red(),
+                "20".green(),
+                "23".green()
+              ));
+
+              println!(
+                "languages:\n  cpp:\n    standard: {}",
+                "20".green()
+              );
+            })
+          }
+        }
+      }
     }
 
     Ok(())
