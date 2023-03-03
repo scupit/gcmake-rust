@@ -428,8 +428,9 @@ impl<'a> CMakeListsWriter<'a> {
       // CMake Version header
       // 3.23: FILE_SET functionality is used.
       // 3.24: Updated FindwxWidgets find module needed to use new wxWidgets 3.2.0 release.
-      // 3.25: FetchContent_Declare uses SYSTEM argument so that compiler warnings are turned off
-      //          for dependencies.
+      // 3.25:
+      //    - FetchContent_Declare uses SYSTEM argument so that compiler warnings are turned off for dependencies.
+      //    - LINUX and CMAKE_HOST_LINUX variables
       writeln!(&self.cmakelists_file, "cmake_minimum_required( VERSION 3.25 )")?;
     }
 

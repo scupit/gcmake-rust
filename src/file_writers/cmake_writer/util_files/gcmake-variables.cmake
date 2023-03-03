@@ -13,6 +13,7 @@ else()
   set( USING_EMSCRIPTEN FALSE )
 endif()
 
+# This will be TRUE when using 'zig c++' as well, since Zig uses clang internally for that.
 if( NOT USING_EMSCRIPTEN AND ("${CMAKE_C_COMPILER_ID}" MATCHES "Clang" OR "${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang") )
   set( USING_CLANG TRUE )
 else()
@@ -25,12 +26,7 @@ set( USING_MINGW ${MINGW} )
 # ==================================================
 # Host (current) system variables
 # ==================================================
-if( CMAKE_HOST_UNIX AND NOT CMAKE_HOST_APPLE )
-  set( CURRENT_SYSTEM_IS_LINUX TRUE )
-else()
-  set( CURRENT_SYSTEM_IS_LINUX FALSE )
-endif()
-
+set( CURRENT_SYSTEM_IS_LINUX ${CMAKE_HOST_LINUX} )
 set( CURRENT_SYSTEM_IS_WINDOWS ${CMAKE_HOST_WIN32} )
 set( CURRENT_SYSTEM_IS_MACOS ${CMAKE_HOST_APPLE} )
 
@@ -39,12 +35,7 @@ set( CURRENT_SYSTEM_IS_UNIX ${CMAKE_HOST_UNIX} )
 # ==================================================
 # Target system variables
 # ==================================================
-if( UNIX AND NOT APPLE )
-  set( TARGET_SYSTEM_IS_LINUX TRUE )
-else()
-  set( TARGET_SYSTEM_IS_LINUX FALSE )
-endif()
-
+set( TARGET_SYSTEM_IS_LINUX ${LINUX} )
 set( TARGET_SYSTEM_IS_WINDOWS ${WIN32} )
 set( TARGET_SYSTEM_IS_MACOS ${APPLE} )
 
