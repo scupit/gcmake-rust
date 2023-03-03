@@ -38,9 +38,9 @@ pub struct FinalDepConfigOption {
 pub fn resolve_final_config_options(
   maybe_reference_map: Option<&HashMap<String, RawDepConfigOption>>,
   // TODO: Change the item type once values other than Strings are supported.
-  maybe_in_map: Option<HashMap<String, String>>
+  maybe_user_given_map: Option<HashMap<String, String>>
 ) -> Result<BTreeMap<String, FinalDepConfigOption>, String> {
-  match (maybe_reference_map, maybe_in_map) {
+  match (maybe_reference_map, maybe_user_given_map) {
     (_, None)=> return Ok(BTreeMap::new()),
     (None, Some(in_map)) => {
       if in_map.is_empty() {
@@ -52,10 +52,10 @@ pub fn resolve_final_config_options(
         ));
       }
     },
-    (Some(reference_map), Some(in_map)) => {
+    (Some(reference_map), Some(user_given_map)) => {
       let mut final_map: BTreeMap<String, FinalDepConfigOption> = BTreeMap::new();
 
-      for (given_name, given_string_value) in in_map {
+      for (given_name, given_string_value) in user_given_map {
         match reference_map.get(&given_name) {
           Some(hidden_config) => {
             final_map.insert(given_name, FinalDepConfigOption {
@@ -71,9 +71,9 @@ pub fn resolve_final_config_options(
               .join(", ");
 
             return Err(format!(
-              "User given config option '{}' isn't a valid option for the predefined dependency. Valid options are [{}]",
+              "User given config option '{}' isn't a valid option for the predefined dependency.\n\tValid options are [{}]",
               given_name.red(),
-              valid_option_list.yellow()
+              valid_option_list.green()
             ));
           }
         }

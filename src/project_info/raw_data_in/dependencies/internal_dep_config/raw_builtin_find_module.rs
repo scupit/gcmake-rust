@@ -29,7 +29,8 @@ pub struct RawModuleDep {
   pub debian_packages: Option<RawDebianPackagesConfig>,
   pub mutually_exclusive: Option<RawMutualExclusionSet>,
   pub emscripten_config: Option<RawEmscriptenConfig>,
-  pub targets: RawPredefinedTargetMapIn
+  pub targets: RawPredefinedTargetMapIn,
+  pub config_options: Option<HashMap<String, RawDepConfigOption>>
 }
 
 impl RawPredepCommon for RawModuleDep {
@@ -93,7 +94,6 @@ impl RawPredepCommon for RawModuleDep {
   }
 
   fn config_options_map(&self) -> Option<&HashMap<String, RawDepConfigOption>> {
-    // TODO: Implement options for 'Find Modules'
-    None
+    self.config_options.as_ref()
   }
 }

@@ -1,8 +1,10 @@
 use std::collections::{HashMap, HashSet, BTreeMap};
 
+use colored::Colorize;
+
 use crate::project_info::raw_data_in::dependencies::{internal_dep_config::{RawModuleDep, CMakeModuleType, raw_dep_common::{RawPredepCommon, RawEmscriptenConfig}}, user_given_dep_config::UserGivenPredefinedDependencyConfig};
 
-use super::{predep_module_common::{PredefinedDepFunctionality, FinalDebianPackagesConfig, FinalDepConfigOption}, final_target_map_common::{FinalTargetConfigMap, make_final_target_config_map}};
+use super::{predep_module_common::{PredefinedDepFunctionality, FinalDebianPackagesConfig, FinalDepConfigOption, resolve_final_config_options}, final_target_map_common::{FinalTargetConfigMap, make_final_target_config_map}};
 
 #[derive(Clone)]
 pub struct PredefinedCMakeModuleDep {
@@ -48,7 +50,7 @@ impl PredefinedCMakeModuleDep {
 
   pub fn from_find_module_dep(
     dep: &RawModuleDep,
-    _user_given_dep_config: &UserGivenPredefinedDependencyConfig,
+    user_given_dep_config: &UserGivenPredefinedDependencyConfig,
     dep_name: &str,
     valid_feature_list: Option<&Vec<&str>>
   ) -> Result<Self, String> {
@@ -92,8 +94,15 @@ impl PredefinedCMakeModuleDep {
       cmake_namespaced_target_map,
       yaml_namespaced_target_map,
       _can_cross_compile: dep.can_trivially_cross_compile(),
-      // TODO: Implement config options for 'Find Modules'
-      config_options: BTreeMap::new()
+      config_options: resolve_final_config_options(
+        dep.config_options_map(),
+        user_given_dep_config.options.clone()
+      )
+        .map_err(|err_msg| format!(
+          "In configuration for predefined dependency '{}':\n{}",
+          dep_name.yellow(),
+          err_msg
+        ))?
     });
   }
 }

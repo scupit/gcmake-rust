@@ -345,7 +345,12 @@ impl PredefinedSubdirDep {
         config_options: resolve_final_config_options(
           subdir_dep.config_options_map(),
           user_given_config.options.clone()
-        )?
+        )
+          .map_err(|err_msg| format!(
+            "In configuration for predefined dependency '{}':\n{}",
+            dep_name.yellow(),
+            err_msg
+          ))?
       }
     )
   }

@@ -36,7 +36,8 @@ pub struct RawComponentsModuleDep {
   pub cmakelists_usage: ComponentsFindModuleUsage,
   pub debian_packages: Option<RawDebianPackagesConfig>,
   pub mutually_exclusive: Option<RawMutualExclusionSet>,
-  pub components: RawPredefinedTargetMapIn
+  pub components: RawPredefinedTargetMapIn,
+  pub config_options: Option<HashMap<String, RawDepConfigOption>>
 }
 
 impl RawPredepCommon for RawComponentsModuleDep {
@@ -93,7 +94,6 @@ impl RawPredepCommon for RawComponentsModuleDep {
   }
 
   fn config_options_map(&self) -> Option<&HashMap<String, RawDepConfigOption>> {
-    // TODO: Implement config options for 'Components Find Modules'.
-    None
+    self.config_options.as_ref()
   }
 }

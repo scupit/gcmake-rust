@@ -1,8 +1,10 @@
 use std::collections::{HashSet, HashMap, BTreeMap};
 
+use colored::Colorize;
+
 use crate::project_info::raw_data_in::dependencies::{internal_dep_config::{RawComponentsModuleDep, UsageMode, CMakeModuleType, raw_dep_common::{RawPredepCommon, RawEmscriptenConfig}}, user_given_dep_config::{UserGivenPredefinedDependencyConfig}};
 
-use super::{predep_module_common::{PredefinedDepFunctionality, FinalDebianPackagesConfig, FinalDepConfigOption}, final_target_map_common::{FinalTargetConfigMap, make_final_target_config_map}};
+use super::{predep_module_common::{PredefinedDepFunctionality, FinalDebianPackagesConfig, FinalDepConfigOption, resolve_final_config_options}, final_target_map_common::{FinalTargetConfigMap, make_final_target_config_map}};
 
 #[derive(Clone)]
 pub struct PredefinedCMakeComponentsModuleDep {
@@ -52,7 +54,7 @@ impl PredefinedCMakeComponentsModuleDep {
 
   pub fn from_components_find_module_dep(
     components_dep: &RawComponentsModuleDep,
-    _user_given_dep_config: &UserGivenPredefinedDependencyConfig,
+    user_given_dep_config: &UserGivenPredefinedDependencyConfig,
     dep_name: &str,
     valid_feature_list: Option<&Vec<&str>>
   ) -> Result<Self, String> {
@@ -108,9 +110,16 @@ impl PredefinedCMakeComponentsModuleDep {
       debian_packages: FinalDebianPackagesConfig::make_from(components_dep.raw_debian_packages_config()),
       lib_link_mode: components_dep.cmakelists_usage.link_format.clone(),
       raw_dep: components_dep.clone(),
-      // TODO: Implement config options for 'Components Find Modules'
-      config_options: BTreeMap::new(),
-      _can_cross_compile: components_dep.can_trivially_cross_compile()
+      _can_cross_compile: components_dep.can_trivially_cross_compile(),
+      config_options: resolve_final_config_options(
+        components_dep.config_options_map(),
+        user_given_dep_config.options.clone()
+      )
+        .map_err(|err_msg| format!(
+          "In configuration for predefined dependency '{}':\n{}",
+          dep_name.yellow(),
+          err_msg
+        ))?
     });
   }
 }
