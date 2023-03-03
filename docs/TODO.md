@@ -15,6 +15,11 @@ There are a whole bunch of things which need doing. This is the place to list th
 - [ ] Have documentation generation depend on all handwritten .rst and .h(pp) files in *docs/*, that way
   CMake knows to rebuild documentation when they change. This is already the case for index.rst, but should
   probably also include the other rst files.
+- [ ] "Package manifest" generator for GCMake projects. It's a bit of a pain to use other GCMake projects
+  as dependencies because their information is never "forward declared" anywhere, unlike predefined dependencies.
+  As a result, we can only generate a proper CMakeLists.txt and fully analyze the project tree once all GCMake
+  projects have already been downloaded (by running a CMake configuration). This is not ideal. The end goal
+  is to have a package registry for GCMake projects, and this is a good first step towards that.
 
 ## Configuration TODO
 
@@ -26,8 +31,6 @@ Support for:
 - NVidia CUDA compiler?
 
 - [ ] Now that minimal installs are implemented, add ability to specify exactly which executables are installed.
-- [ ] Use CMake 3.25 ([Release Notes Here](https://cmake.org/cmake/help/v3.25/release/3.25.html)) for these features:
-  - *LINUX* and *CMAKE_HOST_LINUX* variables
 - [ ] Maybe support cppfront *.h2* headers, once they become a little more "stable".
 
 ### CLI TODO
