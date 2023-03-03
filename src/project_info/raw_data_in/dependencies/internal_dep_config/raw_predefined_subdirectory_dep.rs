@@ -1,5 +1,7 @@
+use std::collections::{HashMap};
+
 use serde::{Deserialize};
-use super::{raw_target_config_common::RawPredefinedTargetMapIn, RawMutualExclusionSet, raw_dep_common::{RawPredepCommon, RawEmscriptenConfig, RawDebianPackagesConfig}};
+use super::{raw_target_config_common::RawPredefinedTargetMapIn, RawMutualExclusionSet, raw_dep_common::{RawPredepCommon, RawEmscriptenConfig, RawDebianPackagesConfig, RawDepConfigOption}};
 
 #[derive(Deserialize, Clone)]
 #[serde(deny_unknown_fields)]
@@ -63,6 +65,7 @@ pub struct RawSubdirectoryDependency {
   pub mutually_exclusive: Option<RawMutualExclusionSet>,
   pub emscripten_config: Option<RawEmscriptenConfig>,
   pub debian_packages: Option<RawDebianPackagesConfig>,
+  pub config_options: Option<HashMap<String, RawDepConfigOption>>,
 
   #[serde(default = "default_requires_custom_populate")]
   pub requires_custom_fetchcontent_populate: bool,
@@ -149,5 +152,9 @@ impl RawPredepCommon for RawSubdirectoryDependency {
 
   fn supports_url_download_method(&self) -> bool {
     return self.download_info.url_method.is_some();
+  }
+
+  fn config_options_map(&self) -> Option<&HashMap<String, RawDepConfigOption>> {
+    self.config_options.as_ref()
   }
 }

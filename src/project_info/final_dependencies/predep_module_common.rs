@@ -1,6 +1,8 @@
-use std::collections::{HashSet, BTreeSet};
+use std::collections::{HashSet, BTreeSet, HashMap, BTreeMap};
 
-use crate::project_info::raw_data_in::dependencies::internal_dep_config::raw_dep_common::{RawEmscriptenConfig, RawDebianPackagesConfig};
+use colored::Colorize;
+
+use crate::project_info::raw_data_in::dependencies::internal_dep_config::raw_dep_common::{RawEmscriptenConfig, RawDebianPackagesConfig, RawDepConfigOption};
 
 use super::final_target_map_common::FinalTargetConfigMap;
 
@@ -26,6 +28,62 @@ impl FinalDebianPackagesConfig {
   }
 }
 
+#[derive(Clone)]
+pub struct FinalDepConfigOption {
+  pub cache_description: Option<String>,
+  pub cmake_var: String,
+  pub value: String
+}
+
+pub fn resolve_final_config_options(
+  maybe_reference_map: Option<&HashMap<String, RawDepConfigOption>>,
+  // TODO: Change the item type once values other than Strings are supported.
+  maybe_in_map: Option<HashMap<String, String>>
+) -> Result<BTreeMap<String, FinalDepConfigOption>, String> {
+  match (maybe_reference_map, maybe_in_map) {
+    (_, None)=> return Ok(BTreeMap::new()),
+    (None, Some(in_map)) => {
+      if in_map.is_empty() {
+        return Ok(BTreeMap::new())
+      }
+      else {
+        return Err(format!(
+          "Some config_option(s) were given, however the predefined dependency doesn't allow any configuration options."
+        ));
+      }
+    },
+    (Some(reference_map), Some(in_map)) => {
+      let mut final_map: BTreeMap<String, FinalDepConfigOption> = BTreeMap::new();
+
+      for (given_name, given_string_value) in in_map {
+        match reference_map.get(&given_name) {
+          Some(hidden_config) => {
+            final_map.insert(given_name, FinalDepConfigOption {
+              cache_description: hidden_config.cache_description.clone(),
+              cmake_var: hidden_config.cmake_var.clone(),
+              value: given_string_value
+            });
+          },
+          None => {
+            let valid_option_list: String = reference_map.keys()
+              .map(|key| &key[..])
+              .collect::<Vec<&str>>()
+              .join(", ");
+
+            return Err(format!(
+              "User given config option '{}' isn't a valid option for the predefined dependency. Valid options are [{}]",
+              given_name.red(),
+              valid_option_list.yellow()
+            ));
+          }
+        }
+      }
+
+      return Ok(final_map);
+    }
+  }
+}
+
 pub trait PredefinedDepFunctionality {
   fn can_cross_compile(&self) -> bool;
   fn get_target_config_map(&self) -> &FinalTargetConfigMap;
@@ -35,4 +93,5 @@ pub trait PredefinedDepFunctionality {
   fn uses_emscripten_link_flag(&self) -> bool;
   fn is_internally_supported_by_emscripten(&self) -> bool;
   fn debian_packages_config(&self) -> &FinalDebianPackagesConfig;
+  fn config_options_map(&self) -> &BTreeMap<String, FinalDepConfigOption>;
 }

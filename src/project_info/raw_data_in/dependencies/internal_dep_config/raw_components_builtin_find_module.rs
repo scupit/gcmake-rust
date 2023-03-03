@@ -1,6 +1,8 @@
+use std::collections::{HashMap};
+
 use serde::{Deserialize};
 
-use super::{CMakeModuleType, raw_target_config_common::RawPredefinedTargetMapIn, RawMutualExclusionSet, raw_dep_common::{RawPredepCommon, RawEmscriptenConfig, RawDebianPackagesConfig}};
+use super::{CMakeModuleType, raw_target_config_common::RawPredefinedTargetMapIn, RawMutualExclusionSet, raw_dep_common::{RawPredepCommon, RawEmscriptenConfig, RawDebianPackagesConfig, RawDepConfigOption}};
 
 #[derive(Deserialize, Clone)]
 #[serde(deny_unknown_fields)]
@@ -88,5 +90,10 @@ impl RawPredepCommon for RawComponentsModuleDep {
 
   fn supports_url_download_method(&self) -> bool {
     false
+  }
+
+  fn config_options_map(&self) -> Option<&HashMap<String, RawDepConfigOption>> {
+    // TODO: Implement config options for 'Components Find Modules'.
+    None
   }
 }

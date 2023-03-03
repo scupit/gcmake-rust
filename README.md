@@ -25,7 +25,7 @@ The project overview is part of the documentation, and is found in [docs/overvie
 ## Usage Requirements
 
 - [Git](https://git-scm.com/) **1.6.5 or higher** must be installed on the system
-- [CMake](https://cmake.org/download/) **3.24 or higher**
+- [CMake](https://cmake.org/download/) **3.25 or higher**
 
 ## Installation
 

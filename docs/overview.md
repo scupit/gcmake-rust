@@ -14,7 +14,7 @@ Documentation is found in [Docs_Home.md](./Docs_Home.md).
 ## Usage Requirements
 
 - [Git](https://git-scm.com/) **1.6.5 or higher** must be installed on the system
-- [CMake](https://cmake.org/download/) **3.24** or higher
+- [CMake](https://cmake.org/download/) **3.25** or higher
 
 ## About gcmake-rust
 

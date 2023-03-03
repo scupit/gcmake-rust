@@ -257,7 +257,8 @@ fn needed_predefined_dependencies(requires_cppfront: bool) -> Option<HashMap<Str
           git_tag: Some(String::from("master")),
           commit_hash: None,
           file_version: None,
-          repo_url: None
+          repo_url: None,
+          options: None
         }
       )]
     ))

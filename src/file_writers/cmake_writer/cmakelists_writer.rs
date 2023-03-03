@@ -428,7 +428,9 @@ impl<'a> CMakeListsWriter<'a> {
       // CMake Version header
       // 3.23: FILE_SET functionality is used.
       // 3.24: Updated FindwxWidgets find module needed to use new wxWidgets 3.2.0 release.
-      writeln!(&self.cmakelists_file, "cmake_minimum_required( VERSION 3.24 )")?;
+      // 3.25: FetchContent_Declare uses SYSTEM argument so that compiler warnings are turned off
+      //          for dependencies.
+      writeln!(&self.cmakelists_file, "cmake_minimum_required( VERSION 3.25 )")?;
     }
 
     // Project metadata
@@ -1081,6 +1083,25 @@ impl<'a> CMakeListsWriter<'a> {
             usage_conditional.full_conditional_string_or(true)
           )?;
 
+          for (_, option_config) in dep_info.as_common().config_options_map() {
+            write!(&self.cmakelists_file,
+              "set( {} \"{}\" ",
+              option_config.cmake_var,
+              option_config.value
+            )?;
+
+            if let Some(description) = option_config.cache_description.as_ref() {
+              write!(&self.cmakelists_file,
+                "CACHE STRING \"{}\" ",
+                description
+              )?;
+            }
+
+            write!(&self.cmakelists_file,
+              ")\n"
+            )?;
+          }
+
           if let Some(pre_load) = dep_info.pre_load_script() {
             writeln!(&self.cmakelists_file, "{}", pre_load.contents_ref())?;
           }
@@ -1433,7 +1454,7 @@ impl<'a> CMakeListsWriter<'a> {
     match &full_download_info {
       FullCMakeDownloadMethodInfo::GitMethod { repo_url, revision_spec_str, .. } => {
         writeln!(&self.cmakelists_file,
-          "\tFetchContent_Declare(\n\t\t{}\n\t\tSOURCE_DIR \"{}\"\n\t\tGIT_REPOSITORY \"{}\"\n\t\t{}\n\t\tGIT_PROGRESS TRUE\n\t\tGIT_SHALLOW FALSE\n\t\tGIT_SUBMODULES_RECURSE TRUE\n\t)",
+          "\tFetchContent_Declare(\n\t\t{}\n\t\tSOURCE_DIR \"{}\"\n\t\tGIT_REPOSITORY \"{}\"\n\t\t{}\n\t\tGIT_PROGRESS TRUE\n\t\tGIT_SHALLOW FALSE\n\t\tGIT_SUBMODULES_RECURSE TRUE\n\t\tSYSTEM\n\t)",
           cached_dep_name,
           destination_cache_dir,
           repo_url,
@@ -1442,7 +1463,7 @@ impl<'a> CMakeListsWriter<'a> {
       },
       FullCMakeDownloadMethodInfo::UrlMethod { .. } => {
         writeln!(&self.cmakelists_file,
-          "\tFetchContent_Declare(\n\t\t{}\n\t\tSOURCE_DIR \"{}\"\n\t\tDOWNLOAD_DIR \"{}\"\n\t\tURL \"${{{}}}\"\n\t)",
+          "\tFetchContent_Declare(\n\t\t{}\n\t\tSOURCE_DIR \"{}\"\n\t\tDOWNLOAD_DIR \"{}\"\n\t\tURL \"${{{}}}\"\n\t\tSYSTEM\n\t)",
           cached_dep_name,
           destination_cache_dir,
           temp_url_download_dir,
@@ -1474,7 +1495,7 @@ impl<'a> CMakeListsWriter<'a> {
     match &full_download_info {
       FullCMakeDownloadMethodInfo::GitMethod { revision_spec_str, .. } => {
         writeln!(&self.cmakelists_file,
-          "FetchContent_Declare(\n\t{}\n\tSOURCE_DIR \"${{CMAKE_CURRENT_SOURCE_DIR}}/dep/{}\"\n\tGIT_REPOSITORY \"{}\"\n\t{}\n\tGIT_PROGRESS TRUE\n\tGIT_SUBMODULES_RECURSE TRUE\n)",
+          "FetchContent_Declare(\n\t{}\n\tSOURCE_DIR \"${{CMAKE_CURRENT_SOURCE_DIR}}/dep/{}\"\n\tGIT_REPOSITORY \"{}\"\n\t{}\n\tGIT_PROGRESS TRUE\n\tGIT_SUBMODULES_RECURSE TRUE\n\tSYSTEM\n)",
           dep_name,
           dep_name,
           destination_cache_dir,
@@ -1488,7 +1509,7 @@ impl<'a> CMakeListsWriter<'a> {
         )?;
 
         writeln!(&self.cmakelists_file,
-          "FetchContent_Declare(\n\t{}\n\tSOURCE_DIR \"${{CMAKE_CURRENT_SOURCE_DIR}}/dep/{}\"\n\tURL \"{}/${{the_archive_file}}\"\n)",
+          "FetchContent_Declare(\n\t{}\n\tSOURCE_DIR \"${{CMAKE_CURRENT_SOURCE_DIR}}/dep/{}\"\n\tURL \"{}/${{the_archive_file}}\"\n\tSYSTEM\n)",
           dep_name,
           dep_name,
           temp_url_download_dir

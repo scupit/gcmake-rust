@@ -1,8 +1,8 @@
-use std::collections::{HashSet, HashMap};
+use std::collections::{HashSet, HashMap, BTreeMap};
 
 use crate::project_info::raw_data_in::dependencies::{internal_dep_config::{RawComponentsModuleDep, UsageMode, CMakeModuleType, raw_dep_common::{RawPredepCommon, RawEmscriptenConfig}}, user_given_dep_config::{UserGivenPredefinedDependencyConfig}};
 
-use super::{predep_module_common::{PredefinedDepFunctionality, FinalDebianPackagesConfig}, final_target_map_common::{FinalTargetConfigMap, make_final_target_config_map}};
+use super::{predep_module_common::{PredefinedDepFunctionality, FinalDebianPackagesConfig, FinalDepConfigOption}, final_target_map_common::{FinalTargetConfigMap, make_final_target_config_map}};
 
 #[derive(Clone)]
 pub struct PredefinedCMakeComponentsModuleDep {
@@ -12,6 +12,7 @@ pub struct PredefinedCMakeComponentsModuleDep {
   yaml_namespaced_target_map: HashMap<String, String>,
   debian_packages: FinalDebianPackagesConfig,
   components: FinalTargetConfigMap,
+  config_options: BTreeMap<String, FinalDepConfigOption>,
   _can_cross_compile: bool
 }
 
@@ -107,6 +108,8 @@ impl PredefinedCMakeComponentsModuleDep {
       debian_packages: FinalDebianPackagesConfig::make_from(components_dep.raw_debian_packages_config()),
       lib_link_mode: components_dep.cmakelists_usage.link_format.clone(),
       raw_dep: components_dep.clone(),
+      // TODO: Implement config options for 'Components Find Modules'
+      config_options: BTreeMap::new(),
       _can_cross_compile: components_dep.can_trivially_cross_compile()
     });
   }
@@ -148,5 +151,9 @@ impl PredefinedDepFunctionality for PredefinedCMakeComponentsModuleDep {
 
   fn is_internally_supported_by_emscripten(&self) -> bool {
     self.raw_dep.is_internally_supported_by_emscripten()
+  }
+
+  fn config_options_map(&self) -> &BTreeMap<String, FinalDepConfigOption> {
+    &self.config_options
   }
 }

@@ -117,6 +117,7 @@ The command set for viewing project metadata.
 - [ ] [concurrencpp](https://github.com/David-Haim/concurrencpp)
 - [ ] [opus](https://opus-codec.org/)
 - [ ] [Vorbis](https://xiph.org/vorbis/)
+- [ ] [glaze](https://github.com/stephenberry/glaze) JSON
 
 #### Support when FetchContent ready
 

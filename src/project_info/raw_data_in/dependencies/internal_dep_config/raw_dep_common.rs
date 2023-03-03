@@ -1,4 +1,4 @@
-use std::collections::{BTreeSet};
+use std::collections::{BTreeSet, HashMap};
 
 use serde::{Deserialize};
 use super::{RawMutualExclusionSet, RawPredefinedTargetMapIn};
@@ -8,6 +8,13 @@ use super::{RawMutualExclusionSet, RawPredefinedTargetMapIn};
 pub struct RawDebianPackagesConfig {
   pub runtime: Option<BTreeSet<String>>,
   pub dev: Option<BTreeSet<String>>
+}
+
+#[derive(Deserialize, Clone)]
+#[serde(deny_unknown_fields)]
+pub struct RawDepConfigOption {
+  pub cache_description: Option<String>,
+  pub cmake_var: String
 }
 
 #[derive(Deserialize, Clone)]
@@ -35,4 +42,5 @@ pub trait RawPredepCommon {
   fn supports_git_download_method(&self) -> bool;
 
   fn raw_debian_packages_config(&self) -> Option<&RawDebianPackagesConfig>;
+  fn config_options_map(&self) -> Option<&HashMap<String, RawDepConfigOption>>;
 }

@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{HashSet, HashMap};
 
 use serde::{Serialize, Deserialize};
 
@@ -29,7 +29,11 @@ pub struct UserGivenPredefinedDependencyConfig {
   // Git mode options
   pub git_tag: Option<String>,
   pub commit_hash: Option<String>,
-  pub repo_url: Option<String>
+  pub repo_url: Option<String>,
+
+  // TODO: Eventually allow option values to be either bool, String, or a list.
+  // For now, just strings is fine though.
+  pub options: Option<HashMap<String, String>>
 }
 
 impl UserGivenPredefinedDependencyConfig {

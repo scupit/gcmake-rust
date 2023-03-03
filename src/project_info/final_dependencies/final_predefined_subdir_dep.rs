@@ -1,10 +1,10 @@
-use std::{collections::{HashMap, HashSet}};
+use std::{collections::{HashMap, HashSet, BTreeMap}};
 
 use colored::Colorize;
 
 use crate::project_info::{raw_data_in::dependencies::{internal_dep_config::{RawSubdirectoryDependency, raw_dep_common::{RawPredepCommon, RawEmscriptenConfig}, RawExtensionsByPlatform}, user_given_dep_config::{UserGivenPredefinedDependencyConfig}}, parsers::{version_parser::{parse_version}, version_transform_parser::transform_version}, path_manipulation::without_leading_dot};
 
-use super::{predep_module_common::{PredefinedDepFunctionality, FinalDebianPackagesConfig}, final_target_map_common::{FinalTargetConfigMap, make_final_target_config_map}};
+use super::{predep_module_common::{PredefinedDepFunctionality, FinalDebianPackagesConfig, FinalDepConfigOption, resolve_final_config_options}, final_target_map_common::{FinalTargetConfigMap, make_final_target_config_map}};
 
 #[derive(Clone)]
 pub enum GitRevisionSpecifier {
@@ -235,7 +235,8 @@ pub struct PredefinedSubdirDep {
   yaml_namespaced_target_map: HashMap<String, String>,
   requires_custom_populate: bool,
   installation_details: Option<SubdirDepInstallationConfig>,
-  raw_dep: RawSubdirectoryDependency
+  raw_dep: RawSubdirectoryDependency,
+  config_options: BTreeMap<String, FinalDepConfigOption>
 }
 
 impl PredefinedSubdirDep {
@@ -340,7 +341,11 @@ impl PredefinedSubdirDep {
         yaml_namespaced_target_map,
         requires_custom_populate: subdir_dep.requires_custom_fetchcontent_populate,
         installation_details,
-        raw_dep: subdir_dep.clone()
+        raw_dep: subdir_dep.clone(),
+        config_options: resolve_final_config_options(
+          subdir_dep.config_options_map(),
+          user_given_config.options.clone()
+        )?
       }
     )
   }
@@ -382,5 +387,9 @@ impl PredefinedDepFunctionality for PredefinedSubdirDep {
 
   fn is_internally_supported_by_emscripten(&self) -> bool {
     self.raw_dep.is_internally_supported_by_emscripten()
+  }
+
+  fn config_options_map(&self) -> &BTreeMap<String, FinalDepConfigOption> {
+    &self.config_options
   }
 }
