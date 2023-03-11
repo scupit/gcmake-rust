@@ -1281,12 +1281,19 @@ impl FinalProjectData {
     doc_generator: &FinalDocGeneratorName,
     needed_file_name: &str
   ) -> Result<(), String> {
+    let example_command: &str = match doc_generator {
+      FinalDocGeneratorName::Doxygen => "gen-default doxyfile",
+      FinalDocGeneratorName::Sphinx => "gen-default sphinx-config"
+    };
+
     return Err(format!(
-      "Project [{}] set documentation generator to {}, but is missing its '{}'. Please create '{}'.",
+      "Project [{}] set documentation generator to {}, but is missing its '{}'. Please create '{}'.\n --> The command `{} {}` can be used to do this automatically.",
       self.get_name_for_error_messages(),
       doc_generator.to_str().yellow(),
       format!("{}/{}", self.docs_dir_relative_to_project_root, needed_file_name).yellow(),
       format!("{}/{}", self.docs_dir_relative_to_cwd, needed_file_name).yellow(),
+      "gcmake-rust".bright_magenta(),
+      example_command.bright_magenta()
     ));
   }
 
