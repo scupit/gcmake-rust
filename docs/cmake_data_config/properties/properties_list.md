@@ -493,14 +493,16 @@ Specify miscellaneous project-wide configuration options.
 
 | Property | Type | Default | Description |
 | -------- | ---- | ------- | ----------- |
-| `ipo_enabled_by_default` | boolean | `false` | Whether to enable interprocedural optimization for the entire build (dependencies and all) by default. When `true`, [CMAKE_INTERPROCEDURAL_OPTIMIZATION](https://cmake.org/cmake/help/latest/variable/CMAKE_INTERPROCEDURAL_OPTIMIZATION.html) will default to *ON*. |
+| `ipo_enabled_by_default_for` | List of build configuration names | `[]` | The list of build configurations which should have interprocedural optimization turned on by default. When a configuration is listed, the corresponding[CMAKE_INTERPROCEDURAL_OPTIMIZATION_<CONFIG_NAME>](https://cmake.org/cmake/help/latest/variable/CMAKE_INTERPROCEDURAL_OPTIMIZATION.html) variable will default to *ON*. |
 | `are_language_extensions_enabled` | boolean | `false` | Allows or disallows the use of C and C++ compiler language extensions. When `true`, [CXX_EXTENSIONS](https://cmake.org/cmake/help/latest/prop_tgt/CXX_EXTENSIONS.html) and [C_EXTENSIONS](https://cmake.org/cmake/help/latest/prop_tgt/C_EXTENSIONS.html) will be set to *ON* for each item built by your project. |
 | `default_compiled_lib_type` | `Static` \| `Shared` | `Shared` | The default type for any `CompiledLib` output created in the whole project tree, including dependencies. This value internally dictates the default value of *BUILD_STATIC_LIBS* and [BUILD_SHARED_LIBS](https://cmake.org/cmake/help/latest/variable/BUILD_SHARED_LIBS.html) variables. |
 
 ``` yaml
 # Example which overrides all the default values.
 global_properties:
-  ipo_enabled_by_default: true
+  ipo_enabled_by_default_for:
+    - Release
+    - RelWithDebInfo
   are_language_extensions_enabled: true
   default_compiled_lib_type: Static
 ```

@@ -26,7 +26,7 @@ fn parse_project_info(
   )
     .map_err(|failure_reason| failure_reason.map_message(|err_message|{
       format!(
-        "{} loading project using path '{}':\n\n{}",
+        "{} loading project at '{}':\n\n{}",
         "Error".red(),
         absolute_path(project_root_dir).unwrap().to_str().unwrap(),
         err_message

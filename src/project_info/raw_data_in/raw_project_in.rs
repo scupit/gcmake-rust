@@ -85,7 +85,7 @@ pub enum DefaultCompiledLibType {
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(deny_unknown_fields)]
 pub struct RawGlobalPropertyConfig {
-  pub ipo_enabled_by_default: Option<bool>,
+  pub ipo_enabled_by_default_for: Option<BTreeSet<BuildType>>,
   pub default_compiled_lib_type: Option<DefaultCompiledLibType>,
   pub are_language_extensions_enabled: Option<bool>
   // TODO: Add option for setting default Emscripten mode.
@@ -176,7 +176,7 @@ pub struct SingleLanguageConfig {
   pub standard: i8
 }
 
-#[derive(Serialize, Deserialize, Debug, Eq, PartialEq, Hash, Clone, PartialOrd, Ord, Sequence)]
+#[derive(Serialize, Deserialize, Debug, Eq, PartialEq, Hash, Clone, Copy, PartialOrd, Ord, Sequence)]
 #[serde(deny_unknown_fields)]
 pub enum BuildType {
   Debug,

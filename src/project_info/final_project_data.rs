@@ -1173,6 +1173,22 @@ impl FinalProjectData {
   }
 
   fn ensure_build_config_correctness(&self) -> Result<(), String> {
+    if let Some(global_props) = self.global_properties.as_ref() {
+      for build_type in &global_props.ipo_enabled_by_default_for {
+        if !self.get_build_configs().contains_key(build_type) {
+          let build_type_name: &str = build_type.name_str();
+
+          return Err(format!(
+            "Config issue: Global property '{}' tries to enable IPO by default for the '{}' build configuration, but the project doesn't have a '{}' configuration in its build_configs. To fix, either add a '{}' configuration to build_configs in cmake_data.yaml or remove it from the 'ipo_enabled_by_default_for' list.",
+            "ipo_enabled_by_default_for".red(),
+            build_type_name.yellow(),
+            build_type_name.yellow(),
+            build_type_name.yellow()
+          ));
+        }
+      }
+    }
+
     for (build_type, by_compiler_map) in self.get_build_configs() {
       for (config_compiler, _) in by_compiler_map {
         if let Some(specific_compiler) = config_compiler.to_specific() {
@@ -1936,10 +1952,10 @@ impl FinalProjectData {
     !self.global_defines.is_empty()
   }
 
-  pub fn ipo_enabled_by_default(&self) -> bool {
+  pub fn is_ipo_enabled_for(&self, build_type: BuildType) -> bool {
     match &self.global_properties {
       None => false,
-      Some(global_properties) => global_properties.ipo_enabled_by_default
+      Some(global_properties) => global_properties.ipo_enabled_by_default_for.contains(&build_type)
     }
   }
 

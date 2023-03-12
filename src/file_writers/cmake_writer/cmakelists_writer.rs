@@ -733,16 +733,15 @@ impl<'a> CMakeListsWriter<'a> {
     writeln!(&self.cmakelists_file, "endif()")?;
     self.write_newline()?;
 
-    {
-      let ipo_default_status_str: &str = if self.project_data.ipo_enabled_by_default()
-        { "ON" }
-        else { "OFF" };
+    write!(&self.cmakelists_file, "initialize_ipo_defaults(")?;
 
-      writeln!(&self.cmakelists_file,
-        "initialize_ipo_defaults( {} )",
-        ipo_default_status_str
-      )?;
+    for build_type in enum_iterator::all::<BuildType>() {
+      if self.project_data.is_ipo_enabled_for(build_type) {
+        write!(&self.cmakelists_file, " {}", build_type.name_str().to_uppercase())?;
+      }
     }
+
+    writeln!(&self.cmakelists_file, " )")?;
 
     writeln!(&self.cmakelists_file,
       "initialize_pgo_defaults()\ninitialize_install_mode()"

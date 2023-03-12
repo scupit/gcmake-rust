@@ -323,9 +323,9 @@ macro( propagate_all_configs_local_defines )
   endforeach()
 endmacro()
 
-macro( initialize_ipo_defaults
-  ipo_on_by_default
-)
+function( initialize_ipo_defaults )
+  cmake_parse_arguments( PARSE_ARGV 0 "_GCMAKE_IPO_DEFAULT" "${GCMAKE_ALL_VALID_BUILD_CONFIGS_UPPER}" "" "" )
+
   if( NOT IPO_DEFAULTS_INITIALIZED )
     include( CheckIPOSupported )
 
@@ -335,27 +335,39 @@ macro( initialize_ipo_defaults
     )
 
     if( is_ipo_supported )
-      if( USING_MINGW )
-        set( IPO_ENABLED_DEFAULT_VALUE OFF )
-      else()
-        set( IPO_ENABLED_DEFAULT_VALUE ${ipo_on_by_default} )
+      set( _ipo_enabled_for_configs )
+
+      foreach( build_config IN LISTS GCMAKE_ALL_VALID_BUILD_CONFIGS_UPPER )
+        set( _ipo_var_name "GCMAKE_ENABLE_IPO_${build_config}" )
+        set( _ipo_option_message "When set to ON, enables INTERPROCEDURAL_OPTIMIZATION for the whole project tree when in ${build_config} mode (including dependencies built as part of the project)" )
+
+        if( _GCMAKE_IPO_DEFAULT_${build_config} AND NOT USING_MINGW )
+          option( ${_ipo_var_name} "${_ipo_option_message}" ON )
+        else()
+          option( ${_ipo_var_name} "${_ipo_option_message}" OFF )
+        endif()
+
+        set( CMAKE_INTERPROCEDURAL_OPTIMIZATION_${build_config} ${${_ipo_var_name}})
+        set( CMAKE_INTERPROCEDURAL_OPTIMIZATION_${build_config} ${${_ipo_var_name}} PARENT_SCOPE )
+
+        if( CMAKE_INTERPROCEDURAL_OPTIMIZATION_${build_config} )
+          list( APPEND _ipo_enabled_for_configs "${build_config}" )
+        endif()
+      endforeach()
+
+      list( LENGTH _ipo_enabled_for_configs ipo_is_enabled_for_some_configs )
+
+      if ( ipo_is_enabled_for_some_configs )
+        string( REPLACE ";" ", " _enabled_str_list "${_ipo_enabled_for_configs}" )
+        message( "Interprocedural Optimization enabled by default for these configurations: ${_enabled_str_list}" )
       endif()
-
-      option(
-        GCMAKE_ENABLE_IPO
-        "When set to ON, enables INTERPROCEDURAL_OPTIMIZATION for the whole project tree (including dependencies built as part of the project)"
-        ${IPO_ENABLED_DEFAULT_VALUE}
-      )
-
-      set( CMAKE_INTERPROCEDURAL_OPTIMIZATION ${GCMAKE_ENABLE_IPO} )
-      message( STATUS "Interprocedural Optimization: ${CMAKE_INTERPROCEDURAL_OPTIMIZATION}" )
     else()
       message( WARNING "Skipping enabling IPO because is isn't supported. Additional info: ${additional_info}" )
     endif()
 
-    set( IPO_DEFAULTS_INITIALIZED TRUE )
+    set( IPO_DEFAULTS_INITIALIZED TRUE PARENT_SCOPE )
   endif()
-endmacro()
+endfunction()
 
 function( initialize_lib_type_options
   DEFAULT_COMPILED_LIB_TYPE
