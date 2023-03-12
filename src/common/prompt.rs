@@ -1,6 +1,8 @@
-use std::{io::{self, stdin, Write}};
+use std::{io::{self, stdin, Write}, fmt::Display};
 
-pub fn prompt_until_custom<F, T>(prompt: &str, transforming_predicate: F) -> io::Result<T>
+use colored::Colorize;
+
+pub fn prompt_until_custom<F, T>(prompt: impl Display, transforming_predicate: F) -> io::Result<T>
   where F: Fn(&str) -> Option<T>
 {
   let mut buffer = String::new();
@@ -19,7 +21,7 @@ pub fn prompt_until_custom<F, T>(prompt: &str, transforming_predicate: F) -> io:
 }
 
 pub fn prompt_until_custom_or_default<F, T: Clone>(
-  prompt: &str,
+  prompt: impl Display,
   transforming_predicate: F,
   default_value: T,
   default_value_string: impl AsRef<str>
@@ -39,11 +41,11 @@ pub fn prompt_until_custom_or_default<F, T: Clone>(
   )
 }
 
-pub fn prompt_until_not_empty(prompt: &str) -> io::Result<String> {
+pub fn prompt_until_not_empty(prompt: impl Display) -> io::Result<String> {
   prompt_until_satisfies(prompt, |value| !value.is_empty())
 }
 
-pub fn prompt_until_satisfies<F>(prompt: &str, predicate: F) -> io::Result<String>
+pub fn prompt_until_satisfies<F>(prompt: impl Display, predicate: F) -> io::Result<String>
   where F: Fn(&str) -> bool
 {
   prompt_until_custom(
@@ -60,7 +62,7 @@ pub fn prompt_until_satisfies<F>(prompt: &str, predicate: F) -> io::Result<Strin
 }
 
 pub fn prompt_until_satisfies_or_default<F>(
-  prompt: &str,
+  prompt: impl Display,
   predicate: F,
   default_value: impl AsRef<str>
 ) -> io::Result<String>
@@ -89,7 +91,7 @@ fn resolve_boolean_from_str(value_str: &str) -> Option<bool> {
   }
 }
 
-pub fn prompt_until_boolean_or_default(prompt: &str, default_value: bool) -> io::Result<bool> {
+pub fn prompt_until_boolean_or_default(prompt: impl Display, default_value: bool) -> io::Result<bool> {
   let value_str: &str = if default_value
     { "y" }
     else { "n" };
@@ -102,9 +104,14 @@ pub fn prompt_until_boolean_or_default(prompt: &str, default_value: bool) -> io:
   )
 }
 
-pub fn prompt_until_boolean(prompt: &str) -> io::Result<bool> {
+pub fn prompt_until_boolean(prompt: impl Display) -> io::Result<bool> {
   prompt_until_custom(
-    &format!("{} (y or n)", prompt),
+    &format!(
+      "{} ({} or {})",
+      prompt,
+      "y".cyan(),
+      "n".cyan()
+    ),
     resolve_boolean_from_str
   )
 }
@@ -132,14 +139,14 @@ impl<T: Clone> ChoiceResolver<T> for ChoiceValue<T> {
 type PromptChoice<'a, T> = (&'a str, &'a dyn ChoiceResolver<T>);
 
 pub fn prompt_with_choices<T>(
-  prompt_title: &str,
+  prompt_title: impl Display,
   choices: &[PromptChoice<T>]
 ) -> io::Result<T> {
   let choice_list_string: String = choices
     .iter()
     .enumerate()
     .map(|(index, (choice_name, _))|
-      format!("{}: {}\n", index + 1, choice_name)
+      format!("{}: {}\n", (index + 1).to_string().cyan(), choice_name)
     )
     .collect();
     

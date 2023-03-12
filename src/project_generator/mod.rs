@@ -71,7 +71,7 @@ pub fn create_project_at(
       .replace("-", "_");
 
     let include_prefix: String = prompt_until_satisfies_or_default(
-      "Include prefix",
+      "Include prefix".bright_green(),
       is_valid_base_include_prefix,
       &default_prefix
     )?;

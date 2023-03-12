@@ -355,7 +355,7 @@ pub fn copy_default_file(
   if file_path.is_file() {
     if project_root_file_path.exists() {
       let prompt: String = format!(
-        "A {} already exists in the root project. Overwrite it? [y or n]: ",
+        "A {} already exists in the root project. Overwrite it?",
         file_name_str
       );
 

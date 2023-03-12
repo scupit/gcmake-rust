@@ -122,7 +122,14 @@ fn create_single_file_set(
         );
 
       let local_collision_mode: FileCollisionHandleOption = prompt_until_custom(
-        &format!("\nFile '{}' already exists.\n[s]kip it, [o]verwrite it, [c]ancel rest, or replace [a]ll?", file_path_relative_to_working_dir.yellow()),
+        &format!(
+          "\nFile '{}' already exists.\n[{}]kip it, [{}]verwrite it, [{}]ancel rest, or replace [{}]ll?",
+          file_path_relative_to_working_dir.yellow(),
+          "s".cyan(),
+          "o".cyan(),
+          "c".cyan(),
+          "a".cyan()
+        ),
         |value| match value {
           "s" => Some(FileCollisionHandleOption::SkipOne),
           "o" => Some(FileCollisionHandleOption::OverwriteOne),

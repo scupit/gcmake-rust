@@ -9,7 +9,6 @@ There are a whole bunch of things which need doing. This is the place to list th
 
 ## Priorities
 
-- [ ] Add color to project generator prompts.
 - [ ] `ipo_enabled_by_default` should be able to take a list of build configurations like `[Release, MinSizeRel]`. It's kind of a pain to have IPO enabled in Debug mode by default.
 - [ ] Warn when files exist inside *include/* or *src/*, but aren't inside the dir with the include prefix
   (like *include/MY_INCLUDE_PREXIX* or *src/MY_INCLUDE_PREFIX*).
