@@ -2,6 +2,8 @@
 
 `gcmake-rust` is a C/C++ project configuration tool which acts as an abstraction layer over CMake.
 
+![Example GIF](assets/gcmake-example.gif)
+
 ## Documentation
 
 Documentation is found in [docs/Docs_Home.md](docs/Docs_Home.md).
