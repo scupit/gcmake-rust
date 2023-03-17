@@ -1830,6 +1830,13 @@ impl<'a> CMakeListsWriter<'a> {
   }
 
   fn write_root_vars(&self) -> io::Result<()> {
+    // Clears CMake's default compiler flags (like CMAKE_CXX_FLAGS_MINSIZEREL) for all items
+    // built by the project, subproject, and tests (not including dependencies). This is
+    // set here so that we don't interfere with the defualt flags used to build dependencies.
+    writeln!(&self.cmakelists_file,
+      "_gcmake_clear_scope_default_compiler_flags()"
+    )?;
+
     // Variables shared between all targets in the current project
     self.set_basic_var("", "PROJECT_INCLUDE_PREFIX", &format!("\"{}\"", self.project_data.get_full_include_prefix()))?;
     self.set_basic_var("", "PROJECT_BASE_NAME", self.project_data.get_project_base_name())?;

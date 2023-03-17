@@ -1,3 +1,15 @@
+# Empties the default per-configuration flags list created by CMake for the
+# duration of the scope. We don't need the default flags CMake sets because we
+# configure them in cmake_data.yaml instead.
+# This should only be called after a project's dependencies have been loaded so we don't
+# interfere with existing behavior in non-GCMake projects.
+macro( _gcmake_clear_scope_default_compiler_flags )
+  foreach( build_type IN LISTS GCMAKE_ALL_VALID_BUILD_CONFIGS_UPPER )
+    set( CMAKE_CXX_FLAGS_${build_type} "" )
+    set( CMAKE_C_FLAGS_${build_type} "" )
+  endforeach()
+endmacro()
+
 function( exe_add_lib_relative_install_rpath
   exe_target
 )

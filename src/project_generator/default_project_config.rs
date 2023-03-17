@@ -85,7 +85,7 @@ fn build_configs_debug_default(include_emscripten_support: bool) -> BuildConfigB
       defines: None
     }),
     (BuildConfigCompilerSpecifier::MSVC, RawBuildConfig {
-      compiler_flags: Some(create_string_set([ "/Od", "/W4", "/DEBUG" ])),
+      compiler_flags: Some(create_string_set([ "/Od", "/W4", "/DEBUG", "/RTC1" ])),
       link_time_flags: None,
       linker_flags: None,
       defines: None
