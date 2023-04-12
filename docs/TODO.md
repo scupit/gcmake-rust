@@ -30,6 +30,14 @@ Support for:
 - Intel C/C++ compiler?
 - NVidia CUDA compiler?
 
+- [ ] Allow `(( lang:c and lang:cpp ))` constraints for flags and defines courtesy of CMake's
+  [$<COMPILE_LANGAUGE>](https://cmake.org/cmake/help/latest/manual/cmake-generator-expressions.7.html#genex:COMPILE_LANGUAGE)
+  generator expression. That might not be possible with Visual Studio though (see notes on the linked page).
+- [ ] Research and add some more useful default flags (for example, `-Wold-style-cast` for GCC/Clang).
+- [ ] Make use of the [$<COMPILE_FEATURES>](https://cmake.org/cmake/help/latest/manual/cmake-generator-expressions.7.html#genex:COMPILE_FEATURES) generator expression ([features list here](https://cmake.org/cmake/help/latest/prop_gbl/CMAKE_CXX_KNOWN_FEATURES.html#prop_gbl:CMAKE_CXX_KNOWN_FEATURES)).
+- [ ] Implement compiler feature checks for individual targets. These should be treated the same as flags
+  internally, just applied using `target_compile_features(...)`. Also add constraint expressions like this:
+  `(( cpp_feature:variadic_templates and c_feature:restrict ))` for C, C++, and CUDA. `(( cpp_standard:23 ))`
 - [ ] Now that minimal installs are implemented, add ability to specify exactly which executables are installed.
 - [ ] Maybe support cppfront *.h2* headers, once they become a little more "stable".
 

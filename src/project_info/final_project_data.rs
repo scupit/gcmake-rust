@@ -755,6 +755,7 @@ impl FinalProjectData {
       let actual_output_name: &str;
       let system_spec: Option<SystemSpecifierWrapper>;
 
+      // TODO: Disallow usage of language feature constraints for output items themselves. 
       match parse_leading_system_spec(output_name, valid_feature_list.as_ref()) {
         Ok(Some(ParseSuccess { value: system_spec_wrapper, rest: real_output_name })) => {
           actual_output_name = real_output_name;

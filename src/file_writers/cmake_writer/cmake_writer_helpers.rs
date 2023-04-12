@@ -1,4 +1,4 @@
-use crate::project_info::{SystemSpecifierWrapper, SystemSpecExpressionTree, SingleSystemSpec};
+use crate::project_info::{SystemSpecifierWrapper, SystemSpecExpressionTree, SingleSystemSpec, SystemSpecFeatureType, feature_map_for_lang};
 
 pub fn system_contstraint_conditional_expression(system_spec: &SystemSpecifierWrapper) -> String {
   match system_spec {
@@ -25,6 +25,36 @@ pub fn system_constraint_generator_expression(
   }
 }
 
+pub fn project_feature_var(feature_name: &str) -> String {
+  return format!(
+    "${{LOCAL_TOPLEVEL_PROJECT_NAME}}_FEATURE_{}",
+    feature_name
+  );
+}
+
+pub fn language_feature_name(
+  feature_identifier: &str,
+  feature_type: SystemSpecFeatureType
+) -> String {
+  assert!(
+    feature_type != SystemSpecFeatureType::ProjectDefined,
+    "Retrieving the 'language feature name' for a feature defined by the project doesn't make sense."
+  );
+
+  let feature_prefix: &str = match feature_type {
+    SystemSpecFeatureType::ProjectDefined => unreachable!(),
+    SystemSpecFeatureType::CLang => "c",
+    SystemSpecFeatureType::CppLang => "cxx",
+    SystemSpecFeatureType::CudaLang => "cuda"
+  };
+  
+  return format!(
+    "{}_{}",
+    feature_prefix,
+    feature_map_for_lang(feature_type).unwrap().get(feature_identifier).unwrap()
+  );
+}
+
 enum CurrentSystemSpecContext {
   None,
   And,
@@ -43,10 +73,14 @@ fn make_inner_system_spec_generator_expression(
         make_inner_system_spec_generator_expression(expr, CurrentSystemSpecContext::None)
       )
     },
-    SystemSpecExpressionTree::Feature { name: feature_name } => {
-      format!(
-        "$<BOOL:${{${{LOCAL_TOPLEVEL_PROJECT_NAME}}_FEATURE_{}}}>",
-        feature_name
+    SystemSpecExpressionTree::Feature { name: feature_name, feature_type } => match feature_type {
+      SystemSpecFeatureType::ProjectDefined => format!(
+        "$<BOOL:${{{}}}>",
+        project_feature_var(feature_name)
+      ),
+      _ => format!(
+        "$<COMPILE_FEATURES:{}>",
+        language_feature_name(feature_name, *feature_type)
       )
     },
     SystemSpecExpressionTree::Value(value) => {
@@ -121,11 +155,14 @@ fn make_inner_system_spec_conditional_expr(spec_tree: &SystemSpecExpressionTree)
         make_inner_system_spec_conditional_expr(expr)
       )
     },
-    SystemSpecExpressionTree::Feature { name: feature_name } => {
-      format!(
-        "${{LOCAL_TOPLEVEL_PROJECT_NAME}}_FEATURE_{}",
-        feature_name
-      )
+    SystemSpecExpressionTree::Feature { name: feature_name, feature_type } => {
+      assert!(
+        *feature_type == SystemSpecFeatureType::ProjectDefined,
+        "Only project-defined feature checks can be used in CMake 'if' statements. This is because language feature checks are tied to targets in CMake.\nThis is the check that failed: {}",
+        spec_tree.to_string()
+      );
+
+      project_feature_var(feature_name)
     },
     SystemSpecExpressionTree::Value(value) => {
       let var_name: &str = match value {
