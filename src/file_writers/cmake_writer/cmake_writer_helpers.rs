@@ -41,18 +41,7 @@ pub fn language_feature_name(
     "Retrieving the 'language feature name' for a feature defined by the project doesn't make sense."
   );
 
-  let feature_prefix: &str = match feature_type {
-    SystemSpecFeatureType::ProjectDefined => unreachable!(),
-    SystemSpecFeatureType::CLang => "c",
-    SystemSpecFeatureType::CppLang => "cxx",
-    SystemSpecFeatureType::CudaLang => "cuda"
-  };
-  
-  return format!(
-    "{}_{}",
-    feature_prefix,
-    feature_map_for_lang(feature_type).unwrap().get(feature_identifier).unwrap()
-  );
+  return feature_map_for_lang(feature_type).unwrap().get(feature_identifier).unwrap().to_string();
 }
 
 enum CurrentSystemSpecContext {

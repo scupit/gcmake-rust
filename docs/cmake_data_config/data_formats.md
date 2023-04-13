@@ -68,6 +68,168 @@ output:
       - (( feature:fancy-printing )) fmt::fmt
 ```
 
+### Constraints With Language Features
+
+Constraint expressions can also be used to check whether certain C, C++, or CUDA
+[language features](https://cmake.org/cmake/help/latest/prop_gbl/CMAKE_CXX_KNOWN_FEATURES.html) are
+available or in use. The
+[list of all available language feature checks](#list-of-supported-language-feature-checks) is available in
+the section below.
+
+- C: `(( c:11 ))`
+- C++: `(( cpp:11 ))`
+- CUDA `(( cuda:11 ))`
+
+``` yaml
+languages:
+  cpp:
+    # The checks below will fail when using C++98 standard, as they were introduced in C++11.
+    # standard: 98
+    standard: 11
+
+# ... rest of required config
+global_defines:
+  - (( cpp:constexpr )) IS_CONSTEXPR_SUPPORTED=1
+  - (( not cpp:constexpr )) IS_CONSTEXPR_SUPPORTED=0
+  - (( cpp:lambdas )) HAS_LAMBDA_SUPPORT
+
+output:
+  my-exe:
+    output_type: Executable
+    entry_file: main.cpp
+```
+
+``` c++
+#include <cstdlib>
+#include <iostream>
+
+int main() {
+  if (IS_CONSTEXPR_SUPPORTED) {
+    std::cout << "Has support for constexpr!\n";
+  }
+  else {
+    std::cout << "Does NOT have support for constexpr :(\n";
+  }
+
+  #ifdef HAS_LAMBDA_SUPPORT
+    [&]() {
+      std::cout << "Has lambda support! (printed inside a lambda)\n";
+    }();
+  #endif
+
+  return EXIT_SUCCESS;
+}
+
+/*
+  Output when standard is C++11:
+  ----------------------------------------
+  Has support for constexpr!
+  Has lambda support! (printed inside a lambda)
+*/
+
+/*
+  Output when standard is C++98:
+  ----------------------------------------
+  Does NOT have support for constexpr :(
+*/
+```
+
+#### List of Supported Language Feature Checks
+
+[Link to all CMake supported C language checks](https://cmake.org/cmake/help/latest/prop_gbl/CMAKE_C_KNOWN_FEATURES.html)
+
+| C Feature | Matching CMake Feature Name |
+| ----------- | --------------------------- |
+|`c:90` | "c_std_90" |
+|`c:99` | "c_std_99" |
+|`c:11` | "c_std_11" |
+|`c:17` | "c_std_17" |
+|`c:23` | "c_std_23" |
+|`c:function_prototypes` | "c_function_prototypes" |
+|`c:restrict` | "c_restrict" |
+|`c:static_assert` | "c_static_assert" |
+|`c:variadic_macros` | "c_variadic_macros" |
+
+[Link to all CMake supported C++ language checks](https://cmake.org/cmake/help/latest/prop_gbl/CMAKE_CXX_KNOWN_FEATURES.html)
+
+| C++ Feature | Matching CMake Feature Name |
+| ----------- | --------------------------- |
+| `cpp:98`  | "cxx_std_98"  |
+| `cpp:11`  | "cxx_std_11" |
+| `cpp:14` | "cxx_std_14" |
+|`cpp:17` | "cxx_std_17" |
+|`cpp:20` | "cxx_std_20" |
+|`cpp:23` | "cxx_std_23" |
+|`cpp:26` | "cxx_std_26" |
+|`cpp:template_templates` | "cxx_template_template_parameters" |
+|`cpp:alignas` | "cxx_alignas" |
+|`cpp:alignof` | "cxx_alignof" |
+|`cpp:attributes` | "cxx_attributes" |
+|`cpp:auto` | "cxx_auto_type" |
+|`cpp:constexpr` | "cxx_constexpr" |
+|`cpp:decltype_incomplete_return_types` | "cxx_decltype_incomplete_return_types" |
+|`cpp:decltype` | "cxx_decltype" |
+|`cpp:default_function_template_args` | "cxx_default_function_template_args" |
+|`cpp:defaulted_functions` | "cxx_defaulted_functions" |
+|`cpp:defaulted_move_initializers` | "cxx_defaulted_move_initializers" |
+|`cpp:delegating_constructors` | "cxx_delegating_constructors" |
+|`cpp:deleted_functions` | "cxx_deleted_functions" |
+|`cpp:enum_forward_declare` | "cxx_enum_forward_declarations" |
+|`cpp:explicit_conversions` | "cxx_explicit_conversions" |
+|`cpp:extended_friend_declarations` | "cxx_extended_friend_declarations" |
+|`cpp:extern_templates` | "cxx_extern_templates" |
+|`cpp:final` | "cxx_final" |
+|`cpp:func_identifier` | "cxx_func_identifier" |
+|`cpp:generalized_initializers` | "cxx_generalized_initializers" |
+|`cpp:inheriting_constructors` | "cxx_inheriting_constructors" |
+|`cpp:inline_namespaces` | "cxx_inline_namespaces" |
+|`cpp:lambdas` | "cxx_lambdas" |
+|`cpp:local_type_template_args` | "cxx_local_type_template_args" |
+|`cpp:long_long` | "cxx_long_long_type" |
+|`cpp:noexcept` | "cxx_noexcept" |
+|`cpp:nonstatic_member_init` | "cxx_nonstatic_member_init" |
+|`cpp:nullptr` | "cxx_nullptr" |
+|`cpp:override` | "cxx_override" |
+|`cpp:range_for` | "cxx_range_for" |
+|`cpp:raw_string_literals` | "cxx_raw_string_literals" |
+|`cpp:ref_qualified_functions` | "cxx_reference_qualified_functions" |
+|`cpp:right_angle_brackets` | "cxx_right_angle_brackets" |
+|`cpp:rvalue_refs` | "cxx_rvalue_references" |
+|`cpp:sizeof_member` | "cxx_sizeof_member" |
+|`cpp:static_assert` | "cxx_static_assert" |
+|`cpp:strong_enums` | "cxx_strong_enums" |
+|`cpp:thread_local` | "cxx_thread_local" |
+|`cpp:trailing_return` | "cxx_trailing_return_types" |
+|`cpp:unicode_literals` | "cxx_unicode_literals" |
+|`cpp:uniform_init` | "cxx_uniform_initialization" |
+|`cpp:unrestricted_unions` | "cxx_unrestricted_unions" |
+|`cpp:user_literals` | "cxx_user_literals" |
+|`cpp:variadic_macros` | "cxx_variadic_macros" |
+|`cpp:variadic_templates` | "cxx_variadic_templates" |
+|`cpp:aggregate_default_initializers` | "cxx_aggregate_default_initializers" |
+|`cpp:attribute_deprecated` | "cxx_attribute_deprecated" |
+|`cpp:binary_literals` | "cxx_binary_literals" |
+|`cpp:contextual_conversions` | "cxx_contextual_conversions" |
+|`cpp:decltype_auto` | "cxx_decltype_auto" |
+|`cpp:digit_separators` | "cxx_digit_separators" |
+|`cpp:generic_lambdas` | "cxx_generic_lambdas" |
+|`cpp:lambda_init_captures` | "cxx_lambda_init_captures" |
+|`cpp:relaxed_constexpr` | "cxx_relaxed_constexpr" |
+|`cpp:return_type_deduction` | "cxx_return_type_deduction" |
+|`cpp:variable_templates` | "cxx_variable_templates" |
+
+[Link to all CMake supported CUDA language checks](https://cmake.org/cmake/help/latest/prop_gbl/CMAKE_CUDA_KNOWN_FEATURES.html)
+
+| CUDA Feature | Matching CMake Feature Name |
+| ----------- | --------------------------- |
+|`cuda:03` | "cuda_std_03" |
+|`cuda:11` | "cuda_std_11" |
+|`cuda:14` | "cuda_std_14" |
+|`cuda:17` | "cuda_std_17" |
+|`cuda:20` | "cuda_std_20" |
+|`cuda:23` | "cuda_std_23" |
+|`cuda:26` | "cuda_std_26" |
+
 ### Constraint examples
 
 Constraint expressions are written in double parentheses `((...))`. Here are some examples:

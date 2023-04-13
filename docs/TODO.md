@@ -30,6 +30,7 @@ Support for:
 - Intel C/C++ compiler?
 - NVidia CUDA compiler?
 
+- [ ] Separate `standard` into `<impl | header>_min_standard`, `<impl | header>_exact_standard` for reasons described in [this CMake post](https://discourse.cmake.org/t/cmake-does-not-set-the-compiler-option-std-to-gnu17-or-c-17-although-i-set-the-target-compile-features-to-cxx-std-17/3299/8)
 - [ ] Allow `(( lang:c and lang:cpp ))` constraints for flags and defines courtesy of CMake's
   [$<COMPILE_LANGAUGE>](https://cmake.org/cmake/help/latest/manual/cmake-generator-expressions.7.html#genex:COMPILE_LANGUAGE)
   generator expression. That might not be possible with Visual Studio though (see notes on the linked page).
