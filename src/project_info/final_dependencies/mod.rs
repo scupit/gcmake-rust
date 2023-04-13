@@ -15,7 +15,7 @@ pub use final_predefined_cmake_module_dep::*;
 pub use final_target_map_common::{FinalRequirementSpecifier, FinalTargetConfig, FinalExternalRequirementSpecifier};
 pub use predep_module_common::{PredefinedDepFunctionality, FinalDebianPackagesConfig};
 
-use crate::project_info::{platform_spec_parser::parse_leading_system_spec, parsers::general_parser::ParseSuccess};
+use crate::project_info::{platform_spec_parser::parse_leading_constraint_spec, parsers::general_parser::ParseSuccess, GivenConstraintSpecParseContext};
 
 use self::{final_target_map_common::FinalTargetConfigMap};
 
@@ -156,7 +156,12 @@ impl FinalPredefinedDependencyConfig {
                   let mut has_matching_target_name: bool = false;
 
                   for (unparsed_target_name, _) in raw_predep_config.dep_configs.get_common()?.raw_target_map_in() {
-                    let raw_target_name: &str = match parse_leading_system_spec(unparsed_target_name, valid_feature_list)? {
+                    let parsing_context = GivenConstraintSpecParseContext {
+                      is_before_output_name: false,
+                      maybe_valid_feature_list: valid_feature_list
+                    };
+
+                    let raw_target_name: &str = match parse_leading_constraint_spec(unparsed_target_name, parsing_context)? {
                       None => unparsed_target_name,
                       Some(ParseSuccess { value: _, rest }) => rest
                     };

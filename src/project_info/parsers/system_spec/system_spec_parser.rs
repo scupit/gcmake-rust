@@ -11,6 +11,8 @@ const C_FEATURE_BEGIN: &'static str = "c";
 const CPP_FEATURE_BEGIN: &'static str = "cpp";
 const CUDA_FEATURE_BEGIN: &'static str = "cuda";
 
+const LANGUAGE_FEATURE_BEGIN_TERMS: [&'static str; 3] = [C_FEATURE_BEGIN, CPP_FEATURE_BEGIN, CUDA_FEATURE_BEGIN];
+
 lazy_static! {
   // https://cmake.org/cmake/help/latest/prop_gbl/CMAKE_CXX_KNOWN_FEATURES.html#prop_gbl:CMAKE_CXX_KNOWN_FEATURES
   static ref VALID_CPP_FEATURES: HashMap<&'static str, &'static str> = HashMap::from([
@@ -120,7 +122,13 @@ lazy_static! {
 
 pub type SystemSpecParseResult<'a> = ParseResult<'a, SystemSpecExpressionTree, SpecParseError>;
 struct SystemSpecParseOptions<'a> {
-  valid_feature_names: Option<HashSet<&'a str>>
+  valid_feature_names: Option<HashSet<&'a str>>,
+  is_before_output_name: bool
+}
+
+pub struct GivenConstraintSpecParseContext<'a> {
+  pub maybe_valid_feature_list: Option<&'a Vec<&'a str>>,
+  pub is_before_output_name: bool
 }
 
 #[derive(PartialEq, Eq, Clone)]
@@ -232,12 +240,13 @@ pub enum SystemSpecExpressionTree {
 impl SystemSpecExpressionTree {
   pub fn parse_from<'a, 'b>(
     s: &'a str,
-    maybe_feature_name_list: Option<impl Iterator<Item = &'b str>>
+    context: GivenConstraintSpecParseContext
   ) -> SystemSpecParseResult<'a> {
 
     let options: SystemSpecParseOptions = SystemSpecParseOptions {
-      valid_feature_names: maybe_feature_name_list
-        .map(|names_iter| names_iter.collect())
+      is_before_output_name: context.is_before_output_name,
+      valid_feature_names: context.maybe_valid_feature_list
+        .map(|names_vec| names_vec.iter().copied().collect()),
     };
 
     return parse_full_spec(s, &options);
@@ -313,6 +322,9 @@ pub enum SpecParseError {
     received: String,
     valid_names: BTreeSet<String>
   },
+  LanguageFeatureInOutputName {
+    parsed_from: String
+  },
   _NotOpened {
     what_parsing: String,
     parsed_from: String,
@@ -322,12 +334,9 @@ pub enum SpecParseError {
 
 pub fn parse_spec_with_diagnostic<'a>(
   expr_str: &'a str,
-  maybe_feature_name_list: Option<&Vec<&str>>
+  context: GivenConstraintSpecParseContext
 ) -> Result<Option<ParseSuccess<'a, SystemSpecExpressionTree>>, String> {
-  let feature_list_iter: Option<_> = maybe_feature_name_list
-    .map(|feature_list| feature_list.iter().copied());
-
-  return match SystemSpecExpressionTree::parse_from(expr_str, feature_list_iter) {
+  return match SystemSpecExpressionTree::parse_from(expr_str, context) {
     Ok(None) => Ok(None),
     Ok(Some(success_data)) => Ok(Some(success_data)),
     Err(parsing_err) => match parsing_err {
@@ -375,6 +384,12 @@ pub fn parse_spec_with_diagnostic<'a>(
             point_to_position(expr_str, &parsed_from)
           ))
         },
+        SpecParseError::LanguageFeatureInOutputName { parsed_from } => {
+          Err(format!(
+            "Language features cannot be used to constrain output items. Note that this constraint expression may be formatted correctly, its usage is just invalid in this context.\n{}",
+            point_to_position(expr_str, &parsed_from)
+          ))
+        }
         SpecParseError::_NotOpened { what_parsing, parsed_from, needed } => {
           unreachable!(
             "Failed to parse {} because it was never properly opened with '{}'. NOTE that this branch only exists for parser debugging purposes, and should be unreachable when not debugging the parser.\n{}.",
@@ -570,6 +585,12 @@ fn parse_compound<'a>(
           parsed_from: after_left.to_string()
         }),
         Some(ParseSuccess { value: _, rest: after_separator }) => {
+          if options.is_before_output_name && LANGUAGE_FEATURE_BEGIN_TERMS.contains(&left_token) {
+            return Err(ParseError::Custom(SpecParseError::LanguageFeatureInOutputName {
+              parsed_from: s.to_string()
+            }))
+          }
+
           parse_feature_right_side(
             after_separator,
             options,
@@ -1054,9 +1075,12 @@ fn test_parser() {
   ];
 
   for ParserTestGroup { raw_expr, expected_tree } in valid_expressions.iter().chain(invalid_expressions.iter()) {
-    // The iterator type given to 'None' here is just a placeholder, but is necessary because the
-    // function must be instantiated with a concrete iterator type.
-    match (expected_tree, parse_spec_with_diagnostic(raw_expr, None)) {
+    let context = GivenConstraintSpecParseContext {
+      is_before_output_name: false,
+      maybe_valid_feature_list: None
+    };
+
+    match (expected_tree, parse_spec_with_diagnostic(raw_expr, context)) {
       (Some(expected), Ok(Some(ParseSuccess { value, ..}))) => {
         assert!(
           expected.exactly_matches_structure(&value),

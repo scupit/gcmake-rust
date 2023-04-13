@@ -21,7 +21,7 @@
 
 use crate::project_info::parsers::general_parser::{ParseSuccess};
 
-use super::system_spec_parser::{SystemSpecExpressionTree, parse_spec_with_diagnostic};
+use super::system_spec_parser::{SystemSpecExpressionTree, parse_spec_with_diagnostic, GivenConstraintSpecParseContext};
 
 
 #[derive(Clone)]
@@ -90,12 +90,11 @@ impl Default for SystemSpecifierWrapper {
   }
 }
 
-
-pub fn parse_leading_system_spec<'a>(
+pub fn parse_leading_constraint_spec<'a>(
   some_string: &'a str,
-  maybe_valid_feature_list: Option<&Vec<&str>>
+  context: GivenConstraintSpecParseContext
 ) -> Result<Option<ParseSuccess<'a, SystemSpecifierWrapper>>, String> {
-  match parse_spec_with_diagnostic(some_string, maybe_valid_feature_list) {
+  match parse_spec_with_diagnostic(some_string, context) {
     Err(err_diagnostic_msg) => Err(err_diagnostic_msg),
     // Ok(None) => Ok(ParseSuccess {
     //   value: SystemSpecCombinedInfo::default_include_all(),

@@ -1,7 +1,9 @@
 // TODO: Write tests. This is an easy module to unit test.
 use regex::Regex;
 
-use super::{system_spec::platform_spec_parser::{SystemSpecifierWrapper, parse_leading_system_spec}, general_parser::ParseSuccess};
+use crate::project_info::GivenConstraintSpecParseContext;
+
+use super::{system_spec::platform_spec_parser::{SystemSpecifierWrapper, parse_leading_constraint_spec}, general_parser::ParseSuccess};
 
 use std::{hash::{Hash, Hasher}, collections::VecDeque};
 
@@ -122,14 +124,21 @@ impl LinkSpecifier {
     let maybe_system_spec: Option<SystemSpecifierWrapper>;
     let specifiers_only_str: &str;
 
-    match parse_leading_system_spec(&full_specifier_string, maybe_valid_feature_list)? {
-      Some(ParseSuccess { value, rest }) => {
-        maybe_system_spec = Some(value);
-        specifiers_only_str = rest;
-      },
-      None => {
-        maybe_system_spec = None;
-        specifiers_only_str = &full_specifier_string;
+    {
+      let parsing_context = GivenConstraintSpecParseContext {
+        is_before_output_name: false,
+        maybe_valid_feature_list
+      };
+
+      match parse_leading_constraint_spec(&full_specifier_string, parsing_context)? {
+        Some(ParseSuccess { value, rest }) => {
+          maybe_system_spec = Some(value);
+          specifiers_only_str = rest;
+        },
+        None => {
+          maybe_system_spec = None;
+          specifiers_only_str = &full_specifier_string;
+        }
       }
     }
 
@@ -242,14 +251,21 @@ impl LinkSpecifier {
       let target_specific_system_spec: Option<SystemSpecifierWrapper>;
       let untrimmed_target_name: &str;
 
-      match parse_leading_system_spec(full_target_spec, maybe_valid_feature_list)? {
-        Some(ParseSuccess { value, rest }) => {
-          target_specific_system_spec = Some(value);
-          untrimmed_target_name = rest;
-        },
-        None => {
-          target_specific_system_spec = None;
-          untrimmed_target_name = full_target_spec;
+      {
+        let parsing_context = GivenConstraintSpecParseContext {
+          is_before_output_name: false,
+          maybe_valid_feature_list
+        };
+
+        match parse_leading_constraint_spec(full_target_spec, parsing_context)? {
+          Some(ParseSuccess { value, rest }) => {
+            target_specific_system_spec = Some(value);
+            untrimmed_target_name = rest;
+          },
+          None => {
+            target_specific_system_spec = None;
+            untrimmed_target_name = full_target_spec;
+          }
         }
       }
 

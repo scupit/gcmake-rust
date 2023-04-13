@@ -1,7 +1,7 @@
 use std::{rc::Rc, collections::{HashMap, BTreeSet, BTreeMap}, path::{PathBuf, Path}};
 use std::hash::{ Hash, Hasher };
 
-use super::{raw_data_in::{OutputItemType, RawCompiledItem, TargetBuildConfigMap, LinkSection, BuildConfigCompilerSpecifier, BuildType, TargetSpecificBuildType, RawBuildConfig, BuildTypeOptionMap, BuildConfigMap, RawGlobalPropertyConfig, DefaultCompiledLibType, RawShortcutConfig, RawFeatureConfig}, final_dependencies::FinalPredefinedDependencyConfig, LinkSpecifier, parsers::{link_spec_parser::LinkAccessMode, general_parser::ParseSuccess}, SystemSpecifierWrapper, platform_spec_parser::parse_leading_system_spec, helpers::{RetrievedCodeFileType, code_file_type, CodeFileLang}, path_manipulation::{cleaned_pathbuf}, final_project_data::CppFileGrammar};
+use super::{raw_data_in::{OutputItemType, RawCompiledItem, TargetBuildConfigMap, LinkSection, BuildConfigCompilerSpecifier, BuildType, TargetSpecificBuildType, RawBuildConfig, BuildTypeOptionMap, BuildConfigMap, RawGlobalPropertyConfig, DefaultCompiledLibType, RawShortcutConfig, RawFeatureConfig}, final_dependencies::FinalPredefinedDependencyConfig, LinkSpecifier, parsers::{link_spec_parser::LinkAccessMode, general_parser::ParseSuccess}, SystemSpecifierWrapper, platform_spec_parser::parse_leading_constraint_spec, helpers::{RetrievedCodeFileType, code_file_type, CodeFileLang}, path_manipulation::{cleaned_pathbuf}, final_project_data::CppFileGrammar, GivenConstraintSpecParseContext};
 
 #[derive(Clone)]
 pub struct CodeFileInfo {
@@ -554,9 +554,14 @@ pub struct CompilerDefine {
 impl CompilerDefine {
   pub fn new(
     define_string: &str,
-    valid_feature_list: Option<&Vec<&str>>
+    maybe_valid_feature_list: Option<&Vec<&str>>
   ) -> Result<Self, String> {
-    return match parse_leading_system_spec(define_string, valid_feature_list)? {
+    let parsing_context = GivenConstraintSpecParseContext {
+      maybe_valid_feature_list,
+      is_before_output_name: false
+    };
+
+    return match parse_leading_constraint_spec(define_string, parsing_context)? {
       Some(ParseSuccess { value, rest }) => {
         Ok(Self {
           system_spec: value,
@@ -600,9 +605,14 @@ pub struct CompilerFlag {
 impl CompilerFlag {
   pub fn new(
     flag_str: &str,
-    valid_feature_list: Option<&Vec<&str>>
+    maybe_valid_feature_list: Option<&Vec<&str>>
   ) -> Result<Self, String> {
-    return match parse_leading_system_spec(flag_str, valid_feature_list)? {
+    let parsing_context = GivenConstraintSpecParseContext {
+      maybe_valid_feature_list,
+      is_before_output_name: false
+    };
+
+    return match parse_leading_constraint_spec(flag_str, parsing_context)? {
       Some(ParseSuccess { value, rest }) => {
         Ok(Self {
           system_spec: value,

@@ -2,10 +2,10 @@ use std::collections::{HashMap, HashSet};
 use std::hash::Hash;
 use std::iter::FromIterator;
 
-use crate::project_info::LinkSpecifier;
+use crate::project_info::{LinkSpecifier, GivenConstraintSpecParseContext};
 use crate::project_info::parsers::general_parser::ParseSuccess;
 use crate::project_info::parsers::link_spec_parser::LinkAccessMode;
-use crate::project_info::parsers::system_spec::platform_spec_parser::{SystemSpecifierWrapper, parse_leading_system_spec};
+use crate::project_info::parsers::system_spec::platform_spec_parser::{SystemSpecifierWrapper, parse_leading_constraint_spec};
 use crate::project_info::raw_data_in::dependencies::internal_dep_config::raw_dep_common::RawPredepCommon;
 use crate::project_info::raw_data_in::dependencies::internal_dep_config::{RawPredefinedTargetMapIn, RawTargetConfig};
 
@@ -82,7 +82,7 @@ type NameParsedTargetMapIn<'a> = HashMap<String, (Option<SystemSpecifierWrapper>
 
 fn name_parsed_target_map<'a>(
   raw_target_map: &'a RawPredefinedTargetMapIn,
-  valid_feature_list: Option<&Vec<&str>>
+  maybe_valid_feature_list: Option<&Vec<&str>>
 ) -> Result<NameParsedTargetMapIn<'a>, String> {
   let mut resulting_map = NameParsedTargetMapIn::new();
   
@@ -91,14 +91,21 @@ fn name_parsed_target_map<'a>(
     let maybe_system_spec: Option<SystemSpecifierWrapper>;
     let target_name_only: &str;
 
-    match parse_leading_system_spec(target_name_with_system_spec, valid_feature_list)? {
-      Some(ParseSuccess { value, rest }) => {
-        maybe_system_spec = Some(value);
-        target_name_only = rest;
-      },
-      None => {
-        maybe_system_spec = None;
-        target_name_only = target_name_with_system_spec;
+    {
+      let parsing_context = GivenConstraintSpecParseContext {
+        is_before_output_name: false,
+        maybe_valid_feature_list
+      };
+
+      match parse_leading_constraint_spec(target_name_with_system_spec, parsing_context)? {
+        Some(ParseSuccess { value, rest }) => {
+          maybe_system_spec = Some(value);
+          target_name_only = rest;
+        },
+        None => {
+          maybe_system_spec = None;
+          target_name_only = target_name_with_system_spec;
+        }
       }
     }
 
