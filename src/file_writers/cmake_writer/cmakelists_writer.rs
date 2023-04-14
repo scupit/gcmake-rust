@@ -999,20 +999,43 @@ impl<'a> CMakeListsWriter<'a> {
 
     self.write_newline()?;
 
+    let mut has_exact_c_standard: bool = false;
+    let mut has_exact_cpp_standard: bool = false;
+
     if let Some(c_config) = language_config.c.as_ref() {
       self.set_basic_var(
         "",
-        "PROJECT_C_LANGUAGE_STANDARD",
-        &c_config.standard.to_string()
+        "PROJECT_C_LANGUAGE_MINIMUM_STANDARD",
+        &c_config.min_standard
       )?;
+
+      if let Some(c_exact_standard) = c_config.exact_standard.as_ref() {
+        has_exact_c_standard = true;
+
+        self.set_basic_var(
+          "",
+          "PROJECT_C_LANGUAGE_EXACT_STANDARD",
+          c_exact_standard
+        )?;
+      }
     }
 
     if let Some(cpp_config) = language_config.cpp.as_ref() {
       self.set_basic_var(
         "",
-        "PROJECT_CXX_LANGUAGE_STANDARD",
-        &cpp_config.standard.to_string()
+        "PROJECT_CXX_LANGUAGE_MINIMUM_STANDARD",
+        &cpp_config.min_standard.to_string()
       )?;
+      
+      if let Some(cpp_exact_standard) = cpp_config.exact_standard.as_ref() {
+        has_exact_cpp_standard = true;
+
+        self.set_basic_var(
+          "",
+          "PROJECT_CXX_LANGUAGE_EXACT_STANDARD",
+          cpp_exact_standard
+        )?;
+      }
     }
 
     writeln!(&self.cmakelists_file,
@@ -1022,11 +1045,21 @@ impl<'a> CMakeListsWriter<'a> {
     // NOTE: One of these messages is guaranteed to be written, since a valid project must make use
     // of either C or C++ in some way.
     if language_config.c.is_some() {
-      self.write_message("\t", "${PROJECT_NAME} is using C${PROJECT_C_LANGUAGE_STANDARD}")?;
+      if has_exact_c_standard {
+        self.write_message("\t", "${PROJECT_NAME} is using C${PROJECT_C_LANGUAGE_EXACT_STANDARD}")?;
+      }
+      else {
+        self.write_message("\t", "${PROJECT_NAME} is using at least C${PROJECT_C_LANGUAGE_MINIMUM_STANDARD}")?;
+      }
     }
 
     if language_config.cpp.is_some() {
-      self.write_message("\t", "${PROJECT_NAME} is using C++${PROJECT_CXX_LANGUAGE_STANDARD}")?;
+      if has_exact_cpp_standard {
+        self.write_message("\t", "${PROJECT_NAME} is using C++${PROJECT_CXX_LANGUAGE_EXACT_STANDARD}")?;
+      }
+      else {
+        self.write_message("\t", "${PROJECT_NAME} is using at least C++${PROJECT_CXX_LANGUAGE_MINIMUM_STANDARD}")?;
+      }
     }
 
     writeln!(&self.cmakelists_file, "endif()")?;
@@ -2566,7 +2599,7 @@ impl<'a> CMakeListsWriter<'a> {
     output_data: &CompiledOutputItem,
     target_name: &str
   ) -> io::Result<()> {
-    let inheritance_method: &str = match output_data.get_output_type() {
+    let flags_inheritance_method: &str = match output_data.get_output_type() {
       OutputItemType::HeaderOnlyLib => "INTERFACE",
       _ => "PRIVATE"
     };
@@ -2575,7 +2608,7 @@ impl<'a> CMakeListsWriter<'a> {
     writeln!(&self.cmakelists_file,
       "target_compile_options( {}\n\t{} ",
       target_name,
-      inheritance_method
+      flags_inheritance_method
     )?;
 
     for (config, _) in self.project_data.get_build_configs() {
@@ -2592,23 +2625,83 @@ impl<'a> CMakeListsWriter<'a> {
     )?;
     self.write_newline()?;
 
+    let compile_features_inheritance_method: &str = match output_data.get_output_type() {
+      OutputItemType::HeaderOnlyLib => "INTERFACE",
+      OutputItemType::Executable => "PRIVATE",
+      _ => "PUBLIC"
+    };
+
     // Language standard and extensions config
     writeln!(&self.cmakelists_file,
       "target_compile_features( {}\n\t{} ",
       target_name,
-      inheritance_method
+      compile_features_inheritance_method
     )?;
 
     let language_config = self.project_data.get_language_info();
+    let has_c_config: bool;
+    let exact_c_standard: Option<&str>;
+    let has_cpp_config: bool;
+    let exact_cpp_standard: Option<&str>;
 
     // NOTE: One of these language settings is guaranteed to be written because a valid
     // project must make use of either C or C++ in some way.
-    if language_config.c.is_some() {
-      writeln!(&self.cmakelists_file, "\t\tc_std_${{PROJECT_C_LANGUAGE_STANDARD}}")?;
+    match language_config.c.as_ref() {
+      Some(c_config) => {
+        writeln!(&self.cmakelists_file, "\t\tc_std_${{PROJECT_C_LANGUAGE_MINIMUM_STANDARD}}")?;
+        exact_c_standard = c_config.exact_standard.as_ref().map(|s| s.as_str());
+        has_c_config = true;
+      },
+      None => {
+        exact_c_standard = None;
+        has_c_config = false;
+      }
     }
 
-    if language_config.cpp.is_some() {
-      writeln!(&self.cmakelists_file, "\t\tcxx_std_${{PROJECT_CXX_LANGUAGE_STANDARD}}")?;
+    match language_config.cpp.as_ref() {
+      Some(cpp_config) => {
+        writeln!(&self.cmakelists_file, "\t\tcxx_std_${{PROJECT_CXX_LANGUAGE_MINIMUM_STANDARD}}")?;
+        exact_cpp_standard = cpp_config.exact_standard.as_ref().map(|s| s.as_str());
+        has_cpp_config = true;
+      },
+      None => {
+        exact_cpp_standard = None;
+        has_cpp_config = false;
+      }
+    }
+
+    writeln!(&self.cmakelists_file,
+      ")"
+    )?;
+
+    writeln!(&self.cmakelists_file,
+      "\nset_target_properties( {} PROPERTIES",
+      target_name
+    )?;
+
+
+    if exact_c_standard.is_some() {
+      writeln!(&self.cmakelists_file,
+        "\tC_STANDARD ${{PROJECT_C_LANGUAGE_EXACT_STANDARD}}",
+      )?;
+    }
+
+    if has_c_config {
+      writeln!(&self.cmakelists_file,
+        "\tC_STANDARD_REQUIRED TRUE",
+      )?;
+    }
+
+    if exact_cpp_standard.is_some() {
+      writeln!(&self.cmakelists_file,
+        "\tCXX_STANDARD ${{PROJECT_CXX_LANGUAGE_EXACT_STANDARD}}",
+      )?;
+    }
+
+    if has_cpp_config {
+      writeln!(&self.cmakelists_file,
+        "\tCXX_STANDARD_REQUIRED TRUE",
+      )?;
     }
 
     writeln!(&self.cmakelists_file,

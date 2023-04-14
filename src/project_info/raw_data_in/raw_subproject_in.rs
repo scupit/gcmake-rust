@@ -44,10 +44,12 @@ impl Into<RawProject> for RawSubproject {
       // language info from their parent project.
       languages: LanguageConfigMap {
         c: Some(SingleLanguageConfig {
-          standard: 11
+          min_standard: String::from("11"),
+          exact_standard: None
         }),
         cpp: Some(SingleLanguageConfig {
-          standard: 17
+          min_standard: String::from("17"),
+          exact_standard: None
         })
       },
       // Placeholder, no meaning

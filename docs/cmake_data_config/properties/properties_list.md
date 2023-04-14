@@ -232,9 +232,13 @@ that can be configured for each language.
 ``` yaml
 languages:
   c:
-    standard: 99
+    # Using exact_standard is not recommended.
+    # exact_standard: 23
+    min_standard: 99
   cpp:
-    standard: 17
+    # Using exact_standard is not recommended.
+    # exact_standard: 20
+    min_standard: 17
 ```
 
 ### documentation
@@ -544,9 +548,9 @@ default_build_type: Release
 
 languages:
   c:
-    standard: 11
+    min_standard: 11
   cpp:
-    standard: 17
+    min_standard: 17
 
 supported_compilers:
   - Clang

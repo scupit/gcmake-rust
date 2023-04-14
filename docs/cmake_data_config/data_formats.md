@@ -83,9 +83,12 @@ the section below.
 ``` yaml
 languages:
   cpp:
-    # The checks below will fail when using C++98 standard, as they were introduced in C++11.
-    # standard: 98
-    standard: 11
+    # The checks below will default to '0' or undefined when using C++98 standard, as the checked 
+    # features were introduced in C++11.
+    # Comment out 'exact_standard: 98' so that your compiler uses C++11 (or later, if the compiler
+    # defaults to a later version), and the checks will pass;
+    exact_standard: 98
+    min_standard: 11
 
 # ... rest of required config
 global_defines:

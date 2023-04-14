@@ -9,6 +9,23 @@ const SUBPROJECT_JOIN_STR: &'static str = "_S_";
 const TEST_PROJECT_JOIN_STR: &'static str = "_TP_";
 const TEST_TARGET_JOIN_STR: &'static str = "_T_";
 
+const ALLOWED_C_STANDARDS: [&'static str; 5] = ["90", "99", "11", "17", "23"];
+const ALLOWED_CPP_STANDARDS: [&'static str; 7] = ["98", "11", "14", "17", "20", "23", "26"];
+
+fn standard_cmp(
+  slice: &[&str],
+  first: &str,
+  second: &str
+) -> Option<std::cmp::Ordering> {
+  let maybe_first_index = slice.iter().position(|&s| s == first);
+  let maybe_second_index = slice.iter().position(|&s| s == second);
+
+  return match (maybe_first_index, maybe_second_index) {
+    (Some(first_index), Some(second_index)) => Some(first_index.cmp(&second_index)),
+    _ => None
+  }
+}
+
 fn resolve_prebuild_script(
   project_root: &str,
   pre_build_config: &PreBuildConfigIn,
@@ -1096,14 +1113,12 @@ impl FinalProjectData {
     let language_config = self.get_language_info();
     let code_file_stats: CodeFileStats = self.get_code_file_stats();
     
-    let project_uses_cpp: bool = code_file_stats.requires_cpp();
     let project_uses_c: bool = code_file_stats.requires_c();
+    let project_uses_cpp: bool = code_file_stats.requires_cpp();
 
     if project_uses_c {
       // Maybe make this a global if needed. It may be useful to print a list of supported language
       // standard "versions".
-      let allowed_c_standards = [90, 99, 11, 17, 23];
-
       match language_config.c.as_ref() {
         None => return Err(format!(
           "Project [{}] makes use of C, but has not specified any C language configuration. Fix by adding a C language configuration to cmake_data.yaml:\n\n{}:\n  {}:\n    standard: 11",
@@ -1112,10 +1127,26 @@ impl FinalProjectData {
           "c".green()
         )),
         Some(c_config) => {
-          if !allowed_c_standards.contains(&c_config.standard) {
+          if !ALLOWED_C_STANDARDS.contains(&c_config.min_standard.as_str()) {
             return Err(format!(
               "C Language standard must be one of [90, 99, 11, 17, 23], but {} was given",
-              c_config.standard.to_string().red()
+              c_config.min_standard.to_string().red()
+            ));
+          }
+
+          if let Some(exact_c_standard) = c_config.exact_standard.as_ref() {
+            if standard_cmp(ALLOWED_C_STANDARDS.as_slice(), exact_c_standard.as_str(), c_config.min_standard.as_str()).unwrap().is_lt() {
+              return Err(format!(
+                "Given exact_standard for C ({}) is earlier than the project's minimum_standard for C ({}). Please set the exact_standard to {} or later.",
+                exact_c_standard.red(),
+                c_config.min_standard.cyan(),
+                c_config.min_standard.green()
+              ));
+            }
+
+            logger::warn(format!(
+              "This project sets an {} for the C language, however doing so isn't recommended unless you never want your project to be compiled with a later standard.",
+              "exact_standard".yellow()
             ));
           }
         }
@@ -1123,8 +1154,6 @@ impl FinalProjectData {
     }
 
     if project_uses_cpp {
-      let allowed_cpp_standards = [98, 11, 14, 17, 20, 23];
-
       match language_config.cpp.as_ref() {
         None => return Err(format!(
           "Project [{}] makes use of C++, but has not specified any C++ language configuration. Fix by adding a C++ language configuration to cmake_data.yaml:\n\n{}:\n  {}:\n    standard: 17",
@@ -1133,21 +1162,40 @@ impl FinalProjectData {
           "cpp".green()
         )),
         Some(cpp_config) => {
-          if !allowed_cpp_standards.contains(&cpp_config.standard) {
+          if !ALLOWED_CPP_STANDARDS.contains(&cpp_config.min_standard.as_str()) {
             return Err(format!(
               "C++ Language standard must be one of [98, 11, 14, 17, 20, 23], but {} was given",
-              cpp_config.standard.to_string().red()
+              cpp_config.min_standard.to_string().red()
             ));
           }
 
-          if self.any_files_contain_cpp2_grammar() && ![20, 23].contains(&cpp_config.standard) {
+          if let Some(exact_cpp_standard) = cpp_config.exact_standard.as_ref() {
+            if standard_cmp(ALLOWED_CPP_STANDARDS.as_slice(), exact_cpp_standard.as_str(), cpp_config.min_standard.as_str()).unwrap().is_lt() {
+              return Err(format!(
+                "Given {} for C++ ({}) is earlier than the project's {} for C ({}). Please set the exact_standard to {} or later.",
+                "exact_standard".red(),
+                exact_cpp_standard.red(),
+                "minimum_standard".cyan(),
+                cpp_config.min_standard.cyan(),
+                cpp_config.min_standard.green()
+              ));
+            }
+
+            logger::warn(format!(
+              "This project sets an {} for the C++ language, however doing so isn't recommended unless you never want your project to be compiled with a later standard.",
+              "exact_standard".yellow()
+            ));
+          }
+
+          if self.any_files_contain_cpp2_grammar()
+            && standard_cmp(ALLOWED_CPP_STANDARDS.as_slice(), cpp_config.min_standard.as_str(), "20").unwrap().is_lt()
+          {
             logger::block(|| {
               logger::warn(format!(
-                "Project [{}] contains .cpp2 files, but its C++ standard is currently set to {}. cppfront (.cpp2) requires C++20 or higher. Please set the Cpp language standard to {} or {} in cmake_data.yaml. Example:\n",
+                "Project [{}] contains .cpp2 files, but its C++ standard is currently set to {}. cppfront (.cpp2) requires C++20 or higher. Please set the C++ language standard to {} or later in cmake_data.yaml. Example:\n",
                 self.get_name_for_error_messages().yellow(),
-                cpp_config.standard.to_string().red(),
-                "20".green(),
-                "23".green()
+                cpp_config.min_standard.to_string().red(),
+                "20".green()
               ));
 
               println!(

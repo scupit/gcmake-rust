@@ -172,8 +172,8 @@ pub struct PreBuildConfigIn {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(deny_unknown_fields)]
 pub struct SingleLanguageConfig {
-  // TODO: Use a string instead of just an integer.
-  pub standard: i8
+  pub min_standard: String,
+  pub exact_standard: Option<String>
 }
 
 #[derive(Serialize, Deserialize, Debug, Eq, PartialEq, Hash, Clone, Copy, PartialOrd, Ord, Sequence)]

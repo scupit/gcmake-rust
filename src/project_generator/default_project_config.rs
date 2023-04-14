@@ -268,12 +268,12 @@ fn needed_predefined_dependencies(requires_cppfront: bool) -> Option<HashMap<Str
   }
 }
 
-fn default_cpp_standard(requires_cppfront: bool) -> i8 {
+fn default_cpp_standard(requires_cppfront: bool) -> &'static str {
   return if requires_cppfront
     // To ensure cppfront works properly, we must compiler using c++20.
     // See https://github.com/hsutter/cppfront#how-do-i-build-cppfront
-    { 20 }
-    else { 17 };
+    { "20" }
+    else { "17" };
 }
 
 pub fn get_default_project_config(
@@ -306,10 +306,13 @@ pub fn get_default_project_config(
     features: None,
     languages: LanguageConfigMap {
       c: Some(SingleLanguageConfig {
-        standard: 11
+        // Should this be 99?
+        min_standard: String::from("11"),
+        exact_standard: None
       }),
       cpp: Some(SingleLanguageConfig {
-        standard: default_cpp_standard(requires_cppfront)
+        min_standard: default_cpp_standard(requires_cppfront).to_string(),
+        exact_standard: None
       })
     },
     output: HashMap::from_iter([
