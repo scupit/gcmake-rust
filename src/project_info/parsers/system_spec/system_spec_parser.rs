@@ -11,7 +11,7 @@ const C_FEATURE_BEGIN: &'static str = "c";
 const CPP_FEATURE_BEGIN: &'static str = "cpp";
 const CUDA_FEATURE_BEGIN: &'static str = "cuda";
 
-const LANGUAGE_FEATURE_BEGIN_TERMS: [&'static str; 3] = [C_FEATURE_BEGIN, CPP_FEATURE_BEGIN, CUDA_FEATURE_BEGIN];
+pub const LANGUAGE_FEATURE_BEGIN_TERMS: [&'static str; 3] = [C_FEATURE_BEGIN, CPP_FEATURE_BEGIN, CUDA_FEATURE_BEGIN];
 
 lazy_static! {
   // https://cmake.org/cmake/help/latest/prop_gbl/CMAKE_CXX_KNOWN_FEATURES.html#prop_gbl:CMAKE_CXX_KNOWN_FEATURES

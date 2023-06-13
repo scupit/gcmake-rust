@@ -273,7 +273,7 @@ impl LinkSpecifier {
 
       if VALID_SINGLE_ITEM_SPEC_REGEX.is_match(target_name) {
 
-        if full_link_set_system_spec.is_some() && !target_specific_system_spec.is_some() {
+        if full_link_set_system_spec.is_some() && target_specific_system_spec.is_some() {
           return Err(format!(
             "When a link set is prefixed with a system specifier, targets in the link set cannot be individually prefixed with system specifiers. However, the target '{}' is prefixed with a system specifier.\n\tSee here -> '{}'",
             target_name,

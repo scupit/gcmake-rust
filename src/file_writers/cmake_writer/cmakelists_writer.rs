@@ -1,8 +1,8 @@
 use std::{collections::{HashSet, BTreeMap, BTreeSet }, fs::File, io::{self, Write, ErrorKind}, path::{PathBuf, Path}, rc::Rc, cell::{RefCell, Ref}, iter::FromIterator};
 
-use crate::{project_info::{final_project_data::{FinalProjectData, CppFileGrammar}, path_manipulation::{relative_to_project_root}, final_dependencies::{GitRevisionSpecifier, PredefinedCMakeComponentsModuleDep, PredefinedSubdirDep, PredefinedCMakeModuleDep, FinalPredepInfo, GCMakeDependencyStatus, FinalPredefinedDependencyConfig, base64_encoded, PredefinedDepFunctionality, FinalDownloadMethod, FinalDebianPackagesConfig}, raw_data_in::{BuildType, BuildConfigCompilerSpecifier, SpecificCompilerSpecifier, OutputItemType, TargetSpecificBuildType, dependencies::internal_dep_config::{CMakeModuleType}, DefaultCompiledLibType}, FinalProjectType, CompiledOutputItem, LinkMode, FinalTestFramework, dependency_graph_mod::dependency_graph::{DependencyGraph, OrderedTargetInfo, ProjectWrapper, TargetNode, SimpleNodeOutputType, Link, EmscriptenLinkFlagInfo, ContainedItem}, SystemSpecifierWrapper, CompilerDefine, FinalBuildConfig, CompilerFlag, LinkerFlag, gcmake_constants::{SRC_DIR_NAME, INCLUDE_DIR_NAME}, platform_spec_parser::parse_leading_constraint_spec, CodeFileInfo, RetrievedCodeFileType, PreBuildScriptType, CodeFileLang, GivenConstraintSpecParseContext}, file_writers::cmake_writer::cmake_writer_helpers::system_constraint_generator_expression};
+use crate::{project_info::{final_project_data::{FinalProjectData, CppFileGrammar}, path_manipulation::{relative_to_project_root}, final_dependencies::{GitRevisionSpecifier, PredefinedCMakeComponentsModuleDep, PredefinedSubdirDep, PredefinedCMakeModuleDep, FinalPredepInfo, GCMakeDependencyStatus, FinalPredefinedDependencyConfig, base64_encoded, PredefinedDepFunctionality, FinalDownloadMethod, FinalDebianPackagesConfig}, raw_data_in::{BuildType, BuildConfigCompilerSpecifier, SpecificCompilerSpecifier, OutputItemType, TargetSpecificBuildType, dependencies::internal_dep_config::{CMakeModuleType}, DefaultCompiledLibType}, FinalProjectType, CompiledOutputItem, LinkMode, FinalTestFramework, dependency_graph_mod::dependency_graph::{DependencyGraph, OrderedTargetInfo, ProjectWrapper, TargetNode, SimpleNodeOutputType, Link, EmscriptenLinkFlagInfo, ContainedItem}, SystemSpecifierWrapper, CompilerDefine, FinalBuildConfig, CompilerFlag, LinkerFlag, gcmake_constants::{SRC_DIR_NAME, INCLUDE_DIR_NAME}, platform_spec_parser::parse_leading_constraint_spec, CodeFileInfo, RetrievedCodeFileType, PreBuildScriptType, CodeFileLang, GivenConstraintSpecParseContext, SystemSpecFeatureType}, file_writers::cmake_writer::cmake_writer_helpers::system_constraint_generator_expression};
 
-use super::{cmake_utils_writer::{CMakeUtilWriter}, cmake_writer_helpers::system_contstraint_conditional_expression};
+use super::{cmake_utils_writer::{CMakeUtilWriter}, cmake_writer_helpers::{system_contstraint_conditional_expression, language_feature_name}};
 use colored::*;
 
 const RUNTIME_BUILD_DIR_VAR: &'static str = "${MY_RUNTIME_OUTPUT_DIR}";
@@ -2517,6 +2517,58 @@ impl<'a> CMakeListsWriter<'a> {
     Ok(())
   }
 
+  fn write_language_features_for_output(
+    &self,
+    output_data: &CompiledOutputItem,
+    target_name: &str
+  ) -> io::Result<()> {
+    if !output_data.get_language_features().has_any() {
+      return Ok(());
+    }
+
+    writeln!(
+      &self.cmakelists_file,
+      "target_compile_features( {}",
+      target_name
+    )?;
+  
+    let features_by_mode = [
+      ("PUBLIC", &output_data.get_language_features().cmake_public),
+      ("INTERFACE", &output_data.get_language_features().cmake_interface),
+      ("PRIVATE", &output_data.get_language_features().cmake_private),
+    ];
+
+    for (inheritance_mode, feature_spec_list) in features_by_mode {
+      if !feature_spec_list.is_empty() {
+        writeln!(
+          &self.cmakelists_file,
+          "\t{}",
+          inheritance_mode
+        )?;
+
+        for spec_components in feature_spec_list {
+          let feature_lang: &str = spec_components.get_namespace_queue().front().unwrap();
+
+          for individual_feature_spec in spec_components.get_target_list() {
+            let cmake_feature_name: String = language_feature_name(
+              individual_feature_spec.get_name(),
+              SystemSpecFeatureType::from_str(feature_lang).unwrap()
+            );
+
+            writeln!(
+              &self.cmakelists_file,
+              "\t\t{}",
+              system_constraint_generator_expression(individual_feature_spec.get_system_spec_info(), cmake_feature_name)
+            )?;
+          }
+        }
+      }
+    }
+
+    writeln!(&self.cmakelists_file, ")")?;
+    Ok(())
+  }
+
   fn write_defines_for_output(
     &self,
     variable_base_name: &str,
@@ -3210,6 +3262,7 @@ impl<'a> CMakeListsWriter<'a> {
     self.write_defines_for_output(output_name, output_data, &target_name)?;
     self.write_target_link_options_for_output(output_name, output_data, &target_name)?;
     self.write_target_compile_options_for_output(output_name, output_data, &target_name)?;
+    self.write_language_features_for_output(output_data, &target_name)?;
     self.write_newline()?;
 
     self.write_links_for_output(&target_name, output_data, output_target_node, true)?;
@@ -3341,6 +3394,7 @@ impl<'a> CMakeListsWriter<'a> {
     self.write_defines_for_output(output_name, output_data, receiver_lib_name)?;
     self.write_target_link_options_for_output(output_name, output_data, target_name)?;
     self.write_target_compile_options_for_output(output_name, output_data, target_name)?;
+    self.write_language_features_for_output(output_data, target_name)?;
     self.write_newline()?;
 
     self.write_links_for_output(

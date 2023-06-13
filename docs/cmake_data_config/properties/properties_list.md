@@ -599,4 +599,4 @@ to install to `C:\Program Files\noice-project 0.0.1` by default.
 This is the section for defining build configurations. Things like compiler flags and Debug/Release builds
 are defined in this section.
 
-See this property's page at [build_configurations.md](build_configurations.md) for details.
+See this property's page at [build_configs.md](build_configs.md) for details.

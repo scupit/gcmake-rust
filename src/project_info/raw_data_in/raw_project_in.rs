@@ -165,6 +165,7 @@ pub enum ImplementationLanguage {
 #[serde(deny_unknown_fields)]
 pub struct PreBuildConfigIn {
   pub link: Option<Vec<String>>,
+  pub language_features: Option<Vec<String>>,
   pub build_config: Option<TargetBuildConfigMap>,
   pub generated_code: Option<BTreeSet<String>>
 }
@@ -308,6 +309,8 @@ pub enum LinkSection {
   }
 }
 
+pub type LanguageFeatureSection = LinkSection;
+
 impl LinkSection {
   pub fn add_exe_link(
     &mut self,
@@ -338,7 +341,10 @@ pub struct RawCompiledItem {
   pub emscripten_html_shell: Option<String>,
   pub defines: Option<Vec<String>>,
   pub build_config: Option<TargetBuildConfigMap>,
-  pub link: Option<LinkSection>
+  pub link: Option<LinkSection>,
+  // Language features are parsed and "inherited" the exact same way as links, so we
+  // can just re-use the link section object with an alias.
+  pub language_features: Option<LanguageFeatureSection>
 }
 
 impl RawCompiledItem {

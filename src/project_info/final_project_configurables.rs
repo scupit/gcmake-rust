@@ -1,7 +1,9 @@
 use std::{rc::Rc, collections::{HashMap, BTreeSet, BTreeMap}, path::{PathBuf, Path}};
 use std::hash::{ Hash, Hasher };
 
-use super::{raw_data_in::{OutputItemType, RawCompiledItem, TargetBuildConfigMap, LinkSection, BuildConfigCompilerSpecifier, BuildType, TargetSpecificBuildType, RawBuildConfig, BuildTypeOptionMap, BuildConfigMap, RawGlobalPropertyConfig, DefaultCompiledLibType, RawShortcutConfig, RawFeatureConfig}, final_dependencies::FinalPredefinedDependencyConfig, LinkSpecifier, parsers::{link_spec_parser::LinkAccessMode, general_parser::ParseSuccess}, SystemSpecifierWrapper, platform_spec_parser::parse_leading_constraint_spec, helpers::{RetrievedCodeFileType, code_file_type, CodeFileLang}, path_manipulation::{cleaned_pathbuf}, final_project_data::CppFileGrammar, GivenConstraintSpecParseContext};
+use colored::Colorize;
+
+use super::{raw_data_in::{OutputItemType, RawCompiledItem, TargetBuildConfigMap, LinkSection, BuildConfigCompilerSpecifier, BuildType, TargetSpecificBuildType, RawBuildConfig, BuildTypeOptionMap, BuildConfigMap, RawGlobalPropertyConfig, DefaultCompiledLibType, RawShortcutConfig, RawFeatureConfig}, final_dependencies::FinalPredefinedDependencyConfig, LinkSpecifier, parsers::{link_spec_parser::LinkAccessMode, general_parser::ParseSuccess}, SystemSpecifierWrapper, platform_spec_parser::parse_leading_constraint_spec, helpers::{RetrievedCodeFileType, code_file_type, CodeFileLang}, path_manipulation::{cleaned_pathbuf}, final_project_data::CppFileGrammar, GivenConstraintSpecParseContext, LANGUAGE_FEATURE_BEGIN_TERMS, feature_map_for_lang, SystemSpecFeatureType};
 
 #[derive(Clone)]
 pub struct CodeFileInfo {
@@ -309,6 +311,14 @@ impl OutputItemLinks {
       cmake_interface: Vec::new()
     }
   }
+
+  pub fn has_any(&self) -> bool {
+    return !(
+      self.cmake_public.is_empty()
+      && self.cmake_interface.is_empty()
+      && self.cmake_private.is_empty()
+    );
+  }
 }
 
 pub struct FileRootGroup {
@@ -317,11 +327,23 @@ pub struct FileRootGroup {
   pub header_root: PathBuf
 }
 
+#[derive(Copy, Clone)]
+enum SpecParseMode {
+  Link,
+  LanguageFeature
+}
+
+pub struct SpecParseInfo<'a> {
+  mode: SpecParseMode,
+  valid_feature_list: Option<&'a Vec<&'a str>>
+}
 
 pub struct CompiledOutputItem {
   pub output_type: OutputItemType,
   pub entry_file: CodeFileInfo,
   pub links: OutputItemLinks,
+  // Language features are parsed and categorized the same way as links, so they can be stored the same way.
+  pub language_features: OutputItemLinks,
   // NOTE: This is a relative path which references a file RELATIVE TO THE ROOT PROJECT'S ROOT DIRECTORY.
   // That directory is not always the same as the project which directly contains the output item.
   pub windows_icon_relative_to_root_project: Option<PathBuf>,
@@ -350,40 +372,51 @@ impl CompiledOutputItem {
       .replace("-", "_");
   }
 
-  pub fn make_link_map(
+  pub fn parse_into_link_spec_map(
     _output_name: &str,
     output_type: &OutputItemType,
     raw_links: &LinkSection,
-    valid_feature_list: Option<&Vec<&str>>
+    spec_parse_info: SpecParseInfo
   ) -> Result<OutputItemLinks, String> {
     let mut output_links = OutputItemLinks::new_empty();
+
+    let (type_parsing_upper, type_parsing): (&str, &str) = match spec_parse_info.mode {
+      SpecParseMode::Link => ("Links", "links"),
+      SpecParseMode::LanguageFeature => ("Language features", "language features")
+    };
 
     match output_type {
       OutputItemType::Executable => match raw_links {
         LinkSection::PublicPrivateCategorized {..} => {
           return Err(format!(
-            "Links given to an executable should not be categorized as public: or private:, however the links provided to this executable are categorized. Please remove the 'public:' and/or 'private:' keys."
+            "{} given to an executable should not be categorized as public: or private:, however the {} provided to this executable are categorized. Please remove the 'public:' and/or 'private:' keys.",
+            type_parsing_upper,
+            type_parsing
           ));
         },
         LinkSection::Uncategorized(link_strings) => {
           parse_all_links_into(
             link_strings,
             &mut output_links.cmake_private,
-            valid_feature_list
+            spec_parse_info.valid_feature_list,
+            spec_parse_info.mode
           )?;
         }
       },
       OutputItemType::HeaderOnlyLib => match raw_links {
         LinkSection::PublicPrivateCategorized {..} => {
           return Err(format!(
-            "Links given to header-only library should not be categorized as public: or private:, however the links provided to this header-only library are categorized. Please remove the 'public:' and/or 'private:' keys."
+            "{} given to header-only library should not be categorized as public: or private:, however the {} provided to this header-only library are categorized. Please remove the 'public:' and/or 'private:' keys.",
+            type_parsing_upper,
+            type_parsing
           ));
         }
         LinkSection::Uncategorized(link_strings) => {
           parse_all_links_into(
             link_strings,
             &mut output_links.cmake_interface,
-            valid_feature_list
+            spec_parse_info.valid_feature_list,
+            spec_parse_info.mode
           )?;
         }
       },
@@ -396,7 +429,8 @@ impl CompiledOutputItem {
             parse_all_links_into(
               public_links,
               &mut output_links.cmake_public,
-              valid_feature_list
+              spec_parse_info.valid_feature_list,
+              spec_parse_info.mode
             )?;
           }
 
@@ -404,13 +438,17 @@ impl CompiledOutputItem {
             parse_all_links_into(
               private_links,
               &mut output_links.cmake_private,
-              valid_feature_list
+              spec_parse_info.valid_feature_list,
+              spec_parse_info.mode
             )?;
           }
         },
         LinkSection::Uncategorized(_) => {
           return Err(format!(
-            "Links given to a compiled library should be categorized into public: and/or private: lists. However, the links given to output were provided as a single list. See the docs for information on categorizing compiled library links."
+            "{} given to a compiled library should be categorized into public: and/or private: lists. However, the {} given to output were provided as a single list. See the docs for information on categorizing compiled library {}.",
+            type_parsing_upper,
+            type_parsing,
+            type_parsing
           ));
         }
       }
@@ -465,6 +503,7 @@ impl CompiledOutputItem {
       // TODO: Constrain entry file to only the project root
       entry_file: CodeFileInfo::from_path(&raw_output_item.entry_file, false),
       links: OutputItemLinks::new_empty(),
+      language_features: OutputItemLinks::new_empty(),
       system_specifier: maybe_system_specifier.unwrap_or_default(),
       windows_icon_relative_to_root_project: raw_output_item.windows_icon.clone()
         .clone()
@@ -477,11 +516,26 @@ impl CompiledOutputItem {
     };
 
     if let Some(raw_links) = &raw_output_item.link {
-      final_output_item.links = Self::make_link_map(
+      final_output_item.links = Self::parse_into_link_spec_map(
         output_name,
         final_output_item.get_output_type(),
         raw_links,
-        valid_feature_list
+        SpecParseInfo {
+          mode: SpecParseMode::Link,
+          valid_feature_list
+        }
+      )?
+    }
+
+    if let Some(raw_lang_features) = &raw_output_item.language_features {
+      final_output_item.language_features = Self::parse_into_link_spec_map(
+        output_name,
+        final_output_item.get_output_type(),
+        raw_lang_features,
+        SpecParseInfo {
+          mode: SpecParseMode::LanguageFeature,
+          valid_feature_list
+        }
       )?
     }
 
@@ -490,6 +544,10 @@ impl CompiledOutputItem {
 
   pub fn get_links(&self) -> &OutputItemLinks {
     &self.links
+  }
+
+  pub fn get_language_features(&self) -> &OutputItemLinks {
+    &self.language_features
   }
 
   pub fn get_build_config_map(&self) -> &Option<FinalTargetBuildConfigMap> {
@@ -538,11 +596,54 @@ impl CompiledOutputItem {
 fn parse_all_links_into(
   link_strings: &Vec<String>,
   destination_vec: &mut Vec<LinkSpecifier>,
-  valid_feature_list: Option<&Vec<&str>>
+  valid_feature_list: Option<&Vec<&str>>,
+  mode: SpecParseMode
 ) -> Result<(), String> {
   for link_str in link_strings {
-    destination_vec.push(LinkSpecifier::parse_from(link_str, LinkAccessMode::UserFacing, valid_feature_list)?);
+    let parsed_spec = LinkSpecifier::parse_from(link_str, LinkAccessMode::UserFacing, valid_feature_list)?;
+
+    match mode {
+      SpecParseMode::Link => (),
+      SpecParseMode::LanguageFeature => validate_language_feature_spec(&parsed_spec)?
+    }
+
+    destination_vec.push(parsed_spec);
   }
+  Ok(())
+}
+
+fn validate_language_feature_spec(parsed_spec: &LinkSpecifier) -> Result<(), String> {
+  if parsed_spec.get_namespace_queue().len() > 1 {
+    return Err(format!(
+      "Language specifier {} is invalid because it contains a nested namespace. Language namespaces should be flat, like \"c:11\" or \"cpp:constexpr\".",
+      parsed_spec.original_spec_str().red()
+    ));
+  }
+
+  let lang_spec: &str = parsed_spec.get_namespace_queue().front().unwrap().as_str();
+
+  if !LANGUAGE_FEATURE_BEGIN_TERMS.contains(&lang_spec) {
+    return Err(format!(
+      "Language specifier {} has an invalid language \"{}\". Available languages are: {}",
+      parsed_spec.original_spec_str().red(),
+      lang_spec.red(),
+      Vec::from(LANGUAGE_FEATURE_BEGIN_TERMS).join(", ")
+    ));
+  }
+
+  let feature_map = feature_map_for_lang(SystemSpecFeatureType::from_str(lang_spec).unwrap()).unwrap();
+
+  for feature_name in parsed_spec.get_target_list() {
+    if !feature_map.contains_key(feature_name.get_name()) {
+      return Err(format!(
+        "Language specifier {} contains an invalid {} feature \"{}\".",
+        parsed_spec.original_spec_str().red(),
+        lang_spec,
+        feature_name.get_name().red()
+      ));
+    }
+  }
+
   Ok(())
 }
 

@@ -2,7 +2,7 @@ use std::{collections::{HashMap, HashSet, BTreeMap, BTreeSet}, path::{Path, Path
 
 use crate::{project_info::path_manipulation::cleaned_pathbuf, logger};
 
-use super::{path_manipulation::{cleaned_path_str, relative_to_project_root, absolute_path}, final_dependencies::{FinalGCMakeDependency, FinalPredefinedDependencyConfig}, raw_data_in::{RawProject, dependencies::internal_dep_config::AllRawPredefinedDependencies, BuildType, LanguageConfigMap, OutputItemType, PreBuildConfigIn, SpecificCompilerSpecifier, BuildConfigCompilerSpecifier, TargetSpecificBuildType, LinkSection, RawTestFramework, DefaultCompiledLibType, RawCompiledItem, RawDocumentationGeneratorConfig, RawDocGeneratorName}, final_project_configurables::{FinalProjectType}, CompiledOutputItem, helpers::{parse_subproject_data, parse_root_project_data, populate_existing_files, find_prebuild_script, PrebuildScriptFile, validate_raw_project_outputs, ProjectOutputType, RetrievedCodeFileType, code_file_type, parse_test_project_data, find_doxyfile_in, validate_doxyfile_in, SphinxConfigFiles, find_sphinx_files, validate_conf_py_in}, PreBuildScript, FinalTestFramework, base_include_prefix_for_test, gcmake_constants::{SRC_DIR_NAME, INCLUDE_DIR_NAME, TESTS_DIR_NAME, SUBPROJECTS_DIR_NAME, DOCS_DIR_NAME}, FinalInstallerConfig, CompilerDefine, FinalBuildConfigMap, make_final_build_config_map, FinalTargetBuildConfigMap, FinalGlobalProperties, FinalShortcutConfig, parsers::{version_parser::ThreePartVersion, general_parser::ParseSuccess}, platform_spec_parser::parse_leading_constraint_spec, SystemSpecifierWrapper, FinalFeatureConfig, FinalFeatureEnabler, CodeFileInfo, FileRootGroup, PreBuildScriptType, FinalDocGeneratorName, FinalDocumentationInfo, CodeFileLang, GivenConstraintSpecParseContext};
+use super::{path_manipulation::{cleaned_path_str, relative_to_project_root, absolute_path}, final_dependencies::{FinalGCMakeDependency, FinalPredefinedDependencyConfig}, raw_data_in::{RawProject, dependencies::internal_dep_config::AllRawPredefinedDependencies, BuildType, LanguageConfigMap, OutputItemType, PreBuildConfigIn, SpecificCompilerSpecifier, BuildConfigCompilerSpecifier, TargetSpecificBuildType, LinkSection, RawTestFramework, DefaultCompiledLibType, RawCompiledItem, RawDocumentationGeneratorConfig, RawDocGeneratorName, LanguageFeatureSection}, final_project_configurables::{FinalProjectType}, CompiledOutputItem, helpers::{parse_subproject_data, parse_root_project_data, populate_existing_files, find_prebuild_script, PrebuildScriptFile, validate_raw_project_outputs, ProjectOutputType, RetrievedCodeFileType, code_file_type, parse_test_project_data, find_doxyfile_in, validate_doxyfile_in, SphinxConfigFiles, find_sphinx_files, validate_conf_py_in}, PreBuildScript, FinalTestFramework, base_include_prefix_for_test, gcmake_constants::{SRC_DIR_NAME, INCLUDE_DIR_NAME, TESTS_DIR_NAME, SUBPROJECTS_DIR_NAME, DOCS_DIR_NAME}, FinalInstallerConfig, CompilerDefine, FinalBuildConfigMap, make_final_build_config_map, FinalTargetBuildConfigMap, FinalGlobalProperties, FinalShortcutConfig, parsers::{version_parser::ThreePartVersion, general_parser::ParseSuccess}, platform_spec_parser::parse_leading_constraint_spec, SystemSpecifierWrapper, FinalFeatureConfig, FinalFeatureEnabler, CodeFileInfo, FileRootGroup, PreBuildScriptType, FinalDocGeneratorName, FinalDocumentationInfo, CodeFileLang, GivenConstraintSpecParseContext};
 use colored::*;
 
 const SUBPROJECT_JOIN_STR: &'static str = "_S_";
@@ -88,7 +88,8 @@ fn resolve_prebuild_script(
           defines: None,
           entry_file: relative_to_project_root(project_root, entry_file_pathbuf).to_str().unwrap().to_string(),
           build_config: pre_build_config.build_config.clone(),
-          link: pre_build_config.link.clone().map(LinkSection::Uncategorized)
+          link: pre_build_config.link.clone().map(LinkSection::Uncategorized),
+          language_features: pre_build_config.language_features.clone().map(LanguageFeatureSection::Uncategorized)
         };
 
         return Ok(Some(PreBuildScript {
@@ -845,7 +846,8 @@ impl FinalProjectData {
       raw_project.prebuild_config.as_ref().unwrap_or(&PreBuildConfigIn {
         link: None,
         build_config: None,
-        generated_code: None
+        generated_code: None,
+        language_features: None
       }),
       valid_feature_list.as_ref(),
       &file_root_group
