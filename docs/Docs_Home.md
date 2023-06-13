@@ -20,18 +20,6 @@ configuration work together.
 9. [Compiler pitfalls](pitfall_list.md)
 10. [Project TODOs/Roadmap](TODO.md)
 
-## Points of Interest
-
-- [Compiling using Zig](compile_using_zig.md)
-- [Emscripten Usage and Caveats](./emscripten.md)
-- [Using CCache](./using_ccache.md)
-- [Cargo-like project "features"](./cmake_data_config/properties/features.md)
-- [Optional/conditional dependencies](./cmake_data_config/linking.md#conditional-dependencies)
-- [CppFront (*.cpp2) Support](./cppfront_integration.md)
-- [Code generation using a pre-build script](pre_build_scripts.md#pre-build-code-generation)
-- [Using documentation generators](documenting_your_project.md)
-- [Private header files](project_structure.md#file-extensions)
-
 ## Important Concepts
 
 - ["Include prefix" accumulation](cmake_data_config/subproject_config.md#include-prefix-accumulation):
@@ -43,6 +31,18 @@ configuration work together.
 - [Non-GCMake dependency consumption](cmake_data_config/properties/properties_list.md#predefined_dependencies)
 - [Auto-generated export header](cmake_data_config/auto_generated_export_macro_header.md)
 - [Making use of pre-build scripts](pre_build_scripts.md)
+
+## Points of Interest
+
+- [Compiling using Zig](compile_using_zig.md)
+- [Emscripten Usage and Caveats](./emscripten.md)
+- [Using CCache](./using_ccache.md)
+- [Cargo-like project "features"](./cmake_data_config/properties/features.md)
+- [Optional/conditional dependencies](./cmake_data_config/linking.md#conditional-dependencies)
+- [CppFront (*.cpp2) Support](./cppfront_integration.md)
+- [Code generation using a pre-build script](pre_build_scripts.md#pre-build-code-generation)
+- [Using documentation generators](documenting_your_project.md)
+- [Private header files](project_structure.md#file-extensions)
 
 ## Quick Links
 
