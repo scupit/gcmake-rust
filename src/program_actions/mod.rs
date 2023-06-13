@@ -7,9 +7,9 @@ mod default_file_creator;
 pub use create_project::*;
 pub use code_file_creator::*;
 pub use manage_dependencies::*;
-use std::{io, path::PathBuf, fs, cell::RefCell, rc::Rc};
+use std::{io, path::PathBuf, fs, cell::RefCell, rc::Rc, collections::BTreeMap, iter::FromIterator};
 
-use crate::{cli_config::{clap_cli_config::{UseFilesCommand, CreateFilesCommand, UpdateDependencyConfigsCommand, TargetInfoCommand, ProjectInfoCommand, PredepInfoCommand, ToolInfoCommand, CreateDefaultFilesCommand, CreateDefaultFileOption}, CLIProjectGenerationInfo, CLIProjectTypeGenerating}, common::{prompt::prompt_until_boolean}, logger::exit_error_log, project_info::{raw_data_in::dependencies::internal_dep_config::AllRawPredefinedDependencies, final_project_data::{UseableFinalProjectDataGroup, ProjectLoadFailureReason, FinalProjectData, FinalProjectLoadContext}, path_manipulation::absolute_path, dep_graph_loader::load_graph, dependency_graph_mod::dependency_graph::{DependencyGraphInfoWrapper, DependencyGraph, TargetNode, BasicTargetSearchResult, DependencyGraphWarningMode, BasicProjectSearchResult}, LinkSpecifier, validators::{is_valid_target_name, is_valid_project_name}}, file_writers::write_configurations, project_generator::GeneralNewProjectInfo, program_actions::info_printers::{target_info_print_funcs::{print_target_header, print_export_header_include_path, print_target_type}, project_info_print_funcs::{print_project_header, print_project_include_prefix, print_immediate_subprojects, print_project_repo_url, print_project_can_cross_compile, print_project_supports_emscripten, print_project_output_list, print_project_dependencies}}};
+use crate::{cli_config::{clap_cli_config::{UseFilesCommand, CreateFilesCommand, UpdateDependencyConfigsCommand, TargetInfoCommand, ProjectInfoCommand, PredepInfoCommand, ToolInfoCommand, CreateDefaultFilesCommand, CreateDefaultFileOption, SpecificToolPartSubcommand}, CLIProjectGenerationInfo, CLIProjectTypeGenerating}, common::{prompt::prompt_until_boolean}, logger::exit_error_log, project_info::{raw_data_in::dependencies::internal_dep_config::AllRawPredefinedDependencies, final_project_data::{UseableFinalProjectDataGroup, ProjectLoadFailureReason, FinalProjectData, FinalProjectLoadContext}, path_manipulation::absolute_path, dep_graph_loader::load_graph, dependency_graph_mod::dependency_graph::{DependencyGraphInfoWrapper, DependencyGraph, TargetNode, BasicTargetSearchResult, DependencyGraphWarningMode, BasicProjectSearchResult}, LinkSpecifier, validators::{is_valid_target_name, is_valid_project_name}, feature_map_for_lang, SystemSpecFeatureType}, file_writers::write_configurations, project_generator::GeneralNewProjectInfo, program_actions::info_printers::{target_info_print_funcs::{print_target_header, print_export_header_include_path, print_target_type}, project_info_print_funcs::{print_project_header, print_project_include_prefix, print_immediate_subprojects, print_project_repo_url, print_project_can_cross_compile, print_project_supports_emscripten, print_project_output_list, print_project_dependencies}}};
 
 use self::{info_printers::predef_dep_info_print_funcs::{print_predef_dep_header, print_predep_targets, print_predep_repo_url, print_predep_github_url, print_predep_can_cross_compile, print_predep_supports_emscripten, print_predep_supported_download_methods, print_predep_doc_link}, default_file_creator::{write_default_doxyfile, write_default_sphinx_files}};
 use colored::*;
@@ -254,6 +254,29 @@ pub fn print_tool_info(command: ToolInfoCommand) {
 
   if command.show_dep_config_dir {
     println!("{}", gcmake_dep_config_dir().to_str().unwrap());
+  }
+
+  if let Some(command_part) = command.part {
+    // TODO: Refactor this into its own function once another command is added.
+    match command_part {
+      SpecificToolPartSubcommand::Lang { language, show_feature_list } => {
+        if show_feature_list {
+          let lang_str: &str = language.as_str();
+          let feature_map = feature_map_for_lang(SystemSpecFeatureType::from_str(lang_str).unwrap());
+
+          assert!(
+            feature_map.is_some(),
+            "When printing the list of valid language features, the given language should always have a matching feature list."
+          );
+
+          println!("{}::{{", lang_str.green());
+          for (gcmake_feature_name, _) in BTreeMap::from_iter(feature_map.unwrap()) {
+            println!("  {},", gcmake_feature_name);
+          }
+          println!("}}");
+        }
+      }
+    }
   }
 }
 

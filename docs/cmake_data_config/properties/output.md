@@ -230,14 +230,16 @@ will still be built and installed because they might be needed (if built as shar
 > *Optional* `List<`[LanguageFeatureSpecifier](../data_formats.md#language-feature-specifier)`>`
 
 This property is used to specify the language features required to build an output item. When specified,
-CMake will check **at configure time** whether your compiler supports the specified features.
+CMake will check **at configure time** whether your compiler supports the specified features. Think of this
+as the counterpart to checking with [CMAKE_CXX_KNOWN_FEATURES](https://cmake.org/cmake/help/latest/prop_gbl/CMAKE_CXX_KNOWN_FEATURES.html),
+[CMAKE_C_KNOWN_FEATURES](https://cmake.org/cmake/help/latest/prop_gbl/CMAKE_C_KNOWN_FEATURES.html), etc.
 
 <!-- TODO: Add a command for printing supported compile features -->
+To see a list of all language features supported by a language, see `gcmake-rust tool-info lang --help`.
 
 Specified features are required
 *unless constrained using a [constraint expression](../data_formats.md#constraint-specifier)*, in which case
 they will only be required when the constraint expression evaluates to *true*.
-
 **Language features follow the same inheritance rules as [linked libraries](#link)**, and therefore must be
 [categorized the same way](#link) as well.
 

@@ -313,6 +313,39 @@ pub struct PredepInfoCommand {
   pub show_supports_emscripten: bool,
 }
 
+#[derive(ValueEnum, Clone, Copy)]
+pub enum LangNameOption {
+  #[value(name = "cpp")]
+  Cpp,
+  #[value(name = "c")]
+  C,
+  #[value(name = "cuda")]
+  Cuda
+}
+
+impl LangNameOption {
+  pub fn as_str(&self) -> &str {
+    return match self {
+      Self::Cpp => "cpp",
+      Self::C => "c",
+      Self::Cuda => "cuda"
+    }
+  }
+}
+
+#[derive(Subcommand)]
+pub enum SpecificToolPartSubcommand {
+  /// Print language-specific information
+  Lang {
+    #[arg(required = true)]
+    language: LangNameOption,
+
+    /// Print the list of supported language-specific features
+    #[arg(long = "feature-list")]
+    show_feature_list: bool
+  }
+}
+
 #[derive(Args)]
 pub struct ToolInfoCommand {
   /// Print the global GCMake configuration directory
@@ -325,5 +358,8 @@ pub struct ToolInfoCommand {
 
   /// Print the dependency config dir
   #[arg(long = "dep-config")]
-  pub show_dep_config_dir: bool
+  pub show_dep_config_dir: bool,
+
+  #[command(subcommand)]
+  pub part: Option<SpecificToolPartSubcommand>
 }
