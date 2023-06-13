@@ -30,13 +30,11 @@ Support for:
 - Intel C/C++ compiler?
 - NVidia CUDA compiler?
 
-- [ ] Each project (including subprojects and tests) should be able to specify required `language_features`. These should be inherited like defines internally, since they are applied using `target_compile_features(...)`
 - [ ] Allow `(( lang:c and lang:cpp ))` constraints for flags and defines courtesy of CMake's
   [$<COMPILE_LANGAUGE>](https://cmake.org/cmake/help/latest/manual/cmake-generator-expressions.7.html#genex:COMPILE_LANGUAGE)
   generator expression. That might not be possible with Visual Studio though (see notes on the linked page).
 - [ ] Research and add some more useful default flags (for example, `-Wold-style-cast` for GCC/Clang).
 - [ ] Now that minimal installs are implemented, add ability to specify exactly which executables are installed.
-- [ ] Maybe support cppfront *.h2* headers, once they become a little more "stable".
 
 ### CLI TODO
 
