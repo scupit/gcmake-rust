@@ -37,6 +37,7 @@ Executables build by test projects have a few additional properties:
 | [windows_icon](#windows_icon) | *Optional* | Relative file name (relative to root project) | Sets an executable's Windows icon. |
 | [emscripten_html_shell](#emscripten_html_shell) | *Optional* | Relative file name (relative to root project) | Sets a [custom HTML shell file](https://emscripten.org/docs/tools_reference/emcc.html#emcc-shell-file) for an executable when building with Emscripten. |
 | [link](#link) | *Optional* | `List<`[LinkSpecifier](../data_formats.md#link-specifier)`>` | This section is used to link libraries to your output. |
+| [language_features](#language_features) | *Optional* | `List<`[LanguageFeatureSpecifier](../data_formats.md#language-feature-specifier)`>` | Specifies a list of language features required to build the item successfully. |
 | [build_config](#build_config) | *Optional* | `Map` (see the property for more info.) | Define additional build configuration which is specific to the output item only. |
 | [defines](#defines) | *Optional* | `List<String>` | This is an 'alias' property for setting compiler defines for a target which are always applied (AllConfigs, AllCompilers). |
 | [requires_custom_main](#requires_custom_main) | *Optional* | boolean | **Applies to test executables only.** Dictates whether or not the test executable must provide its own main function. |
@@ -223,6 +224,67 @@ Here, `fmt::fmt` is propagated to any library which links to *my-compiled-lib*. 
 however, are not propagated as part of the link interface. This means that those SFML libraries will not
 be automatically linked to any output which links to *my-compiled-lib*. However, the SFML library outputs
 will still be built and installed because they might be needed (if built as shared libraries).
+
+### language_features
+
+> *Optional* `List<`[LanguageFeatureSpecifier](../data_formats.md#language-feature-specifier)`>`
+
+This property is used to specify the language features required to build an output item. When specified,
+CMake will check **at configure time** whether your compiler supports the specified features.
+
+<!-- TODO: Add a command for printing supported compile features -->
+
+Specified features are required
+*unless constrained using a [constraint expression](../data_formats.md#constraint-specifier)*, in which case
+they will only be required when the constraint expression evaluates to *true*.
+
+**Language features follow the same inheritance rules as [linked libraries](#link)**, and therefore must be
+[categorized the same way](#link) as well.
+
+Basic executable example:
+
+``` yaml
+output:
+  my-exe:
+    output_type: Executable
+    entry_file: main.cpp
+    language_features:
+      - cpp::{ lambdas, decltype }
+```
+
+More complex executable example:
+
+``` yaml
+features:
+  full-constexpr:
+    default: true
+
+output:
+  my-exe:
+    output_type: Executable
+    entry_file: main.cpp
+    language_features:
+      - cpp::{ lambdas, decltype }
+      # This one means: Require support for the C++ constexpr and relaxed_constexpr LANGUAGE features
+      # when the PROJECT feature "full-constexpr" is enabled.
+      - (( feature:full-constexpr )) cpp::{ constexpr, relaxed_constexpr }
+```
+
+Compiled library example:
+
+``` yaml
+output:
+  my-compiled-lib:
+    output_type: CompiledLib
+    # output_type: StaticLib
+    # output_type: SharedLib
+    entry_file: my-compiled-lib.hpp
+    language_features:
+      public:
+        - cpp::constexpr
+      private:
+        - cpp::relaxed_constexpr
+```
 
 ### build_config
 

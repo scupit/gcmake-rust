@@ -1,7 +1,8 @@
 # features
 
 > This page describes the [features](./properties_list.md#features) root project configuration property
-> used in cmake_data.yaml.
+> used in cmake_data.yaml. These are **project-level features*, not language features. For language
+> features, see [output.language_features](./output.md#language_features)
 
 ## General Info
 

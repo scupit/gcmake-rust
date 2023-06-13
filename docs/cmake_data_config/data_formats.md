@@ -343,7 +343,9 @@ global_defines:
   - JUST_DEFINED                        # Just defines, doesn't assign a value
   - DEFINED_WITH_VALUE=1                # Define and assign a value
   - DEFINED_WITH_STRING="Noice String"  # Define and assign a String
+  # Examples with constraints 
   - ((windows)) IS_WINDOWS
+  - (( cpp:constexpr and cpp:relaxed_constexpr )) FULLY_SUPPORTS_CONSTEXPR="Heck yeah we do!"
 
 build_configs:
   Debug:
@@ -372,6 +374,9 @@ Link specifiers may also be prefixed with [system specifiers](data_formats.md#co
 - `((unix)) namespace::{ lib1, lib2 }`
 - `namespace::{ lib1, ((windows)) lib2 }`
 
+- `SFML::{ window, ((windows)) main }`
+- `(( feature:uses-fmt )) fmt::fmt`
+
 However, a system specifier may only prefix the entire link specifier or individual libraries in
 a multi-link specifier, but not both.
 
@@ -380,3 +385,21 @@ For example, this is invalid:
 
 ((windows)) namespace::{ lib1, ((mingw)) lib2 }
 ```
+
+## Language Feature Specifier
+
+Language feature specifiers are used to select a set of language-specific features.
+
+Language feature specifiers are formatted exactly the same as [link specifiers](#link-specifier)
+and follow the same grammar rules, except for these differences:
+
+1. The "namespace" is the name of a language (`cpp`, `c`, or `cuda`).
+2. The "library" is the feature name.
+
+Some examples:
+
+- `c:17`
+- `cpp::constexpr`
+- `(( feature:custom-alignment )) cpp::{ alignas, alignof }`
+- `cpp::{ lambdas, decltype }`
+- `cpp::{ lambdas, (( msvc )) decltype }`
