@@ -7,5 +7,6 @@ src/program_actions/default_file_creator/doxygen/mod.rs
 src/program_actions/default_file_creator/sphinx/mod.rs
 
 .vscode/
+.mypy_cache/
 /target
 install-gcmake.ps1
