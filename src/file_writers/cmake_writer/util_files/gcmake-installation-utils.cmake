@@ -11,8 +11,8 @@ function( configure_installation
   list( REMOVE_DUPLICATES additional_installs )
 
   set( additional_relative_dep_paths ${MY_ADDITIONAL_RELATIVE_DEP_PATHS} )
-  list( TRANSFORM additional_relative_dep_paths PREPEND "${CMAKE_INSTALL_INCLUDEDIR}/" )
   list( REMOVE_DUPLICATES additional_relative_dep_paths )
+  list( TRANSFORM additional_relative_dep_paths PREPEND "${CMAKE_INSTALL_INCLUDEDIR}/" )
 
   list( LENGTH MY_INSTALLABLE_TARGETS has_targets_to_install )
   list( LENGTH MY_NEEDED_BIN_FILES has_files_to_install )
@@ -126,21 +126,29 @@ function( configure_installation
   endif()
 
   if( has_additional_installs )
-    # message( "${PROJECT_NAME} additional installs: ${additional_installs}" )
-    install( TARGETS ${additional_installs}
-      EXPORT ${PROJECT_NAME}Targets
-      RUNTIME 
-        DESTINATION "${CMAKE_INSTALL_BINDIR}"
-      LIBRARY
-        # Since additional installs should only be used for dependencies, 
-        DESTINATION "${DEPENDENCY_INSTALL_LIBDIR}"
-      ARCHIVE
-        DESTINATION "${DEPENDENCY_INSTALL_LIBDIR}"
-      FILE_SET HEADERS
-        DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
-      INCLUDES DESTINATION
-        ${additional_relative_dep_paths}
-    )
+    foreach( additional_target associated_relative_header_dir IN ZIP_LISTS additional_installs additional_relative_dep_paths )
+      string( FIND "${associated_relative_header_dir}" "${CMAKE_INSTALL_INCLUDEDIR}" prefix_index )
+      if( prefix_index GREATER 0 )
+        message( FATAL_ERROR "Assertion failed: Relative path for an additional install must begin with $\{CMAKE_INSTALL_INCLUDEDIR} (${CMAKE_INSTALL_INCLUDEDIR}). Got bad path \"${associated_relative_header_dir}\"")
+      endif()
+
+      # message( "${PROJECT_NAME} additional installs: ${additional_installs}" )
+      install( TARGETS ${additional_target}
+        EXPORT ${PROJECT_NAME}Targets
+        RUNTIME 
+          DESTINATION "${CMAKE_INSTALL_BINDIR}"
+        LIBRARY
+          # Since additional installs should only be used for dependencies, 
+          DESTINATION "${DEPENDENCY_INSTALL_LIBDIR}"
+        ARCHIVE
+          DESTINATION "${DEPENDENCY_INSTALL_LIBDIR}"
+        FILE_SET HEADERS
+          # associated_relative_header_dir is already prefixed with ${CMAKE_INSTALL_INCLUDEDIR}.
+          DESTINATION "${associated_relative_header_dir}"
+        INCLUDES DESTINATION
+          ${associated_relative_header_dir}
+      )
+    endforeach()
   endif()
 
   if( has_custom_find_modules )

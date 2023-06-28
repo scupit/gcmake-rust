@@ -1,9 +1,14 @@
 use std::{path::{Path, PathBuf}, fs::{self, File}, io::{self, Write}, collections::{HashMap, HashSet}};
 
 fn main() {
+  // Order is important. Any listed file may depend on any of the files listed above it.
   let ordered_cmake_util_names: Vec<&str> = vec![
     "FindSphinx",
     "gcmake-variables",
+    // CPM.cmake is a dependency manager. I did not write this file. It comes from here:
+    // https://github.com/cpm-cmake/CPM.cmake
+    // CPM configuration depends on variables set in gcmake-variables.cmake.
+    "CPM",
     "gcmake-cross-compilation-utils",
     "gcmake-emscripten-utils",
     "gcmake-dir-config",
@@ -273,7 +278,7 @@ fn write_util(
   UtilInfo { name, contents }: &UtilInfo
 ) -> io::Result<()> {
   writeln!(combined_util_file,
-    "const {}: &'static str = r#\"{}\"#;\n",
+    "const {}: &'static str = r##\"{}\"##;\n",
     util_var_name(name),
     contents
   )?;

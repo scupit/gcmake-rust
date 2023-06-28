@@ -9,6 +9,7 @@ There are a whole bunch of things which need doing. This is the place to list th
 
 ## Priorities
 
+- [ ] Manage dependencies using [CPM.cmake](https://github.com/cpm-cmake/CPM.cmake).
 - [ ] Warn when files exist inside *include/* or *src/*, but aren't inside the dir with the include prefix
   (like *include/MY_INCLUDE_PREXIX* or *src/MY_INCLUDE_PREFIX*).
 - [ ] Add CLI commands for cleaning and updating the dep-cache. Not exactly sure how updating should work yet.

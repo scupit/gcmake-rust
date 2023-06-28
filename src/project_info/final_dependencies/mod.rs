@@ -7,7 +7,6 @@ mod final_target_map_common;
 
 use std::{rc::Rc, collections::HashMap};
 
-use base64ct::{Base64Url, Encoding};
 pub use final_predefined_subdir_dep::*;
 pub use final_predefined_cmake_components_module_dep::*;
 pub use final_gcmake_project_dep::*;
@@ -20,10 +19,6 @@ use crate::project_info::{platform_spec_parser::parse_leading_constraint_spec, p
 use self::{final_target_map_common::FinalTargetConfigMap};
 
 use super::raw_data_in::dependencies::{internal_dep_config::{AllRawPredefinedDependencies, RawPredefinedDependencyInfo, PredefinedCMakeDepHookFile, raw_dep_common::RawEmscriptenConfig, CMakeModuleType}, user_given_dep_config::UserGivenPredefinedDependencyConfig};
-
-pub fn base64_encoded(some_url: &str) -> String{
-  return Base64Url::encode_string(some_url.as_bytes());
-}
 
 type HookScriptContainer = Option<Rc<PredefinedCMakeDepHookFile>>;
 
@@ -266,7 +261,7 @@ impl FinalPredefinedDependencyConfig {
     &self.custom_find_module
   }
 
-  pub fn is_fetchcontent(&self) -> bool {
+  pub fn _is_fetchcontent(&self) -> bool {
     match &self.predep_info {
       FinalPredepInfo::Subdirectory(_) => true,
       FinalPredepInfo::CMakeComponentsModule(_) => false,
@@ -274,7 +269,7 @@ impl FinalPredefinedDependencyConfig {
     }
   }
 
-  pub fn is_auto_fetchcontent_ready(&self) -> bool {
+  pub fn _is_auto_fetchcontent_ready(&self) -> bool {
     match &self.predep_info {
       FinalPredepInfo::Subdirectory(subdir_info) => !subdir_info.requires_custom_fetchcontent_populate(),
       FinalPredepInfo::CMakeComponentsModule(_) => false,

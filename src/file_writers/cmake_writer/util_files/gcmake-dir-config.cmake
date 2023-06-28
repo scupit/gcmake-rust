@@ -28,13 +28,3 @@ macro( append_to_actual_dep_list
 )
   list( APPEND ACTUAL_DEP_LIST ${dep_name} )
 endmacro()
-
-function( expose_uncached_deps )
-  foreach( UNCACHED_DEP IN LISTS UNCACHED_DEP_LIST )
-    FetchContent_GetProperties( ${UNCACHED_DEP} )
-    if( NOT ${UNCACHED_DEP}_POPULATED )
-      message( "Caching ${UNCACHED_DEP}..." )
-      FetchContent_Populate( ${UNCACHED_DEP} )
-    endif()
-  endforeach()
-endfunction()

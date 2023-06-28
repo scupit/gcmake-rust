@@ -1,6 +1,6 @@
 use std::{collections::{HashSet, BTreeMap, BTreeSet }, fs::File, io::{self, Write, ErrorKind}, path::{PathBuf, Path}, rc::Rc, cell::{RefCell, Ref}, iter::FromIterator};
 
-use crate::{project_info::{final_project_data::{FinalProjectData, CppFileGrammar}, path_manipulation::{relative_to_project_root}, final_dependencies::{GitRevisionSpecifier, PredefinedCMakeComponentsModuleDep, PredefinedSubdirDep, PredefinedCMakeModuleDep, FinalPredepInfo, GCMakeDependencyStatus, FinalPredefinedDependencyConfig, base64_encoded, PredefinedDepFunctionality, FinalDownloadMethod, FinalDebianPackagesConfig}, raw_data_in::{BuildType, BuildConfigCompilerSpecifier, SpecificCompilerSpecifier, OutputItemType, TargetSpecificBuildType, dependencies::internal_dep_config::{CMakeModuleType}, DefaultCompiledLibType}, FinalProjectType, CompiledOutputItem, LinkMode, FinalTestFramework, dependency_graph_mod::dependency_graph::{DependencyGraph, OrderedTargetInfo, ProjectWrapper, TargetNode, SimpleNodeOutputType, Link, EmscriptenLinkFlagInfo, ContainedItem}, SystemSpecifierWrapper, CompilerDefine, FinalBuildConfig, CompilerFlag, LinkerFlag, gcmake_constants::{SRC_DIR_NAME, INCLUDE_DIR_NAME}, platform_spec_parser::parse_leading_constraint_spec, CodeFileInfo, RetrievedCodeFileType, PreBuildScriptType, CodeFileLang, GivenConstraintSpecParseContext, SystemSpecFeatureType}, file_writers::cmake_writer::cmake_writer_helpers::system_constraint_generator_expression};
+use crate::{project_info::{final_project_data::{FinalProjectData, CppFileGrammar}, path_manipulation::{relative_to_project_root}, final_dependencies::{GitRevisionSpecifier, PredefinedCMakeComponentsModuleDep, PredefinedSubdirDep, PredefinedCMakeModuleDep, FinalPredepInfo, GCMakeDependencyStatus, FinalPredefinedDependencyConfig, PredefinedDepFunctionality, FinalDownloadMethod, FinalDebianPackagesConfig}, raw_data_in::{BuildType, BuildConfigCompilerSpecifier, SpecificCompilerSpecifier, OutputItemType, TargetSpecificBuildType, dependencies::internal_dep_config::{CMakeModuleType}, DefaultCompiledLibType}, FinalProjectType, CompiledOutputItem, LinkMode, FinalTestFramework, dependency_graph_mod::dependency_graph::{DependencyGraph, OrderedTargetInfo, ProjectWrapper, TargetNode, SimpleNodeOutputType, Link, EmscriptenLinkFlagInfo, ContainedItem}, SystemSpecifierWrapper, CompilerDefine, FinalBuildConfig, CompilerFlag, LinkerFlag, gcmake_constants::{SRC_DIR_NAME, INCLUDE_DIR_NAME}, platform_spec_parser::parse_leading_constraint_spec, CodeFileInfo, RetrievedCodeFileType, PreBuildScriptType, CodeFileLang, GivenConstraintSpecParseContext, SystemSpecFeatureType}, file_writers::cmake_writer::cmake_writer_helpers::system_constraint_generator_expression};
 
 use super::{cmake_utils_writer::{CMakeUtilWriter}, cmake_writer_helpers::{system_contstraint_conditional_expression, language_feature_name}};
 use colored::*;
@@ -841,15 +841,6 @@ impl<'a> CMakeListsWriter<'a> {
   fn include_utils(&self) -> io::Result<()> {
     self.write_newline()?;
 
-    if self.project_data.needs_fetchcontent() {
-      writeln!(&self.cmakelists_file,
-        "if( NOT DEFINED FETCHCONTENT_QUIET )"
-      )?;
-      self.set_basic_var("", "FETCHCONTENT_QUIET", "OFF CACHE BOOL \"Enables QUIET option for all content population\"")?;
-      writeln!(&self.cmakelists_file, "endif()\n")?;
-      writeln!(&self.cmakelists_file, "include(FetchContent)")?;
-    }
-
     if self.project_data.is_root_project() {
       writeln!(&self.cmakelists_file, "include(GenerateExportHeader)")?;
       writeln!(&self.cmakelists_file, "include(GNUInstallDirs)")?;
@@ -1174,7 +1165,7 @@ impl<'a> CMakeListsWriter<'a> {
                 dep_name,
                 subdir_dep,
                 &wrapped_graph.0,
-                dep_info.is_auto_fetchcontent_ready()
+                subdir_dep.requires_custom_fetchcontent_populate()
               )?;
             }
           }
@@ -1409,23 +1400,13 @@ impl<'a> CMakeListsWriter<'a> {
     dep_name: &str,
     is_internally_supported_by_emscripten: bool,
     download_method: DownloadMethodInfo,
-    is_auto_fetchcontent_ready: bool
+    requires_custom_populate: bool
   ) -> io::Result<()> {
-    let download_method_name: &str = match &download_method {
-      DownloadMethodInfo::GitMethod { .. } => "git",
-      DownloadMethodInfo::UrlMethod { .. } => "url",
-    };
-
-    let cached_dep_name: String = format!("_gcmake_cached_{}_{}_mode", dep_name, download_method_name);
     let download_url_var: String = format!("{}_DOWNLOAD_URL", dep_name);
 
-    let hashed_cache_dep_dir: String = match &download_method {
-      DownloadMethodInfo::GitMethod { repo_url, .. } => {
-        format!("git_repo/{}", base64_encoded(repo_url))
-      },
+    match &download_method {
+      DownloadMethodInfo::GitMethod { .. } => (),
       DownloadMethodInfo::UrlMethod { windows_url, unix_url } => {
-        let cached_location_var: String = format!("{}_CACHE_DESTINATION_DIR", dep_name);
-
         writeln!(&self.cmakelists_file,
           "if( CURRENT_SYSTEM_IS_WINDOWS )"
         )?;
@@ -1436,12 +1417,6 @@ impl<'a> CMakeListsWriter<'a> {
           &format!("\"{}\"", windows_url)
         )?;
 
-        self.set_basic_var(
-          "\t",
-          &cached_location_var,
-          &format!("\"archive_file/{}\"", base64_encoded(windows_url))
-        )?;
-
         writeln!(&self.cmakelists_file, "else()")?;
 
         self.set_basic_var(
@@ -1450,20 +1425,9 @@ impl<'a> CMakeListsWriter<'a> {
           &format!("\"{}\"", unix_url)
         )?;
 
-        self.set_basic_var(
-          "\t",
-          &cached_location_var,
-          &format!("\"archive_file/{}\"", base64_encoded(unix_url))
-        )?;
-
         writeln!(&self.cmakelists_file, "endif()")?;
-
-        format!("${{{}}}", cached_location_var)
       }
-    };
-
-    let destination_cache_dir: String = format!("${{GCMAKE_DEP_CACHE_DIR}}/{}/{}", dep_name, hashed_cache_dep_dir);
-    let temp_url_download_dir: String = format!("${{GCMAKE_DEP_CACHE_DIR}}/{}/temp_url_download", dep_name);
+    }
 
     let full_download_info: FullCMakeDownloadMethodInfo = match download_method {
       DownloadMethodInfo::GitMethod { repo_url, revision } => FullCMakeDownloadMethodInfo::GitMethod {
@@ -1473,100 +1437,51 @@ impl<'a> CMakeListsWriter<'a> {
           GitRevisionSpecifier::Tag(tag) => format!("GIT_TAG \"{}\"", tag)
         }
       },
-      DownloadMethodInfo::UrlMethod { windows_url, unix_url } => FullCMakeDownloadMethodInfo::UrlMethod {
-        _windows_url: windows_url,
-        _unix_url: unix_url
+      DownloadMethodInfo::UrlMethod { windows_url, unix_url } => {
+        FullCMakeDownloadMethodInfo::UrlMethod {
+          _windows_url: windows_url,
+          _unix_url: unix_url
+        }
       }
     };
 
-    writeln!(&self.cmakelists_file,
-      "if( NOT IS_DIRECTORY \"{}\" )",
-      destination_cache_dir
-    )?;
+    if is_internally_supported_by_emscripten {
+      write!(&self.cmakelists_file,
+        "if( NOT USING_EMSCRIPTEN )\n\t"
+      )?;
+    }
 
     match &full_download_info {
-      FullCMakeDownloadMethodInfo::GitMethod { repo_url, revision_spec_str, .. } => {
+      FullCMakeDownloadMethodInfo::GitMethod { revision_spec_str, repo_url } => {
         writeln!(&self.cmakelists_file,
-          "\tFetchContent_Declare(\n\t\t{}\n\t\tSOURCE_DIR \"{}\"\n\t\tGIT_REPOSITORY \"{}\"\n\t\t{}\n\t\tGIT_PROGRESS TRUE\n\t\tGIT_SHALLOW FALSE\n\t\tGIT_SUBMODULES_RECURSE TRUE\n\t\tSYSTEM\n\t)",
-          cached_dep_name,
-          destination_cache_dir,
+          "CPMAddPackage(\n\tNAME {}\n\tDOWNLOAD_ONLY {}\n\tGIT_REPOSITORY \"{}\"\n\t{}\n\tGIT_SUBMODULES_RECURSE TRUE\n\tSYSTEM\n)",
+          dep_name,
+          on_or_off_str(requires_custom_populate),
           repo_url,
           revision_spec_str
         )?;
       },
       FullCMakeDownloadMethodInfo::UrlMethod { .. } => {
         writeln!(&self.cmakelists_file,
-          "\tFetchContent_Declare(\n\t\t{}\n\t\tSOURCE_DIR \"{}\"\n\t\tDOWNLOAD_DIR \"{}\"\n\t\tURL \"${{{}}}\"\n\t\tSYSTEM\n\t)",
-          cached_dep_name,
-          destination_cache_dir,
-          temp_url_download_dir,
+          "CPMAddPackage(\n\tNAME {}\n\tDOWNLOAD_ONLY {}\n\tURL \"${{{}}}\"\n\tSYSTEM\n)",
+          dep_name,
+          on_or_off_str(requires_custom_populate),
           download_url_var
         )?;
       }
     }
 
-    if is_internally_supported_by_emscripten {
-      write!(&self.cmakelists_file,
-        "\tif( NOT USING_EMSCRIPTEN )\n\t"
-      )?;
-    }
-
+    // The "actual dep list" is now unused since we populate dependencies using CPM. However, I'm keeping it
+    // here because it holds a list of all dependency project names in use at CMake configure time.
     writeln!(&self.cmakelists_file,
-      "\tappend_to_uncached_dep_list( {} )",
-      cached_dep_name
+      "append_to_actual_dep_list( {} )",
+      dep_name
     )?;
 
     if is_internally_supported_by_emscripten {
       writeln!(&self.cmakelists_file,
-        "\tendif()"
+        "endif()"
       )?;
-    }
-
-    writeln!(&self.cmakelists_file, "endif()")?;
-    self.write_newline()?;
-
-    match &full_download_info {
-      FullCMakeDownloadMethodInfo::GitMethod { revision_spec_str, .. } => {
-        writeln!(&self.cmakelists_file,
-          "FetchContent_Declare(\n\t{}\n\tSOURCE_DIR \"${{CMAKE_CURRENT_SOURCE_DIR}}/dep/{}\"\n\tGIT_REPOSITORY \"{}\"\n\t{}\n\tGIT_PROGRESS TRUE\n\tGIT_SUBMODULES_RECURSE TRUE\n\tSYSTEM\n)",
-          dep_name,
-          dep_name,
-          destination_cache_dir,
-          revision_spec_str
-        )?;
-      },
-      FullCMakeDownloadMethodInfo::UrlMethod { .. } => {
-        writeln!(&self.cmakelists_file,
-          "cmake_path( GET {} FILENAME the_archive_file )",
-          download_url_var
-        )?;
-
-        writeln!(&self.cmakelists_file,
-          "FetchContent_Declare(\n\t{}\n\tSOURCE_DIR \"${{CMAKE_CURRENT_SOURCE_DIR}}/dep/{}\"\n\tURL \"{}/${{the_archive_file}}\"\n\tSYSTEM\n)",
-          dep_name,
-          dep_name,
-          temp_url_download_dir
-        )?;
-      }
-    }
-
-    if is_auto_fetchcontent_ready {
-      if is_internally_supported_by_emscripten {
-        write!(&self.cmakelists_file,
-          "if( NOT USING_EMSCRIPTEN )\n\t"
-        )?;
-      }
-
-      writeln!(&self.cmakelists_file,
-        "append_to_actual_dep_list( {} )",
-        dep_name
-      )?;
-
-      if is_internally_supported_by_emscripten {
-        writeln!(&self.cmakelists_file,
-          "endif()"
-        )?;
-      }
     }
 
     Ok(())
@@ -1577,7 +1492,7 @@ impl<'a> CMakeListsWriter<'a> {
     dep_name: &str,
     dep_info: &PredefinedSubdirDep,
     graph_for_dependency: &Rc<RefCell<DependencyGraph<'a>>>,
-    is_auto_fetchcontent_ready: bool
+    requires_custom_populate: bool
   ) -> io::Result<()> {
     // Subdir dependencies which have this 'custom import' script
     // might be installed in a weird way due to how CMake's FILE_SET
@@ -1696,7 +1611,7 @@ impl<'a> CMakeListsWriter<'a> {
       dep_name,
       dep_info.is_internally_supported_by_emscripten(),
       download_method,
-      is_auto_fetchcontent_ready
+      requires_custom_populate
     )?;
     Ok(())
   }
@@ -1774,15 +1689,6 @@ impl<'a> CMakeListsWriter<'a> {
   }
 
   fn write_apply_dependencies(&self) -> io::Result<()> {
-    writeln!(&self.cmakelists_file, "expose_uncached_deps()")?;
-
-    if self.project_data.needs_fetchcontent() {
-      writeln!(&self.cmakelists_file,
-        "list( LENGTH ACTUAL_DEP_LIST actual_dep_list_length )\nif( actual_dep_list_length )"
-      )?;
-      writeln!(&self.cmakelists_file, "\n\tFetchContent_MakeAvailable( ${{ACTUAL_DEP_LIST}} )\nendif()")?;
-    }
-
     for wrapped_graph in &self.sorted_target_info.project_order {
       let borrowed_graph = wrapped_graph.as_ref().borrow();
 
@@ -1820,13 +1726,15 @@ impl<'a> CMakeListsWriter<'a> {
             }
 
             writeln!(&self.cmakelists_file,
-              "\nFetchContent_GetProperties( {} )",
+              // See https://github.com/cpm-cmake/CPM.cmake#usage for the origin of <dep_name>_ADDED.
+              "if( NOT {}_ADDED )\n\tmessage( FATAL_ERROR \"Assertion failed: Custom population for dependency '{}' tried to run before the dependency was downloaded.\")\nendif()",
+              dep_name,
               dep_name
             )?;
 
+            // The conditional above ensures <dep_name>_ADDED is TRUE.
             writeln!(&self.cmakelists_file,
-              "if( NOT {}_POPULATED )\n\tFetchContent_Populate( {} )",
-              dep_name,
+              "\nif( NOT {}_GCMAKE_CONFIGURED )",
               dep_name
             )?;
 
@@ -1840,6 +1748,7 @@ impl<'a> CMakeListsWriter<'a> {
               )?;
             }
 
+            self.set_basic_var("\t", &format!("{}_GCMAKE_CONFIGURED", dep_name), "TRUE")?;
             writeln!(&self.cmakelists_file, "endif()")?;
 
             if is_dep_internally_supported_by_emscripten {

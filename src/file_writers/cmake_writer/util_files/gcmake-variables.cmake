@@ -53,6 +53,11 @@ endif()
 
 set( GCMAKE_CONFIG_DIR "${USER_HOME_DIR}/.gcmake" )
 set( GCMAKE_DEP_CACHE_DIR "${GCMAKE_CONFIG_DIR}/dep-cache" )
+    
+# FIXME: CPM_SOURCE_CACHE is not used when a SOURCE_DIR is specified. This is interesting.
+if( NOT DEFINED ENV{CPM_SOURCE_CACHE})
+  set( ENV{CPM_SOURCE_CACHE} "${GCMAKE_DEP_CACHE_DIR}")
+endif()
 
 set( GCMAKE_ALL_VALID_BUILD_CONFIGS "Debug" "Release" "MinSizeRel" "RelWithDebInfo" )
 set( GCMAKE_ALL_VALID_BUILD_CONFIGS_UPPER "DEBUG" "RELEASE" "MINSIZEREL" "RELWITHDEBINFO" )
