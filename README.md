@@ -10,6 +10,9 @@ Documentation is found in [docs/Docs_Home.md](docs/Docs_Home.md).
 
 ## About
 
+This project uses [CPM.cmake](https://github.com/cpm-cmake/CPM.cmake)
+[v0.38.1](https://github.com/cpm-cmake/CPM.cmake/releases/tag/v0.38.1) for dependency management.
+
 Among other things, this tool is able to:
 
 - Generate full CMake configurations for an entire project tree.

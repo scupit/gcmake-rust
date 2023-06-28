@@ -16,8 +16,7 @@ information and will do nothing if added to a project tree.
 
 Currently, `~/.gcmake/` always contains these directories:
 
-1. **dep-cache\/**: The gcmake "dependency cache". This is currently just a collection of locally cloned
-    repositories. GCMake projects clone from the local copies of these repositories.
+1. **dep-cache\/**: The gcmake "dependency cache" directory. [Subdirectory dependencies](./predefined_dependency_doc.md#as_subdirectory) are cloned here so that they can be used offline and reused by other projects.
 2. **gcmake-dependency-configs\/**: The [predefined dependency configuration repository](predefined_dependency_doc.md).
 
 ### Manual Configuration

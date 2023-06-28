@@ -80,12 +80,17 @@ cmake_components_module:
 ### as_subdirectory
 
 This is the configuration section for dependencies which support being consumed by a CMake project
-using CMake's `add_subdirectory` (and therefore [`FetchContent`](https://cmake.org/cmake/help/latest/module/FetchContent.html)).
-(nlohmann_json, GLFW, etc.)
+using CMake's `add_subdirectory`. Dependencies of this type can be downloaded using
+[`FetchContent`](https://cmake.org/cmake/help/latest/module/FetchContent.html) (called using
+[CPM.cmake](https://github.com/cpm-cmake/CPM.cmake)'s `CPMAddPackage(...)`).
 
-These dependencies will be cloned into your project's *dep/* directory at *CMake configure time*,
-and will be built directly as a part of your project. These translate to a `FetchContent_Declare` call
-in the CMakeLists.txt.
+Some examples of this dependency type: *nlohmann_json*, *GLFW*, *SFML*.
+
+Subdirectory dependencies will be cloned into the dependency cache directory located in
+[GCMake's configuration directory](./the_configuration_directory.md) at **CMake configure time**
+and will be built as part of your project. These translate to a `CPMAddPackage(...)` call in the
+CMakeLists.txt. See [Managing dependency repos](./managing_dependency_repos.md) for some additional
+details.
 
 **Full example:** [gcmake-dependency-configs/nlohmann_json/dep_config.yaml](https://github.com/scupit/gcmake-dependency-configs/blob/develop/nlohmann_json/dep_config.yaml)
 

@@ -1,45 +1,18 @@
 # Managing Dependency Repositories
 
-## Updating Repositories
+GCMake-rust now uses [CPM.cmake](https://github.com/cpm-cmake/CPM.cmake) for managing dependency
+downloads and caching for repositories and archives.
 
-GCMake-rust doesn't currently have a built-in command to update all dependency git repositories at once.
-However, you can use the [gcmake-update-deps.ps1](/gcmake-update-deps.ps1) PowerShell script (Windows)
-or the [gcmake-update-deps.sh](/gcmake-update-deps.sh) script (Unix/Non-Windows) to do that
-until the command is integrated into *gcmake-rust* itself.
+## Downloaded Dependency Location
 
-### Windows PowerShell Example
+Dependencies are downloaded inside the [GCMake configuration directory](./the_configuration_directory.md#contents) dependency cache folder, which is most likely located at `~/.gcmake/dep-cache/`. CPM's
+`CPM_SOURCE_CACHE` variable is set to that directory by default.
 
-``` powershell
-# "git pull" the master branch of all dependency repositories already cloned in
-# ~/.gcmake/dep-cache/*/git_repo and remove all invalid repositories
-gcmake-update-deps.ps1
+### Corrupted dependencies
 
-# Just remove all invalid repositories without updating the valid ones. This is useful
-# when working offline.
-gcmake-update-deps.ps1 -cleanOnly
-```
+While unlikely, it's probably possible for a
+[subdirectory dependency](./predefined_dependency_doc.md#as_subdirectory) to become corrupted when
+downloading. If a dependency is failing to download or just acting weird in general, try deleting it
+from the dependency cache and re-running CMake configuration.
 
-### Unix (Non-Windows) Example
-
-``` sh
-# "git pull" the master branch of all dependency repositories already cloned in
-# ~/.gcmake/dep-cache/*/git_repo and remove all invalid repositories
-gcmake-update-deps.sh
-
-# Just remove all invalid repositories without updating the valid ones. This is useful
-# when working offline.
-gcmake-update-deps.sh -c
-```
-
-## Handling corrupted or invalid repositories
-
-Sometimes cached dependency git repositories will become corrupted or rendered invalid in some way. This
-often happens when CMake fails to initially clone a dependency repository into the cache.
-Corrupted repositories cause project builds to repeatedly fail because they cannot be cloned properly.
-
-Running `gcmake-update-deps -cleanOnly` or `gcmake-update-deps -c`
-([see above](#managing-dependency-repositories)) should fix the issue by
-removing invalid repositories from the dependency cache. If your build still fails after running that
-command, try deleting your project's the *dep/* directory as well as the build directory you are
-currently using. Removing those forces CMake to re-populate the missing dependency repositories with
-valid ones.
+For example, if `fmt` is corrupted, delete `~/.gcmake/dep-cache/fmt`.

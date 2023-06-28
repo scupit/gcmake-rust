@@ -57,7 +57,7 @@ configuration work together.
 - [Adding a pre-build script](cmake_data_config/properties/properties_list.md#prebuild_config)
 - [Using dependencies](cmake_data_config/properties/properties_list.md#predefined_dependencies)
 - [Managing dependency repositories](managing_dependency_repos.md)
-- [Removing corrupted or invalid dependency repositories](managing_dependency_repos.md#handling-corrupted-or-invalid-repositories)
+- [Removing corrupted or invalid dependency repositories](managing_dependency_repos.md#corrupted-dependencies)
 - [Default config files](the_configuration_directory.md#manual-configuration) such as .gitignore, .clang-format, and .clang-tidy
 - [Compiling using Zig](compile_using_zig.md)
 - [Emscripten Usage and Caveats](./emscripten.md)
