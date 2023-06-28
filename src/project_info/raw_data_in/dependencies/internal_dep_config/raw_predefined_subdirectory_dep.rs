@@ -32,7 +32,8 @@ pub struct RawExtensionsByPlatform {
 #[derive(Deserialize, Clone)]
 #[serde(deny_unknown_fields)]
 pub struct RawSubdirDepUrlDownloadConfig {
-  pub url_base: String,
+  pub url_base_by_version: Option<HashMap<String, String>>,
+  pub url_base: Option<String>,
   pub version_transform: String,
   pub extensions: RawExtensionsByPlatform
 }

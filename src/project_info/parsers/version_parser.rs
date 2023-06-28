@@ -1,7 +1,37 @@
+pub fn parse_version(version_str: &str) -> Option<ThreePartVersion> {
+  return ThreePartVersion::from_str(version_str);
+}
+
+#[derive(PartialEq, Eq)]
 pub struct ThreePartVersion {
   pub major: u32,
   pub minor: u32,
   pub patch: u32,
+}
+
+impl PartialOrd for ThreePartVersion {
+  fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+    return Some(self.cmp(other));
+  }
+}
+
+impl Ord for ThreePartVersion {
+  fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+    let mut ordering: std::cmp::Ordering = self.major.cmp(&other.major);
+
+    if ordering.is_ne() {
+      return ordering;
+    }
+
+    ordering = self.minor.cmp(&other.minor);
+
+    if ordering.is_ne() {
+      return ordering;
+    }
+
+    return self.patch.cmp(&other.patch);
+
+  }
 }
 
 impl ThreePartVersion {
@@ -44,6 +74,5 @@ impl ThreePartVersion {
   }
 }
 
-pub fn parse_version(version_str: &str) -> Option<ThreePartVersion> {
-  return ThreePartVersion::from_str(version_str);
-}
+
+

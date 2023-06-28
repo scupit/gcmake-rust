@@ -2,7 +2,7 @@ use std::{collections::{HashMap, HashSet, BTreeMap}};
 
 use colored::Colorize;
 
-use crate::project_info::{raw_data_in::dependencies::{internal_dep_config::{RawSubdirectoryDependency, raw_dep_common::{RawPredepCommon, RawEmscriptenConfig}, RawExtensionsByPlatform}, user_given_dep_config::{UserGivenPredefinedDependencyConfig}}, parsers::{version_parser::{parse_version}, version_transform_parser::transform_version}, path_manipulation::without_leading_dot};
+use crate::project_info::{raw_data_in::dependencies::{internal_dep_config::{RawSubdirectoryDependency, raw_dep_common::{RawPredepCommon, RawEmscriptenConfig}, RawExtensionsByPlatform, RawSubdirDepUrlDownloadConfig}, user_given_dep_config::{UserGivenPredefinedDependencyConfig}}, parsers::{version_parser::{parse_version, ThreePartVersion}, version_transform_parser::transform_version}, path_manipulation::without_leading_dot};
 
 use super::{predep_module_common::{PredefinedDepFunctionality, FinalDebianPackagesConfig, FinalDepConfigOption, resolve_final_config_options}, final_target_map_common::{FinalTargetConfigMap, make_final_target_config_map}};
 
@@ -75,6 +75,38 @@ impl SubdirDepInstallationConfig {
       { !should_install }
       else { should_install }
   }
+}
+
+fn get_url_from_version(
+  version: &ThreePartVersion,
+  url_info: &RawSubdirDepUrlDownloadConfig
+) -> Result<String, String> {
+  if let Some(url_map) = url_info.url_base_by_version.as_ref() {
+    let mut version_list: Vec<(ThreePartVersion, &str)> = Vec::new();
+
+    for (version_str_key, matching_url) in url_map {
+      match ThreePartVersion::from_str(version_str_key) {
+        None => return Err(format!("Invalid version key \"{}\". The key is for base URL: \"{}\"", version_str_key.red(), matching_url)),
+        Some(parsed_version) => {
+          version_list.push((parsed_version, matching_url.as_str()));
+        }
+      }
+    }
+
+    version_list.sort_by(|(first_version, _), (second_version, _)|
+      first_version.cmp(second_version).reverse()
+    );
+
+    if let Some((_, matching_url)) = version_list.into_iter().find(|(parsed_version, _)| version >= parsed_version) {
+      return Ok(matching_url.to_string());
+    }
+  }
+
+  if let Some(base_url) = url_info.url_base.as_ref() {
+    return Ok(base_url.clone());
+  }
+
+  return Err(format!("No matching URL found for version '{}'", version.to_string().red()))
 }
 
 fn resolve_download_method(
@@ -195,11 +227,20 @@ fn resolve_download_method(
               unix: unix_url_extension
             } = &subdir_dep.get_url_info().unwrap().extensions;
 
+            let base_url: String = get_url_from_version(&parsed_version, subdir_dep.get_url_info().unwrap())
+              .map_err(|err_msg|
+                format!(
+                  "When resolving base URL for dependency '{}':\n{}",
+                  dep_name.yellow(),
+                  err_msg
+                )
+              )?;
+
             return Ok(FinalDownloadMethod::UrlMode(FinalUrlDownloadDescriptor {
               // <baseUrl><transformedVersion>
               url_without_extension: format!(
                 "{}{}",
-                subdir_dep.get_url_info().unwrap().url_base,
+                base_url,
                 transformed_version
               ),
               extension: FinalUrlExtensions {
