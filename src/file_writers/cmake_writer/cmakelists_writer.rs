@@ -1,6 +1,6 @@
 use std::{collections::{HashSet, BTreeMap, BTreeSet }, fs::File, io::{self, Write, ErrorKind}, path::{PathBuf, Path}, rc::Rc, cell::{RefCell, Ref}, iter::FromIterator};
 
-use crate::{project_info::{final_project_data::{FinalProjectData, CppFileGrammar}, path_manipulation::{relative_to_project_root}, final_dependencies::{GitRevisionSpecifier, PredefinedCMakeComponentsModuleDep, PredefinedSubdirDep, PredefinedCMakeModuleDep, FinalPredepInfo, GCMakeDependencyStatus, FinalPredefinedDependencyConfig, PredefinedDepFunctionality, FinalDownloadMethod, FinalDebianPackagesConfig}, raw_data_in::{BuildType, BuildConfigCompilerSpecifier, SpecificCompilerSpecifier, OutputItemType, TargetSpecificBuildType, dependencies::internal_dep_config::{CMakeModuleType}, DefaultCompiledLibType}, FinalProjectType, CompiledOutputItem, LinkMode, FinalTestFramework, dependency_graph_mod::dependency_graph::{DependencyGraph, OrderedTargetInfo, ProjectWrapper, TargetNode, SimpleNodeOutputType, Link, EmscriptenLinkFlagInfo, ContainedItem}, SystemSpecifierWrapper, CompilerDefine, FinalBuildConfig, CompilerFlag, LinkerFlag, gcmake_constants::{SRC_DIR_NAME, INCLUDE_DIR_NAME}, platform_spec_parser::parse_leading_constraint_spec, CodeFileInfo, RetrievedCodeFileType, PreBuildScriptType, CodeFileLang, GivenConstraintSpecParseContext, SystemSpecFeatureType}, file_writers::cmake_writer::cmake_writer_helpers::system_constraint_generator_expression};
+use crate::{project_info::{final_project_data::{FinalProjectData, CppFileGrammar}, path_manipulation::{relative_to_project_root}, final_dependencies::{GitRevisionSpecifier, PredefinedCMakeComponentsModuleDep, PredefinedSubdirDep, PredefinedCMakeModuleDep, FinalPredepInfo, GCMakeDependencyStatus, FinalPredefinedDependencyConfig, PredefinedDepFunctionality, FinalDownloadMethod, FinalDebianPackagesConfig, GCMakeDepIDHash}, raw_data_in::{BuildType, BuildConfigCompilerSpecifier, SpecificCompilerSpecifier, OutputItemType, TargetSpecificBuildType, dependencies::internal_dep_config::{CMakeModuleType}, DefaultCompiledLibType}, FinalProjectType, CompiledOutputItem, LinkMode, FinalTestFramework, dependency_graph_mod::dependency_graph::{DependencyGraph, OrderedTargetInfo, ProjectWrapper, TargetNode, SimpleNodeOutputType, Link, EmscriptenLinkFlagInfo, ContainedItem}, SystemSpecifierWrapper, CompilerDefine, FinalBuildConfig, CompilerFlag, LinkerFlag, gcmake_constants::{SRC_DIR_NAME, INCLUDE_DIR_NAME}, platform_spec_parser::parse_leading_constraint_spec, CodeFileInfo, RetrievedCodeFileType, PreBuildScriptType, CodeFileLang, GivenConstraintSpecParseContext, SystemSpecFeatureType}, file_writers::cmake_writer::cmake_writer_helpers::system_constraint_generator_expression};
 
 use super::{cmake_utils_writer::{CMakeUtilWriter}, cmake_writer_helpers::{system_contstraint_conditional_expression, language_feature_name}};
 use colored::*;
@@ -1400,7 +1400,8 @@ impl<'a> CMakeListsWriter<'a> {
     dep_name: &str,
     is_internally_supported_by_emscripten: bool,
     download_method: DownloadMethodInfo,
-    requires_custom_populate: bool
+    requires_custom_populate: bool,
+    project_hash_to_write: Option<&GCMakeDepIDHash>
   ) -> io::Result<()> {
     let download_url_var: String = format!("{}_DOWNLOAD_URL", dep_name);
 
@@ -1469,6 +1470,15 @@ impl<'a> CMakeListsWriter<'a> {
           download_url_var
         )?;
       }
+    }
+
+    if let Some(hash_info) = project_hash_to_write {
+      writeln!(&self.cmakelists_file,
+        "gcmake_write_dep_hash_file_if_missing( \"${{{}_SOURCE_DIR}}/{}\" \"{}\" )",
+        dep_name,
+        hash_info.relative_hash_file,
+        hash_info.hash_string
+      )?;
     }
 
     // The "actual dep list" is now unused since we populate dependencies using CPM. However, I'm keeping it
@@ -1611,7 +1621,8 @@ impl<'a> CMakeListsWriter<'a> {
       dep_name,
       dep_info.is_internally_supported_by_emscripten(),
       download_method,
-      requires_custom_populate
+      requires_custom_populate,
+      None
     )?;
     Ok(())
   }
@@ -1639,6 +1650,9 @@ impl<'a> CMakeListsWriter<'a> {
           usage_conditional.full_conditional_string_or(true)
         )?;
 
+        // TODO: Rename this variable in all locations. The name is misleading;
+        // this is the relative install location of the dependenency's files, not the
+        // location it's downloaded to at build time.
         self.set_basic_var(
           "\n",
           &format!("{}_RELATIVE_DEP_PATH", dep_name),
@@ -1670,9 +1684,9 @@ impl<'a> CMakeListsWriter<'a> {
             repo_url: dep_info.repo_url().to_string(),
             revision: dep_info.revision().clone(),
           },
-          true // All GCMake projects are FetchContent-ready.
+          false, // All GCMake projects are FetchContent-ready, so they don't require custom population.
+          Some(dep_info.get_hash_info())
         )?;
-
 
         writeln!(&self.cmakelists_file,
           "gcmake_config_file_add_contents( \"find_dependency( {} \n\tPATHS\n\t\t\\\"${{CMAKE_CURRENT_LIST_DIR}}/../{}\\\"\n)\" )",

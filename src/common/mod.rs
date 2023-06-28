@@ -1,5 +1,11 @@
 pub mod prompt;
 
+use base64ct::{Base64Url, Encoding};
+
+pub fn base64_encoded(data: impl AsRef<str>) -> String {
+  return Base64Url::encode_string(data.as_ref().as_bytes());
+}
+
 pub fn make_c_identifier(item: impl AsRef<str>) -> String {
   return item.as_ref()
     .replace(" ", "_")

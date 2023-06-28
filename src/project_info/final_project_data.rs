@@ -1,13 +1,15 @@
 use std::{collections::{HashMap, HashSet, BTreeMap, BTreeSet}, path::{Path, PathBuf}, io, rc::Rc, fs::{self}, iter::FromIterator};
 
-use crate::{project_info::path_manipulation::cleaned_pathbuf, logger};
+use crate::{project_info::path_manipulation::cleaned_pathbuf, logger, program_actions::gcmake_dep_cache_dir, common::base64_encoded};
 
-use super::{path_manipulation::{cleaned_path_str, relative_to_project_root, absolute_path}, final_dependencies::{FinalGCMakeDependency, FinalPredefinedDependencyConfig}, raw_data_in::{RawProject, dependencies::internal_dep_config::AllRawPredefinedDependencies, BuildType, LanguageConfigMap, OutputItemType, PreBuildConfigIn, SpecificCompilerSpecifier, BuildConfigCompilerSpecifier, TargetSpecificBuildType, LinkSection, RawTestFramework, DefaultCompiledLibType, RawCompiledItem, RawDocumentationGeneratorConfig, RawDocGeneratorName, LanguageFeatureSection}, final_project_configurables::{FinalProjectType}, CompiledOutputItem, helpers::{parse_subproject_data, parse_root_project_data, populate_existing_files, find_prebuild_script, PrebuildScriptFile, validate_raw_project_outputs, ProjectOutputType, RetrievedCodeFileType, code_file_type, parse_test_project_data, find_doxyfile_in, validate_doxyfile_in, SphinxConfigFiles, find_sphinx_files, validate_conf_py_in}, PreBuildScript, FinalTestFramework, base_include_prefix_for_test, gcmake_constants::{SRC_DIR_NAME, INCLUDE_DIR_NAME, TESTS_DIR_NAME, SUBPROJECTS_DIR_NAME, DOCS_DIR_NAME}, FinalInstallerConfig, CompilerDefine, FinalBuildConfigMap, make_final_build_config_map, FinalTargetBuildConfigMap, FinalGlobalProperties, FinalShortcutConfig, parsers::{version_parser::ThreePartVersion, general_parser::ParseSuccess}, platform_spec_parser::parse_leading_constraint_spec, SystemSpecifierWrapper, FinalFeatureConfig, FinalFeatureEnabler, CodeFileInfo, FileRootGroup, PreBuildScriptType, FinalDocGeneratorName, FinalDocumentationInfo, CodeFileLang, GivenConstraintSpecParseContext};
+use super::{path_manipulation::{cleaned_path_str, relative_to_project_root, absolute_path}, final_dependencies::{FinalGCMakeDependency, FinalPredefinedDependencyConfig, relative_hash_file_path}, raw_data_in::{RawProject, dependencies::internal_dep_config::AllRawPredefinedDependencies, BuildType, LanguageConfigMap, OutputItemType, PreBuildConfigIn, SpecificCompilerSpecifier, BuildConfigCompilerSpecifier, TargetSpecificBuildType, LinkSection, RawTestFramework, DefaultCompiledLibType, RawCompiledItem, RawDocumentationGeneratorConfig, RawDocGeneratorName, LanguageFeatureSection}, final_project_configurables::{FinalProjectType}, CompiledOutputItem, helpers::{parse_subproject_data, parse_root_project_data, populate_existing_files, find_prebuild_script, PrebuildScriptFile, validate_raw_project_outputs, ProjectOutputType, RetrievedCodeFileType, code_file_type, parse_test_project_data, find_doxyfile_in, validate_doxyfile_in, SphinxConfigFiles, find_sphinx_files, validate_conf_py_in}, PreBuildScript, FinalTestFramework, base_include_prefix_for_test, gcmake_constants::{SRC_DIR_NAME, INCLUDE_DIR_NAME, TESTS_DIR_NAME, SUBPROJECTS_DIR_NAME, DOCS_DIR_NAME}, FinalInstallerConfig, CompilerDefine, FinalBuildConfigMap, make_final_build_config_map, FinalTargetBuildConfigMap, FinalGlobalProperties, FinalShortcutConfig, parsers::{version_parser::ThreePartVersion, general_parser::ParseSuccess}, platform_spec_parser::parse_leading_constraint_spec, SystemSpecifierWrapper, FinalFeatureConfig, FinalFeatureEnabler, CodeFileInfo, FileRootGroup, PreBuildScriptType, FinalDocGeneratorName, FinalDocumentationInfo, CodeFileLang, GivenConstraintSpecParseContext};
 use colored::*;
 
 const SUBPROJECT_JOIN_STR: &'static str = "_S_";
 const TEST_PROJECT_JOIN_STR: &'static str = "_TP_";
 const TEST_TARGET_JOIN_STR: &'static str = "_T_";
+
+const CONFIG_FILE_NAME: &'static str = "cmake_data.yaml";
 
 const ALLOWED_C_STANDARDS: [&'static str; 5] = ["90", "99", "11", "17", "23"];
 const ALLOWED_CPP_STANDARDS: [&'static str; 7] = ["98", "11", "14", "17", "20", "23", "26"];
@@ -24,6 +26,31 @@ fn standard_cmp(
     (Some(first_index), Some(second_index)) => Some(first_index.cmp(&second_index)),
     _ => None
   }
+}
+
+fn find_matching_gcmake_dep_path(
+  dep_name: &str,
+  expected_hash: &str
+) -> io::Result<Option<PathBuf>> {
+  let search_root: PathBuf = gcmake_dep_cache_dir().join(dep_name);
+
+  if !search_root.is_dir() {
+    return Ok(None);
+  }
+
+  for dirent in search_root.read_dir()? {
+    let project_path: PathBuf = dirent?.path();
+
+    if project_path.is_dir() {
+      let hash_file_path: PathBuf = project_path.join(relative_hash_file_path());
+
+      if hash_file_path.is_file() && fs::read_to_string(&hash_file_path)? == expected_hash {
+        return Ok(Some(project_path));
+      }
+    }
+  }
+
+  return Ok(None);
 }
 
 fn resolve_prebuild_script(
@@ -136,7 +163,7 @@ fn project_levels_below_root(clean_path_root: &str) -> io::Result<Option<usize>>
   let mut levels_up_checked: usize = 0;
   let mut path_using: PathBuf = absolute_path(clean_path_root).unwrap();
 
-  path_using.push("cmake_data.yaml");
+  path_using.push(CONFIG_FILE_NAME);
 
   if !path_using.is_file() {
     return Ok(None);
@@ -145,7 +172,7 @@ fn project_levels_below_root(clean_path_root: &str) -> io::Result<Option<usize>>
   path_using.pop();
 
   while path_using.try_exists()? {
-    path_using.push("cmake_data.yaml");
+    path_using.push(CONFIG_FILE_NAME);
     path_using = cleaned_pathbuf(path_using);
 
     if !path_using.is_file() {
@@ -337,7 +364,7 @@ impl FinalProjectData {
         None => return Err(ProjectLoadFailureReason::MissingYaml(format!(
           "The directory \"{}\" does not contain a {} file, so the project level could not be determined.",
           &cleaned_given_root.yellow(),
-          "cmake_data.yaml".yellow()
+          CONFIG_FILE_NAME.yellow()
         )))
       }
     };
@@ -726,17 +753,31 @@ impl FinalProjectData {
 
     if let Some(gcmake_dep_map) = &raw_project.gcmake_dependencies {
       for (dep_name, dep_config) in gcmake_dep_map {
-        let dep_path: String = format!("{}/dep/{}", &project_root_relative_to_cwd, &dep_name);
+        // CPM hashes dependency directories in the global cache, so we can't immediately determine the
+        // exact repository which matches our specified dependency. We get around that by having CMake
+        // write this hash into a file at configure time. Then when gcmake-rust is run again,
+        // we can find the matching dependency repository by checking whether the contents of that
+        // hash file match what we expect.
+        let expected_hash: String = base64_encoded(format!(
+          "{}->{}->{}",
+          dep_name,
+          dep_config.repo_url,
+          dep_config.commit_hash.clone()
+            .unwrap_or(dep_config.commit_hash.clone().unwrap_or_default())
+        ));
 
-        let maybe_dep_project: Option<Rc<FinalProjectData>> = if Path::new(&dep_path).exists() {
-          Some(Rc::new(Self::create_new(
-            &dep_path,
+        let maybe_dep_path: Option<PathBuf> = find_matching_gcmake_dep_path(dep_name, &expected_hash)
+          .map_err(|io_err| ProjectLoadFailureReason::Other(io_err.to_string()))?;
+
+        let maybe_dep_project: Option<Rc<FinalProjectData>> = match maybe_dep_path {
+          None => None,
+          Some(dep_path) => Some(Rc::new(Self::create_new(
+            dep_path.to_str().unwrap(),
             None,
             all_dep_config,
             just_created_project_at
           )?))
-        }
-        else { None };
+        };
 
         gcmake_dependency_projects.insert(
           dep_name.clone(),
@@ -744,6 +785,7 @@ impl FinalProjectData {
             FinalGCMakeDependency::new(
               &dep_name,
               dep_config,
+              expected_hash,
               maybe_dep_project
             )
             .map_err(ProjectLoadFailureReason::Other)?
@@ -1123,7 +1165,8 @@ impl FinalProjectData {
       // standard "versions".
       match language_config.c.as_ref() {
         None => return Err(format!(
-          "Project [{}] makes use of C, but has not specified any C language configuration. Fix by adding a C language configuration to cmake_data.yaml:\n\n{}:\n  {}:\n    standard: 11",
+          "Project [{}] makes use of C, but has not specified any C language configuration. Fix by adding a C language configuration to {}:\n\n{}:\n  {}:\n    standard: 11",
+          CONFIG_FILE_NAME,
           self.get_name_for_error_messages().yellow(),
           "languages".purple(),
           "c".green()
@@ -1158,7 +1201,8 @@ impl FinalProjectData {
     if project_uses_cpp {
       match language_config.cpp.as_ref() {
         None => return Err(format!(
-          "Project [{}] makes use of C++, but has not specified any C++ language configuration. Fix by adding a C++ language configuration to cmake_data.yaml:\n\n{}:\n  {}:\n    standard: 17",
+          "Project [{}] makes use of C++, but has not specified any C++ language configuration. Fix by adding a C++ language configuration to {}:\n\n{}:\n  {}:\n    standard: 17",
+          CONFIG_FILE_NAME,
           self.get_name_for_error_messages().yellow(),
           "languages".purple(),
           "cpp".green()
@@ -1194,10 +1238,11 @@ impl FinalProjectData {
           {
             logger::block(|| {
               logger::warn(format!(
-                "Project [{}] contains .cpp2 files, but its C++ standard is currently set to {}. cppfront (.cpp2) requires C++20 or higher. Please set the C++ language standard to {} or later in cmake_data.yaml. Example:\n",
+                "Project [{}] contains .cpp2 files, but its C++ standard is currently set to {}. cppfront (.cpp2) requires C++20 or higher. Please set the C++ language standard to {} or later in {}. Example:\n",
                 self.get_name_for_error_messages().yellow(),
                 cpp_config.min_standard.to_string().red(),
-                "20".green()
+                "20".green(),
+                CONFIG_FILE_NAME
               ));
 
               println!(
@@ -1238,11 +1283,12 @@ impl FinalProjectData {
           let build_type_name: &str = build_type.name_str();
 
           return Err(format!(
-            "Config issue: Global property '{}' tries to enable IPO by default for the '{}' build configuration, but the project doesn't have a '{}' configuration in its build_configs. To fix, either add a '{}' configuration to build_configs in cmake_data.yaml or remove it from the 'ipo_enabled_by_default_for' list.",
+            "Config issue: Global property '{}' tries to enable IPO by default for the '{}' build configuration, but the project doesn't have a '{}' configuration in its build_configs. To fix, either add a '{}' configuration to build_configs in {} or remove it from the 'ipo_enabled_by_default_for' list.",
             "ipo_enabled_by_default_for".red(),
             build_type_name.yellow(),
             build_type_name.yellow(),
-            build_type_name.yellow()
+            build_type_name.yellow(),
+            CONFIG_FILE_NAME
           ));
         }
       }
@@ -1342,10 +1388,12 @@ impl FinalProjectData {
     let config_tool_name: &str = doc_generator.to_str();
 
     logger::warn(format!(
-      "Project [{}] contains file {}, but hasn't enabled a documentation generator in its cmake_data.yaml. If this is intended, just ignore this warning. Otherwise, enable the {} documentation generator in cmake_data.yaml like this:\n\n{}:\n   generator: {}",
+      "Project [{}] contains file {}, but hasn't enabled a documentation generator in its {}. If this is intended, just ignore this warning. Otherwise, enable the {} documentation generator in {} like this:\n\n{}:\n   generator: {}",
       self.get_name_for_error_messages().yellow(),
       file_relative_to_cwd.as_ref().to_str().unwrap(),
+      CONFIG_FILE_NAME,
       config_tool_name.green(),
+      CONFIG_FILE_NAME,
       "documentation".purple(),
       config_tool_name.green()
     ));

@@ -1,3 +1,18 @@
+function( gcmake_write_dep_hash_file_if_missing
+  file_path
+  hash_string
+)
+  cmake_path( GET file_path PARENT_PATH file_dir )
+  cmake_path( ABSOLUTE_PATH file_dir NORMALIZE )
+  if( NOT EXISTS file_dir )
+    file( MAKE_DIRECTORY "${file_dir}" )
+  endif()
+
+  if( NOT EXISTS file_path )
+    file( WRITE "${file_path}" "${hash_string}" )
+  endif()
+endfunction()
+
 function( ensure_gcmake_config_dirs_exist )
   if( "${CMAKE_SOURCE_DIR}" STREQUAL "${CMAKE_CURRENT_SOURCE_DIR}" )
     if( NOT IS_DIRECTORY "${GCMAKE_CONFIG_DIR}" )

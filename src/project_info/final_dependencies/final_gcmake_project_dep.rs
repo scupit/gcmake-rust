@@ -4,6 +4,12 @@ use crate::project_info::{final_project_data::FinalProjectData, raw_data_in::dep
 
 use super::{FinalGitRepoDescriptor, GitRevisionSpecifier};
 
+const GCMAKE_DEP_HASH_FILE_NAME: &'static str = "unique_hash.txt";
+
+pub fn relative_hash_file_path() -> String {
+  return format!(".gcmake/{}", GCMAKE_DEP_HASH_FILE_NAME);
+}
+
 pub enum GCMakeDependencyStatus {
   // String is the placeholder project name. Used for namespacing targets until the dependency project exists
   // (is cloned) in dep/, when the real project name can be known. 
@@ -11,18 +17,25 @@ pub enum GCMakeDependencyStatus {
   Available(Rc<FinalProjectData>)
 }
 
+pub struct GCMakeDepIDHash {
+  pub hash_string: String,
+  pub relative_hash_file: String
+}
+
 pub struct FinalGCMakeDependency {
   name: String,
   git_repo: FinalGitRepoDescriptor,
   dep_project_status: GCMakeDependencyStatus,
   use_default_features: bool,
-  features: BTreeSet<String>
+  features: BTreeSet<String>,
+  hash_info: GCMakeDepIDHash
 }
 
 impl FinalGCMakeDependency {
   pub fn new(
     dep_name: &str,
     given_config: &UserGivenGCMakeProjectDependency,
+    unique_hash: String,
     maybe_associated_project: Option<Rc<FinalProjectData>>
   ) -> Result<Self, String> {
     let download_specifier: GitRevisionSpecifier = if let Some(tag_string) = &given_config.git_tag {
@@ -46,6 +59,10 @@ impl FinalGCMakeDependency {
         None => GCMakeDependencyStatus::NotDownloaded(dep_name.to_string())
       },
       use_default_features: given_config.use_default_features.unwrap_or(true),
+      hash_info: GCMakeDepIDHash {
+        hash_string: unique_hash,
+        relative_hash_file: relative_hash_file_path()
+      },
       features: given_config.features.clone()
         .map_or(BTreeSet::default(), |feature_set| feature_set.into_iter().collect())
     })
@@ -53,6 +70,10 @@ impl FinalGCMakeDependency {
 
   pub fn given_dependency_name(&self) -> &str {
     &self.name
+  }
+
+  pub fn get_hash_info(&self) -> &GCMakeDepIDHash {
+    &self.hash_info
   }
 
   pub fn project_base_name(&self) -> &str {
