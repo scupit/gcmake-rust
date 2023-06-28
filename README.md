@@ -38,7 +38,7 @@ For common use cases, see the [project overview](docs/overview.md) docs page.
 
 1. Clone the repository: `git clone --recurse-submodules git@github.com:scupit/gcmake-rust.git`
 2. `cd` into the cloned repository.
-3. Switch to the desired branch or release tag: `git checkout v1.6.3`.
+3. Switch to the desired branch or release tag: `git checkout v1.6.4`.
 4. Run `cargo install --path .` to create an optimized build and install the resulting gcmake-rust executable
   to `$HOME/.cargo/bin` (or `%USERPROFILE%\.cargo\bin` on Windows).
 5. Optionally, alias `gcmake-rust` to just `gcmake`.
