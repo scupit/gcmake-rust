@@ -36,6 +36,20 @@ pub mod configuration {
   }
 }
 
+pub struct DefaultProjectConfigOptions {
+  pub supported_compilers: BTreeSet<SpecificCompilerSpecifier>
+}
+
+impl DefaultProjectConfigOptions {
+  pub fn includes_emscripten_support(&self) -> bool {
+    self.supported_compilers.contains(&SpecificCompilerSpecifier::Emscripten)
+  }
+
+  pub fn _includes_cuda_support(&self) -> bool {
+    self.supported_compilers.contains(&SpecificCompilerSpecifier::CUDA)
+  }
+}
+
 pub struct CreatedProject {
   pub name: String,
   pub info: DefaultProjectInfo
@@ -47,31 +61,31 @@ pub enum DefaultProjectInfo {
   TestProject(RawTestProject)
 }
 
-fn should_support_emscripten(project_type_creating: &ProjectTypeCreating) -> bool {
+fn supported_compilers(project_type_creating: &ProjectTypeCreating) -> BTreeSet<SpecificCompilerSpecifier> {
   return match project_type_creating {
-    ProjectTypeCreating::RootProject { include_emscripten_support: true } => true,
-    _ => false
+    ProjectTypeCreating::RootProject { supported_compilers } => BTreeSet::from_iter(supported_compilers.iter().copied()),
+    // Compiler support is only used by root projects. Subprojects "inherit" compiler support information
+    // in CMake code from the root project.
+    _ => BTreeSet::new()
   }
-}
-
-fn supported_compilers_default(include_emscripten_support: bool) -> BTreeSet<SpecificCompilerSpecifier> {
-  let mut supported_compilers: BTreeSet<SpecificCompilerSpecifier> = BTreeSet::from_iter([
-    SpecificCompilerSpecifier::GCC,
-    SpecificCompilerSpecifier::Clang,
-    SpecificCompilerSpecifier::MSVC
-  ]);
-
-  if include_emscripten_support {
-    supported_compilers.insert(SpecificCompilerSpecifier::Emscripten);
-  }
-
-  return supported_compilers;
 }
 
 type BuildConfigByCompiler = BTreeMap<BuildConfigCompilerSpecifier, RawBuildConfig>;
 
-fn build_configs_debug_default(include_emscripten_support: bool) -> BuildConfigByCompiler {
-  let mut debug_config: BuildConfigByCompiler = BTreeMap::from_iter([
+fn filtered_build_config(
+  project_config: &DefaultProjectConfigOptions,
+  build_config: BuildConfigByCompiler
+) -> BuildConfigByCompiler {
+  return build_config.into_iter()
+    .filter(|(compiler, _)| match compiler {
+      BuildConfigCompilerSpecifier::AllCompilers => true,
+      selected => project_config.supported_compilers.contains(&selected.to_specific().unwrap())
+    })
+    .collect();
+}
+
+fn build_configs_debug_default(project_config: &DefaultProjectConfigOptions) -> BuildConfigByCompiler {
+  let debug_config: BuildConfigByCompiler = BTreeMap::from_iter([
     (BuildConfigCompilerSpecifier::GCC, RawBuildConfig {
       compiler_flags: Some(create_string_set([ "-Og", "-g", "-Wall", "-Wextra", "-Wconversion", "-Wuninitialized", "-pedantic", "-pedantic-errors"])),
       link_time_flags: None,
@@ -79,6 +93,12 @@ fn build_configs_debug_default(include_emscripten_support: bool) -> BuildConfigB
       defines: None
     }),
     (BuildConfigCompilerSpecifier::Clang, RawBuildConfig {
+      compiler_flags: Some(create_string_set([ "-Og", "-g", "-Wall", "-Wextra", "-Wconversion", "-Wuninitialized", "-pedantic", "-pedantic-errors"])),
+      link_time_flags: None,
+      linker_flags: None,
+      defines: None
+    }),
+    (BuildConfigCompilerSpecifier::CUDA, RawBuildConfig {
       compiler_flags: Some(create_string_set([ "-Og", "-g", "-Wall", "-Wextra", "-Wconversion", "-Wuninitialized", "-pedantic", "-pedantic-errors"])),
       link_time_flags: None,
       linker_flags: None,
@@ -89,26 +109,20 @@ fn build_configs_debug_default(include_emscripten_support: bool) -> BuildConfigB
       link_time_flags: None,
       linker_flags: None,
       defines: None
+    }),
+    (BuildConfigCompilerSpecifier::Emscripten, RawBuildConfig {
+      compiler_flags: Some(create_string_set([ "-O0", "-g", "-gsource-map" ])),
+      link_time_flags: None,
+      linker_flags: None,
+      defines: None
     })
   ]);
 
-  if include_emscripten_support {
-    debug_config.insert(
-      BuildConfigCompilerSpecifier::Emscripten,
-      RawBuildConfig {
-        compiler_flags: Some(create_string_set([ "-O0", "-g", "-gsource-map" ])),
-        link_time_flags: None,
-        linker_flags: None,
-        defines: None
-      }
-    );
-  }
-
-  return debug_config;
+  return filtered_build_config(project_config, debug_config);
 }
 
-fn build_configs_release_default(include_emscripten_support: bool) -> BuildConfigByCompiler {
-  let mut release_config: BuildConfigByCompiler = BTreeMap::from_iter([
+fn build_configs_release_default(project_config: &DefaultProjectConfigOptions) -> BuildConfigByCompiler {
+  let release_config: BuildConfigByCompiler = BTreeMap::from_iter([
     (BuildConfigCompilerSpecifier::AllCompilers, RawBuildConfig {
       compiler_flags: None,
       link_time_flags: None,
@@ -122,6 +136,12 @@ fn build_configs_release_default(include_emscripten_support: bool) -> BuildConfi
       defines: None
     }),
     (BuildConfigCompilerSpecifier::Clang, RawBuildConfig {
+      compiler_flags: Some(create_string_set([ "-O3" ])),
+      link_time_flags: None,
+      linker_flags: Some(create_string_set([ "-s" ])),
+      defines: None
+    }),
+    (BuildConfigCompilerSpecifier::CUDA, RawBuildConfig {
       compiler_flags: Some(create_string_set([ "-O3" ])),
       link_time_flags: None,
       linker_flags: Some(create_string_set([ "-s" ])),
@@ -132,26 +152,20 @@ fn build_configs_release_default(include_emscripten_support: bool) -> BuildConfi
       link_time_flags: None,
       linker_flags: None,
       defines: None
+    }),
+    (BuildConfigCompilerSpecifier::Emscripten, RawBuildConfig {
+      compiler_flags: Some(create_string_set([ "-O3" ])),
+      link_time_flags: None,
+      linker_flags: None,
+      defines: None
     })
   ]);
 
-  if include_emscripten_support {
-    release_config.insert(
-      BuildConfigCompilerSpecifier::Emscripten,
-      RawBuildConfig {
-        compiler_flags: Some(create_string_set([ "-O3" ])),
-        link_time_flags: None,
-        linker_flags: None,
-        defines: None
-      }
-    );
-  }
-
-  return release_config;
+  return filtered_build_config(project_config, release_config);
 }
 
-fn build_configs_minsizerel_default(include_emscripten_support: bool) -> BuildConfigByCompiler {
-  let mut minsizerel_config: BuildConfigByCompiler = BTreeMap::from_iter([
+fn build_configs_minsizerel_default(project_config: &DefaultProjectConfigOptions) -> BuildConfigByCompiler {
+  let minsizerel_config: BuildConfigByCompiler = BTreeMap::from_iter([
     (BuildConfigCompilerSpecifier::AllCompilers, RawBuildConfig {
       compiler_flags: None,
       link_time_flags: None,
@@ -165,6 +179,12 @@ fn build_configs_minsizerel_default(include_emscripten_support: bool) -> BuildCo
       defines: None
     }),
     (BuildConfigCompilerSpecifier::Clang, RawBuildConfig {
+      compiler_flags: Some(create_string_set([ "-Os" ])),
+      link_time_flags: None,
+      linker_flags: Some(create_string_set([ "-s" ])),
+      defines: None
+    }),
+    (BuildConfigCompilerSpecifier::CUDA, RawBuildConfig {
       compiler_flags: Some(create_string_set([ "-Os" ])),
       link_time_flags: None,
       linker_flags: Some(create_string_set([ "-s" ])),
@@ -175,26 +195,20 @@ fn build_configs_minsizerel_default(include_emscripten_support: bool) -> BuildCo
       link_time_flags: None,
       linker_flags: None,
       defines: None
+    }),
+    (BuildConfigCompilerSpecifier::Emscripten, RawBuildConfig {
+      compiler_flags: Some(create_string_set([ "-Oz" ])),
+      link_time_flags: None,
+      linker_flags: None,
+      defines: None
     })
   ]);
 
-  if include_emscripten_support {
-    minsizerel_config.insert(
-      BuildConfigCompilerSpecifier::Emscripten,
-      RawBuildConfig {
-        compiler_flags: Some(create_string_set([ "-Oz" ])),
-        link_time_flags: None,
-        linker_flags: None,
-        defines: None
-      }
-    );
-  }
-
-  return minsizerel_config;
+  return filtered_build_config(project_config, minsizerel_config);
 }
 
-fn build_configs_relwithdebinfo_default(include_emscripten_support: bool) -> BuildConfigByCompiler {
-  let mut relwithdebinfo_config: BuildConfigByCompiler = BTreeMap::from_iter([
+fn build_configs_relwithdebinfo_default(project_config: &DefaultProjectConfigOptions) -> BuildConfigByCompiler {
+  let relwithdebinfo_config: BuildConfigByCompiler = BTreeMap::from_iter([
     (BuildConfigCompilerSpecifier::AllCompilers, RawBuildConfig {
       compiler_flags: None,
       link_time_flags: None,
@@ -213,36 +227,38 @@ fn build_configs_relwithdebinfo_default(include_emscripten_support: bool) -> Bui
       linker_flags: None,
       defines: None
     }),
+    (BuildConfigCompilerSpecifier::CUDA, RawBuildConfig {
+      compiler_flags: Some(create_string_set([ "-O2", "-g" ])),
+      link_time_flags: None,
+      linker_flags: None,
+      defines: None
+    }),
     (BuildConfigCompilerSpecifier::MSVC, RawBuildConfig {
       compiler_flags: Some(create_string_set([ "/O2", "/DEBUG" ])),
+      link_time_flags: None,
+      linker_flags: None,
+      defines: None
+    }),
+    (BuildConfigCompilerSpecifier::Emscripten, RawBuildConfig {
+      compiler_flags: Some(create_string_set([ "-O2", "-g", "-gsource-map" ])),
       link_time_flags: None,
       linker_flags: None,
       defines: None
     })
   ]);
 
-  if include_emscripten_support {
-    relwithdebinfo_config.insert(
-      BuildConfigCompilerSpecifier::Emscripten,
-      RawBuildConfig {
-        compiler_flags: Some(create_string_set([ "-O2", "-g", "-gsource-map" ])),
-        link_time_flags: None,
-        linker_flags: None,
-        defines: None
-      }
-    );
-  }
-
-  return relwithdebinfo_config;
+  return filtered_build_config(project_config, relwithdebinfo_config);
 }
 
-fn global_defines_default(include_emscripten_support: bool) -> Option<Vec<String>> {
+fn global_defines_default(config: &DefaultProjectConfigOptions) -> Option<Vec<String>> {
   let mut defines_list: Vec<String> = Vec::new();
 
-  if include_emscripten_support {
+  if config.includes_emscripten_support() {
     defines_list.push(String::from("((emscripten)) EMSCRIPTEN"));
   }
 
+  // TODO: Should I add a define for CUDA?
+  // https://docs.nvidia.com/cuda/cuda-compiler-driver-nvcc/index.html#nvcc-identification-macro
   return if defines_list.is_empty()
     { None }
     else { Some(defines_list) };
@@ -286,7 +302,9 @@ pub fn get_default_project_config(
   project_vendor: &str,
   requires_custom_main: Option<bool>
 ) -> RawProject {
-  let include_emscripten_support: bool = should_support_emscripten(project_type_creating);
+  let config_options = DefaultProjectConfigOptions {
+    supported_compilers: supported_compilers(project_type_creating)
+  };
 
   let requires_cppfront: bool = match project_lang {
     MainFileLanguage::Cpp2 => true,
@@ -300,7 +318,7 @@ pub fn get_default_project_config(
     vendor: String::from(project_vendor),
     version: String::from("0.0.1"),
     installer_config: None,
-    supported_compilers: supported_compilers_default(include_emscripten_support),
+    supported_compilers: config_options.supported_compilers.clone(),
     prebuild_config: None,
     documentation: None,
     features: None,
@@ -339,13 +357,13 @@ pub fn get_default_project_config(
     predefined_dependencies: needed_predefined_dependencies(requires_cppfront),
     gcmake_dependencies: None,
     build_configs: BTreeMap::from_iter([
-      (BuildType::Debug, build_configs_debug_default(include_emscripten_support)),
-      (BuildType::Release, build_configs_release_default(include_emscripten_support)),
-      (BuildType::MinSizeRel, build_configs_minsizerel_default(include_emscripten_support)),
-      (BuildType::RelWithDebInfo, build_configs_relwithdebinfo_default(include_emscripten_support))
+      (BuildType::Debug, build_configs_debug_default(&config_options)),
+      (BuildType::Release, build_configs_release_default(&config_options)),
+      (BuildType::MinSizeRel, build_configs_minsizerel_default(&config_options)),
+      (BuildType::RelWithDebInfo, build_configs_relwithdebinfo_default(&config_options))
     ]),
     default_build_type: BuildType::Debug,
-    global_defines: global_defines_default(include_emscripten_support),
+    global_defines: global_defines_default(&config_options),
     global_properties: Some(RawGlobalPropertyConfig {
       default_compiled_lib_type: None,
       ipo_enabled_by_default_for: Some(BTreeSet::from([

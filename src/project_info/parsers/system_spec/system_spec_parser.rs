@@ -138,6 +138,7 @@ pub enum SingleSystemSpec {
   GCC,
   Clang,
   MSVC,
+  CUDA,
   Emscripten
 }
 
@@ -155,6 +156,7 @@ impl SingleSystemSpec {
       "gcc" => Self::GCC,
       "clang" => Self::Clang,
       "msvc" => Self::MSVC,
+      "cuda" => Self::CUDA,
       "emscripten" => Self::Emscripten,
       _ => return None
     };
@@ -174,6 +176,7 @@ impl SingleSystemSpec {
       Self::GCC => "gcc",
       Self::Clang => "clang",
       Self::MSVC => "msvc",
+      Self::CUDA => "cuda",
       Self::Emscripten => "emscripten"
     }
   }

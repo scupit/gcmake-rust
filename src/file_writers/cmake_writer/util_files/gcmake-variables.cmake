@@ -7,6 +7,12 @@ else()
   set( USING_GCC FALSE )
 endif()
 
+if( "${CMAKE_C_COMPILER_ID}" MATCHES "NVIDIA" OR "${CMAKE_CXX_COMPILER_ID}" MATCHES "NVIDIA" )
+  set( USING_NVIDIA TRUE )
+else()
+  set( USING_NVIDIA FALSE )
+endif()
+
 if( CMAKE_SYSTEM_NAME STREQUAL "Emscripten" )
   set( USING_EMSCRIPTEN TRUE )
 else()

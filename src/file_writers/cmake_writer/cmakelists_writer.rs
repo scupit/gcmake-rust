@@ -151,6 +151,7 @@ fn compiler_matcher_string(compiler_specifier: &SpecificCompilerSpecifier) -> &s
   match compiler_specifier {
     SpecificCompilerSpecifier::GCC => "USING_GCC",
     SpecificCompilerSpecifier::Clang => "USING_CLANG",
+    SpecificCompilerSpecifier::CUDA => "USING_NVIDIA",
     SpecificCompilerSpecifier::MSVC => "USING_MSVC",
     SpecificCompilerSpecifier::Emscripten => "USING_EMSCRIPTEN"
   }
@@ -1852,6 +1853,7 @@ impl<'a> CMakeListsWriter<'a> {
           BuildConfigCompilerSpecifier::GCC => SpecificCompilerSpecifier::GCC,
           BuildConfigCompilerSpecifier::Clang => SpecificCompilerSpecifier::Clang,
           BuildConfigCompilerSpecifier::MSVC => SpecificCompilerSpecifier::MSVC,
+          BuildConfigCompilerSpecifier::CUDA => SpecificCompilerSpecifier::CUDA,
           BuildConfigCompilerSpecifier::Emscripten => SpecificCompilerSpecifier::Emscripten,
           BuildConfigCompilerSpecifier::AllCompilers => continue
         };

@@ -203,6 +203,7 @@ pub enum BuildConfigCompilerSpecifier {
   AllCompilers,
   GCC,
   Clang,
+  CUDA,
   MSVC,
   Emscripten
 }
@@ -214,6 +215,7 @@ impl BuildConfigCompilerSpecifier {
       Self::GCC => Some(SpecificCompilerSpecifier::GCC),
       Self::Clang => Some(SpecificCompilerSpecifier::Clang),
       Self::MSVC => Some(SpecificCompilerSpecifier::MSVC),
+      Self::CUDA => Some(SpecificCompilerSpecifier::CUDA),
       Self::Emscripten => Some(SpecificCompilerSpecifier::Emscripten)
     }
   }
@@ -257,6 +259,7 @@ pub enum SpecificCompilerSpecifier {
   GCC,
   Clang,
   MSVC,
+  CUDA,
   Emscripten
 }
 
@@ -265,6 +268,7 @@ impl SpecificCompilerSpecifier {
     return match *self {
       Self::GCC => "GCC",
       Self::Clang => "Clang",
+      Self::CUDA => "NVIDIA Cuda",
       Self::MSVC => "MSVC",
       Self::Emscripten => "Emscripten"
     }

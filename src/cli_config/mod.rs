@@ -1,4 +1,6 @@
-use crate::{project_generator::configuration::{MainFileLanguage, CreationProjectOutputType, OutputLibType}};
+use std::collections::HashSet;
+
+use crate::{project_generator::configuration::{MainFileLanguage, CreationProjectOutputType, OutputLibType}, project_info::raw_data_in::SpecificCompilerSpecifier};
 
 use self::clap_cli_config::{CLIProjectOutputTypeIn, NewProjectSubcommand};
 pub mod clap_cli_config;
@@ -14,7 +16,7 @@ pub struct CLIProjectGenerationInfo {
   pub project_name: String,
   pub project_type: CLIProjectTypeGenerating,
   pub project_output_type: Option<CreationProjectOutputType>,
-  pub should_include_emscripten_support: bool,
+  pub supported_compilers: HashSet<SpecificCompilerSpecifier>,
   pub should_use_cpp2_main_if_possible: bool
 }
 
@@ -28,12 +30,22 @@ impl From<NewProjectSubcommand> for CLIProjectGenerationInfo {
           else if project_info.c      { Some(MainFileLanguage::C) }
           else                        { None };
 
+        let mut supported_compilers: HashSet<SpecificCompilerSpecifier> = HashSet::from([
+          SpecificCompilerSpecifier::GCC,
+          SpecificCompilerSpecifier::Clang,
+          SpecificCompilerSpecifier::MSVC
+        ]);
+
+        if !project_info.no_emscripten {
+          supported_compilers.insert(SpecificCompilerSpecifier::Emscripten);
+        }
+
         return CLIProjectGenerationInfo {
           project_name: project_info.new_project_name,
           language,
           project_type: CLIProjectTypeGenerating::RootProject,
           project_output_type: convert_given_project_type(&project_info.project_type),
-          should_include_emscripten_support: !project_info.no_emscripten,
+          supported_compilers,
           should_use_cpp2_main_if_possible: project_info.cpp2
         }
       },
@@ -50,7 +62,7 @@ impl From<NewProjectSubcommand> for CLIProjectGenerationInfo {
           project_type: CLIProjectTypeGenerating::Subproject,
           project_output_type: convert_given_project_type(&subproject_info.subproject_type),
           // This will be ignored for subprojects
-          should_include_emscripten_support: false,
+          supported_compilers: HashSet::new(),
           should_use_cpp2_main_if_possible: subproject_info.cpp2
         }
       },
@@ -61,7 +73,7 @@ impl From<NewProjectSubcommand> for CLIProjectGenerationInfo {
           project_type: CLIProjectTypeGenerating::Test,
           project_output_type: Some(CreationProjectOutputType::Executable),
           // This will be ignored for test projects
-          should_include_emscripten_support: false,
+          supported_compilers: HashSet::new(),
           should_use_cpp2_main_if_possible: false
         }
       }

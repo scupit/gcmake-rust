@@ -1,10 +1,10 @@
-use std::{rc::Rc};
-use crate::{cli_config::{CLIProjectGenerationInfo, CLIProjectTypeGenerating}, project_info::{path_manipulation::cleaned_path_str, final_project_data::{FinalProjectData}}, logger::exit_error_log, project_generator::{GeneralNewProjectInfo, create_project_at}};
+use std::{rc::Rc, collections::HashSet};
+use crate::{cli_config::{CLIProjectGenerationInfo, CLIProjectTypeGenerating}, project_info::{path_manipulation::cleaned_path_str, final_project_data::{FinalProjectData}, raw_data_in::SpecificCompilerSpecifier}, logger::exit_error_log, project_generator::{GeneralNewProjectInfo, create_project_at}};
 use colored::*;
 
 pub enum ProjectTypeCreating {
   RootProject {
-    include_emscripten_support: bool
+    supported_compilers: HashSet<SpecificCompilerSpecifier>
   },
   Subproject {
     parent_project: Rc<FinalProjectData>
@@ -30,7 +30,7 @@ impl ProjectTypeCreating {
       CLIProjectTypeGenerating::RootProject => {
         match project_operating_on {
           None => ProjectTypeCreating::RootProject {
-            include_emscripten_support: generation_info.should_include_emscripten_support
+            supported_compilers: generation_info.supported_compilers.clone()
           },
           Some(_) => {
             exit_error_log(&format!(
