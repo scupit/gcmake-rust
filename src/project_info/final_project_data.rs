@@ -13,6 +13,7 @@ const CONFIG_FILE_NAME: &'static str = "cmake_data.yaml";
 
 const ALLOWED_C_STANDARDS: [&'static str; 5] = ["90", "99", "11", "17", "23"];
 const ALLOWED_CPP_STANDARDS: [&'static str; 7] = ["98", "11", "14", "17", "20", "23", "26"];
+const ALLOWED_CUDA_STANDARDS: [&'static str; 8] = ["98", "03", "11", "14", "17", "20", "23", "26"];
 
 fn standard_cmp(
   slice: &[&str],
@@ -245,8 +246,9 @@ struct NeededParseInfoFromParent {
   inherited_features: Rc<BTreeMap<String, FinalFeatureConfig>>
 }
 
-struct CodeFileStats {
+pub struct CodeFileStats {
   num_cpp2_files: i32,
+  num_cuda_files: i32,
   num_cpp_files: i32,
   num_c_files: i32
 }
@@ -255,13 +257,22 @@ impl CodeFileStats {
   pub fn new() -> Self {
     return Self {
       num_cpp2_files: 0,
+      num_cuda_files: 0,
       num_cpp_files: 0,
       num_c_files: 0
     };
   }
 
+  pub fn requires_cuda(&self) -> bool {
+    self.num_cuda_files > 0
+  }
+
   pub fn requires_cpp(&self) -> bool {
     self.num_cpp2_files + self.num_cpp_files > 0
+  }
+
+  pub fn requires_cpp2(&self) -> bool {
+    self.num_cpp2_files > 0
   }
 
   pub fn requires_c(&self) -> bool {
@@ -1137,7 +1148,7 @@ impl FinalProjectData {
     }
   }
 
-  fn get_code_file_stats(&self) -> CodeFileStats {
+  pub fn get_code_file_stats(&self) -> CodeFileStats {
     let mut file_stats = CodeFileStats::new();
 
     self.iter_all_code_files(&mut |code_file| {
@@ -1146,7 +1157,8 @@ impl FinalProjectData {
         CodeFileLang::Cpp { used_grammar } => match used_grammar {
           CppFileGrammar::Cpp1 => file_stats.num_cpp_files += 1,
           CppFileGrammar::Cpp2 => file_stats.num_cpp2_files += 1
-        }
+        },
+        CodeFileLang::Cuda => file_stats.num_cuda_files += 1
       }
     });
 
@@ -1157,10 +1169,7 @@ impl FinalProjectData {
     let language_config = self.get_language_info();
     let code_file_stats: CodeFileStats = self.get_code_file_stats();
     
-    let project_uses_c: bool = code_file_stats.requires_c();
-    let project_uses_cpp: bool = code_file_stats.requires_cpp();
-
-    if project_uses_c {
+    if code_file_stats.requires_c() {
       // Maybe make this a global if needed. It may be useful to print a list of supported language
       // standard "versions".
       match language_config.c.as_ref() {
@@ -1198,7 +1207,7 @@ impl FinalProjectData {
       }
     }
 
-    if project_uses_cpp {
+    if code_file_stats.requires_cpp() {
       match language_config.cpp.as_ref() {
         None => return Err(format!(
           "Project [{}] makes use of C++, but has not specified any C++ language configuration. Fix by adding a C++ language configuration to {}:\n\n{}:\n  {}:\n    standard: 17",
@@ -1210,7 +1219,7 @@ impl FinalProjectData {
         Some(cpp_config) => {
           if !ALLOWED_CPP_STANDARDS.contains(&cpp_config.min_standard.as_str()) {
             return Err(format!(
-              "C++ Language standard must be one of [98, 11, 14, 17, 20, 23], but {} was given",
+              "C++ Language standard must be one of [98, 11, 14, 17, 20, 23, 26], but {} was given",
               cpp_config.min_standard.to_string().red()
             ));
           }
@@ -1218,7 +1227,7 @@ impl FinalProjectData {
           if let Some(exact_cpp_standard) = cpp_config.exact_standard.as_ref() {
             if standard_cmp(ALLOWED_CPP_STANDARDS.as_slice(), exact_cpp_standard.as_str(), cpp_config.min_standard.as_str()).unwrap().is_lt() {
               return Err(format!(
-                "Given {} for C++ ({}) is earlier than the project's {} for C ({}). Please set the exact_standard to {} or later.",
+                "Given {} for C++ ({}) is earlier than the project's {} for C++ ({}). Please set the exact_standard to {} or later.",
                 "exact_standard".red(),
                 exact_cpp_standard.red(),
                 "minimum_standard".cyan(),
@@ -1250,6 +1259,44 @@ impl FinalProjectData {
                 "20".green()
               );
             })
+          }
+        }
+      }
+    }
+
+    if code_file_stats.requires_cuda() {
+      match language_config.cuda.as_ref() {
+        None => return Err(format!(
+          "Project [{}] makes use of CUDA, but has not specified any CUDA language configuration. Fix by adding a CUDA language configuration to {}:\n\n{}:\n  {}:\n    standard: 17",
+          CONFIG_FILE_NAME,
+          self.get_name_for_error_messages().yellow(),
+          "languages".purple(),
+          "cuda".green()
+        )),
+        Some(cuda_config) => {
+          if !ALLOWED_CUDA_STANDARDS.contains(&cuda_config.min_standard.as_str()) {
+            return Err(format!(
+              "CUDA Language standard must be one of [98, 03, 11, 14, 17, 20, 23, 26], but {} was given",
+              cuda_config.min_standard.to_string().red()
+            ));
+          }
+
+          if let Some(exact_cuda_standard) = cuda_config.exact_standard.as_ref() {
+            if standard_cmp(ALLOWED_CUDA_STANDARDS.as_slice(), exact_cuda_standard.as_str(), cuda_config.min_standard.as_str()).unwrap().is_lt() {
+              return Err(format!(
+                "Given {} for CUDA ({}) is earlier than the project's {} for CUDA ({}). Please set the exact_standard to {} or later.",
+                "exact_standard".red(),
+                exact_cuda_standard.red(),
+                "minimum_standard".cyan(),
+                cuda_config.min_standard.cyan(),
+                cuda_config.min_standard.green()
+              ));
+            }
+
+            logger::warn(format!(
+              "This project sets an {} for the CUDA language, however doing so isn't recommended unless you never want your project to be compiled with a later standard.",
+              "exact_standard".yellow()
+            ));
           }
         }
       }
@@ -1769,6 +1816,17 @@ impl FinalProjectData {
     output_item: &CompiledOutputItem
   ) -> Result<(), String> {
     let entry_file_type: RetrievedCodeFileType = output_item.get_entry_file().code_file_type();
+
+    if let CodeFileLang::Cuda = entry_file_type.lang().unwrap() {
+      // NOTE: Might remove this restriction in the future. For now, I want all projects to
+      // be as cross-platform as possible.
+      return Err(format!(
+        "The entry_file for '{}' in project '{}' is a CUDA file. {}.",
+        item_name.yellow(),
+        self.get_project_base_name(),
+        "Entry files cannot be CUDA files".yellow()
+      ));
+    }
 
     match *output_item.get_output_type() {
       OutputItemType::Executable => {

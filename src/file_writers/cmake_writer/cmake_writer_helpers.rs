@@ -82,7 +82,7 @@ fn make_inner_system_spec_generator_expression(
         SingleSystemSpec::Unix => "TARGET_SYSTEM_IS_UNIX",
         SingleSystemSpec::MinGW => "USING_MINGW",
         SingleSystemSpec::GCC => "USING_GCC",
-        SingleSystemSpec::CUDA => "USING_NVIDIA",
+        SingleSystemSpec::CUDA => "USING_CUDA",
         SingleSystemSpec::Clang => "USING_CLANG",
         SingleSystemSpec::MSVC => "USING_MSVC",
         SingleSystemSpec::Emscripten => "USING_EMSCRIPTEN",
@@ -163,7 +163,7 @@ fn make_inner_system_spec_conditional_expr(spec_tree: &SystemSpecExpressionTree)
         SingleSystemSpec::Unix => "TARGET_SYSTEM_IS_UNIX",
         SingleSystemSpec::MinGW => "USING_MINGW",
         SingleSystemSpec::GCC => "USING_GCC",
-        SingleSystemSpec::CUDA => "USING_NVIDIA",
+        SingleSystemSpec::CUDA => "USING_CUDA",
         SingleSystemSpec::Clang => "USING_CLANG",
         SingleSystemSpec::MSVC => "USING_MSVC",
         SingleSystemSpec::Emscripten => "USING_EMSCRIPTEN"

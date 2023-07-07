@@ -1,7 +1,7 @@
 use std::collections::{HashMap, BTreeSet, BTreeMap};
 use serde::{Serialize, Deserialize};
 
-use super::{raw_project_in::{RawCompiledItem, RawProject, BuildType}, PreBuildConfigIn, SingleLanguageConfig, LanguageConfigMap};
+use super::{raw_project_in::{RawCompiledItem, RawProject, BuildType}, PreBuildConfigIn, LanguageConfigMap};
 
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(deny_unknown_fields)]
@@ -43,14 +43,9 @@ impl Into<RawProject> for RawSubproject {
       // NOTE: This language config is only a placeholder. Subprojects will inherit
       // language info from their parent project.
       languages: LanguageConfigMap {
-        c: Some(SingleLanguageConfig {
-          min_standard: String::from("11"),
-          exact_standard: None
-        }),
-        cpp: Some(SingleLanguageConfig {
-          min_standard: String::from("17"),
-          exact_standard: None
-        })
+        c: None,
+        cpp: None,
+        cuda: None
       },
       // Placeholder, no meaning
       test_framework: None,

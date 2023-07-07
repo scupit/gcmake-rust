@@ -384,6 +384,21 @@ pub fn load_graph(
             "predefined_dependecies".purple(),
             "cppfront".yellow()
           ))
+        },
+        AdditionalConfigValidationFailureReason::HasCUDAFilesButMissingCUDADependency { } => {
+          return wrap_error_msg(format!(
+            "Project [{}] contains at least one {} file ({} or {}), but is missing the predefined dependency '{}'. '{}' dependency is required for projects which contain CUDA files. Please list {} as one of the project root's {}. For example:\n\n{}:\n  {}:\n    git_tag: master",
+            borrow_project(project).project_debug_name().yellow(),
+            "cuda".green(),
+            ".cu".green(),
+            ".cuh".green(),
+            "cuda".yellow(),
+            "cuda".yellow(),
+            "cuda".yellow(),
+            "predefined_dependecies".purple(),
+            "predefined_dependecies".purple(),
+            "cuda".yellow()
+          ))
         }
       },
     }

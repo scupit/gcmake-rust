@@ -133,7 +133,8 @@ pub struct NewTestProjectCommand {
 pub enum FileCreationLang {
   C,
   Cpp,
-  Cpp2
+  Cpp2,
+  Cuda
 }
 
 #[derive(Args)]

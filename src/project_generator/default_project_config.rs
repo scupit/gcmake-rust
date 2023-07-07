@@ -331,7 +331,9 @@ pub fn get_default_project_config(
       cpp: Some(SingleLanguageConfig {
         min_standard: default_cpp_standard(requires_cppfront).to_string(),
         exact_standard: None
-      })
+      }),
+      // TODO: Add a default CUDA configuration if language support is enabled.
+      cuda: None
     },
     output: HashMap::from_iter([
       (format!("{}", project_name), RawCompiledItem {

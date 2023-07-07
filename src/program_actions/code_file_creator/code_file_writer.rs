@@ -102,17 +102,23 @@ pub fn extension_for(file_type: CodeFileType, is_private: bool) -> &'static str 
         | FileCreationLang::Cpp2 => {
         if is_private { ".private.hpp" }
         else { ".hpp" }
+      },
+      FileCreationLang::Cuda => {
+        if is_private { ".private.cuh" }
+        else { ".cuh" }
       }
     },
     CodeFileType::Source(lang) => match lang {
       FileCreationLang::C => ".c",
       FileCreationLang::Cpp => ".cpp",
-      FileCreationLang::Cpp2 => ".cpp2"
+      FileCreationLang::Cpp2 => ".cpp2",
+      FileCreationLang::Cuda => ".cu"
     },
     CodeFileType::TemplateImpl(lang) => match lang {
       FileCreationLang::C => "IGNORED",
       FileCreationLang::Cpp
-        | FileCreationLang::Cpp2 => {
+        | FileCreationLang::Cpp2
+        | FileCreationLang::Cuda => {
         if is_private { ".private.tpp" }
         else { ".tpp" }
       }
@@ -168,10 +174,10 @@ fn write_header(
           &file_info.shared_name_c_ident
         )?;
       },
-      FileCreationLang::Cpp => {
+      FileCreationLang::Cpp | FileCreationLang::Cuda => {
         writeln!(
           header_file,
-          "\nclass {}\n{{\n\tpublic:\n\t\tvoid printName();\n}};\n",
+          "\n#include <vector>\n\nstd::vector<float> placeholder_{}(const std::vector<float>& xs, const std::vector<float>& ys);\n",
           &file_info.shared_name_c_ident
         )?;
       },
@@ -240,6 +246,14 @@ fn write_compiled_lib_header_section(
         &file_info.shared_name_c_ident
       )?;
     },
+    FileCreationLang::Cuda => {
+      writeln!(
+        header_file,
+        "\n#include <vector>\n\n{}std:vector<float> placeholder_{}(const std::vector<float>& xs, const std::vector<float>& ys);\n",
+        export_macro,
+        &file_info.shared_name_c_ident
+      )?;
+    },
     FileCreationLang::Cpp2 => {
       writeln!(
         header_file,
@@ -289,6 +303,38 @@ fn write_source(
           &source_file,
           "#include <iostream>\n\nvoid {}::printName() {{\n\tstd::cout << \"{}\\n\";\n}}",
           &file_info.shared_name_c_ident,
+          &file_info.shared_name_c_ident
+        )?;
+      },
+      FileCreationLang::Cuda => {
+        writeln!(
+          &source_file,
+          r#"
+#include <thrust/device_vector.h>
+
+__global__ void addVec(float *A, float *B, float* C) {{
+  int i = threadIdx.x;
+  C[i] = A[i] + B[i];
+}}
+
+std::vector<float> placeholder_{}(const std::vector<float>& xs, const std::vector<float>& ys) {{
+  std::vector<float> result;
+
+  thrust::device_vector<float> A(vec.begin(), vec.end());
+  thrust::device_vector<float> B(other.vec.begin(), other.vec.end());
+
+  thrust::device_vector<float> C(FloatVec::size);
+
+  addVec<<<1, FloatVec::size>>>(
+    thrust::raw_pointer_cast(A.data()),
+    thrust::raw_pointer_cast(B.data()),
+    thrust::raw_pointer_cast(C.data())
+  );
+
+  thrust::copy(C.begin(), C.end(), result.begin());
+  return result;
+}}
+          "#,
           &file_info.shared_name_c_ident
         )?;
       },

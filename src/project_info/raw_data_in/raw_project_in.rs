@@ -12,7 +12,8 @@ pub type TargetBuildConfigMap = BTreeMap<TargetSpecificBuildType, BuildTypeOptio
 #[serde(deny_unknown_fields)]
 pub struct LanguageConfigMap {
   pub c: Option<SingleLanguageConfig>,
-  pub cpp: Option<SingleLanguageConfig>
+  pub cpp: Option<SingleLanguageConfig>,
+  pub cuda: Option<SingleLanguageConfig>
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]

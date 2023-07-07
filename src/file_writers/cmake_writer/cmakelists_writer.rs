@@ -5,6 +5,16 @@ use crate::{project_info::{final_project_data::{FinalProjectData, CppFileGrammar
 use super::{cmake_utils_writer::{CMakeUtilWriter}, cmake_writer_helpers::{system_contstraint_conditional_expression, language_feature_name}};
 use colored::*;
 
+lazy_static! {
+  static ref CUDA_CONSTRAINT: SystemSpecifierWrapper = parse_leading_constraint_spec(
+    "(( cuda ))",
+    GivenConstraintSpecParseContext {
+      maybe_valid_feature_list: None,
+      is_before_output_name: false
+    }
+  ).unwrap().unwrap() .value;
+}
+
 const RUNTIME_BUILD_DIR_VAR: &'static str = "${MY_RUNTIME_OUTPUT_DIR}";
 const LIB_BUILD_DIR_VAR: &'static str = "${MY_LIBRARY_OUTPUT_DIR}";
 
@@ -151,7 +161,7 @@ fn compiler_matcher_string(compiler_specifier: &SpecificCompilerSpecifier) -> &s
   match compiler_specifier {
     SpecificCompilerSpecifier::GCC => "USING_GCC",
     SpecificCompilerSpecifier::Clang => "USING_CLANG",
-    SpecificCompilerSpecifier::CUDA => "USING_NVIDIA",
+    SpecificCompilerSpecifier::CUDA => "USING_CUDA",
     SpecificCompilerSpecifier::MSVC => "USING_MSVC",
     SpecificCompilerSpecifier::Emscripten => "USING_EMSCRIPTEN"
   }
@@ -435,9 +445,42 @@ impl<'a> CMakeListsWriter<'a> {
       writeln!(&self.cmakelists_file, "cmake_minimum_required( VERSION 3.25 )")?;
     }
 
+    let file_stats = self.project_data.get_code_file_stats();
+    let mut initial_lang_list: Vec<&str> = Vec::new();
+
+    if file_stats.requires_c() {
+      initial_lang_list.push("\"C\"");
+    }
+
+    if file_stats.requires_cpp() {
+      initial_lang_list.push("\"CXX\"");
+    }
+
+    self.set_basic_var(
+      "",
+      "_language_list",
+      &initial_lang_list.join(" ")
+    )?;
+
+    if file_stats.requires_cuda() {
+      self.set_basic_option(
+        "",
+        "GCMAKE_ENABLE_CUDA",
+        "OFF",
+        "When ON, any CUDA files in the project will be added to the build."
+      )?;
+
+      // Appending CUDA to the language list tells CMAKE to check for the CUDA compiler driver,
+      // and automatically enables internal configuration options important to the CUDA language.
+      writeln!(
+        &self.cmakelists_file,
+        "if( GCMAKE_ENABLE_CUDA )\n\tlist( APPEND _langauge_list \"CUDA\" )\nendif()"
+      )?;
+    }
+
     // Project metadata
     writeln!(&self.cmakelists_file,
-      "project( {}\n\tVERSION {}\n\tDESCRIPTION \"{}\"\n)",
+      "\nproject( {}\n\tVERSION {}\n\tDESCRIPTION \"{}\"\n\tLANGUAGES ${{_language_list}}\n)",
       self.project_data.get_full_namespaced_project_name(),
       self.project_data.version.to_string(),
       self.project_data.get_description()
@@ -2009,8 +2052,14 @@ impl<'a> CMakeListsWriter<'a> {
     let relative_path: &str = if fixed_file_path.starts_with('/')
       { &fixed_file_path[1..] }
       else { &fixed_file_path[..] };
+    
+    let mut result: String = format!("\"${{{}}}/{}\"", used_path_prefix_var, relative_path);
 
-    return format!("\"${{{}}}/{}\"", used_path_prefix_var, relative_path);
+    if let CodeFileLang::Cuda = code_file_info_in.code_file_type().lang().unwrap() {
+      result = system_constraint_generator_expression(&CUDA_CONSTRAINT, result);
+    }
+
+    return result;
   }
 
   fn set_code_file_collection(

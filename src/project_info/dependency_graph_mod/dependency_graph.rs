@@ -1,6 +1,6 @@
 use std::{cell::{RefCell}, rc::{Rc, Weak}, hash::{Hash, Hasher}, collections::{BTreeMap, BTreeSet, VecDeque}, borrow::Borrow, path::{Path, PathBuf}, iter::FromIterator, cmp::Ordering};
 
-use crate::{project_info::{LinkMode, CompiledOutputItem, PreBuildScript, OutputItemLinks, final_project_data::FinalProjectData, final_dependencies::{FinalGCMakeDependency, FinalPredefinedDependencyConfig, GCMakeDependencyStatus, FinalRequirementSpecifier, FinalTargetConfig, FinalExternalRequirementSpecifier, FinalPredepInfo}, LinkSpecifier, FinalProjectType, parsers::{link_spec_parser::{LinkAccessMode, LinkSpecTargetList, LinkSpecifierTarget}, system_spec::platform_spec_parser::SystemSpecifierWrapper}, raw_data_in::{dependencies::internal_dep_config::raw_dep_common::RawEmscriptenConfig, OutputItemType}, FinalFeatureEnabler, PreBuildScriptType}};
+use crate::{project_info::{LinkMode, CompiledOutputItem, PreBuildScript, OutputItemLinks, final_project_data::{FinalProjectData, CodeFileStats}, final_dependencies::{FinalGCMakeDependency, FinalPredefinedDependencyConfig, GCMakeDependencyStatus, FinalRequirementSpecifier, FinalTargetConfig, FinalExternalRequirementSpecifier, FinalPredepInfo}, LinkSpecifier, FinalProjectType, parsers::{link_spec_parser::{LinkAccessMode, LinkSpecTargetList, LinkSpecifierTarget}, system_spec::platform_spec_parser::SystemSpecifierWrapper}, raw_data_in::{dependencies::internal_dep_config::raw_dep_common::RawEmscriptenConfig, OutputItemType}, FinalFeatureEnabler, PreBuildScriptType, SystemSpecExpressionTree, SingleSystemSpec}};
 
 use super::hash_wrapper::RcRefcHashWrapper;
 use colored::*;
@@ -51,6 +51,7 @@ impl<'a> CycleNode<'a> {
 
 pub enum AdditionalConfigValidationFailureReason<'a> {
   HasCpp2ButMissingCppfrontDependency { },
+  HasCUDAFilesButMissingCUDADependency { },
   EmscriptenHTMLPathPointsToNonexistent {
     target: Rc<RefCell<TargetNode<'a>>>,
     absolute_path_to_html_file: PathBuf,
@@ -1438,28 +1439,56 @@ impl<'a> DependencyGraph<'a> {
     Ok(())
   }
 
-  fn associate_cppfront_with_dependent_targets(&self) -> Result<(), GraphLoadFailureReason<'a>> {
+  // NOTE: GCMake doesn't really have "plugins". However, cppfront and CUDA 
+  fn associate_plugin_libs_with_dependent_targets(&self) -> Result<(), GraphLoadFailureReason<'a>> {
+    let mut project_requires_cppfront: bool = false;
+    let mut project_requires_cuda: bool = false;
+
     if let Some(normal_project) = self.project_wrapper().maybe_normal_project() {
-      if normal_project.any_files_contain_cpp2_grammar() {
+      let file_stats: CodeFileStats = normal_project.get_code_file_stats();
+
+      if file_stats.requires_cpp2() {
+        project_requires_cppfront = true;
+
         if !self.get_predefined_dependencies().contains_key("cppfront") {
           return Err(GraphLoadFailureReason::FailedAdditionalProjectValidation {
             project: Weak::upgrade(&self.current_graph_ref).unwrap(),
             failure_reason: AdditionalConfigValidationFailureReason::HasCpp2ButMissingCppfrontDependency { }
-          })
+          });
+        }
+      }
+
+      if file_stats.requires_cuda() {
+        project_requires_cuda = true;
+
+        if !self.get_predefined_dependencies().contains_key("cuda") {
+          return Err(GraphLoadFailureReason::FailedAdditionalProjectValidation {
+            project: Weak::upgrade(&self.current_graph_ref).unwrap(),
+            failure_reason: AdditionalConfigValidationFailureReason::HasCUDAFilesButMissingCUDADependency { }
+          });
         }
       }
     }
-
-    let all_project_targets_require_cppfront: bool = match self.project_wrapper().maybe_normal_project() {
-      Some(normal_project) => normal_project.any_files_contain_cpp2_grammar(),
-      None => false
-    };
 
     let cppfront_artifacts_target: Option<Rc<RefCell<TargetNode<'a>>>> = self.root_project().as_ref().borrow()
       .predefined_deps
       .get("cppfront")
       .map(|cppfront_graph|
         Rc::clone(cppfront_graph.as_ref().borrow().targets.borrow().get("artifacts").unwrap())
+      );
+
+    let cuda_rt_target: Option<Rc<RefCell<TargetNode<'a>>>> = self.root_project().as_ref().borrow()
+      .predefined_deps
+      .get("cuda")
+      .map(|cuda_graph|
+        Rc::clone(cuda_graph.as_ref().borrow().targets.borrow().get("runtime").unwrap())
+      );
+
+    let cuda_static_rt_target: Option<Rc<RefCell<TargetNode<'a>>>> = self.root_project().as_ref().borrow()
+      .predefined_deps
+      .get("cuda")
+      .map(|cuda_graph|
+        Rc::clone(cuda_graph.as_ref().borrow().targets.borrow().get("runtime_static").unwrap())
       );
 
     let borrowed_target_map = self.targets.borrow();
@@ -1471,21 +1500,13 @@ impl<'a> DependencyGraph<'a> {
       target_refs.push(pre_build_node);
     }
 
-    for target_config in target_refs{
+    for target_config in target_refs {
       let target: &mut TargetNode = &mut target_config.as_ref().borrow_mut();
 
-      // TODO: No need to calculate this if the project already requires cppfront.
-      // Low priority.
-      let target_requires_cppfront: bool = match target.get_contained_item() {
-        ContainedItem::CompiledOutput(output) => output.get_entry_file().uses_cpp2_grammar(),
-        ContainedItem::PreBuild(pre_build_script) => match pre_build_script.get_type() {
-          PreBuildScriptType::Exe(pre_build_exe) => pre_build_exe.entry_file.uses_cpp2_grammar(),
-          _ => false
-        }
-        _ => false
-      };
-
-      if all_project_targets_require_cppfront || target_requires_cppfront {
+      // TODO: If a project requires cppfront but the pre-build script doesn't,
+      // we probably shouldn't link cppfront::artifacts to the pre-build script.
+      // I don't think this causes issues currently though, so it might be fine.
+      if project_requires_cppfront {
         assert!(
           cppfront_artifacts_target.is_some(),
           "cppfront::artifacts should be guaranteed to exist when loading the FinalProjectData."
@@ -1497,6 +1518,47 @@ impl<'a> DependencyGraph<'a> {
           SystemSpecifierWrapper::default(),
           Rc::downgrade(&unwrapped_artifacts_target),
           LinkMode::Private
+        ));
+      }
+
+
+      if project_requires_cuda {
+        let target_already_has_cuda_rt: bool = [
+          cuda_rt_target.as_ref().unwrap(),
+          cuda_static_rt_target.as_ref().unwrap()
+        ]
+            .iter()
+            .any(|rt_target| target.get_depends_on().contains_key(&rt_target.as_ref().borrow().unique_target_id()));
+
+        if target_already_has_cuda_rt {
+          continue;
+        }
+
+        // We'll use the shared CUDA runtime by default, since that seems to be the standard.
+        let unwrapped_cudart_target = cuda_rt_target.clone().unwrap();
+
+        let cuda_link_mode: LinkMode = match target.get_contained_item() {
+          ContainedItem::PreBuild(pre_build) if pre_build.is_exe() => LinkMode::Private,
+          ContainedItem::CompiledOutput(output_item) => match output_item.get_output_type() {
+            // For compiled libraries, default to PUBLIC inheritance mode to cover all bases.
+            // This can probably be set to PRIVATE if we don't use CUDA in public header files.
+            // TODO: Set this to private if we don't have any CUDA header files. Keep it PUBLIC otherwise.
+            OutputItemType::CompiledLib
+              | OutputItemType::SharedLib
+              | OutputItemType::StaticLib => LinkMode::Public,
+            OutputItemType::Executable => LinkMode::Private,
+            OutputItemType::HeaderOnlyLib => LinkMode::Interface
+          },
+          _ => {
+            unreachable!("Predefined libraries and non-compiled pre-build scripts shouldn't require our code to link a CUDA runtime to them.");
+          }
+        };
+
+        target.insert_link(Link::new(
+          unwrapped_cudart_target.as_ref().borrow().get_name().to_string(),
+          SystemSpecifierWrapper::Specific(SystemSpecExpressionTree::Value(SingleSystemSpec::CUDA)),
+          Rc::downgrade(&unwrapped_cudart_target),
+          cuda_link_mode
         ));
       }
     }
@@ -1531,7 +1593,7 @@ impl<'a> DependencyGraph<'a> {
           message if this is not the case.
   */
   fn ensure_proper_predefined_dep_links(&self) -> Result<(), GraphLoadFailureReason<'a>> {
-    self.associate_cppfront_with_dependent_targets()?;
+    self.associate_plugin_libs_with_dependent_targets()?;
 
     // "External requirements" for predefined dependencies must be loaded here because
     // we know that all predefined dependencies used by the project have been loaded at this point.

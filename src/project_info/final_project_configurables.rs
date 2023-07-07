@@ -186,6 +186,13 @@ impl PreBuildScript {
     return &self.type_config;
   }
 
+  pub fn is_exe(&self) -> bool {
+    match self.get_type() {
+      PreBuildScriptType::Exe(_) => true,
+      _ => false
+    }
+  }
+
   fn generated_files_by_type(&self, file_type: RetrievedCodeFileType) -> BTreeSet<&CodeFileInfo> {
     return self.generated_code
       .iter()

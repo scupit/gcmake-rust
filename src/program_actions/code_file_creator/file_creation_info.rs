@@ -133,7 +133,8 @@ pub fn validate_which_generating(
       }
     }
     FileCreationLang::Cpp
-      | FileCreationLang::Cpp2 => (),
+      | FileCreationLang::Cpp2
+      | FileCreationLang::Cuda => (),
   }
 
   Ok(())

@@ -5,12 +5,13 @@ use regex::Regex;
 
 use super::{raw_data_in::{RawProject, RawSubproject, OutputItemType, RawTestProject}, path_manipulation::{cleaned_pathbuf, relative_to_project_root}, final_project_data::{ProjectLoadFailureReason, CppFileGrammar}, CodeFileInfo};
 
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 pub enum CodeFileLang {
   C,
   Cpp {
     used_grammar: CppFileGrammar
-  }
+  },
+  Cuda
 }
 
 #[derive(Clone)]
@@ -23,6 +24,15 @@ pub enum RetrievedCodeFileType {
 }
 
 impl RetrievedCodeFileType {
+  pub fn lang(&self) -> Option<CodeFileLang> {
+    return match self {
+      RetrievedCodeFileType::Header(lang) => Some(lang.clone()),
+      RetrievedCodeFileType::Source(lang) => Some(lang.clone()),
+      RetrievedCodeFileType::TemplateImpl => Some(CodeFileLang::Cpp { used_grammar: CppFileGrammar::Cpp1 }),
+      RetrievedCodeFileType::Unknown => None
+    }
+  }
+
   pub fn is_source(&self) -> bool {
     match self {
       Self::Source { .. } => true,
@@ -55,11 +65,13 @@ pub fn code_file_type(any_path_type: impl AsRef<Path>) -> RetrievedCodeFileType 
       "cpp2"                          => RetrievedCodeFileType::Source(CodeFileLang::Cpp { used_grammar: CppFileGrammar::Cpp2 }),
       "c"                             => RetrievedCodeFileType::Source(CodeFileLang::C),
       "cc"| "cpp" | "cxx"             => RetrievedCodeFileType::Source(CodeFileLang::Cpp { used_grammar: CppFileGrammar::Cpp1 }),
+      "cu"                            => RetrievedCodeFileType::Source(CodeFileLang::Cuda),
       // NOTE: I'm treating ".h" headers as C only. Any C++ projects which use ".h" for
       // C++ headers will also contain C++ source files (therefore requiring a C++ language configuration
       // for the project), so this shouldn't cause any errors.
       "h"                             => RetrievedCodeFileType::Header(CodeFileLang::C),
       "hh" | "hpp" | "hxx"            => RetrievedCodeFileType::Header(CodeFileLang::Cpp { used_grammar: CppFileGrammar::Cpp1 }),
+      "cuh"                           => RetrievedCodeFileType::Header(CodeFileLang::Cuda),
       "tpp" | "tcc" | "txx" | "inl"   => RetrievedCodeFileType::TemplateImpl,
       _                               => RetrievedCodeFileType::Unknown
     },
@@ -197,7 +209,7 @@ pub fn validate_doxyfile_in(doxyfile_in_path: &Path) -> Result<(), String> {
 pub fn find_prebuild_script(project_root: &str) -> Option<PrebuildScriptFile> {
   let pre_build_file_base_name: &str = "pre_build";
 
-  for possible_exe_file in file_variants(project_root, pre_build_file_base_name, vec!["c", "cxx", "cpp", "cpp2"]) {
+  for possible_exe_file in file_variants(project_root, pre_build_file_base_name, vec!["c", "cxx", "cpp", "cpp2", "cu"]) {
     if Path::exists(possible_exe_file.as_path()) {
       return Some(PrebuildScriptFile::Exe(cleaned_pathbuf(possible_exe_file)));
     }
