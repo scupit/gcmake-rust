@@ -1,6 +1,6 @@
 use std::{collections::{HashSet, BTreeMap, BTreeSet }, fs::File, io::{self, Write, ErrorKind}, path::{PathBuf, Path}, rc::Rc, cell::{RefCell, Ref}, iter::FromIterator};
 
-use crate::{project_info::{final_project_data::{FinalProjectData, CppFileGrammar}, path_manipulation::{relative_to_project_root}, final_dependencies::{GitRevisionSpecifier, PredefinedCMakeComponentsModuleDep, PredefinedSubdirDep, PredefinedCMakeModuleDep, FinalPredepInfo, GCMakeDependencyStatus, FinalPredefinedDependencyConfig, PredefinedDepFunctionality, FinalDownloadMethod, FinalDebianPackagesConfig, GCMakeDepIDHash}, raw_data_in::{BuildType, BuildConfigCompilerSpecifier, SpecificCompilerSpecifier, OutputItemType, TargetSpecificBuildType, dependencies::internal_dep_config::{CMakeModuleType}, DefaultCompiledLibType}, FinalProjectType, CompiledOutputItem, LinkMode, FinalTestFramework, dependency_graph_mod::dependency_graph::{DependencyGraph, OrderedTargetInfo, ProjectWrapper, TargetNode, SimpleNodeOutputType, Link, EmscriptenLinkFlagInfo, ContainedItem}, SystemSpecifierWrapper, CompilerDefine, FinalBuildConfig, CompilerFlag, LinkerFlag, gcmake_constants::{SRC_DIR_NAME, INCLUDE_DIR_NAME}, platform_spec_parser::parse_leading_constraint_spec, CodeFileInfo, RetrievedCodeFileType, PreBuildScriptType, CodeFileLang, GivenConstraintSpecParseContext, SystemSpecFeatureType}, file_writers::cmake_writer::cmake_writer_helpers::system_constraint_generator_expression};
+use crate::{project_info::{final_project_data::{FinalProjectData, CppFileGrammar}, path_manipulation::{relative_to_project_root}, final_dependencies::{GitRevisionSpecifier, PredefinedCMakeComponentsModuleDep, PredefinedSubdirDep, PredefinedCMakeModuleDep, FinalPredepInfo, GCMakeDependencyStatus, FinalPredefinedDependencyConfig, PredefinedDepFunctionality, FinalDownloadMethod, FinalDebianPackagesConfig, GCMakeDepIDHash}, raw_data_in::{BuildType, BuildConfigCompilerSpecifier, SpecificCompilerSpecifier, OutputItemType, TargetSpecificBuildType, dependencies::internal_dep_config::{CMakeModuleType}, DefaultCompiledLibType}, FinalProjectType, CompiledOutputItem, LinkMode, FinalTestFramework, dependency_graph_mod::dependency_graph::{DependencyGraph, OrderedTargetInfo, ProjectWrapper, TargetNode, SimpleNodeOutputType, Link, EmscriptenLinkFlagInfo, ContainedItem}, SystemSpecifierWrapper, CompilerDefine, FinalBuildConfig, CompilerFlag, LinkerFlag, gcmake_constants::{SRC_DIR_NAME, INCLUDE_DIR_NAME}, platform_spec_parser::parse_leading_constraint_spec, CodeFileInfo, RetrievedCodeFileType, PreBuildScriptType, CodeFileLang, GivenConstraintSpecParseContext, SystemSpecFeatureType, SystemSpecExpressionTree, SingleSystemSpec}, file_writers::cmake_writer::cmake_writer_helpers::system_constraint_generator_expression};
 
 use super::{cmake_utils_writer::{CMakeUtilWriter}, cmake_writer_helpers::{system_contstraint_conditional_expression, language_feature_name}};
 use colored::*;
@@ -191,30 +191,72 @@ fn flattened_defines_list_string(spacer: &str, defines: &Vec<CompilerDefine>) ->
     .join(&format!("\n{}", spacer))
 }
 
-fn flattened_compiler_flags_string(spacer: &str, compiler_flags: &Vec<CompilerFlag>) -> String {
-  let flattened_string: String = compiler_flags.iter()
-    .map(|CompilerFlag { system_spec, flag_string }| {
+#[derive(Copy, Clone, Eq, PartialEq)]
+enum FlagUseTime {
+  Compile,
+  Link
+}
+
+#[derive(Copy, Clone)]
+struct FlagOptions {
+  from_compiler: SpecificCompilerSpecifier,
+  to_compiler: SpecificCompilerSpecifier
+}
+
+fn single_flag_string(
+  CompilerFlag { system_spec, flag_string }: &CompilerFlag,
+  flag_use: FlagUseTime,
+  options: &FlagOptions
+) -> String {
+
+  // NOTE: We don't have to do any special transformations to the linker flags
+  // because CMake sends them to the correct program automatically.
+  match (options.from_compiler, options.to_compiler, flag_use) {
+    (from_compiler, SpecificCompilerSpecifier::CUDA, FlagUseTime::Compile) if from_compiler != SpecificCompilerSpecifier::CUDA => {
+      let escaped_for_cuda: String = system_constraint_generator_expression(
+        &system_spec.intersection(&SystemSpecifierWrapper::Specific(
+          SystemSpecExpressionTree::Value(SingleSystemSpec::CUDA)
+        )),
+        // TODO: I actually need to add these to CUDA flags, not CXX flags.
+        // Need to change which ones these are written to for each compiler in general. That's annoying.
+        &quote_escaped_string(&format!("SHELL:-Xcompiler {}", flag_string.trim()))
+      );
+
+      return format!("\"{}\"", escaped_for_cuda);
+    },
+    _ => {
       let escaped: String = system_constraint_generator_expression(
         system_spec,
         &quote_escaped_string(flag_string.trim())
       );
 
-      format!("\"{}\"", escaped)
-    })
+      return format!("\"{}\"", escaped);
+    }
+  }
+}
+
+fn flattened_compiler_flags_string(
+  spacer: &str,
+  compiler_flags: &Vec<CompilerFlag>,
+  flag_use: FlagUseTime,
+  options: FlagOptions
+) -> String {
+  let flattened_string: String = compiler_flags.iter()
+    .map(|flag| single_flag_string(flag, flag_use, &options))
     .collect::<Vec<String>>()
     .join(&format!("\n{}", spacer));
 
   return format!(" {} ", flattened_string)
 }
 
-fn flattened_linker_flags_string(linker_flags: &Vec<LinkerFlag>) -> String {
+fn flattened_linker_flags_string(
+  linker_flags: &Vec<LinkerFlag>,
+  options: FlagOptions
+) -> String {
   let comma_separated_flags: String = linker_flags.iter()
-    .map(|LinkerFlag { system_spec, flag_string }|
-      system_constraint_generator_expression(
-        system_spec,
-        &quote_escaped_string(flag_string.trim())
-      )
-    )
+    .map(|flag| quote_escaped_string(
+      &single_flag_string(flag, FlagUseTime::Link, &options)
+    ))
     .collect::<Vec<String>>()
     .join(",");
 
@@ -474,7 +516,7 @@ impl<'a> CMakeListsWriter<'a> {
       // and automatically enables internal configuration options important to the CUDA language.
       writeln!(
         &self.cmakelists_file,
-        "if( GCMAKE_ENABLE_CUDA )\n\tlist( APPEND _langauge_list \"CUDA\" )\nendif()"
+        "if( GCMAKE_ENABLE_CUDA )\n\tlist( APPEND _language_list \"CUDA\" )\nendif()"
       )?;
     }
 
@@ -557,6 +599,10 @@ impl<'a> CMakeListsWriter<'a> {
     )?;
 
     writeln!(&self.cmakelists_file,
+      "set( GCMAKE_ADDITIONAL_CUDA_FLAGS \"\" CACHE STRING \"SEMICOLON SEPARATED list of additional compiler flags to build the project with. Useful for static analyzers or flags like -march which shouldn't be included by default\" )"
+    )?;
+
+    writeln!(&self.cmakelists_file,
       "set( GCMAKE_ADDITIONAL_LINK_TIME_FLAGS \"\" CACHE STRING \"SEMICOLON SEPARATED list of additional link-time flags to build the project with\" )"
     )?;
 
@@ -570,6 +616,10 @@ impl<'a> CMakeListsWriter<'a> {
 
     writeln!(&self.cmakelists_file,
       "set( ${{PROJECT_NAME}}_ADDITIONAL_COMPILER_FLAGS \"\" CACHE STRING \"SEMICOLON SEPARATED list of additional compiler flags to build project '${{PROJECT_NAME}}' with. Useful for static analyzers or flags like -march which shouldn't be included by default\" )"
+    )?;
+
+    writeln!(&self.cmakelists_file,
+      "set( ${{PROJECT_NAME}}_ADDITIONAL_CUDA_FLAGS \"\" CACHE STRING \"SEMICOLON SEPARATED list of additional CUDA flags to build project '${{PROJECT_NAME}}' with. Useful for static analyzers or flags like -march which shouldn't be included by default\" )"
     )?;
 
     writeln!(&self.cmakelists_file,
@@ -1073,6 +1123,24 @@ impl<'a> CMakeListsWriter<'a> {
       }
     }
 
+    if let Some(cuda_config) = language_config.cuda.as_ref() {
+      self.set_basic_var(
+        "",
+        "PROJECT_CUDA_LANGUAGE_MINIMUM_STANDARD",
+        &cuda_config.min_standard.to_string()
+      )?;
+      
+      if let Some(cpp_exact_standard) = cuda_config.exact_standard.as_ref() {
+        has_exact_cpp_standard = true;
+
+        self.set_basic_var(
+          "",
+          "PROJECT_CUDA_LANGUAGE_EXACT_STANDARD",
+          cpp_exact_standard
+        )?;
+      }
+    }
+
     writeln!(&self.cmakelists_file,
       "\nif( \"${{CMAKE_SOURCE_DIR}}\" STREQUAL \"${{CMAKE_CURRENT_SOURCE_DIR}}\" )"
     )?;
@@ -1094,6 +1162,15 @@ impl<'a> CMakeListsWriter<'a> {
       }
       else {
         self.write_message("\t", "${PROJECT_NAME} is using at least C++${PROJECT_CXX_LANGUAGE_MINIMUM_STANDARD}")?;
+      }
+    }
+
+    if language_config.cpp.is_some() {
+      if has_exact_cpp_standard {
+        self.write_message("\t", "${PROJECT_NAME} is using CUDA${PROJECT_CUDA_LANGUAGE_EXACT_STANDARD}")?;
+      }
+      else {
+        self.write_message("\t", "${PROJECT_NAME} is using at least CUDA${PROJECT_CUDA_LANGUAGE_MINIMUM_STANDARD}")?;
       }
     }
 
@@ -1911,16 +1988,17 @@ impl<'a> CMakeListsWriter<'a> {
       }
     }
 
-    let mut has_written_a_config: bool = false;
-    let mut if_prefix: &str = "";
-
     for (compiler, config_map) in &simplified_map {
+      let configuring_cuda: bool = match compiler {
+        SpecificCompilerSpecifier::CUDA => true,
+        _ => false
+      };
+
       if !config_map.is_empty() {
         let compiler_check_string: &str = compiler_matcher_string(compiler);
 
         writeln!(&self.cmakelists_file,
-          "{}if( {} )",
-          if_prefix,
+          "if( {} )",
           compiler_check_string 
         )?;
 
@@ -1929,10 +2007,34 @@ impl<'a> CMakeListsWriter<'a> {
 
           // Write compiler flags per compiler for each config.
           if build_config.has_compiler_flags() {
+            if !configuring_cuda {
+              writeln!(&self.cmakelists_file,
+                "\tlist( APPEND {}_LOCAL_COMPILER_FLAGS\n\t\t{}\n\t)",
+                &uppercase_config_name,
+                &flattened_compiler_flags_string(
+                  "\t\t",
+                  &build_config.compiler_flags,
+                  FlagUseTime::Compile,
+                  FlagOptions {
+                    from_compiler: *compiler,
+                    to_compiler: *compiler
+                  }
+                )
+              )?;
+            }
+
             writeln!(&self.cmakelists_file,
-              "\tlist( APPEND {}_LOCAL_COMPILER_FLAGS\n\t\t{}\n\t)",
+              "\tlist( APPEND {}_LOCAL_CUDA_FLAGS\n\t\t{}\n\t)",
               &uppercase_config_name,
-              &flattened_compiler_flags_string("\t\t", &build_config.compiler_flags)
+              &flattened_compiler_flags_string(
+                "\t\t",
+                &build_config.compiler_flags,
+                FlagUseTime::Compile,
+                FlagOptions {
+                  from_compiler: *compiler,
+                  to_compiler: SpecificCompilerSpecifier::CUDA
+                }
+              )
             )?;
 
             if let SpecificCompilerSpecifier::Emscripten = compiler {
@@ -1941,7 +2043,15 @@ impl<'a> CMakeListsWriter<'a> {
               writeln!(&self.cmakelists_file,
                 "\tlist( APPEND {}_LOCAL_LINK_FLAGS\n\t\t{}\n\t)",
                 &uppercase_config_name,
-                &flattened_compiler_flags_string("\t\t", &build_config.compiler_flags)
+                &flattened_compiler_flags_string(
+                  "\t\t",
+                  &build_config.compiler_flags,
+                  FlagUseTime::Link,
+                  FlagOptions {
+                    from_compiler: *compiler,
+                    to_compiler: *compiler
+                  }
+                )
               )?;
             }
           }
@@ -1950,7 +2060,15 @@ impl<'a> CMakeListsWriter<'a> {
             writeln!(&self.cmakelists_file,
               "\tlist( APPEND {}_LOCAL_LINK_FLAGS\n\t\t{}\n\t)",
               &uppercase_config_name,
-              &flattened_compiler_flags_string("\t\t", &build_config.link_time_flags)
+              &flattened_compiler_flags_string(
+                "\t\t",
+                &build_config.link_time_flags,
+                FlagUseTime::Link,
+                FlagOptions {
+                  from_compiler: *compiler,
+                  to_compiler: *compiler
+                }
+              )
             )?;
           }
 
@@ -1959,7 +2077,13 @@ impl<'a> CMakeListsWriter<'a> {
             writeln!(&self.cmakelists_file,
               "\tlist( APPEND {}_LOCAL_LINK_FLAGS\n\t\t{}\n\t)",
               uppercase_config_name,
-              &flattened_linker_flags_string(&build_config.linker_flags)
+              &flattened_linker_flags_string(
+                &build_config.linker_flags,
+                FlagOptions {
+                  from_compiler: *compiler,
+                  to_compiler: *compiler
+                }
+              )
             )?;
           }
 
@@ -1972,14 +2096,10 @@ impl<'a> CMakeListsWriter<'a> {
           }
         }
 
-        has_written_a_config = true;
-        if_prefix = "else";
+        writeln!(&self.cmakelists_file, "endif()")?;
       }
     }
 
-    if has_written_a_config {
-      writeln!(&self.cmakelists_file, "endif()")?;
-    }
     Ok(())
   }
 
@@ -2053,13 +2173,13 @@ impl<'a> CMakeListsWriter<'a> {
       { &fixed_file_path[1..] }
       else { &fixed_file_path[..] };
     
-    let mut result: String = format!("\"${{{}}}/{}\"", used_path_prefix_var, relative_path);
+    let mut unquoted_result: String = format!("${{{}}}/{}", used_path_prefix_var, relative_path);
 
     if let CodeFileLang::Cuda = code_file_info_in.code_file_type().lang().unwrap() {
-      result = system_constraint_generator_expression(&CUDA_CONSTRAINT, result);
+      unquoted_result = system_constraint_generator_expression(&CUDA_CONSTRAINT, unquoted_result);
     }
 
-    return result;
+    return format!("\"{}\"", unquoted_result);
   }
 
   fn set_code_file_collection(
@@ -2268,50 +2388,96 @@ impl<'a> CMakeListsWriter<'a> {
   ) -> io::Result<()> {
     let build_type_name_upper: String = build_type.name_str().to_uppercase();
 
-    if build_config.has_compiler_flags() {
-      let flattened_flags_list: String = flattened_compiler_flags_string("\t", &build_config.compiler_flags);
-      writeln!(&self.cmakelists_file,
-        "{}list( APPEND {}_{}_OWN_COMPILER_FLAGS {} )",
-        spacer,
-        output_name,
-        &build_type_name_upper,
-        &flattened_flags_list
-      )?;
+    // Flags should only be added for specific compilers anyways. I think this restriction is
+    // checked when loading the project anyways, but I'll have to check that.
+    if let Some(specific_compiler) = compiler.as_ref() {
+      let configuring_cuda: bool = match specific_compiler {
+        SpecificCompilerSpecifier::CUDA => true,
+        _ => false
+      };
 
-      if let Some(SpecificCompilerSpecifier::Emscripten) = compiler {
-        // According to this doc link:
-        // https://emscripten.org/docs/compiling/Building-Projects.html#building-projects-with-optimizations
-        // An optimal emscripten build needs to pass the same flags during both the compilation and link
-        // phase.
+      if build_config.has_compiler_flags() {
+        if !configuring_cuda {
+          let flattened_flags_list: String = flattened_compiler_flags_string(
+            "\t",
+            &build_config.compiler_flags,
+            FlagUseTime::Compile,
+            FlagOptions {
+              from_compiler: *specific_compiler,
+              to_compiler: *specific_compiler
+            }
+          );
+          writeln!(&self.cmakelists_file,
+            "{}list( APPEND {}_{}_OWN_COMPILER_FLAGS {} )",
+            spacer,
+            output_name,
+            &build_type_name_upper,
+            &flattened_flags_list
+          )?;
+
+          if let Some(SpecificCompilerSpecifier::Emscripten) = compiler {
+            // According to this doc link:
+            // https://emscripten.org/docs/compiling/Building-Projects.html#building-projects-with-optimizations
+            // An optimal emscripten build needs to pass the same flags during both the compilation and link
+            // phase.
+            writeln!(&self.cmakelists_file,
+              "{}list( APPEND {}_{}_OWN_LINK_FLAGS {} )",
+              spacer,
+              output_name,
+              &build_type_name_upper,
+              &flattened_flags_list
+            )?;
+          }
+        }
+
+        writeln!(&self.cmakelists_file,
+          "{}list( APPEND {}_{}_OWN_CUDA_FLAGS {} )",
+          spacer,
+          output_name,
+          &build_type_name_upper,
+          &flattened_compiler_flags_string(
+            "\t",
+            &build_config.compiler_flags,
+            FlagUseTime::Compile,
+            FlagOptions {
+              from_compiler: *specific_compiler,
+              to_compiler: SpecificCompilerSpecifier::CUDA
+            }
+          )
+        )?;
+      }
+
+      if build_config.has_link_time_flags() {
         writeln!(&self.cmakelists_file,
           "{}list( APPEND {}_{}_OWN_LINK_FLAGS {} )",
           spacer,
           output_name,
           &build_type_name_upper,
-          &flattened_flags_list
-          // &flattened_linker_flags_string(&build_config.compiler_flags)
+          flattened_linker_flags_string(
+            &build_config.link_time_flags,
+            FlagOptions {
+              from_compiler: *specific_compiler,
+              to_compiler: *specific_compiler
+            }
+          )
         )?;
       }
-    }
 
-    if build_config.has_link_time_flags() {
-      writeln!(&self.cmakelists_file,
-        "{}list( APPEND {}_{}_OWN_LINK_FLAGS {} )",
-        spacer,
-        output_name,
-        &build_type_name_upper,
-        flattened_linker_flags_string(&build_config.link_time_flags)
-      )?;
-    }
-
-    if build_config.has_linker_flags() {
-      writeln!(&self.cmakelists_file,
-        "{}list( APPEND {}_{}_OWN_LINK_FLAGS {} )",
-        spacer,
-        output_name,
-        &build_type_name_upper,
-        flattened_linker_flags_string(&build_config.linker_flags)
-      )?;
+      if build_config.has_linker_flags() {
+        writeln!(&self.cmakelists_file,
+          "{}list( APPEND {}_{}_OWN_LINK_FLAGS {} )",
+          spacer,
+          output_name,
+          &build_type_name_upper,
+          flattened_linker_flags_string(
+            &build_config.linker_flags,
+            FlagOptions {
+              from_compiler: *specific_compiler,
+              to_compiler: *specific_compiler
+            }
+          )
+        )?;
+      }
     }
 
     if build_config.has_compiler_defines() {
@@ -2341,14 +2507,17 @@ impl<'a> CMakeListsWriter<'a> {
 
       let inherited_linker_flags: String;
       let inherited_compiler_flags: String;
+      let inherited_cuda_flags: String;
 
       if output_data.is_header_only_type() {
         inherited_linker_flags = String::from("");
         inherited_compiler_flags = String::from("");
+        inherited_cuda_flags = String::from("");
       }
       else {
         inherited_linker_flags = format!("\"${{{}_LOCAL_LINK_FLAGS}}\"", &build_type_name_upper);
         inherited_compiler_flags = format!("\"${{{}_LOCAL_COMPILER_FLAGS}}\"", &build_type_name_upper);
+        inherited_cuda_flags = format!("\"${{{}_LOCAL_CUDA_FLAGS}}\"", &build_type_name_upper);
       }
 
       self.set_basic_var(
@@ -2361,6 +2530,12 @@ impl<'a> CMakeListsWriter<'a> {
         "",
         &format!("{}_{}_OWN_COMPILER_FLAGS", variable_base_name, &build_type_name_upper),
         &inherited_compiler_flags
+      )?;
+
+      self.set_basic_var(
+        "",
+        &format!("{}_{}_OWN_CUDA_FLAGS", variable_base_name, &build_type_name_upper),
+        &inherited_cuda_flags
       )?;
 
       self.set_basic_var(
@@ -2427,21 +2602,16 @@ impl<'a> CMakeListsWriter<'a> {
           )?;
         }
 
-        let mut is_first_run: bool = true;
+        let mut has_written_an_if: bool = false;
 
         // Settings by compiler, by config. ('all build type' configs per compiler will also be here).
         for (specific_compiler, config_by_build_type) in by_compiler {
-          let if_spec: &str = if is_first_run
-            { "if" }
-            else { "elseif" };
-
-          is_first_run = false;
-
           writeln!(&self.cmakelists_file,
-            "{}( {} )",
-            if_spec,
+            "\nif( {} )",
             compiler_matcher_string(&specific_compiler)
           )?;
+
+          has_written_an_if = true;
 
           for (given_build_type, build_config) in config_by_build_type {
             if let TargetSpecificBuildType::AllConfigs = &given_build_type {
@@ -2469,8 +2639,7 @@ impl<'a> CMakeListsWriter<'a> {
           }
         }
 
-        // If is_first_run is false, that means an if block has been written to the CMakeLists
-        if !is_first_run {
+        if has_written_an_if {
           writeln!(&self.cmakelists_file,
             "endif()"
           )?;
@@ -2639,7 +2808,14 @@ impl<'a> CMakeListsWriter<'a> {
 
     for (config, _) in self.project_data.get_build_configs() {
       writeln!(&self.cmakelists_file,
-        "\t\t\"$<$<CONFIG:{}>:${{{}_{}_OWN_COMPILER_FLAGS}}>\"",
+        "\t\t\"$<$<AND:$<CONFIG:{}>,$<NOT:$<COMPILE_LANGUAGE:CUDA>>>:${{{}_{}_OWN_COMPILER_FLAGS}}>\"",
+        config.name_str(),
+        variable_base_name,
+        config.name_str().to_uppercase()
+      )?;
+
+      writeln!(&self.cmakelists_file,
+        "\t\t\"$<$<AND:$<CONFIG:{}>,$<COMPILE_LANGUAGE:CUDA>>:${{{}_{}_OWN_CUDA_FLAGS}}>\"",
         config.name_str(),
         variable_base_name,
         config.name_str().to_uppercase()
@@ -2669,6 +2845,8 @@ impl<'a> CMakeListsWriter<'a> {
     let exact_c_standard: Option<&str>;
     let has_cpp_config: bool;
     let exact_cpp_standard: Option<&str>;
+    let has_cuda_config: bool;
+    let exact_cuda_standard: Option<&str>;
 
     // NOTE: One of these language settings is guaranteed to be written because a valid
     // project must make use of either C or C++ in some way.
@@ -2693,6 +2871,18 @@ impl<'a> CMakeListsWriter<'a> {
       None => {
         exact_cpp_standard = None;
         has_cpp_config = false;
+      }
+    }
+
+    match language_config.cuda.as_ref() {
+      Some(cuda_config) => {
+        writeln!(&self.cmakelists_file, "\t\tcuda_std_${{PROJECT_CUDA_LANGUAGE_MINIMUM_STANDARD}}")?;
+        exact_cuda_standard = cuda_config.exact_standard.as_ref().map(|s| s.as_str());
+        has_cuda_config = true;
+      },
+      None => {
+        exact_cuda_standard = None;
+        has_cuda_config = false;
       }
     }
 
@@ -2727,6 +2917,18 @@ impl<'a> CMakeListsWriter<'a> {
     if has_cpp_config {
       writeln!(&self.cmakelists_file,
         "\tCXX_STANDARD_REQUIRED TRUE",
+      )?;
+    }
+
+    if exact_cuda_standard.is_some() {
+      writeln!(&self.cmakelists_file,
+        "\tCUDA_STANDARD ${{PROJECT_CUDA_LANGUAGE_EXACT_STANDARD}}",
+      )?;
+    }
+
+    if has_cuda_config {
+      writeln!(&self.cmakelists_file,
+        "\tCUDA_STANDARD_REQUIRED TRUE",
       )?;
     }
 

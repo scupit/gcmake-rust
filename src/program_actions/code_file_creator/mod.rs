@@ -23,7 +23,7 @@ pub fn handle_create_files(
   command: &CreateFilesCommand
 ) -> Result<bool, String> {
   let which_generating: FileTypeGeneratingInfo = FileTypeGeneratingInfo::new(&command.which)?;
-  validate_which_generating(&command.language, &which_generating)?;
+  validate_which_generating(project_data.get_language_info(), &command.language, &which_generating)?;
 
   let mut global_file_collision_option = FileCollisionHandleOption::Unspecified;
 

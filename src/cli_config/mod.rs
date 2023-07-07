@@ -36,8 +36,12 @@ impl From<NewProjectSubcommand> for CLIProjectGenerationInfo {
           SpecificCompilerSpecifier::MSVC
         ]);
 
-        if !project_info.no_emscripten {
+        if !project_info.with_cuda && !project_info.no_emscripten {
           supported_compilers.insert(SpecificCompilerSpecifier::Emscripten);
+        }
+
+        if project_info.with_cuda {
+          supported_compilers.insert(SpecificCompilerSpecifier::CUDA);
         }
 
         return CLIProjectGenerationInfo {

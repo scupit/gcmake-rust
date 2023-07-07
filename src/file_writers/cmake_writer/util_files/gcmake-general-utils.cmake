@@ -5,6 +5,7 @@
 # interfere with existing behavior in non-GCMake projects.
 macro( _gcmake_clear_scope_default_compiler_flags )
   foreach( build_type IN LISTS GCMAKE_ALL_VALID_BUILD_CONFIGS_UPPER )
+    set( CMAKE_CUDA_FLAGS_${build_type} "" )
     set( CMAKE_CXX_FLAGS_${build_type} "" )
     set( CMAKE_C_FLAGS_${build_type} "" )
   endforeach()
@@ -313,6 +314,11 @@ macro( initialize_build_config_vars )
       ${${LOCAL_TOPLEVEL_PROJECT_NAME}_SANITIZER_FLAGS}
       ${GCMAKE_ADDITIONAL_COMPILER_FLAGS}
       ${${LOCAL_TOPLEVEL_PROJECT_NAME}_ADDITIONAL_COMPILER_FLAGS}
+    )
+
+    set( ${config_name}_LOCAL_CUDA_FLAGS
+      ${GCMAKE_ADDITIONAL_CUDA_FLAGS}
+      ${${LOCAL_TOPLEVEL_PROJECT_NAME}_ADDITIONAL_CUDA_FLAGS}
     )
 
     string( REPLACE ";" "," GCMAKE_ADDITIONAL_LINKER_FLAGS "${GCMAKE_ADDITIONAL_LINKER_FLAGS}" )

@@ -92,7 +92,10 @@ pub struct NewRootProjectCommand {
 
   // Omits Emscripten from the list of supported compilers
   #[arg(long)]
-  pub no_emscripten: bool
+  pub no_emscripten: bool,
+
+  #[arg(long)]
+  pub with_cuda: bool
 }
 
 /// Generate a new subproject

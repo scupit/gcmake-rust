@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use crate::{project_info::path_manipulation::{relative_to_project_root, cleaned_path_str}, cli_config::clap_cli_config::FileCreationLang};
+use crate::{project_info::{path_manipulation::{relative_to_project_root, cleaned_path_str}, raw_data_in::LanguageConfigMap}, cli_config::clap_cli_config::FileCreationLang};
 
 use super::code_file_writer::CodeFileType;
 use colored::*;
@@ -120,6 +120,7 @@ impl SharedFileInfo {
 }
 
 pub fn validate_which_generating(
+  language_config_map: &LanguageConfigMap,
   lang: &FileCreationLang,
   which_generating: &FileTypeGeneratingInfo
 ) -> Result<(), String> {
@@ -131,10 +132,36 @@ pub fn validate_which_generating(
           "Error: ".red()
         ));
       }
+
+      if language_config_map.c.is_none() {
+        return Err(format!(
+          "{}Can't generate a {} file for a project which doesn't support it. To fix this issue, add a configuration for the {} language in the project's root cmake_data.yaml.",
+          "Error: ".red(),
+          "C".yellow(),
+          "C".yellow()
+        ));
+      }
     }
-    FileCreationLang::Cpp
-      | FileCreationLang::Cpp2
-      | FileCreationLang::Cuda => (),
+    FileCreationLang::Cpp | FileCreationLang::Cpp2 => {
+      if language_config_map.cpp.is_none() {
+        return Err(format!(
+          "{}Can't generate a {} file for a project which doesn't support it. To fix this issue, add a configuration for the {} language in the project's root cmake_data.yaml.",
+          "Error: ".red(),
+          "C++ or cpp2".yellow(),
+          "cpp".yellow()
+        ));
+      }
+    },
+    FileCreationLang::Cuda => {
+      if language_config_map.cuda.is_none() {
+        return Err(format!(
+          "{}Can't generate a {} file for a project which doesn't support it. To fix this issue, add a configuration for the {} language in the project's root cmake_data.yaml.",
+          "Error: ".red(),
+          "CUDA".yellow(),
+          "cuda".yellow()
+        ));
+      }
+    }
   }
 
   Ok(())

@@ -204,8 +204,8 @@ pub enum BuildConfigCompilerSpecifier {
   AllCompilers,
   GCC,
   Clang,
-  CUDA,
   MSVC,
+  CUDA,
   Emscripten
 }
 

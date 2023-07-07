@@ -574,12 +574,15 @@ fn parse_compound<'a>(
     None => Ok(None),
     Some(ParseSuccess { value: left_token, rest: after_left }) => match left_token {
       PROJECT_FEATURE_BEGIN | C_FEATURE_BEGIN | CPP_FEATURE_BEGIN | CUDA_FEATURE_BEGIN => match parse_given_str(":", after_left)? {
-        None => Err(ParseError::InvalidIdentifier {
-          what_parsing: format!("{} specifier separator ':'", left_token),
-          identifier: after_left[0..1].to_string(),
-          expected: Some(String::from(":")),
-          parsed_from: after_left.to_string()
-        }),
+        None => match parse_value(s, options) {
+          Ok(Some(_)) => Ok(None),
+          _ => Err(ParseError::InvalidIdentifier {
+            what_parsing: format!("{} specifier separator ':'", left_token),
+            identifier: after_left[0..1].to_string(),
+            expected: Some(String::from(":")),
+            parsed_from: after_left.to_string()
+          })
+        },
         Some(ParseSuccess { value: _, rest: after_separator }) => {
           if options.is_before_output_name && LANGUAGE_FEATURE_BEGIN_TERMS.contains(&left_token) {
             return Err(ParseError::Custom(SpecParseError::LanguageFeatureInOutputName {
@@ -808,6 +811,20 @@ fn test_parser() {
     ParserTestGroup {
       raw_expr: "((windows))",
       expected_tree: Some(SystemSpecExpressionTree::Value(SingleSystemSpec::Windows))
+    },
+    ParserTestGroup {
+      raw_expr: "((cuda))",
+      expected_tree: Some(SystemSpecExpressionTree::Value(SingleSystemSpec::CUDA))
+    },
+    ParserTestGroup {
+      raw_expr: "((cuda and cuda:20))",
+      expected_tree: Some(SystemSpecExpressionTree::And(
+        Box::new(SystemSpecExpressionTree::Value(SingleSystemSpec::CUDA)),
+        Box::new(SystemSpecExpressionTree::Feature {
+          name: String::from("20"),
+          feature_type: SystemSpecFeatureType::CudaLang
+        })
+      ))
     },
     ParserTestGroup {
       raw_expr: "((windows or linux))",

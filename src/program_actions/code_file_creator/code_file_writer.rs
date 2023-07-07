@@ -317,21 +317,25 @@ __global__ void addVec(float *A, float *B, float* C) {{
   C[i] = A[i] + B[i];
 }}
 
+// Assumes xs and ys are the same length
 std::vector<float> placeholder_{}(const std::vector<float>& xs, const std::vector<float>& ys) {{
+  const auto size = xs.size()
+
   std::vector<float> result;
+  result.reserve(size);
 
-  thrust::device_vector<float> A(vec.begin(), vec.end());
-  thrust::device_vector<float> B(other.vec.begin(), other.vec.end());
+  thrust::device_vector<float> A(xs.begin(), xs.end());
+  thrust::device_vector<float> B(ys.begin(), ys.end());
 
-  thrust::device_vector<float> C(FloatVec::size);
+  thrust::device_vector<float> C(size);
 
-  addVec<<<1, FloatVec::size>>>(
+  addVec<<<1, size>>>(
     thrust::raw_pointer_cast(A.data()),
     thrust::raw_pointer_cast(B.data()),
     thrust::raw_pointer_cast(C.data())
   );
 
-  thrust::copy(C.begin(), C.end(), result.begin());
+  thrust::copy(C.begin(), C.end(), std::back_inserter(result));
   return result;
 }}
           "#,

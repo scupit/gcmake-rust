@@ -45,7 +45,7 @@ impl DefaultProjectConfigOptions {
     self.supported_compilers.contains(&SpecificCompilerSpecifier::Emscripten)
   }
 
-  pub fn _includes_cuda_support(&self) -> bool {
+  pub fn includes_cuda_support(&self) -> bool {
     self.supported_compilers.contains(&SpecificCompilerSpecifier::CUDA)
   }
 }
@@ -99,7 +99,7 @@ fn build_configs_debug_default(project_config: &DefaultProjectConfigOptions) -> 
       defines: None
     }),
     (BuildConfigCompilerSpecifier::CUDA, RawBuildConfig {
-      compiler_flags: Some(create_string_set([ "-Og", "-g", "-Wall", "-Wextra", "-Wconversion", "-Wuninitialized", "-pedantic", "-pedantic-errors"])),
+      compiler_flags: None,
       link_time_flags: None,
       linker_flags: None,
       defines: None
@@ -142,9 +142,9 @@ fn build_configs_release_default(project_config: &DefaultProjectConfigOptions) -
       defines: None
     }),
     (BuildConfigCompilerSpecifier::CUDA, RawBuildConfig {
-      compiler_flags: Some(create_string_set([ "-O3" ])),
+      compiler_flags: None,
       link_time_flags: None,
-      linker_flags: Some(create_string_set([ "-s" ])),
+      linker_flags: None,
       defines: None
     }),
     (BuildConfigCompilerSpecifier::MSVC, RawBuildConfig {
@@ -185,9 +185,9 @@ fn build_configs_minsizerel_default(project_config: &DefaultProjectConfigOptions
       defines: None
     }),
     (BuildConfigCompilerSpecifier::CUDA, RawBuildConfig {
-      compiler_flags: Some(create_string_set([ "-Os" ])),
+      compiler_flags: None,
       link_time_flags: None,
-      linker_flags: Some(create_string_set([ "-s" ])),
+      linker_flags: None,
       defines: None
     }),
     (BuildConfigCompilerSpecifier::MSVC, RawBuildConfig {
@@ -228,7 +228,7 @@ fn build_configs_relwithdebinfo_default(project_config: &DefaultProjectConfigOpt
       defines: None
     }),
     (BuildConfigCompilerSpecifier::CUDA, RawBuildConfig {
-      compiler_flags: Some(create_string_set([ "-O2", "-g" ])),
+      compiler_flags: None,
       link_time_flags: None,
       linker_flags: None,
       defines: None
@@ -257,31 +257,80 @@ fn global_defines_default(config: &DefaultProjectConfigOptions) -> Option<Vec<St
     defines_list.push(String::from("((emscripten)) EMSCRIPTEN"));
   }
 
-  // TODO: Should I add a define for CUDA?
-  // https://docs.nvidia.com/cuda/cuda-compiler-driver-nvcc/index.html#nvcc-identification-macro
+  if config.includes_cuda_support() {
+    defines_list.push(String::from("((cuda)) CUDA"));
+  }
+
   return if defines_list.is_empty()
     { None }
     else { Some(defines_list) };
 }
 
-fn needed_predefined_dependencies(requires_cppfront: bool) -> Option<HashMap<String, UserGivenPredefinedDependencyConfig>> {
-  return if requires_cppfront {
-    Some(HashMap::from_iter(
-      [(
-        String::from("cppfront"),
-        UserGivenPredefinedDependencyConfig {
-          git_tag: Some(String::from("master")),
-          commit_hash: None,
-          file_version: None,
-          repo_url: None,
-          options: None
-        }
-      )]
-    ))
+fn needed_predefined_dependencies(
+  config: &DefaultProjectConfigOptions,
+  requires_cppfront: bool
+) -> Option<HashMap<String, UserGivenPredefinedDependencyConfig>> {
+  let mut needed_dependencies: HashMap<String, UserGivenPredefinedDependencyConfig> = HashMap::new();
+
+  if requires_cppfront {
+    needed_dependencies.insert(
+      String::from("cppfront"),
+      UserGivenPredefinedDependencyConfig {
+        git_tag: Some(String::from("master")),
+        commit_hash: None,
+        file_version: None,
+        repo_url: None,
+        options: None
+      }
+    );
   }
-  else {
+
+  if config.includes_cuda_support() {
+    needed_dependencies.insert(
+      String::from("cuda"),
+      UserGivenPredefinedDependencyConfig {
+        git_tag: None,
+        commit_hash: None,
+        file_version: None,
+        repo_url: None,
+        options: None
+      }
+    );
+  }
+
+  return if needed_dependencies.is_empty() {
     None
   }
+  else {
+    Some(needed_dependencies)
+  }
+}
+
+fn language_config(
+  config: &DefaultProjectConfigOptions,
+  requires_cppfront: bool
+) -> LanguageConfigMap {
+  let mut default_lang_config = LanguageConfigMap {
+    c: Some(SingleLanguageConfig {
+      // Should this be 99?
+      min_standard: String::from("11"),
+      exact_standard: None
+    }),
+    cpp: Some(SingleLanguageConfig {
+      min_standard: default_cpp_standard(requires_cppfront).to_string(),
+      exact_standard: None
+    }),
+    cuda: None
+  };
+
+  if config.includes_cuda_support() {
+    default_lang_config.cuda = Some(SingleLanguageConfig {
+      min_standard: String::from("17"),
+      exact_standard: None
+    });
+  }
+
+  return default_lang_config;
 }
 
 fn default_cpp_standard(requires_cppfront: bool) -> &'static str {
@@ -322,19 +371,7 @@ pub fn get_default_project_config(
     prebuild_config: None,
     documentation: None,
     features: None,
-    languages: LanguageConfigMap {
-      c: Some(SingleLanguageConfig {
-        // Should this be 99?
-        min_standard: String::from("11"),
-        exact_standard: None
-      }),
-      cpp: Some(SingleLanguageConfig {
-        min_standard: default_cpp_standard(requires_cppfront).to_string(),
-        exact_standard: None
-      }),
-      // TODO: Add a default CUDA configuration if language support is enabled.
-      cuda: None
-    },
+    languages: language_config(&config_options, requires_cppfront),
     output: HashMap::from_iter([
       (format!("{}", project_name), RawCompiledItem {
         entry_file: String::from(main_file_name(project_name, &project_lang, &project_output_type)),
@@ -356,7 +393,7 @@ pub fn get_default_project_config(
         requires_custom_main
       })
     ]),
-    predefined_dependencies: needed_predefined_dependencies(requires_cppfront),
+    predefined_dependencies: needed_predefined_dependencies(&config_options, requires_cppfront),
     gcmake_dependencies: None,
     build_configs: BTreeMap::from_iter([
       (BuildType::Debug, build_configs_debug_default(&config_options)),
