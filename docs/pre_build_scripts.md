@@ -67,7 +67,7 @@ After adding the file, re-run `gcmake-rust` to regenerate the CMake configuratio
 
 ### Pre-build code generation
 
-As stated in [general pre-build script rule](#general-pre-build-script-rules) #4, 
+As stated in [general pre-build script rule](#general-pre-build-script-rules) #4,
 
 > If a pre-build script is used for code generation (i.e. it generates header, source, or template-impl
 > files which will be used to build your project), each of the code files it generates must be explicitly

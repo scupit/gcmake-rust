@@ -26,6 +26,7 @@ configuration work together.
   How project hierarchy affects each subproject's file inclusion prefix.
 - [Output item rules and constraints](cmake_data_config/properties/output.md#general-output-rules):
   Rules dictating output type and quantity per project instance.
+- [Configuration data formats](cmake_data_config/data_formats.md)
 - [Linking](cmake_data_config/linking.md): How linking works in GCMake
 - [Consuming other GCMake projects](cmake_data_config/properties/properties_list.md#gcmake_dependencies)
 - [Non-GCMake dependency consumption](cmake_data_config/properties/properties_list.md#predefined_dependencies)
@@ -37,6 +38,7 @@ configuration work together.
 - [Compiling using Zig](compile_using_zig.md)
 - [Emscripten Usage and Caveats](./emscripten.md)
 - [Using CCache](./using_ccache.md)
+- [Using CUDA](./using_cuda.md)
 - [Cargo-like project "features"](./cmake_data_config/properties/features.md)
 - [Optional/conditional dependencies](./cmake_data_config/linking.md#conditional-dependencies)
 - [CppFront (*.cpp2) Support](./cppfront_integration.md)

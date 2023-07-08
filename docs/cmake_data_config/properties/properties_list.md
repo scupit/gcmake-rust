@@ -204,6 +204,7 @@ Allowed values:
 - GCC
 - Clang
 - MSVC
+- CUDA
 - Emscripten
 
 ``` yaml
@@ -220,14 +221,18 @@ supported_compilers:
 >
 > **REQUIRED** `LanguageConfigMap`
 
-Describes the language features required by the project. At present, `standard` is the only property
-that can be configured for each language.
+Describes the language features required by the project. A project is only required to configure
+languages it uses.
 
-**NOTE:** Currently both `c` and `cpp` must be configured even if the project doesn't use both C and C++.
+Each language used by a project is required to specify either a `min_standard` or an `exact_standard`.
+`min_standard` means the compiler can use a standard later than or equal to what is given, while
+`exact_standard` requires the compiler to use the given standard. `min_standard` should be used
+almost all the time. `exact_standard` mainly exists for situations where you're trying to debug
+issues which seem to only occur when using a specific standard.
 
-| Property  |  c  |  cpp |
-| --------- | --- | ---- |
-| `standard` | `90` \| `99` \| `11` \| `17` \| `23` | `98` \| `11` \| `14` \| `17` \| `20` \| `23` |
+|  c  |  cpp | cuda |
+| --- | ---- | ---- |
+| `90` \| `99` \| `11` \| `17` \| `23` | `98` \| `11` \| `14` \| `17` \| `20` \| `23` \| `26` | `98` \| `03` \| `11` \| `14` \| `17` \| `20` \| `23` \| `26`
 
 ``` yaml
 languages:
@@ -236,6 +241,10 @@ languages:
     # exact_standard: 23
     min_standard: 99
   cpp:
+    # Using exact_standard is not recommended.
+    # exact_standard: 20
+    min_standard: 17
+  cuda:
     # Using exact_standard is not recommended.
     # exact_standard: 20
     min_standard: 17
