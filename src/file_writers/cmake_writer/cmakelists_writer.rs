@@ -504,20 +504,22 @@ impl<'a> CMakeListsWriter<'a> {
       &initial_lang_list.join(" ")
     )?;
 
-    if file_stats.requires_cuda() {
-      self.set_basic_option(
-        "",
-        "GCMAKE_ENABLE_CUDA",
-        "OFF",
-        "When ON, any CUDA files in the project will be added to the build."
-      )?;
+    if self.project_data.is_root_project() {
+      if file_stats.requires_cuda() {
+        self.set_basic_option(
+          "",
+          "GCMAKE_ENABLE_CUDA",
+          "OFF",
+          "When ON, any CUDA files in the project will be added to the build."
+        )?;
 
-      // Appending CUDA to the language list tells CMAKE to check for the CUDA compiler driver,
-      // and automatically enables internal configuration options important to the CUDA language.
-      writeln!(
-        &self.cmakelists_file,
-        "if( GCMAKE_ENABLE_CUDA )\n\tlist( APPEND _language_list \"CUDA\" )\nendif()"
-      )?;
+        // Appending CUDA to the language list tells CMAKE to check for the CUDA compiler driver,
+        // and automatically enables internal configuration options important to the CUDA language.
+        writeln!(
+          &self.cmakelists_file,
+          "if( GCMAKE_ENABLE_CUDA )\n\tlist( APPEND _language_list \"CUDA\" )\nendif()"
+        )?;
+      }
     }
 
     // Project metadata
