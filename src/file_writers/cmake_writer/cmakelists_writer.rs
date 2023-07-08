@@ -1165,12 +1165,12 @@ impl<'a> CMakeListsWriter<'a> {
       }
     }
 
-    if language_config.cpp.is_some() {
+    if language_config.cuda.is_some() {
       if has_exact_cpp_standard {
-        self.write_message("\t", "${PROJECT_NAME} is using CUDA${PROJECT_CUDA_LANGUAGE_EXACT_STANDARD}")?;
+        self.write_message("\t", "${PROJECT_NAME} is using CUDA ${PROJECT_CUDA_LANGUAGE_EXACT_STANDARD}")?;
       }
       else {
-        self.write_message("\t", "${PROJECT_NAME} is using at least CUDA${PROJECT_CUDA_LANGUAGE_MINIMUM_STANDARD}")?;
+        self.write_message("\t", "${PROJECT_NAME} is using at least CUDA ${PROJECT_CUDA_LANGUAGE_MINIMUM_STANDARD}")?;
       }
     }
 

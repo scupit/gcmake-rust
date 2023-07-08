@@ -298,7 +298,7 @@ impl TargetSpecificBuildType {
 
   pub fn name_string(&self) -> &str {
     return match self {
-      Self::AllConfigs => "All",
+      Self::AllConfigs => "AllConfigs",
       other => other.to_general_build_type().unwrap().name_str()
     }
   }

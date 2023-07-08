@@ -1342,19 +1342,54 @@ impl FinalProjectData {
     }
 
     for (build_type, by_compiler_map) in self.get_build_configs() {
-      for (config_compiler, _) in by_compiler_map {
-        if let Some(specific_compiler) = config_compiler.to_specific() {
-          if !self.supported_compilers.contains(&specific_compiler) {
-            let compiler_name: &str = specific_compiler.name_string();
+      for (config_compiler, final_build_config) in by_compiler_map {
+        match config_compiler {
+          BuildConfigCompilerSpecifier::AllCompilers => {
+            if final_build_config.has_compiler_flags() {
+              return Err(format!(
+                "Config Issue: The global build_config for project '{}' defines {} for '{}:{}'. However, flags cannot be specified globally for all compilers. They can only be specified for individual compilers.",
+                self.get_project_base_name(),
+                "compiler_flags".red(),
+                build_type.name_str(),
+                "AllCompilers".yellow()
+              ));
+            }
 
-            return Err(format!(
-              "Config Issue: '{}' build config defines a section for {}, but {} is not in the supported_compilers list. To fix, either remove the {} section or add {} to the supported_compilers list for this project.",
-              build_type.name_str(),
-              compiler_name,
-              compiler_name,
-              compiler_name,
-              compiler_name
-            ));
+            if final_build_config.has_link_time_flags() {
+              return Err(format!(
+                "Config Issue: The global build_config for project '{}' defines {} for '{}:{}'. However, flags cannot be specified globally for all compilers. They can only be specified for individual compilers.",
+                self.get_project_base_name(),
+                "link_time_flags".red(),
+                build_type.name_str(),
+                "AllCompilers".yellow()
+              ));
+            }
+
+            if final_build_config.has_linker_flags() {
+              return Err(format!(
+                "Config Issue: The global build_config for project '{}' defines {} for '{}:{}'. However, flags cannot be specified globally for all compilers. They can only be specified for individual compilers.",
+                self.get_project_base_name(),
+                "linker_flags".red(),
+                build_type.name_str(),
+                "AllCompilers".yellow()
+              ));
+            }
+          },
+          general_compiler => {
+            let specific_compiler = general_compiler.to_specific().unwrap();
+
+            if !self.supported_compilers.contains(&specific_compiler) {
+              let compiler_name: &str = specific_compiler.name_string();
+
+              return Err(format!(
+                "Config Issue: '{}' build config defines a section for {}, but {} is not in the supported_compilers list. To fix, either remove the {} section or add {} to the supported_compilers list for this project.",
+                build_type.name_str(),
+                compiler_name,
+                compiler_name,
+                compiler_name,
+                compiler_name
+              ));
+            }
           }
         }
       }
@@ -1923,9 +1958,42 @@ impl FinalProjectData {
         }
       }
 
-      for (compiler_specifier, _) in config_by_compiler {
+      for (compiler_specifier, final_build_config) in config_by_compiler {
         match compiler_specifier {
-          BuildConfigCompilerSpecifier::AllCompilers => continue,
+          BuildConfigCompilerSpecifier::AllCompilers => {
+            if final_build_config.has_compiler_flags() {
+              return Err(format!(
+                "The build_config for {} in project '{}' defines {} for '{}:{}'. However, flags cannot be specified globally for all compilers. They can only be specified for individual compilers.",
+                item_name.yellow(),
+                self.get_project_base_name(),
+                "compiler_flags".red(),
+                build_type_name,
+                "AllCompilers".yellow()
+              ));
+            }
+
+            if final_build_config.has_link_time_flags() {
+              return Err(format!(
+                "The build_config for {} in project '{}' defines {} for '{}:{}'. However, flags cannot be specified globally for all compilers. They can only be specified for individual compilers.",
+                item_name.yellow(),
+                self.get_project_base_name(),
+                "link_time_flags".red(),
+                build_type_name,
+                "AllCompilers".yellow()
+              ));
+            }
+
+            if final_build_config.has_linker_flags() {
+              return Err(format!(
+                "The build_config for {} in project '{}' defines {} for '{}:{}'. However, flags cannot be specified globally for all compilers. They can only be specified for individual compilers.",
+                item_name.yellow(),
+                self.get_project_base_name(),
+                "linker_flags".red(),
+                build_type_name,
+                "AllCompilers".yellow()
+              ));
+            }
+          },
           narrowed_specifier => {
             let specific_specifier: SpecificCompilerSpecifier = narrowed_specifier.to_specific().unwrap();
 
