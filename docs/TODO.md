@@ -9,11 +9,7 @@ There are a whole bunch of things which need doing. This is the place to list th
 
 ## Priorities
 
-- [ ] Support for parallelism systems
-  - [ ] [Kokkos](https://github.com/kokkos/kokkos): Heterogenous programming framework which can utilize many backends.
-  - [ ] OpenMP checks with [FindOpenMP](https://cmake.org/cmake/help/latest/module/FindOpenMP.html); Apparently OpenMP is supported out of the box on [most large compilers](https://www.openmp.org/resources/openmp-compilers-tools/), and even supports GPU offloading.
-  - [ ] Cuda (**SEE MY "TESTING CUDA" CMAKE PROJECT TO UNDERSTAND WHAT I NEED TO DO**) (CMake has first-party support for this as a language). Need to research the difference between the cuda compiler `nvcc` and NVidia's other compiler `nvc++` (part of its HPC SDK). Looks like `nvcc` is a compile driver for CUDA, and `nvc` and `nvc++` are just C++17 compilers (part of NVidia's HPC SDK) with some extra parallelism features. Unfortunately, the HPC SDK is only natively available on Linux.
-    - [ ] Figure out [FindCUDAToolkit](https://cmake.org/cmake/help/latest/module/FindCUDAToolkit.html)
+- [x] Support for parallelism systems ([CUDA](https://developer.nvidia.com/cuda-toolkit), [Kokkos](https://github.com/kokkos/kokkos), and [compiler-builtin OpenMP](https://www.openmp.org/))
   - Don't support HIP because it doesn't support Windows. OpenSYCL barely has experimental Windows support, but its build process looks like a pain in general. OpenCL seems extremely portable, but I couldn't get it to work in a basic CMake project so I won't support it yet.
 - [ ] Warn when files exist inside *include/* or *src/*, but aren't inside the dir with the include prefix
   (like *include/MY_INCLUDE_PREXIX* or *src/MY_INCLUDE_PREFIX*).

@@ -56,13 +56,24 @@ function( gcmake_configure_cpack )
     message( STATUS "No license file found for ${LOCAL_TOPLEVEL_PROJECT_NAME}" )
   endif()
 
-  get_cmake_property( LIST_OF_COMPONENTS COMPONENTS )
-  # message( "components: ${LIST_OF_COMPONENTS}" )
-
   # https://gitlab.kitware.com/cmake/cmake/-/issues/20177
-  set( CPACK_COMPONENTS_ALL ${LIST_OF_COMPONENTS} )
+  # https://cmake.org/cmake/help/latest/module/CPackComponent.html
+  get_cmake_property( CPACK_COMPONENTS_ALL COMPONENTS )
+  # message( "components: ${CPACK_COMPONENTS_ALL}" )
 
-  set( DEP_COMPONENT_LIST ${LIST_OF_COMPONENTS} )
+  # For some reason, the Kokkos library installs its targets both with and without
+  # specifying the 'Kokkos' COMPONENT. This causes the WIX generator to fail with
+  # a "duplicate GUID for file..." error. Everything other than the Kokkos targets
+  # are installed without specifying a COMPONENT as well. As a result, we can tell
+  # CPack to just omit the 'Kokkos' component so that only a single copy of each Kokkos
+  # library is installed. This hack fixes the WIX issue, although it should probably be moved
+  # into the Kokkos pre_load or post_load script somehow. For now, this is fine.
+  # TODO: Move this into a pre_load or post_load script if it causes issues.
+  if( "Kokkos" IN_LIST CPACK_COMPONENTS_ALL )
+    list( REMOVE_ITEM CPACK_COMPONENTS_ALL "Kokkos" )
+  endif()
+
+  set( DEP_COMPONENT_LIST ${CPACK_COMPONENTS_ALL} )
   list( REMOVE_ITEM DEP_COMPONENT_LIST ${INSTALLER_CONFIG_PROJECT_COMPONENT} )
 
   cpack_add_component( ${INSTALLER_CONFIG_PROJECT_COMPONENT}

@@ -444,7 +444,11 @@ macro( initialize_mingw_dll_install_options )
     "libatomic-1.dll"
   )
 
-  cmake_path( GET CMAKE_C_COMPILER PARENT_PATH MINGW_DLL_DIR )
+  if( DEFINED CMAKE_C_COMPILER )
+    cmake_path( GET CMAKE_C_COMPILER PARENT_PATH MINGW_DLL_DIR )
+  else()
+    cmake_path( GET CMAKE_CXX_COMPILER PARENT_PATH MINGW_DLL_DIR )
+  endif()
 
   foreach( dll_name matching_file IN ZIP_LISTS _MINGW_DLL_NAME _CORRESPONDING_FILES )
     set( dll_file_var GCMAKE_FILE_MINGW_${dll_name}_DLL )
