@@ -1,15 +1,16 @@
-use std::{fs::File, io::{self, Write}, path::{Path}};
+use std::{fs::File, io::{self, Write}, path::Path};
 
 use crate::{project_generator::configuration::CreationProjectOutputType, project_info::CompiledOutputItem, common::{make_c_identifier, basic_configure_replace}};
 
 use super::configuration::OutputLibType;
 
 const C_EXE_MAIN: &'static str =
-"#include <stdio.h>
+"#include <stdlib.h>
+#include <stdio.h>
 
 int main(int argc, char** argv) {
 \tprintf(\"Hello World!\");
-\treturn 0;
+\treturn EXIT_SUCCESS;
 }
 ";
 
@@ -21,7 +22,7 @@ const C_COMPILED_LIB_MAIN: &'static str =
 
 #include \"@EXPORT_HEADER@\"
 
-inline int @EXPORT_MACRO@ placholderFunc(void) {
+inline int @EXPORT_MACRO@ placeholderFunc(void) {
   return 2;
 }
 ";

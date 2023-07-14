@@ -1,8 +1,8 @@
 use std::{collections::{HashSet, BTreeMap, BTreeSet }, fs::File, io::{self, Write, ErrorKind}, path::{PathBuf, Path}, rc::Rc, cell::{RefCell, Ref}, iter::FromIterator};
 
-use crate::{project_info::{final_project_data::{FinalProjectData, CppFileGrammar}, path_manipulation::{relative_to_project_root}, final_dependencies::{GitRevisionSpecifier, PredefinedCMakeComponentsModuleDep, PredefinedSubdirDep, PredefinedCMakeModuleDep, FinalPredepInfo, GCMakeDependencyStatus, FinalPredefinedDependencyConfig, PredefinedDepFunctionality, FinalDownloadMethod, FinalDebianPackagesConfig, GCMakeDepIDHash}, raw_data_in::{BuildType, BuildConfigCompilerSpecifier, SpecificCompilerSpecifier, OutputItemType, TargetSpecificBuildType, dependencies::internal_dep_config::{CMakeModuleType}, DefaultCompiledLibType}, FinalProjectType, CompiledOutputItem, LinkMode, FinalTestFramework, dependency_graph_mod::dependency_graph::{DependencyGraph, OrderedTargetInfo, ProjectWrapper, TargetNode, SimpleNodeOutputType, Link, EmscriptenLinkFlagInfo, ContainedItem}, SystemSpecifierWrapper, CompilerDefine, FinalBuildConfig, CompilerFlag, LinkerFlag, gcmake_constants::{SRC_DIR_NAME, INCLUDE_DIR_NAME}, platform_spec_parser::parse_leading_constraint_spec, CodeFileInfo, RetrievedCodeFileType, PreBuildScriptType, CodeFileLang, GivenConstraintSpecParseContext, SystemSpecFeatureType, SystemSpecExpressionTree, SingleSystemSpec}, file_writers::cmake_writer::cmake_writer_helpers::system_constraint_generator_expression};
+use crate::{project_info::{final_project_data::{FinalProjectData, CppFileGrammar}, path_manipulation::relative_to_project_root, final_dependencies::{GitRevisionSpecifier, PredefinedCMakeComponentsModuleDep, PredefinedSubdirDep, PredefinedCMakeModuleDep, FinalPredepInfo, GCMakeDependencyStatus, FinalPredefinedDependencyConfig, PredefinedDepFunctionality, FinalDownloadMethod, FinalDebianPackagesConfig, GCMakeDepIDHash}, raw_data_in::{BuildType, BuildConfigCompilerSpecifier, SpecificCompilerSpecifier, OutputItemType, TargetSpecificBuildType, dependencies::internal_dep_config::CMakeModuleType, DefaultCompiledLibType}, FinalProjectType, CompiledOutputItem, LinkMode, FinalTestFramework, dependency_graph_mod::dependency_graph::{DependencyGraph, OrderedTargetInfo, ProjectWrapper, TargetNode, SimpleNodeOutputType, Link, EmscriptenLinkFlagInfo, ContainedItem}, SystemSpecifierWrapper, CompilerDefine, FinalBuildConfig, CompilerFlag, LinkerFlag, gcmake_constants::{SRC_DIR_NAME, INCLUDE_DIR_NAME}, platform_spec_parser::parse_leading_constraint_spec, CodeFileInfo, RetrievedCodeFileType, PreBuildScriptType, CodeFileLang, GivenConstraintSpecParseContext, SystemSpecFeatureType, SystemSpecExpressionTree, SingleSystemSpec}, file_writers::cmake_writer::cmake_writer_helpers::system_constraint_generator_expression};
 
-use super::{cmake_utils_writer::{CMakeUtilWriter}, cmake_writer_helpers::{system_contstraint_conditional_expression, language_feature_name}};
+use super::{cmake_utils_writer::CMakeUtilWriter, cmake_writer_helpers::{system_contstraint_conditional_expression, language_feature_name}};
 use colored::*;
 
 lazy_static! {
@@ -203,10 +203,20 @@ struct FlagOptions {
   to_compiler: SpecificCompilerSpecifier
 }
 
+fn wrapped_flag(should_quote: bool, base: String) -> String {
+  return if should_quote {
+    format!("\"{}\"", base)
+  }
+  else {
+    base
+  }
+}
+
 fn single_flag_string(
   CompilerFlag { system_spec, flag_string }: &CompilerFlag,
   flag_use: FlagUseTime,
-  options: &FlagOptions
+  options: &FlagOptions,
+  quoted: bool
 ) -> String {
 
   // NOTE: We don't have to do any special transformations to the linker flags
@@ -222,7 +232,7 @@ fn single_flag_string(
         &quote_escaped_string(&format!("SHELL:-Xcompiler {}", flag_string.trim()))
       );
 
-      return format!("\"{}\"", escaped_for_cuda);
+      return wrapped_flag(quoted, escaped_for_cuda)
     },
     _ => {
       let escaped: String = system_constraint_generator_expression(
@@ -230,7 +240,7 @@ fn single_flag_string(
         &quote_escaped_string(flag_string.trim())
       );
 
-      return format!("\"{}\"", escaped);
+      return wrapped_flag(quoted, escaped)
     }
   }
 }
@@ -242,7 +252,7 @@ fn flattened_compiler_flags_string(
   options: FlagOptions
 ) -> String {
   let flattened_string: String = compiler_flags.iter()
-    .map(|flag| single_flag_string(flag, flag_use, &options))
+    .map(|flag| single_flag_string(flag, flag_use, &options, true))
     .collect::<Vec<String>>()
     .join(&format!("\n{}", spacer));
 
@@ -254,9 +264,7 @@ fn flattened_linker_flags_string(
   options: FlagOptions
 ) -> String {
   let comma_separated_flags: String = linker_flags.iter()
-    .map(|flag| quote_escaped_string(
-      &single_flag_string(flag, FlagUseTime::Link, &options)
-    ))
+    .map(|flag| single_flag_string(flag, FlagUseTime::Link, &options, false))
     .collect::<Vec<String>>()
     .join(",");
 
