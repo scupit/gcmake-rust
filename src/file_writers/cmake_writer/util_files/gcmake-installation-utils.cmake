@@ -176,7 +176,7 @@ function( configure_installation
 
   include( CMakePackageConfigHelpers )
 
-  configure_package_config_file( "${CMAKE_CURRENT_SOURCE_DIR}/Config.cmake.in"
+  configure_package_config_file( "${CMAKE_CURRENT_BINARY_DIR}/Config.cmake.in"
     "${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}Config.cmake"
     INSTALL_DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake"
   )
