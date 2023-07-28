@@ -28,7 +28,15 @@ function( gcmake_configure_cpack )
     endif()
   endforeach()
 
-  option( CPACK_STRIP_FILES "Whether to strip symbols from installed binaries" ON )
+  if( USING_EMSCRIPTEN )
+    # We need file stripping to be off when using Emscripten, otherwise WIX installer generation
+    # will fail due to llvm-strip failing to strip the .html files.
+    set( CPACK_STRIP_FILES_DEFAULT_VALUE OFF )
+  else()
+    set( CPACK_STRIP_FILES_DEFAULT_VALUE ON )
+  endif()
+
+  option( CPACK_STRIP_FILES "Whether to strip symbols from installed binaries" ${CPACK_STRIP_FILES_DEFAULT_VALUE} )
 
   if( INSTALLER_CONFIG_SHORTCUT_MAP )
     set( CPACK_PACKAGE_EXECUTABLES ${INSTALLER_CONFIG_SHORTCUT_MAP} )
