@@ -9,7 +9,7 @@ There are a whole bunch of things which need doing. This is the place to list th
 
 ## Priorities
 
-- [ ] Warn on dependencies which are never used, since that's almost always a mistake.
+- [x] Warn on dependencies which are never used, since that's almost always a mistake.
 - [x] Support for parallelism systems ([CUDA](https://developer.nvidia.com/cuda-toolkit), [Kokkos](https://github.com/kokkos/kokkos), and [compiler-builtin OpenMP](https://www.openmp.org/))
   - Don't support HIP because it doesn't support Windows. OpenSYCL barely has experimental Windows support, but its build process looks like a pain in general. OpenCL seems extremely portable, but I couldn't get it to work in a basic CMake project so I won't support it yet.
 - [ ] Warn when files exist inside *include/* or *src/*, but aren't inside the dir with the include prefix

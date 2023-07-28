@@ -1,4 +1,4 @@
-use std::{cell::{RefCell}, rc::{Rc, Weak}, hash::{Hash, Hasher}, collections::{BTreeMap, BTreeSet, VecDeque}, borrow::Borrow, path::{Path, PathBuf}, iter::FromIterator, cmp::Ordering};
+use std::{cell::{RefCell}, rc::{Rc, Weak}, hash::{Hash, Hasher}, collections::{BTreeMap, BTreeSet, VecDeque}, path::{Path, PathBuf}, iter::FromIterator, cmp::Ordering};
 
 use crate::{project_info::{LinkMode, CompiledOutputItem, PreBuildScript, OutputItemLinks, final_project_data::{FinalProjectData, CodeFileStats}, final_dependencies::{FinalGCMakeDependency, FinalPredefinedDependencyConfig, GCMakeDependencyStatus, FinalRequirementSpecifier, FinalTargetConfig, FinalExternalRequirementSpecifier, FinalPredepInfo}, LinkSpecifier, FinalProjectType, parsers::{link_spec_parser::{LinkAccessMode, LinkSpecTargetList, LinkSpecifierTarget}, system_spec::platform_spec_parser::SystemSpecifierWrapper}, raw_data_in::{dependencies::internal_dep_config::raw_dep_common::RawEmscriptenConfig, OutputItemType}, FinalFeatureEnabler, PreBuildScriptType, SystemSpecExpressionTree, SingleSystemSpec}};
 
@@ -1258,7 +1258,7 @@ impl<'a> DependencyGraph<'a> {
             // Only err if two different targets share the same identifier. Obviously
             // a target has the same identifier as itself. This check is important because
             // dependency targets are checked once for each root project tree they are a part of.
-            if matching_target.as_ref().borrow().ne(borrowed_target.borrow()) {
+            if matching_target.as_ref().borrow().ne(&borrowed_target) {
               return Err(GraphLoadFailureReason::DuplicateYamlIdentifier {
                 target1: Rc::clone(target),
                 target1_project: borrowed_target.container_project(),
@@ -1285,10 +1285,7 @@ impl<'a> DependencyGraph<'a> {
     for target_cmake_ident in cmake_idents_to_check {
       match cmake_identifiers.get(target_cmake_ident) {
         Some(matching_target) => {
-          if matching_target.as_ref().borrow().ne(borrowed_target.borrow()) {
-            println!(
-              "Weird"
-            );
+          if matching_target.as_ref().borrow().ne(&borrowed_target) {
             return Err(GraphLoadFailureReason::DuplicateCMakeIdentifier {
               target1: Rc::clone(target),
               target1_project: borrowed_target.container_project(),

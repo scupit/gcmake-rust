@@ -1,4 +1,6 @@
-use std::{rc::Rc, cell::{RefCell, Ref}};
+use std::{rc::Rc, cell::{RefCell, Ref}, collections::{HashMap, BTreeMap}};
+
+use crate::logger;
 
 use super::{final_project_data::{UseableFinalProjectDataGroup}, dependency_graph_mod::dependency_graph::{DependencyGraphInfoWrapper, DependencyGraph, GraphLoadFailureReason, TargetNode, OwningComplexTargetRequirement, DependencyGraphWarningMode, AdditionalConfigValidationFailureReason, MaybePresentOwningTarget}, SystemSpecifierWrapper};
 use colored::*;
@@ -11,12 +13,52 @@ fn borrow_project<'a, 'b>(project: &'b Rc<RefCell<DependencyGraph<'a>>>) -> Ref<
   return project.as_ref().borrow();
 }
 
+fn warn_for_unused_deps(dep_graph_info: &DependencyGraphInfoWrapper) {
+  // Maps project ID to targets used in the project.
+  let mut dependency_project_use_map: HashMap<usize, (u32, String)> = HashMap::new();
+
+  for dep_project_map in [
+    dep_graph_info.root_dep_graph.as_ref().borrow().get_predefined_dependencies(),
+    dep_graph_info.root_dep_graph.as_ref().borrow().get_gcmake_dependencies() 
+  ] {
+    for (_, dep_project) in dep_project_map {
+      dependency_project_use_map.insert(
+        dep_project.as_ref().borrow().project_id(),
+        (0, dep_project.as_ref().borrow().project_debug_name().to_string())
+      );
+    }
+  }
+
+  for project_target in dep_graph_info.sorted_info.regular_targets_with_root_project_id(dep_graph_info.root_dep_graph.as_ref().borrow().project_id()) {
+    for (_, link_details) in project_target.as_ref().borrow().get_depends_on() {
+      let matching_project_id = link_details.linked_target().as_ref().borrow().container_project().as_ref().borrow().root_project_id();
+      if let Some((num_uses, _)) = dependency_project_use_map.get_mut(&matching_project_id) {
+        *num_uses += 1;
+      }
+    }
+  }
+
+  let dep_uses_by_name: BTreeMap<String, u32> = dependency_project_use_map.into_iter()
+    .map(|(_, (num_uses, project_name))| (project_name, num_uses))
+    .collect();
+
+  for (dep_name, num_uses) in dep_uses_by_name {
+    if num_uses == 0 {
+      logger::warn(format!(
+        "No targets from dependency [{}] are ever used. Did you forget to link one of its targets to an output item or executable pre-build script?",
+        dep_name.yellow()
+      ));
+    }
+  }
+}
+
 pub fn load_graph(
   project_data: &UseableFinalProjectDataGroup,
   warning_mode: DependencyGraphWarningMode
 ) -> Result<DependencyGraphInfoWrapper, String> {
   match DependencyGraph::new_info_from_root(&project_data.root_project, warning_mode) {
     Ok(dep_graph_info) => {
+      warn_for_unused_deps(&dep_graph_info);
       return Ok(dep_graph_info);
     },
     // TODO: Improve these error messages. Especially figure out how to add a "project stack trace" to
