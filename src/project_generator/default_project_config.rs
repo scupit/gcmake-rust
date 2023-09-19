@@ -87,13 +87,19 @@ fn filtered_build_config(
 fn build_configs_debug_default(project_config: &DefaultProjectConfigOptions) -> BuildConfigByCompiler {
   let debug_config: BuildConfigByCompiler = BTreeMap::from_iter([
     (BuildConfigCompilerSpecifier::GCC, RawBuildConfig {
-      compiler_flags: Some(create_string_set([ "-Og", "-g", "-Wall", "-Wextra", "-Wconversion", "-Wuninitialized", "-pedantic", "-pedantic-errors"])),
+      // https://gcc.gnu.org/onlinedocs/gcc/Optimize-Options.html#index-Og 
+      // The GCC docs recommend using -Og for the "standard edit-compile-debug cycle". However,
+      // in my experience it causes the debugger to skip lines in places I don't expect.
+      // -O0 produces the expected debugging experience every time (so far), so I'm using that
+      // as the new default. Unoptimized performance is good enough for debugging most programs
+      // anyways. If someone needs -Og for some reason, they can change this in the build config.
+      compiler_flags: Some(create_string_set([ "-O0", "-g", "-Wall", "-Wextra", "-Wconversion", "-Wuninitialized", "-pedantic", "-pedantic-errors"])),
       link_time_flags: None,
       linker_flags: None,
       defines: None
     }),
     (BuildConfigCompilerSpecifier::Clang, RawBuildConfig {
-      compiler_flags: Some(create_string_set([ "-Og", "-g", "-Wall", "-Wextra", "-Wconversion", "-Wuninitialized", "-pedantic", "-pedantic-errors"])),
+      compiler_flags: Some(create_string_set([ "-O0", "-g", "-Wall", "-Wextra", "-Wconversion", "-Wuninitialized", "-pedantic", "-pedantic-errors"])),
       link_time_flags: None,
       linker_flags: None,
       defines: None

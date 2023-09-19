@@ -31,7 +31,6 @@ There are a whole bunch of things which need doing. This is the place to list th
 Support for:
 
 - Intel C/C++ compiler?
-- NVidia CUDA compiler?
 
 - [ ] Allow `(( lang:c and lang:cpp ))` constraints for flags and defines courtesy of CMake's
   [$<COMPILE_LANGAUGE>](https://cmake.org/cmake/help/latest/manual/cmake-generator-expressions.7.html#genex:COMPILE_LANGUAGE)
