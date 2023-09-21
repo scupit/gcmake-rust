@@ -57,7 +57,7 @@ fn create_single_file_set(
 ) -> Result<(), String> {
   let shared_file_info: SharedFileInfo = SharedFileInfo::new(
     &file_name,
-    project_data.get_project_root_dir()
+    project_data.get_project_root_relative_to_cwd()
   );
   validate_shared_file_info(&shared_file_info)?;
 
@@ -167,7 +167,7 @@ fn create_single_file_set(
         for file_path in created_files {
           println!(
             "Created: {}",
-            relative_to_project_root(&project_data.get_project_root_dir(), file_path).to_str().unwrap().cyan()
+            relative_to_project_root(&project_data.get_project_root_relative_to_cwd(), file_path).to_str().unwrap().cyan()
           );
         }
       }

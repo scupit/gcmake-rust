@@ -18,7 +18,7 @@ pub fn write_debian_dep_install_sh<'a>(
       &mut accumulated_deps
     );
 
-    let file_path: PathBuf = Path::new(project_data.get_project_root_dir()).join(DEBIAN_DEP_INSTALL_SH_FILE_NAME);
+    let file_path: PathBuf = Path::new(project_data.get_project_root_relative_to_cwd()).join(DEBIAN_DEP_INSTALL_SH_FILE_NAME);
     let deb_dep_installer_file: File = File::create(file_path.as_path())?;
 
     if accumulated_deps.is_empty() {

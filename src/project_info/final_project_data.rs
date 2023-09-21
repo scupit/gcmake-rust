@@ -2,7 +2,7 @@ use std::{collections::{HashMap, HashSet, BTreeMap, BTreeSet}, path::{Path, Path
 
 use crate::{project_info::path_manipulation::cleaned_pathbuf, logger, program_actions::gcmake_dep_cache_dir, common::base64_encoded};
 
-use super::{path_manipulation::{cleaned_path_str, relative_to_project_root, absolute_path}, final_dependencies::{FinalGCMakeDependency, FinalPredefinedDependencyConfig, relative_hash_file_path}, raw_data_in::{RawProject, dependencies::internal_dep_config::AllRawPredefinedDependencies, BuildType, LanguageConfigMap, OutputItemType, PreBuildConfigIn, SpecificCompilerSpecifier, BuildConfigCompilerSpecifier, TargetSpecificBuildType, LinkSection, RawTestFramework, DefaultCompiledLibType, RawCompiledItem, RawDocumentationGeneratorConfig, RawDocGeneratorName, LanguageFeatureSection}, final_project_configurables::{FinalProjectType}, CompiledOutputItem, helpers::{parse_subproject_data, parse_root_project_data, populate_existing_files, find_prebuild_script, PrebuildScriptFile, validate_raw_project_outputs, ProjectOutputType, RetrievedCodeFileType, code_file_type, parse_test_project_data, find_doxyfile_in, validate_doxyfile_in, SphinxConfigFiles, find_sphinx_files, validate_conf_py_in}, PreBuildScript, FinalTestFramework, base_include_prefix_for_test, gcmake_constants::{SRC_DIR_NAME, INCLUDE_DIR_NAME, TESTS_DIR_NAME, SUBPROJECTS_DIR_NAME, DOCS_DIR_NAME}, FinalInstallerConfig, CompilerDefine, FinalBuildConfigMap, make_final_build_config_map, FinalTargetBuildConfigMap, FinalGlobalProperties, FinalShortcutConfig, parsers::{version_parser::ThreePartVersion, general_parser::ParseSuccess}, platform_spec_parser::parse_leading_constraint_spec, SystemSpecifierWrapper, FinalFeatureConfig, FinalFeatureEnabler, CodeFileInfo, FileRootGroup, PreBuildScriptType, FinalDocGeneratorName, FinalDocumentationInfo, CodeFileLang, GivenConstraintSpecParseContext};
+use super::{path_manipulation::{cleaned_path_str, relative_to_project_root, absolute_path}, final_dependencies::{FinalGCMakeDependency, FinalPredefinedDependencyConfig, relative_hash_file_path}, raw_data_in::{RawProject, dependencies::internal_dep_config::AllRawPredefinedDependencies, BuildType, LanguageConfigMap, OutputItemType, PreBuildConfigIn, SpecificCompilerSpecifier, BuildConfigCompilerSpecifier, TargetSpecificBuildType, LinkSection, RawTestFramework, DefaultCompiledLibType, RawCompiledItem, RawDocumentationGeneratorConfig, RawDocGeneratorName, LanguageFeatureSection}, final_project_configurables::FinalProjectType, CompiledOutputItem, helpers::{parse_subproject_data, parse_root_project_data, populate_existing_files, find_prebuild_script, PrebuildScriptFile, validate_raw_project_outputs, ProjectOutputType, RetrievedCodeFileType, code_file_type, parse_test_project_data, find_doxyfile_in, validate_doxyfile_in, SphinxConfigFiles, find_sphinx_files, validate_conf_py_in}, PreBuildScript, FinalTestFramework, base_include_prefix_for_test, gcmake_constants::{SRC_DIR_NAME, INCLUDE_DIR_NAME, TESTS_DIR_NAME, SUBPROJECTS_DIR_NAME, DOCS_DIR_NAME}, FinalInstallerConfig, CompilerDefine, FinalBuildConfigMap, make_final_build_config_map, FinalTargetBuildConfigMap, FinalGlobalProperties, FinalShortcutConfig, parsers::{version_parser::ThreePartVersion, general_parser::ParseSuccess}, platform_spec_parser::parse_leading_constraint_spec, SystemSpecifierWrapper, FinalFeatureConfig, FinalFeatureEnabler, CodeFileInfo, FileRootGroup, PreBuildScriptType, FinalDocGeneratorName, FinalDocumentationInfo, CodeFileLang, GivenConstraintSpecParseContext};
 use colored::*;
 
 const SUBPROJECT_JOIN_STR: &'static str = "_S_";
@@ -306,8 +306,6 @@ pub enum CppFileGrammar {
 pub struct FinalProjectData {
   project_type: FinalProjectType,
   project_output_type: ProjectOutputType,
-  project_root_dir: String,
-  absolute_project_root: PathBuf,
   pub version: ThreePartVersion,
   // project: RawProject,
   installer_config: FinalInstallerConfig,
@@ -324,23 +322,14 @@ pub struct FinalProjectData {
   global_properties: Option<FinalGlobalProperties>,
   documentation: Option<FinalDocumentationInfo>,
 
-  base_include_prefix: String,
-  full_include_prefix: String,
-
-  src_dir_relative_to_cwd: String,
-  src_dir_relative_to_project_root: String,
-  include_dir_relative_to_cwd: String,
-  include_dir_relative_to_project_root: String,
-
-  docs_dir_relative_to_cwd: String,
-  docs_dir_relative_to_project_root: String,
+  paths_and_prefixes: ProjectPaths,
 
   // src/FULL_INCLUDE_PREFIX/*.c(pp(2))
   pub src_files: BTreeSet<CodeFileInfo>,
   // src/FULL_INCLUDE_PREFIX/*.private.h(pp)
   pub private_headers: BTreeSet<CodeFileInfo>,
   // include/FULL_INCLUDE_PREFIX/*.h(pp)
-  pub include_files: BTreeSet<CodeFileInfo>,
+  pub public_headers: BTreeSet<CodeFileInfo>,
   // include/FULL_INCLUDE_PREFIX/*.{inl|tpp}
   pub template_impl_files: BTreeSet<CodeFileInfo>,
 
@@ -354,7 +343,6 @@ pub struct FinalProjectData {
 
   features: Rc<BTreeMap<String, FinalFeatureConfig>>,
   prebuild_script: Option<PreBuildScript>,
-  target_namespace_prefix: String,
   was_just_created: bool
 }
 
@@ -445,7 +433,7 @@ impl FinalProjectData {
       unclean_project_root,
       &initial_project_data,
       &parent_project_info
-    );
+    )?;
 
     let mut test_project_map: SubprojectMap = SubprojectMap::new();
 
@@ -744,12 +732,8 @@ impl FinalProjectData {
       version: maybe_version.unwrap(),
       installer_config,
       vendor: project_vendor,
-      full_include_prefix: project_paths.full_include_prefix,
-      base_include_prefix: initial_project_data.raw_project.get_include_prefix().to_string(),
       global_defines: global_defines,
       documentation: Self::finalized_doc_generator_info(initial_project_data.raw_project.documentation.as_ref()),
-      docs_dir_relative_to_cwd: project_paths.docs_dir_relative_to_cwd,
-      docs_dir_relative_to_project_root: project_paths.docs_dir_relative_to_project_root,
       features: initial_project_data.features,
       global_properties: initial_project_data.raw_project.global_properties
         .as_ref()
@@ -760,32 +744,24 @@ impl FinalProjectData {
       supported_compilers: initial_project_data.supported_compiler_set,
       project_type: initial_project_data.project_type,
       project_output_type,
-      absolute_project_root: absolute_path(&project_paths.project_root_relative_to_cwd)
-        .map_err(ProjectLoadFailureReason::Other)?,
-      project_root_dir: project_paths.project_root_relative_to_cwd,
-
-      src_dir_relative_to_cwd: project_paths.src_dir_relative_to_cwd,
-      src_dir_relative_to_project_root: project_paths.src_dir_relative_to_project_root,
-      include_dir_relative_to_cwd: project_paths.include_dir_relative_to_cwd,
-      include_dir_relative_to_project_root: project_paths.include_dir_relative_to_project_root,
 
       src_files: BTreeSet::new(),
       private_headers: BTreeSet::new(),
-      include_files: BTreeSet::new(),
+      public_headers: BTreeSet::new(),
       template_impl_files: BTreeSet::new(),
       subprojects,
       output: output_items,
       predefined_dependencies,
       gcmake_dependency_projects,
       prebuild_script,
-      target_namespace_prefix: project_paths.target_namespace_prefix,
       test_framework: initial_project_data.final_test_framework,
       tests: test_project_map,
+      paths_and_prefixes: project_paths,
       was_just_created: false
     };
 
     finalized_project_data.was_just_created = match just_created_project_at {
-      Some(created_root) => *created_root == finalized_project_data.absolute_project_root,
+      Some(created_root) => created_root.as_path() == finalized_project_data.get_absolute_project_root(),
       None => false
     };
 
@@ -801,18 +777,18 @@ impl FinalProjectData {
             finalized_project_data.src_files.insert(cloned_file_info);
           },
           RetrievedCodeFileType::Header(_) | RetrievedCodeFileType::TemplateImpl => {
-            finalized_project_data.include_files.insert(cloned_file_info);
+            finalized_project_data.public_headers.insert(cloned_file_info);
           },
           _ => ()
         }
       }
     }
 
-    let usable_project_root = PathBuf::from(finalized_project_data.get_project_root_dir());
+    let usable_project_root = PathBuf::from(finalized_project_data.get_project_root_relative_to_cwd());
 
     populate_existing_files(
       usable_project_root.as_path(),
-      Path::new(&finalized_project_data.src_dir_relative_to_cwd),
+      PathBuf::from(finalized_project_data.get_src_dir_relative_to_cwd()).as_path(),
       &mut finalized_project_data.src_files,
       &|file_path| match code_file_type(file_path) {
         RetrievedCodeFileType::Source { .. } => true,
@@ -823,7 +799,7 @@ impl FinalProjectData {
 
     populate_existing_files(
       usable_project_root.as_path(),
-      Path::new(&finalized_project_data.src_dir_relative_to_cwd),
+      PathBuf::from(finalized_project_data.get_src_dir_relative_to_cwd()).as_path(),
       &mut finalized_project_data.private_headers,
       &|file_path| match code_file_type(file_path) {
         RetrievedCodeFileType::Header(_)
@@ -835,8 +811,8 @@ impl FinalProjectData {
 
     populate_existing_files(
       usable_project_root.as_path(),
-      Path::new(&finalized_project_data.include_dir_relative_to_cwd),
-      &mut finalized_project_data.include_files,
+      PathBuf::from(finalized_project_data.get_include_dir_relative_to_cwd()).as_path(),
+      &mut finalized_project_data.public_headers,
       &|file_path| match code_file_type(file_path) {
         RetrievedCodeFileType::Header(_) => true,
         _ => false
@@ -846,7 +822,7 @@ impl FinalProjectData {
 
     populate_existing_files(
       usable_project_root.as_path(),
-      Path::new(&finalized_project_data.include_dir_relative_to_cwd),
+      PathBuf::from(finalized_project_data.get_include_dir_relative_to_cwd()).as_path(),
       &mut finalized_project_data.template_impl_files,
       &|file_path| match code_file_type(file_path) {
         RetrievedCodeFileType::TemplateImpl => true,
@@ -877,7 +853,7 @@ impl FinalProjectData {
     absolute_root: &PathBuf,
     project: Rc<FinalProjectData>
   ) -> Option<Rc<FinalProjectData>> {
-    if project.absolute_project_root == *absolute_root {
+    if project.get_absolute_project_root() == absolute_root.as_path() {
       return Some(project);
     }
 
@@ -900,7 +876,7 @@ impl FinalProjectData {
   fn iter_all_code_files(&self, mut callback: &mut dyn FnMut(&CodeFileInfo)) {
     let file_sets: Vec<&BTreeSet<CodeFileInfo>> = vec![
       &self.private_headers,
-      &self.include_files,
+      &self.public_headers,
       &self.src_files,
       &self.template_impl_files
     ];
@@ -1279,8 +1255,8 @@ impl FinalProjectData {
       "Project [{}] set documentation generator to {}, but is missing its '{}'. Please create '{}'.\n --> The command `{} {}` can be used to do this automatically.",
       self.get_name_for_error_messages(),
       doc_generator.to_str().yellow(),
-      format!("{}/{}", self.docs_dir_relative_to_project_root, needed_file_name).yellow(),
-      format!("{}/{}", self.docs_dir_relative_to_cwd, needed_file_name).yellow(),
+      format!("{}/{}", self.get_docs_dir_relative_to_project_root(), needed_file_name).yellow(),
+      format!("{}/{}", self.get_docs_dir_relative_to_cwd(), needed_file_name).yellow(),
       "gcmake-rust".bright_magenta(),
       example_command.bright_magenta()
     ));
@@ -1293,7 +1269,7 @@ impl FinalProjectData {
           "Project [{}] creates a header-only library, but contains private header files. A header-only library can't have private headers. To fix, remove all headers in the project's {}/ directory ({}).",
           self.get_name_for_error_messages().yellow(),
           SRC_DIR_NAME,
-          self.src_dir_relative_to_cwd.yellow()
+          self.get_src_dir_relative_to_cwd().yellow()
         ));
       }
     }
@@ -1329,8 +1305,8 @@ impl FinalProjectData {
   }
 
   fn ensure_doc_generator_correctness(&self, project_load_context: &FinalProjectLoadContext) -> Result<(), String> {
-    let doxyfile_in_search_result: Option<PathBuf> = find_doxyfile_in(&self.docs_dir_relative_to_cwd);
-    let sphinx_files_search_result: SphinxConfigFiles = find_sphinx_files(&self.docs_dir_relative_to_cwd);
+    let doxyfile_in_search_result: Option<PathBuf> = find_doxyfile_in(self.get_docs_dir_relative_to_cwd());
+    let sphinx_files_search_result: SphinxConfigFiles = find_sphinx_files(self.get_docs_dir_relative_to_cwd());
 
     match &self.documentation {
       None => {
@@ -1569,7 +1545,7 @@ impl FinalProjectData {
     output_item: &CompiledOutputItem
   ) -> Result<(), String> {
     let absolute_entry_file_path: PathBuf = absolute_path(
-      Path::new(self.get_project_root_dir())
+      Path::new(self.get_project_root_relative_to_cwd())
         .join(output_item.get_entry_file().get_file_path())
     )?;
     let entry_file_directory: &Path = absolute_entry_file_path.parent().unwrap();
@@ -1803,7 +1779,7 @@ impl FinalProjectData {
   }
 
   pub fn nested_include_prefix(&self, next_include_prefix: &str) -> String {
-    return format!("{}/{}", &self.full_include_prefix, next_include_prefix);
+    return format!("{}/{}", self.get_full_include_prefix(), next_include_prefix);
   }
 
   pub fn has_tests(&self) -> bool {
@@ -1844,7 +1820,7 @@ impl FinalProjectData {
   }
 
   pub fn prefix_with_project_namespace(&self, name: &str) -> String {
-    return format!("{}::{}", &self.target_namespace_prefix, name);
+    return format!("{}::{}", self.get_target_namespace_prefix(), name);
   }
 
   pub fn receiver_lib_name(
@@ -1881,20 +1857,24 @@ impl FinalProjectData {
     &self.prebuild_script
   }
 
-  pub fn get_project_root_dir(&self) -> &str {
-    &self.project_root_dir
+  pub fn get_project_root_relative_to_cwd(&self) -> &str {
+    self.paths_and_prefixes.project_root_relative_to_cwd.as_str()
   }
 
   pub fn get_absolute_project_root(&self) -> &Path {
-    &self.absolute_project_root.as_path()
+    self.paths_and_prefixes.absolute_project_root.as_path()
   }
 
   pub fn get_base_include_prefix(&self) -> &str {
-    &self.base_include_prefix
+    self.paths_and_prefixes.base_include_prefix.as_str()
   }
 
   pub fn get_full_include_prefix(&self) -> &str {
-    &self.full_include_prefix
+    self.paths_and_prefixes.full_include_prefix.as_str()
+  }
+
+  pub fn get_target_namespace_prefix(&self) -> &str {
+    self.paths_and_prefixes.target_namespace_prefix.as_str()
   }
 
   pub fn get_project_base_name(&self) -> &str {
@@ -1934,23 +1914,27 @@ impl FinalProjectData {
   }
 
   pub fn get_src_dir_relative_to_cwd(&self) -> &str {
-    &self.src_dir_relative_to_cwd
+    self.paths_and_prefixes.src_dir_relative_to_cwd.as_str()
   }
 
   pub fn get_src_dir_relative_to_project_root(&self) -> &str {
-    &self.src_dir_relative_to_project_root
+    self.paths_and_prefixes.src_dir_relative_to_project_root.as_str()
   }
 
   pub fn get_include_dir_relative_to_cwd(&self) -> &str {
-    &self.include_dir_relative_to_cwd
+    self.paths_and_prefixes.include_dir_relative_to_cwd.as_str()
   }
 
   pub fn get_include_dir_relative_to_project_root(&self) -> &str {
-    &self.include_dir_relative_to_project_root
+    self.paths_and_prefixes.include_dir_relative_to_project_root.as_str()
   }
 
   pub fn get_docs_dir_relative_to_cwd(&self) -> &str {
-    &self.docs_dir_relative_to_cwd
+    self.paths_and_prefixes.docs_dir_relative_to_cwd.as_str()
+  }
+
+  pub fn get_docs_dir_relative_to_project_root(&self) -> &str {
+    self.paths_and_prefixes.docs_dir_relative_to_project_root.as_str()
   }
 
   pub fn get_build_configs(&self) -> &FinalBuildConfigMap {
@@ -2236,9 +2220,11 @@ fn obtain_feature_map(raw_project: &RawProject) -> Result<Rc<BTreeMap<String, Fi
 }
 
 struct ProjectPaths {
+  base_include_prefix: String,
   full_include_prefix: String,
   target_namespace_prefix: String,
   project_root_relative_to_cwd: String,
+  absolute_project_root: PathBuf,
   src_dir_relative_to_project_root: String,
   src_dir_relative_to_cwd: String,
   include_dir_relative_to_project_root: String,
@@ -2253,15 +2239,16 @@ fn obtain_prefixes_and_dirs(
   unclean_project_root: &str,
   initial_project_data: &InitialProjectData,
   parent_project_info: &Option<NeededParseInfoFromParent>
-) -> ProjectPaths {
+) -> Result<ProjectPaths, ProjectLoadFailureReason> {
   let full_include_prefix: String;
   let target_namespace_prefix: String;
+  let base_include_prefix: String = initial_project_data.raw_project.get_include_prefix().to_string();
 
   match parent_project_info {
     Some(parent_project) => {
       let true_base_prefix: String = match &parent_project.parse_mode {
-        ChildParseMode::TestProject => base_include_prefix_for_test(initial_project_data.raw_project.get_include_prefix()),
-        _ => initial_project_data.raw_project.get_include_prefix().to_string()
+        ChildParseMode::TestProject => base_include_prefix_for_test(base_include_prefix.as_str()),
+        _ => base_include_prefix.clone()
       };
 
       full_include_prefix = format!(
@@ -2273,7 +2260,7 @@ fn obtain_prefixes_and_dirs(
       target_namespace_prefix = parent_project.target_namespace_prefix.clone();
     },
     None => {
-      full_include_prefix = initial_project_data.raw_project.get_include_prefix().to_string();
+      full_include_prefix = base_include_prefix.clone();
       target_namespace_prefix = initial_project_data.raw_project.get_name().to_string();
     }
   }
@@ -2291,7 +2278,7 @@ fn obtain_prefixes_and_dirs(
     &full_include_prefix
   );
 
-  return ProjectPaths {
+  return Ok(ProjectPaths {
     src_dir_relative_to_cwd: format!(
       "{}/{}",
       &project_root_relative_to_cwd,
@@ -2320,8 +2307,11 @@ fn obtain_prefixes_and_dirs(
       &project_root_relative_to_cwd,
       SUBPROJECTS_DIR_NAME
     )),
+    absolute_project_root: absolute_path(&project_root_relative_to_cwd)
+      .map_err(ProjectLoadFailureReason::Other)?,
     project_root_relative_to_cwd,
+    base_include_prefix,
     full_include_prefix,
     target_namespace_prefix
-  };
+  });
 }
