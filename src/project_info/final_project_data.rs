@@ -440,75 +440,17 @@ impl FinalProjectData {
       Err(err_message) => return Err(ProjectLoadFailureReason::Other(err_message))
     };
 
-    let full_include_prefix: String;
-    let target_namespace_prefix: String;
-
-    match parent_project_info {
-      Some(parent_project) => {
-        let true_base_prefix: String = match &parent_project.parse_mode {
-          ChildParseMode::TestProject => base_include_prefix_for_test(initial_project_data.raw_project.get_include_prefix()),
-          _ => initial_project_data.raw_project.get_include_prefix().to_string()
-        };
-
-        full_include_prefix = format!(
-          "{}/{}",
-          parent_project.include_prefix,
-          true_base_prefix
-        );
-
-        target_namespace_prefix = parent_project.target_namespace_prefix;
-      },
-      None => {
-        full_include_prefix = initial_project_data.raw_project.get_include_prefix().to_string();
-        target_namespace_prefix = initial_project_data.raw_project.get_name().to_string();
-      }
-    }
-
-    let project_root_relative_to_cwd: String = cleaned_path_str(&unclean_project_root).to_string();
-    let project_vendor: String = initial_project_data.raw_project.vendor.clone();
-
-    let src_dir_relative_to_project_root: String = format!(
-      "{}/{}",
-      SRC_DIR_NAME,
-      &full_include_prefix
-    );
-
-    let src_dir_relative_to_cwd: String = format!(
-      "{}/{}",
-      &project_root_relative_to_cwd,
-      &src_dir_relative_to_project_root
-    );
-
-    let include_dir_relative_to_project_root: String = format!(
-      "{}/{}",
-      INCLUDE_DIR_NAME,
-      &full_include_prefix
-    );
-
-    let include_dir_relative_to_cwd: String = format!(
-      "{}/{}",
-      &project_root_relative_to_cwd,
-      &include_dir_relative_to_project_root
-    );
-
-    let docs_dir_relative_to_project_root: String = String::from(DOCS_DIR_NAME);
-
-    let docs_dir_relative_to_cwd: String = format!(
-      "{}/{}",
-      &project_root_relative_to_cwd,
-      &docs_dir_relative_to_project_root
+    let project_vendor = initial_project_data.raw_project.vendor.clone();
+    let project_paths: ProjectPaths = obtain_prefixes_and_dirs(
+      unclean_project_root,
+      &initial_project_data,
+      &parent_project_info
     );
 
     let mut test_project_map: SubprojectMap = SubprojectMap::new();
 
-    let project_test_dir_path: PathBuf = PathBuf::from(format!(
-      "{}/{}",
-      &project_root_relative_to_cwd,
-      TESTS_DIR_NAME
-    ));
-
-    if project_test_dir_path.is_dir() {
-      let tests_dir_iter = fs::read_dir(project_test_dir_path.as_path())
+    if project_paths.project_test_dir_path.is_dir() {
+      let tests_dir_iter = fs::read_dir(project_paths.project_test_dir_path.as_path())
         .map_err(|err| ProjectLoadFailureReason::Other(err.to_string()))?;
 
       for dir_entry in tests_dir_iter {
@@ -528,8 +470,8 @@ impl FinalProjectData {
               parent_project_namespaced_name: initial_project_data.full_namespaced_project_name.clone(),
               parse_mode: ChildParseMode::TestProject,
               test_framework: initial_project_data.final_test_framework.clone(), 
-              include_prefix: full_include_prefix.clone(),
-              target_namespace_prefix: target_namespace_prefix.clone(),
+              include_prefix: project_paths.full_include_prefix.clone(),
+              target_namespace_prefix: project_paths.target_namespace_prefix.clone(),
               build_config_map: Rc::clone(&initial_project_data.build_config),
               language_config_map: Rc::clone(&initial_project_data.language_config),
               supported_compilers: Rc::clone(&initial_project_data.supported_compiler_set),
@@ -554,16 +496,10 @@ impl FinalProjectData {
       }
     }
 
-    let project_subproject_dir_path: PathBuf = PathBuf::from(format!(
-      "{}/{}",
-      &project_root_relative_to_cwd,
-      SUBPROJECTS_DIR_NAME
-    ));
-
     let mut subprojects: SubprojectMap = SubprojectMap::new();
 
-    if project_subproject_dir_path.is_dir() {
-      let subprojects_dir_iter = fs::read_dir(project_subproject_dir_path.as_path())
+    if project_paths.project_subproject_dir_path.is_dir() {
+      let subprojects_dir_iter = fs::read_dir(project_paths.project_subproject_dir_path.as_path())
         .map_err(|err| ProjectLoadFailureReason::Other(err.to_string()))?;
 
       for dir_entry in subprojects_dir_iter {
@@ -583,8 +519,8 @@ impl FinalProjectData {
               parent_project_namespaced_name: initial_project_data.full_namespaced_project_name.clone(),
               parse_mode: ChildParseMode::Subproject,
               test_framework: initial_project_data.final_test_framework.clone(),
-              include_prefix: full_include_prefix.clone(),
-              target_namespace_prefix: target_namespace_prefix.clone(),
+              include_prefix: project_paths.full_include_prefix.clone(),
+              target_namespace_prefix: project_paths.target_namespace_prefix.clone(),
               supported_compilers: Rc::clone(&initial_project_data.supported_compiler_set),
               build_config_map: Rc::clone(&initial_project_data.build_config),
               language_config_map: Rc::clone(&initial_project_data.language_config),
@@ -695,7 +631,6 @@ impl FinalProjectData {
             format!("Error when parsing system specifier from output name '{}':\n{}", output_name, err_msg)
           ))
         }
-
       }
 
       output_items.insert(
@@ -738,13 +673,13 @@ impl FinalProjectData {
     }
 
     let file_root_group = FileRootGroup {
-      project_root: PathBuf::from(&project_root_relative_to_cwd),
-      header_root: PathBuf::from(&include_dir_relative_to_cwd),
-      src_root: PathBuf::from(&src_dir_relative_to_cwd)
+      project_root: PathBuf::from(&project_paths.project_root_relative_to_cwd),
+      header_root: PathBuf::from(&project_paths.include_dir_relative_to_cwd),
+      src_root: PathBuf::from(&project_paths.src_dir_relative_to_cwd)
     };
 
     let prebuild_script = resolve_prebuild_script(
-      &project_root_relative_to_cwd,
+      &project_paths.project_root_relative_to_cwd,
       initial_project_data.raw_project.prebuild_config.as_ref().unwrap_or(&PreBuildConfigIn {
         link: None,
         build_config: None,
@@ -809,12 +744,12 @@ impl FinalProjectData {
       version: maybe_version.unwrap(),
       installer_config,
       vendor: project_vendor,
-      full_include_prefix,
+      full_include_prefix: project_paths.full_include_prefix,
       base_include_prefix: initial_project_data.raw_project.get_include_prefix().to_string(),
       global_defines: global_defines,
       documentation: Self::finalized_doc_generator_info(initial_project_data.raw_project.documentation.as_ref()),
-      docs_dir_relative_to_cwd,
-      docs_dir_relative_to_project_root,
+      docs_dir_relative_to_cwd: project_paths.docs_dir_relative_to_cwd,
+      docs_dir_relative_to_project_root: project_paths.docs_dir_relative_to_project_root,
       features: initial_project_data.features,
       global_properties: initial_project_data.raw_project.global_properties
         .as_ref()
@@ -825,14 +760,14 @@ impl FinalProjectData {
       supported_compilers: initial_project_data.supported_compiler_set,
       project_type: initial_project_data.project_type,
       project_output_type,
-      absolute_project_root: absolute_path(&project_root_relative_to_cwd)
+      absolute_project_root: absolute_path(&project_paths.project_root_relative_to_cwd)
         .map_err(ProjectLoadFailureReason::Other)?,
-      project_root_dir: project_root_relative_to_cwd,
+      project_root_dir: project_paths.project_root_relative_to_cwd,
 
-      src_dir_relative_to_cwd,
-      src_dir_relative_to_project_root,
-      include_dir_relative_to_cwd,
-      include_dir_relative_to_project_root,
+      src_dir_relative_to_cwd: project_paths.src_dir_relative_to_cwd,
+      src_dir_relative_to_project_root: project_paths.src_dir_relative_to_project_root,
+      include_dir_relative_to_cwd: project_paths.include_dir_relative_to_cwd,
+      include_dir_relative_to_project_root: project_paths.include_dir_relative_to_project_root,
 
       src_files: BTreeSet::new(),
       private_headers: BTreeSet::new(),
@@ -843,7 +778,7 @@ impl FinalProjectData {
       predefined_dependencies,
       gcmake_dependency_projects,
       prebuild_script,
-      target_namespace_prefix,
+      target_namespace_prefix: project_paths.target_namespace_prefix,
       test_framework: initial_project_data.final_test_framework,
       tests: test_project_map,
       was_just_created: false
@@ -2298,4 +2233,95 @@ fn obtain_feature_map(raw_project: &RawProject) -> Result<Rc<BTreeMap<String, Fi
   }
 
   return Ok(Rc::new(final_feature_map));
+}
+
+struct ProjectPaths {
+  full_include_prefix: String,
+  target_namespace_prefix: String,
+  project_root_relative_to_cwd: String,
+  src_dir_relative_to_project_root: String,
+  src_dir_relative_to_cwd: String,
+  include_dir_relative_to_project_root: String,
+  include_dir_relative_to_cwd: String,
+  docs_dir_relative_to_project_root: String,
+  docs_dir_relative_to_cwd: String,
+  project_test_dir_path: PathBuf,
+  project_subproject_dir_path: PathBuf
+}
+
+fn obtain_prefixes_and_dirs(
+  unclean_project_root: &str,
+  initial_project_data: &InitialProjectData,
+  parent_project_info: &Option<NeededParseInfoFromParent>
+) -> ProjectPaths {
+  let full_include_prefix: String;
+  let target_namespace_prefix: String;
+
+  match parent_project_info {
+    Some(parent_project) => {
+      let true_base_prefix: String = match &parent_project.parse_mode {
+        ChildParseMode::TestProject => base_include_prefix_for_test(initial_project_data.raw_project.get_include_prefix()),
+        _ => initial_project_data.raw_project.get_include_prefix().to_string()
+      };
+
+      full_include_prefix = format!(
+        "{}/{}",
+        parent_project.include_prefix,
+        true_base_prefix
+      );
+
+      target_namespace_prefix = parent_project.target_namespace_prefix.clone();
+    },
+    None => {
+      full_include_prefix = initial_project_data.raw_project.get_include_prefix().to_string();
+      target_namespace_prefix = initial_project_data.raw_project.get_name().to_string();
+    }
+  }
+
+  let project_root_relative_to_cwd: String = cleaned_path_str(&unclean_project_root).to_string();
+  let docs_dir_relative_to_project_root = String::from(DOCS_DIR_NAME);
+  let src_dir_relative_to_project_root: String = format!(
+    "{}/{}",
+    SRC_DIR_NAME,
+    &full_include_prefix
+  );
+  let include_dir_relative_to_project_root: String = format!(
+    "{}/{}",
+    INCLUDE_DIR_NAME,
+    &full_include_prefix
+  );
+
+  return ProjectPaths {
+    src_dir_relative_to_cwd: format!(
+      "{}/{}",
+      &project_root_relative_to_cwd,
+      &src_dir_relative_to_project_root
+    ),
+    src_dir_relative_to_project_root,
+    include_dir_relative_to_cwd: format!(
+      "{}/{}",
+      &project_root_relative_to_cwd,
+      &include_dir_relative_to_project_root
+    ),
+    include_dir_relative_to_project_root,
+    docs_dir_relative_to_cwd: format!(
+      "{}/{}",
+      &project_root_relative_to_cwd,
+      &docs_dir_relative_to_project_root
+    ),
+    docs_dir_relative_to_project_root,
+    project_test_dir_path: PathBuf::from(format!(
+      "{}/{}",
+      &project_root_relative_to_cwd,
+      TESTS_DIR_NAME
+    )),
+    project_subproject_dir_path: PathBuf::from(format!(
+      "{}/{}",
+      &project_root_relative_to_cwd,
+      SUBPROJECTS_DIR_NAME
+    )),
+    project_root_relative_to_cwd,
+    full_include_prefix,
+    target_namespace_prefix
+  };
 }
