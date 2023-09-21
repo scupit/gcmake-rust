@@ -742,13 +742,17 @@ pub enum DependencyGraphWarningMode {
   Off
 }
 
-// TODO: Allow predefined dependencies to influence target ordering. For instance, SFML
-// targets must be linked in a certain order to work. The SFML predefined configuration
-// should be allowed to specify that its 'window' target depends on 'system', and so on.
-// Essentially, the configuration should be able to contain a graph-like representation
-// of how the dependency's targets depend on each other. After ensuring the graph is correct,
-// targets in that library which depend on other targets will be sorted lower in the list
-// than the targets they depend on.
+// TODO: Rewrite this graph without RC. Currently, each "dependency" graph can also be used
+// as a node in other graphs. This works, but managing RCs and mutability in this kind
+// of structure is messy and a pain.
+// 
+// The new graph should be laid out in a flat structure, where all projects (including subprojects,
+// etc.) are stored in a flat structure within a single "graph" itself, mapped by their project ID.
+// Each project already has a project ID and some other data. We can just map the project ID to a
+// "Node" containing the project and its relevant data.
+// Associations will just be a map of project IDs to a list of project IDs they depend on.
+// Actually, it'll have to be a struct of project IDs so that we can differentiate between
+// subprojects, test projects, gcmake dependencies, and predefined dependencies.
 pub struct DependencyGraph<'a> {
   parent: Option<Weak<RefCell<DependencyGraph<'a>>>>,
   toplevel: Weak<RefCell<DependencyGraph<'a>>>,

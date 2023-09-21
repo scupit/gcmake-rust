@@ -142,6 +142,15 @@ fn resolve_prebuild_script(
   }
 }
 
+fn referenced_feature_list(feature_list: Option<&Vec<String>>) -> Option<Vec<&str>> {
+  return feature_list
+    .map(|features|
+      features.iter()
+        .map(|owned_string| owned_string.as_ref())
+        .collect()
+    );
+}
+
 fn feature_list_from(feature_map: &BTreeMap<String, FinalFeatureConfig>) -> Option<Vec<&str>> {
   let feature_name_list: Vec<&str> = feature_map.iter()
     .map(|(feature_name, _)| &feature_name[..])
@@ -199,6 +208,9 @@ fn project_levels_below_root(clean_path_root: &str) -> io::Result<Option<usize>>
 
 type SubprojectMap = HashMap<String, Rc<FinalProjectData>>;
 type TestProjectMap = SubprojectMap;
+type GCMakeDependencyMap = HashMap<String, Rc<FinalGCMakeDependency>>;
+type OutputItemMap = HashMap<String, CompiledOutputItem>;
+type PredefinedDepMap = HashMap<String, Rc<FinalPredefinedDependencyConfig>>;
 
 pub enum ProjectLoadFailureReason {
   MissingYaml(String),
@@ -413,252 +425,21 @@ impl FinalProjectData {
       // just_created_project_at
     )?;
 
-    let valid_feature_list: Option<Vec<&str>> = if initial_project_data.features.is_empty()
+    let valid_feature_list: Option<Vec<String>> = if initial_project_data.features.is_empty()
       { None }
       else {
         Some(
           initial_project_data.features.keys()
-            .map(|key| &key[..])
+            .map(|key| key.clone())
             .collect()
         )
       };
-
-    let project_output_type: ProjectOutputType = match validate_raw_project_outputs(&initial_project_data.raw_project) {
-      Ok(project_output_type) => project_output_type,
-      Err(err_message) => return Err(ProjectLoadFailureReason::Other(err_message))
-    };
-
-    let project_vendor = initial_project_data.raw_project.vendor.clone();
+    
     let project_paths: ProjectPaths = obtain_prefixes_and_dirs(
       unclean_project_root,
       &initial_project_data,
       &parent_project_info
     )?;
-
-    let mut test_project_map: SubprojectMap = SubprojectMap::new();
-
-    if project_paths.project_test_dir_path.is_dir() {
-      let tests_dir_iter = fs::read_dir(project_paths.project_test_dir_path.as_path())
-        .map_err(|err| ProjectLoadFailureReason::Other(err.to_string()))?;
-
-      for dir_entry in tests_dir_iter {
-        let test_project_path: PathBuf = match dir_entry {
-          Ok(entry) => entry.path(),
-          Err(err) => return Err(ProjectLoadFailureReason::Other(err.to_string()))
-        };
-      
-        if test_project_path.is_dir() {
-          let test_project_name: String = test_project_path.file_name().unwrap().to_str().unwrap().to_string();
-
-          let new_test_project: FinalProjectData = Self::create_new(
-            test_project_path.to_str().unwrap(),
-            Some(NeededParseInfoFromParent {
-              actual_base_name: test_project_name.clone(),
-              actual_vendor: project_vendor.clone(),
-              parent_project_namespaced_name: initial_project_data.full_namespaced_project_name.clone(),
-              parse_mode: ChildParseMode::TestProject,
-              test_framework: initial_project_data.final_test_framework.clone(), 
-              include_prefix: project_paths.full_include_prefix.clone(),
-              target_namespace_prefix: project_paths.target_namespace_prefix.clone(),
-              build_config_map: Rc::clone(&initial_project_data.build_config),
-              language_config_map: Rc::clone(&initial_project_data.language_config),
-              supported_compilers: Rc::clone(&initial_project_data.supported_compiler_set),
-              inherited_features: Rc::clone(&initial_project_data.features)
-            }),
-            all_dep_config,
-            just_created_project_at
-          )
-            .map_err(|failure_reason| {
-              failure_reason.map_message(|err_message| format!(
-                "\t-> in test project '{}'\n{}",
-                cleaned_pathbuf(test_project_path.clone()).to_str().unwrap(),
-                err_message
-              ))
-            })?;
-
-          test_project_map.insert(
-            test_project_name,
-            Rc::new(new_test_project)
-          );
-        }
-      }
-    }
-
-    let mut subprojects: SubprojectMap = SubprojectMap::new();
-
-    if project_paths.project_subproject_dir_path.is_dir() {
-      let subprojects_dir_iter = fs::read_dir(project_paths.project_subproject_dir_path.as_path())
-        .map_err(|err| ProjectLoadFailureReason::Other(err.to_string()))?;
-
-      for dir_entry in subprojects_dir_iter {
-        let subproject_path: PathBuf = match dir_entry {
-          Ok(entry) => entry.path(),
-          Err(err) => return Err(ProjectLoadFailureReason::Other(err.to_string()))
-        };
-      
-        if subproject_path.is_dir() {
-          let subproject_name: String = subproject_path.file_name().unwrap().to_str().unwrap().to_string();
-
-          let new_subproject: FinalProjectData = Self::create_new(
-            subproject_path.to_str().unwrap(),
-            Some(NeededParseInfoFromParent {
-              actual_base_name: subproject_name.clone(),
-              actual_vendor: project_vendor.clone(),
-              parent_project_namespaced_name: initial_project_data.full_namespaced_project_name.clone(),
-              parse_mode: ChildParseMode::Subproject,
-              test_framework: initial_project_data.final_test_framework.clone(),
-              include_prefix: project_paths.full_include_prefix.clone(),
-              target_namespace_prefix: project_paths.target_namespace_prefix.clone(),
-              supported_compilers: Rc::clone(&initial_project_data.supported_compiler_set),
-              build_config_map: Rc::clone(&initial_project_data.build_config),
-              language_config_map: Rc::clone(&initial_project_data.language_config),
-              inherited_features: Rc::clone(&initial_project_data.features)
-            }),
-            all_dep_config,
-            just_created_project_at
-          )
-            .map_err(|failure_reason| {
-              failure_reason.map_message(|err_message| format!(
-                "\t-> in subproject '{}'\n{}",
-                cleaned_pathbuf(subproject_path.clone()).to_str().unwrap(),
-                err_message
-              ))
-            })?;
-
-          subprojects.insert(
-            subproject_name,
-            Rc::new(new_subproject)
-          );
-        }
-      }
-    }
-
-    let mut gcmake_dependency_projects: HashMap<String, Rc<FinalGCMakeDependency>> = HashMap::new();
-
-    if let Some(gcmake_dep_map) = &initial_project_data.raw_project.gcmake_dependencies {
-      for (dep_name, dep_config) in gcmake_dep_map {
-        // CPM hashes dependency directories in the global cache, so we can't immediately determine the
-        // exact repository which matches our specified dependency. We get around that by having CMake
-        // write this hash into a file at configure time. Then when gcmake-rust is run again,
-        // we can find the matching dependency repository by checking whether the contents of that
-        // hash file match what we expect.
-        let expected_hash: String = base64_encoded(format!(
-          "{}->{}->{}",
-          dep_name,
-          dep_config.repo_url,
-          dep_config.commit_hash.clone()
-            .unwrap_or(dep_config.commit_hash.clone().unwrap_or_default())
-        ));
-
-        let maybe_dep_path: Option<PathBuf> = find_matching_gcmake_dep_path(dep_name, &expected_hash)
-          .map_err(|io_err| ProjectLoadFailureReason::Other(io_err.to_string()))?;
-
-        let maybe_dep_project: Option<Rc<FinalProjectData>> = match maybe_dep_path {
-          None => None,
-          Some(dep_path) => Some(Rc::new(Self::create_new(
-            dep_path.to_str().unwrap(),
-            None,
-            all_dep_config,
-            just_created_project_at
-          )?))
-        };
-
-        gcmake_dependency_projects.insert(
-          dep_name.clone(),
-          Rc::new(
-            FinalGCMakeDependency::new(
-              &dep_name,
-              dep_config,
-              expected_hash,
-              maybe_dep_project
-            )
-            .map_err(ProjectLoadFailureReason::Other)?
-          )
-        );
-      }
-    }
-
-    let mut output_items: HashMap<String, CompiledOutputItem> = HashMap::new();
-
-    for (output_name, raw_output_item) in initial_project_data.raw_project.get_output_mut() {
-      if let FinalProjectType::Test { framework } = &initial_project_data.project_type {
-        if raw_output_item.link.is_none() {
-          raw_output_item.link = Some(LinkSection::Uncategorized(Vec::new()));
-        }
-
-        let needed_target_name: &str = if raw_output_item.requires_custom_main.unwrap_or(false)
-          { framework.main_not_provided_link_target_name() }
-          else { framework.main_provided_link_target_name() };
-
-        raw_output_item.link.as_mut().unwrap().add_exe_link(
-          framework.project_dependency_name(),
-          needed_target_name
-        );
-      }
-
-      let actual_output_name: &str;
-      let system_spec: Option<SystemSpecifierWrapper>;
-
-      {
-        let parsing_context = GivenConstraintSpecParseContext {
-          maybe_valid_feature_list: valid_feature_list.as_ref(),
-          is_before_output_name: true
-        };
-
-        // TODO: Disallow usage of language feature constraints for output items themselves. 
-        match parse_leading_constraint_spec(output_name, parsing_context) {
-          Ok(Some(ParseSuccess { value: system_spec_wrapper, rest: real_output_name })) => {
-            actual_output_name = real_output_name;
-            system_spec = Some(system_spec_wrapper);
-          },
-          Ok(None) => {
-            actual_output_name = output_name;
-            system_spec = None;
-          },
-          Err(err_msg) => return Err(ProjectLoadFailureReason::Other(
-            format!("Error when parsing system specifier from output name '{}':\n{}", output_name, err_msg)
-          ))
-        }
-      }
-
-      output_items.insert(
-        actual_output_name.to_string(),
-        CompiledOutputItem::make_from(
-          actual_output_name,
-          raw_output_item,
-          system_spec,
-          valid_feature_list.as_ref()
-        )
-          .map_err(|err_message| ProjectLoadFailureReason::Other(
-            format!("When creating output item named '{}':\n{}", output_name, err_message)
-          ))?
-      );
-    }
-
-    let mut predefined_dependencies: HashMap<String, Rc<FinalPredefinedDependencyConfig>> = HashMap::new();
-
-    if let FinalProjectType::Root = &initial_project_data.project_type {
-      if let Some(framework) = &initial_project_data.final_test_framework {
-        predefined_dependencies.insert(
-          framework.project_dependency_name().to_string(),
-          framework.unwrap_config()
-        );
-      }
-    }
-
-    if let Some(pre_deps) = &initial_project_data.raw_project.predefined_dependencies {
-      for (dep_name, user_given_config) in pre_deps {
-        let finalized_dep = FinalPredefinedDependencyConfig::new(
-          all_dep_config,
-          user_given_config,
-          dep_name,
-          valid_feature_list.as_ref()
-        )
-          .map_err(ProjectLoadFailureReason::Other)?;
-
-        predefined_dependencies.insert(dep_name.clone(), Rc::new(finalized_dep));
-      }
-    }
 
     let file_root_group = FileRootGroup {
       project_root: PathBuf::from(&project_paths.project_root_relative_to_cwd),
@@ -674,7 +455,7 @@ impl FinalProjectData {
         generated_code: None,
         language_features: None
       }),
-      valid_feature_list.as_ref(),
+      referenced_feature_list(valid_feature_list.as_ref()).as_ref(),
       &file_root_group
     ).map_err(ProjectLoadFailureReason::Other)?;
 
@@ -720,18 +501,48 @@ impl FinalProjectData {
       .as_ref()
       .map_or(
         Ok(Vec::new()),
-        |defines_set| CompilerDefine::make_list(&defines_set, valid_feature_list.as_ref())
+        |defines_set| CompilerDefine::make_list(
+          &defines_set,
+          referenced_feature_list(valid_feature_list.as_ref()).as_ref(),
+        )
       )
       .map_err(ProjectLoadFailureReason::Other)?;
 
     let mut finalized_project_data = FinalProjectData {
+      subprojects: obtain_subprojects(
+        &project_paths,
+        &initial_project_data,
+        all_dep_config,
+        just_created_project_at
+      )?,
+      output: obtain_output_items(
+        valid_feature_list.as_ref(),
+        &mut initial_project_data,
+      )?,
+      predefined_dependencies: obtain_predefined_dependencies(
+        valid_feature_list.as_ref(),
+        &initial_project_data,
+        all_dep_config
+      )?,
+      gcmake_dependency_projects: obtain_gcmake_dep_projects(
+        &initial_project_data,
+        all_dep_config,
+        just_created_project_at
+      )?,
+      tests: obtain_test_projects(
+        &project_paths,
+        &initial_project_data,
+        all_dep_config,
+        just_created_project_at
+      )?,
+
       project_base_name: initial_project_data.raw_project.name.clone(),
       project_name_for_error_messages,
       full_namespaced_project_name: initial_project_data.full_namespaced_project_name,
       description: initial_project_data.raw_project.description.to_string(),
       version: maybe_version.unwrap(),
       installer_config,
-      vendor: project_vendor,
+      vendor: initial_project_data.vendor,
       global_defines: global_defines,
       documentation: Self::finalized_doc_generator_info(initial_project_data.raw_project.documentation.as_ref()),
       features: initial_project_data.features,
@@ -743,19 +554,18 @@ impl FinalProjectData {
       language_config_map: initial_project_data.language_config,
       supported_compilers: initial_project_data.supported_compiler_set,
       project_type: initial_project_data.project_type,
-      project_output_type,
+      project_output_type: match validate_raw_project_outputs(&initial_project_data.raw_project) {
+        Ok(project_output_type) => project_output_type,
+        Err(err_message) => return Err(ProjectLoadFailureReason::Other(err_message))
+      },
 
       src_files: BTreeSet::new(),
       private_headers: BTreeSet::new(),
       public_headers: BTreeSet::new(),
       template_impl_files: BTreeSet::new(),
-      subprojects,
-      output: output_items,
-      predefined_dependencies,
-      gcmake_dependency_projects,
+
       prebuild_script,
       test_framework: initial_project_data.final_test_framework,
-      tests: test_project_map,
       paths_and_prefixes: project_paths,
       was_just_created: false
     };
@@ -2049,6 +1859,7 @@ impl FinalProjectData {
 
 struct InitialProjectData {
   raw_project: RawProject,
+  vendor: String,
   project_type: FinalProjectType,
   full_namespaced_project_name: String,
   final_test_framework: Option<FinalTestFramework>,
@@ -2121,6 +1932,7 @@ fn make_initial_project_data(
             raw_project.get_name()
           ),
           final_test_framework: test_framework.clone(),
+          vendor: raw_project.vendor.clone(),
           raw_project
         });
       },
@@ -2154,6 +1966,7 @@ fn make_initial_project_data(
           ),
           project_type: FinalProjectType::Subproject { },
           final_test_framework: test_framework.clone(),
+          vendor: raw_project.vendor.clone(),
           raw_project
         });
       }
@@ -2199,6 +2012,7 @@ fn make_initial_root_project_info(
     supported_compiler_set: Rc::new(HashSet::from_iter(raw_project.supported_compilers.clone())),
     full_namespaced_project_name: raw_project.name.clone(),
     build_config: Rc::new(finalized_build_config),
+    vendor: raw_project.vendor.clone(),
     final_test_framework,
     features,
     raw_project
@@ -2314,4 +2128,271 @@ fn obtain_prefixes_and_dirs(
     full_include_prefix,
     target_namespace_prefix
   });
+}
+
+fn obtain_test_projects(
+  project_paths: &ProjectPaths,
+  initial_project_data: &InitialProjectData,
+  all_dep_config: &AllRawPredefinedDependencies,
+  just_created_project_at: &Option<PathBuf>
+) -> Result<SubprojectMap, ProjectLoadFailureReason> {
+  let mut test_project_map: SubprojectMap = SubprojectMap::new();
+
+  if project_paths.project_test_dir_path.is_dir() {
+    let tests_dir_iter = fs::read_dir(project_paths.project_test_dir_path.as_path())
+      .map_err(|err| ProjectLoadFailureReason::Other(err.to_string()))?;
+
+    for dir_entry in tests_dir_iter {
+      let test_project_path: PathBuf = match dir_entry {
+        Ok(entry) => entry.path(),
+        Err(err) => return Err(ProjectLoadFailureReason::Other(err.to_string()))
+      };
+    
+      if test_project_path.is_dir() {
+        let test_project_name: String = test_project_path.file_name().unwrap().to_str().unwrap().to_string();
+
+        let new_test_project: FinalProjectData = FinalProjectData::create_new(
+          test_project_path.to_str().unwrap(),
+          Some(NeededParseInfoFromParent {
+            actual_base_name: test_project_name.clone(),
+            actual_vendor: initial_project_data.vendor.clone(),
+            parent_project_namespaced_name: initial_project_data.full_namespaced_project_name.clone(),
+            parse_mode: ChildParseMode::TestProject,
+            test_framework: initial_project_data.final_test_framework.clone(), 
+            include_prefix: project_paths.full_include_prefix.clone(),
+            target_namespace_prefix: project_paths.target_namespace_prefix.clone(),
+            build_config_map: Rc::clone(&initial_project_data.build_config),
+            language_config_map: Rc::clone(&initial_project_data.language_config),
+            supported_compilers: Rc::clone(&initial_project_data.supported_compiler_set),
+            inherited_features: Rc::clone(&initial_project_data.features)
+          }),
+          all_dep_config,
+          just_created_project_at
+        )
+          .map_err(|failure_reason| {
+            failure_reason.map_message(|err_message| format!(
+              "\t-> in test project '{}'\n{}",
+              cleaned_pathbuf(test_project_path.clone()).to_str().unwrap(),
+              err_message
+            ))
+          })?;
+
+        test_project_map.insert(
+          test_project_name,
+          Rc::new(new_test_project)
+        );
+      }
+    }
+  }
+
+  return Ok(test_project_map);
+}
+
+fn obtain_subprojects(
+  project_paths: &ProjectPaths,
+  initial_project_data: &InitialProjectData,
+  all_dep_config: &AllRawPredefinedDependencies,
+  just_created_project_at: &Option<PathBuf>
+) -> Result<SubprojectMap, ProjectLoadFailureReason> {
+  let mut subproject_map = SubprojectMap::new();
+
+  if project_paths.project_subproject_dir_path.is_dir() {
+    let subprojects_dir_iter = fs::read_dir(project_paths.project_subproject_dir_path.as_path())
+      .map_err(|err| ProjectLoadFailureReason::Other(err.to_string()))?;
+
+    for dir_entry in subprojects_dir_iter {
+      let subproject_path: PathBuf = match dir_entry {
+        Ok(entry) => entry.path(),
+        Err(err) => return Err(ProjectLoadFailureReason::Other(err.to_string()))
+      };
+    
+      if subproject_path.is_dir() {
+        let subproject_name: String = subproject_path.file_name().unwrap().to_str().unwrap().to_string();
+
+        let new_subproject: FinalProjectData = FinalProjectData::create_new(
+          subproject_path.to_str().unwrap(),
+          Some(NeededParseInfoFromParent {
+            actual_base_name: subproject_name.clone(),
+            actual_vendor: initial_project_data.vendor.clone(),
+            parent_project_namespaced_name: initial_project_data.full_namespaced_project_name.clone(),
+            parse_mode: ChildParseMode::Subproject,
+            test_framework: initial_project_data.final_test_framework.clone(),
+            include_prefix: project_paths.full_include_prefix.clone(),
+            target_namespace_prefix: project_paths.target_namespace_prefix.clone(),
+            supported_compilers: Rc::clone(&initial_project_data.supported_compiler_set),
+            build_config_map: Rc::clone(&initial_project_data.build_config),
+            language_config_map: Rc::clone(&initial_project_data.language_config),
+            inherited_features: Rc::clone(&initial_project_data.features)
+          }),
+          all_dep_config,
+          just_created_project_at
+        )
+          .map_err(|failure_reason| {
+            failure_reason.map_message(|err_message| format!(
+              "\t-> in subproject '{}'\n{}",
+              cleaned_pathbuf(subproject_path.clone()).to_str().unwrap(),
+              err_message
+            ))
+          })?;
+
+        subproject_map.insert(
+          subproject_name,
+          Rc::new(new_subproject)
+        );
+      }
+    }
+  }
+
+  return Ok(subproject_map);
+}
+
+fn obtain_gcmake_dep_projects(
+  initial_project_data: &InitialProjectData,
+  all_dep_config: &AllRawPredefinedDependencies,
+  just_created_project_at: &Option<PathBuf>
+) -> Result<GCMakeDependencyMap, ProjectLoadFailureReason> {
+  let mut gcmake_dep_project_map = GCMakeDependencyMap::new();
+
+  if let Some(gcmake_dep_map) = &initial_project_data.raw_project.gcmake_dependencies {
+    for (dep_name, dep_config) in gcmake_dep_map {
+      // CPM hashes dependency directories in the global cache, so we can't immediately determine the
+      // exact repository which matches our specified dependency. We get around that by having CMake
+      // write this hash into a file at configure time. Then when gcmake-rust is run again,
+      // we can find the matching dependency repository by checking whether the contents of that
+      // hash file match what we expect.
+      let expected_hash: String = base64_encoded(format!(
+        "{}->{}->{}",
+        dep_name,
+        dep_config.repo_url,
+        dep_config.commit_hash.clone()
+          .unwrap_or(dep_config.commit_hash.clone().unwrap_or_default())
+      ));
+
+      let maybe_dep_path: Option<PathBuf> = find_matching_gcmake_dep_path(dep_name, &expected_hash)
+        .map_err(|io_err| ProjectLoadFailureReason::Other(io_err.to_string()))?;
+
+      let maybe_dep_project: Option<Rc<FinalProjectData>> = match maybe_dep_path {
+        None => None,
+        Some(dep_path) => Some(Rc::new(FinalProjectData::create_new(
+          dep_path.to_str().unwrap(),
+          None,
+          all_dep_config,
+          just_created_project_at
+        )?))
+      };
+
+      gcmake_dep_project_map.insert(
+        dep_name.clone(),
+        Rc::new(
+          FinalGCMakeDependency::new(
+            &dep_name,
+            dep_config,
+            expected_hash,
+            maybe_dep_project
+          )
+          .map_err(ProjectLoadFailureReason::Other)?
+        )
+      );
+    }
+  }
+
+  return Ok(gcmake_dep_project_map);
+}
+
+fn obtain_output_items(
+  valid_feature_list: Option<&Vec<String>>,
+  initial_project_data: &mut InitialProjectData,
+) -> Result<OutputItemMap, ProjectLoadFailureReason> {
+  let mut output_item_map = OutputItemMap::new();
+
+  for (output_name, raw_output_item) in initial_project_data.raw_project.get_output_mut() {
+    if let FinalProjectType::Test { framework } = &initial_project_data.project_type {
+      if raw_output_item.link.is_none() {
+        raw_output_item.link = Some(LinkSection::Uncategorized(Vec::new()));
+      }
+
+      let needed_target_name: &str = if raw_output_item.requires_custom_main.unwrap_or(false)
+        { framework.main_not_provided_link_target_name() }
+        else { framework.main_provided_link_target_name() };
+
+      raw_output_item.link.as_mut().unwrap().add_exe_link(
+        framework.project_dependency_name(),
+        needed_target_name
+      );
+    }
+
+    let actual_output_name: &str;
+    let system_spec: Option<SystemSpecifierWrapper>;
+
+    {
+      let usable_feature_list = referenced_feature_list(valid_feature_list);
+      let parsing_context = GivenConstraintSpecParseContext {
+        maybe_valid_feature_list: usable_feature_list.as_ref(),
+        is_before_output_name: true
+      };
+
+      // TODO: Disallow usage of language feature constraints for output items themselves. 
+      match parse_leading_constraint_spec(output_name, parsing_context) {
+        Ok(Some(ParseSuccess { value: system_spec_wrapper, rest: real_output_name })) => {
+          actual_output_name = real_output_name;
+          system_spec = Some(system_spec_wrapper);
+        },
+        Ok(None) => {
+          actual_output_name = output_name;
+          system_spec = None;
+        },
+        Err(err_msg) => return Err(ProjectLoadFailureReason::Other(
+          format!("Error when parsing system specifier from output name '{}':\n{}", output_name, err_msg)
+        ))
+      }
+    }
+
+    output_item_map.insert(
+      actual_output_name.to_string(),
+      CompiledOutputItem::make_from(
+        actual_output_name,
+        raw_output_item,
+        system_spec,
+        referenced_feature_list(valid_feature_list).as_ref()
+      )
+        .map_err(|err_message| ProjectLoadFailureReason::Other(
+          format!("When creating output item named '{}':\n{}", output_name, err_message)
+        ))?
+    );
+  }
+
+  return Ok(output_item_map);
+}
+
+fn obtain_predefined_dependencies(
+  valid_feature_list: Option<&Vec<String>>,
+  initial_project_data: &InitialProjectData,
+  all_dep_config: &AllRawPredefinedDependencies
+) -> Result<PredefinedDepMap, ProjectLoadFailureReason> {
+  let mut predefined_dependencies = PredefinedDepMap::new();
+
+  if let FinalProjectType::Root = &initial_project_data.project_type {
+    if let Some(framework) = &initial_project_data.final_test_framework {
+      predefined_dependencies.insert(
+        framework.project_dependency_name().to_string(),
+        framework.unwrap_config()
+      );
+    }
+  }
+
+  if let Some(pre_deps) = &initial_project_data.raw_project.predefined_dependencies {
+    for (dep_name, user_given_config) in pre_deps {
+      let finalized_dep = FinalPredefinedDependencyConfig::new(
+        all_dep_config,
+        user_given_config,
+        dep_name,
+        referenced_feature_list(valid_feature_list).as_ref()
+      )
+        .map_err(ProjectLoadFailureReason::Other)?;
+
+      predefined_dependencies.insert(dep_name.clone(), Rc::new(finalized_dep));
+    }
+  }
+
+  return Ok(predefined_dependencies);
 }
