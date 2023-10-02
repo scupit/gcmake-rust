@@ -9,6 +9,10 @@ There are a whole bunch of things which need doing. This is the place to list th
 
 ## Priorities
 
+- [ ] Overhaul documentation. Mainly:
+  - Replace use of the term "project" with "package", since "project" is ambiguous. "package" should refer to the whole parent project, including subprojects and test projects.
+  - List and explain project goals and non-goals.
+- Add a license (MIT? Will have to check the license of each dependency.).
 - [x] Warn on dependencies which are never used, since that's almost always a mistake.
 - [x] Support for parallelism systems ([CUDA](https://developer.nvidia.com/cuda-toolkit), [Kokkos](https://github.com/kokkos/kokkos), and [compiler-builtin OpenMP](https://www.openmp.org/))
   - Don't support HIP because it doesn't support Windows. OpenSYCL barely has experimental Windows support, but its build process looks like a pain in general. OpenCL seems extremely portable, but I couldn't get it to work in a basic CMake project so I won't support it yet.

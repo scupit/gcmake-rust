@@ -72,11 +72,8 @@ predefined_dependencies:
 prebuild_config:
   link:
     - fmt::fmt
-  build_config:
-    AllConfigs:
-      AllCompilers:
-        defines:
-          - NOICE="This is defined for the pre-build only."
+  defines:
+    - NOICE="This is defined for the pre-build only."
   generated_code:
     - my-source-file.cpp
     - my-header-file.hpp

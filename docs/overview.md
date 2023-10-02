@@ -1,47 +1,16 @@
 # Overview
 
-This "project overview" page is essentially the same as the [README](/README.md).
-It's here to explain the basic functionality of this project and describe its common uses.
+This "project overview" page is a summary of the motivation behind this project, and its functionality.
 
-## Documentation
+- For information on getting started, [see the README](/README.md).
+- For documentation, see [docs/Docs_Home.md](/docs/Docs_Home.md).
+- For a list of dependencies currently compatible with this project, see the [external dependency configuration repository](/gcmake-dependency-configs) and [its README](/gcmake-dependency-configs/README.md)
+- For working project examples, see the [gcmake-test-project repository](/gcmake-test-project) and [its README](/gcmake-test-project/README.md). The projects in that repository are tests cases for this tool, so they should all work.
 
-Documentation is found in [Docs_Home.md](./Docs_Home.md).
+<!-- TODO: Explain project functionality -->
+<!-- TODO: Explain project motivation -->
 
-## Build Requirements
-
-- A [Rust toolchain](https://www.rust-lang.org/tools/install)
-
-## Usage Requirements
-
-- [Git](https://git-scm.com/) **1.6.5 or higher** must be installed on the system
-- [CMake](https://cmake.org/download/) **3.25** or higher
-
-## About gcmake-rust
-
-This project uses [CPM.cmake](https://github.com/cpm-cmake/CPM.cmake)
-[v0.38.1](https://github.com/cpm-cmake/CPM.cmake/releases/tag/v0.38.1) for dependency management.
-
-Among other things, this tool is able to:
-
-- Generate full CMake configurations for an entire project tree.
-- Generate new C/C++ projects, subprojects, and test projects.
-- Generate header, source, and template-impl files in-tree.
-
-## Example Project
-
-See the [gcmake-test-project](/gcmake-test-project/) for a full example
-of a working gcmake project.
-
-## Suggestions
-
-See [the README](/README.md) for [build/installation information](/README.md#installation) and
-help [getting started](/README.md#getting-started).
-
-See [the documentation](Docs_Home.md) for in-depth information about this tool.
-
-> It's worth aliasing `gcmake-rust` to just `gcmake`, for convenience.
-
-## Common Uses
+## Some Example Commands
 
 > **NOTE:** This section assumes the `gcmake-rust` executable is aliased to `gcmake`.
 

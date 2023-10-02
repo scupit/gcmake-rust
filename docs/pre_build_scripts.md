@@ -2,6 +2,11 @@
 
 > This page explains the creation, usage, and nuances of pre-build scripts.
 
+For pre-build configuration options, see the [project prebuild_config property](./cmake_data_config/properties/prebuild_config.md).
+
+GCMake-rust has built-in support for pre-build scripts. These scripts are guaranteed to run before
+any targets in the immediate project are built, and are mainly useful for generating assets and code.
+
 Pre-build scripts can be written in `Python` (just make sure you have a
 [Python interpreter](https://www.python.org/downloads/) installed), `C`, and `C++`.
 

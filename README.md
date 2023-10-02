@@ -1,23 +1,35 @@
 # gcmake-rust
 
-`gcmake-rust` is a C/C++ project configuration tool which acts as an abstraction layer over CMake.
+`gcmake-rust` is an opinionated C/C++ project configuration tool which generates FetchContent-ready CMake configurations for an entire project tree.
+
+Among other things, this project's features include:
+
+- Full C/C++ project, subproject, and test project generation
+- In-tree header and source file generation
+- Automatic installation configuration via cpack
+- Configurable [pre-build scripts](/docs/pre_build_scripts.md)
+- Automatic dependency link ordering and cycle detection
+- [Cargo-like "project features"](/docs/cmake_data_config/properties/features.md)
+- [Unified constraint expressions](/docs/cmake_data_config/data_formats.md#constraint-specifier): A readable, less painful alternative to [CMake generator expressions](https://cmake.org/cmake/help/latest/manual/cmake-generator-expressions.7.html)
+- [Conditional (optional) dependencies](/docs/cmake_data_config/linking.md#conditional-dependencies)
+- Out of the box [support for Herb Sutter's cppfront](/docs/cppfront_integration.md)
+- Out of the box [support for Emscripten](/docs/emscripten.md)
+- Out of the box [support for CUDA](/docs/using_cuda.md)
 
 ![Example GIF](assets/gcmake-example.gif)
 
 ## Documentation
 
-Documentation is found in [docs/Docs_Home.md](docs/Docs_Home.md).
+Documentation is located in [docs/Docs_Home.md](/docs/Docs_Home.md).
 
-## About
+## General Information
 
 This project uses [CPM.cmake](https://github.com/cpm-cmake/CPM.cmake)
 [v0.38.1](https://github.com/cpm-cmake/CPM.cmake/releases/tag/v0.38.1) for dependency management.
 
-Among other things, this tool is able to:
-
-- Generate full CMake configurations for an entire project tree.
-- Generate new C/C++ projects, subprojects, and test projects.
-- Generate header, source, and template-impl files in-tree.
+- For **documentation**, see [docs/Docs_Home.md](/docs/Docs_Home.md).
+- For a list of dependencies currently compatible with this project, see the [external dependency configuration repository](/gcmake-dependency-configs) and [its README](/gcmake-dependency-configs/README.md)
+- For working project examples, see the [gcmake-test-project repository](/gcmake-test-project) and [its README](/gcmake-test-project/README.md). The projects in that repository are tests cases for this tool, so they should all work.
 
 ## Project Overview
 
@@ -26,6 +38,7 @@ The project overview is part of the documentation, and is found in [docs/overvie
 ## Build Requirements
 
 - A [Rust toolchain](https://www.rust-lang.org/tools/install)
+- [Git](https://git-scm.com/) (to clone the project and submodules)
 
 ## Usage Requirements
 
