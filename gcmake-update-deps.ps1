@@ -65,6 +65,14 @@ $repoUpdateScriptBlock = {
       }
     }
   }
+  elseif (-Not (Test-Path -Path "$repoDir/*")) {
+    if ($dryRun) {
+      Write-Host "Would remove invalid directory (maybe due to failed archive download?) at $repoDir"
+    }
+    else {
+      Remove-Item -Recurse -Force $repoDir && Write-Host "Removed invalid directory (maybe due to failed archive download?) at $repoDir"
+    }
+  }
 }
 
 
