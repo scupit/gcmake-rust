@@ -3,7 +3,7 @@ use std::hash::{ Hash, Hasher };
 
 use colored::Colorize;
 
-use super::{raw_data_in::{OutputItemType, RawCompiledItem, TargetBuildConfigMap, LinkSection, BuildConfigCompilerSpecifier, BuildType, TargetSpecificBuildType, RawBuildConfig, BuildTypeOptionMap, BuildConfigMap, RawGlobalPropertyConfig, DefaultCompiledLibType, RawShortcutConfig, RawFeatureConfig}, final_dependencies::FinalPredefinedDependencyConfig, LinkSpecifier, parsers::{link_spec_parser::LinkAccessMode, general_parser::ParseSuccess}, SystemSpecifierWrapper, platform_spec_parser::parse_leading_constraint_spec, helpers::{RetrievedCodeFileType, code_file_type, CodeFileLang}, path_manipulation::{cleaned_pathbuf}, final_project_data::CppFileGrammar, GivenConstraintSpecParseContext, LANGUAGE_FEATURE_BEGIN_TERMS, feature_map_for_lang, SystemSpecFeatureType};
+use super::{raw_data_in::{OutputItemType, RawCompiledItem, TargetBuildConfigMap, LinkSection, BuildConfigCompilerSpecifier, BuildType, TargetSpecificBuildType, RawBuildConfig, BuildTypeOptionMap, BuildConfigMap, RawGlobalPropertyConfig, DefaultCompiledLibType, RawShortcutConfig, RawFeatureConfig}, final_dependencies::FinalPredefinedDependencyConfig, LinkSpecifier, parsers::{link_spec_parser::LinkAccessMode, general_parser::ParseSuccess}, SystemSpecifierWrapper, platform_spec_parser::parse_leading_constraint_spec, helpers::{RetrievedCodeFileType, code_file_type, CodeFileLang}, path_manipulation::cleaned_pathbuf, final_project_data::CppFileGrammar, GivenConstraintSpecParseContext, LANGUAGE_FEATURE_BEGIN_TERMS, feature_map_for_lang, SystemSpecFeatureType};
 
 #[derive(Clone)]
 pub struct CodeFileInfo {
@@ -30,14 +30,17 @@ impl CodeFileInfo {
     match self.code_file_type() {
       RetrievedCodeFileType::Header(lang) => Some(lang),
       RetrievedCodeFileType::Source(lang) => Some(lang),
-      RetrievedCodeFileType::TemplateImpl => Some(CodeFileLang::Cpp { used_grammar: CppFileGrammar::Cpp1 }),
+      RetrievedCodeFileType::TemplateImpl => Some(CodeFileLang::Cpp {
+        used_grammar: CppFileGrammar::Cpp1,
+        is_module: false
+      }),
       RetrievedCodeFileType::Unknown => None
     }
   }
 
   pub fn uses_cpp2_grammar(&self) -> bool {
     return match &self.file_type {
-      RetrievedCodeFileType::Source(CodeFileLang::Cpp { used_grammar }) => match used_grammar {
+      RetrievedCodeFileType::Source(CodeFileLang::Cpp { used_grammar, .. }) => match used_grammar {
         CppFileGrammar::Cpp1 => false,
         CppFileGrammar::Cpp2 => true,
       },
@@ -201,15 +204,15 @@ impl PreBuildScript {
   }
 
   pub fn generated_sources(&self) -> BTreeSet<&CodeFileInfo> {
-    self.generated_files_by_type(RetrievedCodeFileType::Source(CodeFileLang::Cpp {
-      // The grammar value is ignored for the check.
-      used_grammar: CppFileGrammar::Cpp1
-    }))
+    self.generated_files_by_type(RetrievedCodeFileType::Source(
+      // The language value is ignored for the check.
+      CodeFileLang::C
+    ))
   }
 
   pub fn generated_headers(&self) -> BTreeSet<&CodeFileInfo> {
     self.generated_files_by_type(RetrievedCodeFileType::Header(
-      // The language value is ignored for the check
+      // The language value is ignored for the check.
       CodeFileLang::C
     ))
   }

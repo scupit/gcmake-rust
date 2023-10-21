@@ -134,6 +134,7 @@ function( gcmake_apply_exe_files
   entry_file
   source_list_var
   header_list_var
+  modules_list_var
 )
   set( receiver_interface_lib ${receiver_target} )
 
@@ -151,7 +152,40 @@ function( gcmake_apply_exe_files
       FILE_SET HEADERS
         FILES
           ${headers_build}
+          # Omitting 'headers_install' is intentional. CMake's FILE_SET functionality automatically
+          # registers these files for install to the correct paths.
     )
+  endif()
+
+  list( LENGTH ${modules_list_var} num_modules )
+
+  if( num_modules GREATER 0)
+    gcmake_wrap_files_in_generators( ${modules_list_var} modules_build modules_install )
+
+    # FIXME: Module header units are not supported as of CMake 3.28. 
+    # https://cmake.org/cmake/help/v3.28/manual/cmake-cxxmodules.7.html#limitations
+    # Use this version once header units are supported.
+
+    target_sources( ${receiver_interface_lib} INTERFACE
+      FILE_SET CXX_MODULES
+        FILES
+          ${modules_build}
+          # Omitting 'modules_install' is intentional. CMake's FILE_SET functionality automatically
+          # registers these files for install to the correct paths.
+    )
+
+    # FIXME: Right now we can't give the 'interface receiver lib' C++ modules because CMake doesn't
+    # allow modules to be added as INTERFACE (I think CMake sees INTERFACE modules as header units,
+    # which aren't currently supported and are listed as a limitation). Therefore module files are
+    # not propagated to tests through the 'interface receiver lib'. I'll need to add a workaround 
+    # for that for now, until CMake supports module header units.
+    # target_sources( ${exe_target} PRIVATE
+    #   FILE_SET CXX_MODULES
+    #     FILES
+    #       ${modules_build}
+    #       # Omitting 'modules_install' is intentional. CMake's FILE_SET functionality automatically
+    #       # registers these files for install to the correct paths.
+    # )
   endif()
 endfunction()
 
@@ -165,8 +199,10 @@ function( gcmake_apply_lib_files
   lib_target
   lib_type_spec
   entry_file
+  is_entry_file_module
   source_list_var
   header_list_var
+  modules_list_var
 )
   set( _valid_lib_type_specs "COMPILED_LIB" "HEADER_ONLY_LIB" )
   if( NOT lib_type_spec IN_LIST _valid_lib_type_specs )
@@ -216,7 +252,12 @@ function( gcmake_apply_lib_files
   # We don't actually add the aliased entry file to the build because it would mess up our installation
   # structure. The aliased file is only there to allow a uniform inclusion path for library entry
   # files when both building and after installing a library.
-  set( all_headers "${entry_file}" ${${header_list_var}} )
+  set( all_headers ${${header_list_var}} )
+
+  if( is_entry_file_module )
+    list( PREPEND all_headers "${entry_file}")
+  endif()
+
   gcmake_wrap_files_in_generators( all_headers all_headers_build all_headers_install )
 
   target_sources( ${lib_target} ${header_inheritance_mode}
@@ -228,6 +269,25 @@ function( gcmake_apply_lib_files
         # However, the headers won't be installed as part of the file set if they aren't specified
         # here as part of the build interface. I'm not sure why that is.
         ${all_headers_build}
+  )
+
+  set( all_modules ${${modules_list_var}} )
+
+  if( is_entry_file_module )
+    list( PREPEND all_modules "${entry_file}")
+  endif()
+
+  gcmake_wrap_files_in_generators( all_modules all_modules_build all_modules_install )
+
+  target_sources( ${lib_target} ${header_inheritance_mode}
+    FILE_SET CXX_MODULES
+      FILES
+        ${all_modules_install}
+        # The "build interface" headers don't need to be specified at all for the build
+        # to work because they will be found inside the library's "include directories".
+        # However, the headers won't be installed as part of the file set if they aren't specified
+        # here as part of the build interface. I'm not sure why that is.
+        ${all_modules_build}
   )
 endfunction()
 

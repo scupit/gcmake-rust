@@ -9,6 +9,15 @@ There are a whole bunch of things which need doing. This is the place to list th
 
 ## Priorities
 
+- [ ] C++ modules support (since [CMake 3.28 supports modules now](https://cmake.org/cmake/help/v3.28/manual/cmake-cxxmodules.7.html#manual:cmake-cxxmodules(7)), for the most part).
+  - [ ] General C++ module support, including installation and using a module file as a libary entry file.
+  - [ ] Figure out how to propagate modules to tests, since they can't be added using the 'interface' library created for each executable. (modules currently can't be added as INTERFACE. I think this is part of the "no module header unit support" limitation).
+  - [ ] Module file generation
+  - [ ] Show error when trying to generate module files and the C++ standard is not C++20 or later.
+  - [ ] Show error when using modules in a header-only library, since [CMake 3.28 doesn't support module header units](https://cmake.org/cmake/help/v3.28/manual/cmake-cxxmodules.7.html#limitations).
+  - [ ] Show error when using modules and project C++ standard is not C++20 or later.
+  - [ ] Warn when module files are found in *src/*.
+
 - [x] Warn on dependencies which are never used, since that's almost always a mistake.
 - [x] Support for parallelism systems ([CUDA](https://developer.nvidia.com/cuda-toolkit), [Kokkos](https://github.com/kokkos/kokkos), and [compiler-builtin OpenMP](https://www.openmp.org/))
   - Don't support HIP because it doesn't support Windows. OpenSYCL barely has experimental Windows support, but its build process looks like a pain in general. OpenCL seems extremely portable, but I couldn't get it to work in a basic CMake project so I won't support it yet.

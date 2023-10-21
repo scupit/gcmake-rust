@@ -1,6 +1,6 @@
 use std::{collections::{HashSet, BTreeMap, BTreeSet }, fs::File, io::{self, Write, ErrorKind}, path::{PathBuf, Path}, rc::Rc, cell::{RefCell, Ref}, iter::FromIterator};
 
-use crate::{project_info::{final_project_data::{FinalProjectData, CppFileGrammar}, path_manipulation::relative_to_project_root, final_dependencies::{GitRevisionSpecifier, PredefinedCMakeComponentsModuleDep, PredefinedSubdirDep, PredefinedCMakeModuleDep, FinalPredepInfo, GCMakeDependencyStatus, FinalPredefinedDependencyConfig, PredefinedDepFunctionality, FinalDownloadMethod, FinalDebianPackagesConfig, GCMakeDepIDHash}, raw_data_in::{BuildType, BuildConfigCompilerSpecifier, SpecificCompilerSpecifier, OutputItemType, TargetSpecificBuildType, dependencies::internal_dep_config::CMakeModuleType, DefaultCompiledLibType}, FinalProjectType, CompiledOutputItem, LinkMode, FinalTestFramework, dependency_graph_mod::dependency_graph::{DependencyGraph, OrderedTargetInfo, ProjectWrapper, TargetNode, SimpleNodeOutputType, Link, EmscriptenLinkFlagInfo, ContainedItem}, SystemSpecifierWrapper, CompilerDefine, FinalBuildConfig, CompilerFlag, LinkerFlag, gcmake_constants::{SRC_DIR_NAME, INCLUDE_DIR_NAME}, platform_spec_parser::parse_leading_constraint_spec, CodeFileInfo, RetrievedCodeFileType, PreBuildScriptType, CodeFileLang, GivenConstraintSpecParseContext, SystemSpecFeatureType, SystemSpecExpressionTree, SingleSystemSpec}, file_writers::cmake_writer::cmake_writer_helpers::system_constraint_generator_expression};
+use crate::{project_info::{final_project_data::{FinalProjectData, CppFileGrammar, CodeFileStats}, path_manipulation::relative_to_project_root, final_dependencies::{GitRevisionSpecifier, PredefinedCMakeComponentsModuleDep, PredefinedSubdirDep, PredefinedCMakeModuleDep, FinalPredepInfo, GCMakeDependencyStatus, FinalPredefinedDependencyConfig, PredefinedDepFunctionality, FinalDownloadMethod, FinalDebianPackagesConfig, GCMakeDepIDHash}, raw_data_in::{BuildType, BuildConfigCompilerSpecifier, SpecificCompilerSpecifier, OutputItemType, TargetSpecificBuildType, dependencies::internal_dep_config::CMakeModuleType, DefaultCompiledLibType}, FinalProjectType, CompiledOutputItem, LinkMode, FinalTestFramework, dependency_graph_mod::dependency_graph::{DependencyGraph, OrderedTargetInfo, ProjectWrapper, TargetNode, SimpleNodeOutputType, Link, EmscriptenLinkFlagInfo, ContainedItem}, SystemSpecifierWrapper, CompilerDefine, FinalBuildConfig, CompilerFlag, LinkerFlag, gcmake_constants::{SRC_DIR_NAME, INCLUDE_DIR_NAME}, platform_spec_parser::parse_leading_constraint_spec, CodeFileInfo, RetrievedCodeFileType, PreBuildScriptType, CodeFileLang, GivenConstraintSpecParseContext, SystemSpecFeatureType, SystemSpecExpressionTree, SingleSystemSpec}, file_writers::cmake_writer::cmake_writer_helpers::system_constraint_generator_expression};
 
 use super::{cmake_utils_writer::CMakeUtilWriter, cmake_writer_helpers::{system_contstraint_conditional_expression, language_feature_name}};
 use colored::*;
@@ -177,6 +177,12 @@ fn on_or_off_str(value: bool) -> &'static str {
     else { "OFF" };
 }
 
+fn true_or_false_str(value: bool) -> &'static str {
+  return if value
+    { "TRUE" }
+    else { "FALSE" };
+}
+
 fn flattened_defines_list_string(spacer: &str, defines: &Vec<CompilerDefine>) -> String {
   defines.iter()
     .map(|CompilerDefine { system_spec, def_string }| {
@@ -275,6 +281,8 @@ struct CMakeListsWriter<'a> {
   dep_graph: Rc<RefCell<DependencyGraph<'a>>>,
   sorted_target_info: &'a OrderedTargetInfo<'a>,
   project_data: Rc<FinalProjectData>,
+  root_project_file_stats: CodeFileStats,
+
   util_writer: Option<CMakeUtilWriter>,
   cmakelists_file: File,
 
@@ -298,6 +306,15 @@ impl<'a> CMakeListsWriter<'a> {
     util_writer: Option<CMakeUtilWriter>
   ) -> io::Result<Self> {
     let borrowed_graph = dep_graph.as_ref().borrow();
+
+    // TODO: Don't calculate this for every project, subproject, test project, etc.
+    // Low priority, since it doesn't cause issues and isn't a huge performance cost.
+    let root_file_stats = borrowed_graph
+      .root_project().as_ref().borrow()
+      .project_wrapper().clone() // This clone is cheap, since it only clones an Rc.
+      .unwrap_normal_project()
+      .get_code_file_stats();
+
     let project_data: Rc<FinalProjectData> = match borrowed_graph.project_wrapper() {
       ProjectWrapper::NormalProject(normal_project) => Rc::clone(normal_project),
       ProjectWrapper::GCMakeDependencyRoot(gcmake_dep) => match gcmake_dep.project_status() {
@@ -341,6 +358,7 @@ impl<'a> CMakeListsWriter<'a> {
       sorted_target_info: sorted_target_info,
       project_data,
       util_writer,
+      root_project_file_stats: root_file_stats, 
       cmakelists_file: File::create(cmakelists_file_name)?
     })
   }
@@ -485,6 +503,8 @@ impl<'a> CMakeListsWriter<'a> {
   }
 
   fn write_project_header(&self) -> io::Result<()> {
+    let file_stats = self.project_data.get_code_file_stats();
+
     if self.project_data.is_root_project() {
       // CMake Version header
       // 3.23: FILE_SET functionality is used.
@@ -492,10 +512,20 @@ impl<'a> CMakeListsWriter<'a> {
       // 3.25:
       //    - FetchContent_Declare uses SYSTEM argument so that compiler warnings are turned off for dependencies.
       //    - LINUX and CMAKE_HOST_LINUX variables
-      writeln!(&self.cmakelists_file, "cmake_minimum_required( VERSION 3.25 )")?;
+      // 3.28: C++ modules support. I should make this conditional, since the project doesn't need 3.28 (for now)
+      // unless it's using C++ modules.
+      //    - https://cmake.org/cmake/help/v3.28/manual/cmake-cxxmodules.7.html#manual:cmake-cxxmodules(7)
+      let required_version: &str = if file_stats.requires_cpp_modules()
+        { "3.28" }
+        else { "3.25" };
+
+      writeln!(
+        &self.cmakelists_file,
+        "cmake_minimum_required( VERSION {} )",
+        required_version
+      )?;
     }
 
-    let file_stats = self.project_data.get_code_file_stats();
     let mut initial_lang_list: Vec<&str> = Vec::new();
 
     if file_stats.requires_c() {
@@ -1057,6 +1087,7 @@ impl<'a> CMakeListsWriter<'a> {
             exe_info,
             self.dep_graph_ref().get_pre_build_node().as_ref().unwrap(),
             &self.project_data.prebuild_script_name(),
+            "UNUSED",
             "UNUSED",
             "UNUSED"
           )?;
@@ -2171,7 +2202,7 @@ impl<'a> CMakeListsWriter<'a> {
     }
 
     let used_path_prefix_var: &str = match code_file_info_in.code_file_type() {
-      RetrievedCodeFileType::Source(CodeFileLang::Cpp { used_grammar: CppFileGrammar::Cpp2 }) if !options.should_retain_cpp2_paths => {
+      RetrievedCodeFileType::Source(CodeFileLang::Cpp { used_grammar: CppFileGrammar::Cpp2, .. }) if !options.should_retain_cpp2_paths => {
         // cppfront (.cpp2) generated files are always .cpp
         fixed_file_path = fixed_file_path.replace(".cpp2", ".cpp");
         cmake_generated_src_dir_prefix
@@ -2237,6 +2268,7 @@ impl<'a> CMakeListsWriter<'a> {
     let src_var_name: String = format!("{}_SOURCES", project_name);
     let private_headers_var_name: String = format!("{}_PRIVATE_HEADERS", project_name);
     let public_includes_var_name: String = format!("{}_HEADERS", project_name);
+    let cpp_modules_var_name: String = format!("{}_MODULE_FILES", project_name);
 
     self.write_newline()?;
 
@@ -2271,7 +2303,21 @@ impl<'a> CMakeListsWriter<'a> {
       self.project_data.get_include_dir_relative_to_project_root(),
       &self.header_root_var,
       &self.generated_src_root_var,
-      &self.project_data.public_headers,
+      &self.project_data.public_headers.iter().filter(|&lang|
+        !lang.code_file_type().is_cpp_module()
+      ).collect(),
+      &CodeFileTransformOptions::default()
+    )?;
+    self.write_newline()?;
+
+    self.set_code_file_collection(
+      &cpp_modules_var_name,
+      self.project_data.get_include_dir_relative_to_project_root(),
+      &self.header_root_var,
+      &self.generated_src_root_var,
+      &self.project_data.public_headers.iter().filter(|&lang|
+        lang.code_file_type().is_cpp_module()
+      ).collect(),
       &CodeFileTransformOptions::default()
     )?;
     self.write_newline()?;
@@ -2346,6 +2392,7 @@ impl<'a> CMakeListsWriter<'a> {
         )?;
       }
 
+      let requires_cpp_modules: bool = self.root_project_file_stats.requires_cpp_modules();
       match matching_output.get_output_type() {
         OutputItemType::Executable => {
           self.write_executable(
@@ -2353,7 +2400,8 @@ impl<'a> CMakeListsWriter<'a> {
             &unwrapped_target,
             &output_name,
             &src_var_name,
-            &public_includes_var_name
+            &public_includes_var_name,
+            &cpp_modules_var_name
           )?;
         },
         OutputItemType::StaticLib
@@ -2365,7 +2413,9 @@ impl<'a> CMakeListsWriter<'a> {
             &unwrapped_target,
             &output_name,
             &src_var_name,
-            &public_includes_var_name
+            &public_includes_var_name,
+            &cpp_modules_var_name,
+            requires_cpp_modules
           )?;
         },
         OutputItemType::CompiledLib => {
@@ -2374,7 +2424,9 @@ impl<'a> CMakeListsWriter<'a> {
             &unwrapped_target,
             &output_name,
             &src_var_name,
-            &public_includes_var_name
+            &public_includes_var_name,
+            &cpp_modules_var_name,
+            requires_cpp_modules
           )?;
         }
       }
@@ -2673,22 +2725,28 @@ impl<'a> CMakeListsWriter<'a> {
   fn write_language_features_for_output(
     &self,
     output_data: &CompiledOutputItem,
-    target_name: &str
+    target_name: &str,
+    receiver_lib_name: Option<&str>
   ) -> io::Result<()> {
     if !output_data.get_language_features().has_any() {
       return Ok(());
     }
 
+    let get_inheritance_mode = |default_val: &'a str| return match receiver_lib_name.as_ref() {
+      Some(_) => "INTERFACE",
+      None => default_val
+    };
+
     writeln!(
       &self.cmakelists_file,
       "target_compile_features( {}",
-      target_name
+      receiver_lib_name.unwrap_or(target_name)
     )?;
   
     let features_by_mode = [
-      ("PUBLIC", &output_data.get_language_features().cmake_public),
-      ("INTERFACE", &output_data.get_language_features().cmake_interface),
-      ("PRIVATE", &output_data.get_language_features().cmake_private),
+      (get_inheritance_mode("PUBLIC"), &output_data.get_language_features().cmake_public),
+      (get_inheritance_mode("INTERFACE"), &output_data.get_language_features().cmake_interface),
+      (get_inheritance_mode("PRIVATE"), &output_data.get_language_features().cmake_private),
     ];
 
     for (inheritance_mode, feature_spec_list) in features_by_mode {
@@ -2802,7 +2860,8 @@ impl<'a> CMakeListsWriter<'a> {
     &self,
     variable_base_name: &str,
     output_data: &CompiledOutputItem,
-    target_name: &str
+    target_name: &str,
+    receiver_lib_name: Option<&str>
   ) -> io::Result<()> {
     let flags_inheritance_method: &str = match output_data.get_output_type() {
       OutputItemType::HeaderOnlyLib => "INTERFACE",
@@ -2837,16 +2896,17 @@ impl<'a> CMakeListsWriter<'a> {
     )?;
     self.write_newline()?;
 
-    let compile_features_inheritance_method: &str = match output_data.get_output_type() {
-      OutputItemType::HeaderOnlyLib => "INTERFACE",
-      OutputItemType::Executable => "PRIVATE",
+    let compile_features_inheritance_method: &str = match (receiver_lib_name, output_data.get_output_type()) {
+      (Some(_), _) => "INTERFACE",
+      (_, OutputItemType::HeaderOnlyLib) => "INTERFACE",
+      (_, OutputItemType::Executable) => "PRIVATE",
       _ => "PUBLIC"
     };
 
     // Language standard and extensions config
     writeln!(&self.cmakelists_file,
       "target_compile_features( {}\n\t{} ",
-      target_name,
+      receiver_lib_name.unwrap_or(target_name),
       compile_features_inheritance_method
     )?;
 
@@ -3269,7 +3329,9 @@ impl<'a> CMakeListsWriter<'a> {
     output_target_node: &Rc<RefCell<TargetNode<'a>>>,
     output_name: &str,
     src_var_name: &str,
-    includes_var_name: &str
+    includes_var_name: &str,
+    cpp_modules_var_name: &str,
+    requires_cpp_modules: bool
   ) -> io::Result<()> {
     self.write_output_title(output_name)?;
 
@@ -3298,7 +3360,9 @@ impl<'a> CMakeListsWriter<'a> {
       output_target_node,
       output_name,
       includes_var_name,
-      src_var_name
+      src_var_name,
+      cpp_modules_var_name,
+      requires_cpp_modules
     )?;
 
     Ok(()) 
@@ -3310,7 +3374,9 @@ impl<'a> CMakeListsWriter<'a> {
     output_target_node: &Rc<RefCell<TargetNode<'a>>>,
     output_name: &str,
     src_var_name: &str,
-    includes_var_name: &str
+    includes_var_name: &str,
+    cpp_modules_var_name: &str,
+    requires_cpp_modules: bool
   ) -> io::Result<()> {
     self.write_output_title(output_name)?;
 
@@ -3327,7 +3393,9 @@ impl<'a> CMakeListsWriter<'a> {
       output_target_node,
       output_name,
       includes_var_name,
-      src_var_name
+      src_var_name,
+      cpp_modules_var_name,
+      requires_cpp_modules
     )?;
 
     Ok(()) 
@@ -3339,7 +3407,9 @@ impl<'a> CMakeListsWriter<'a> {
     output_target_node: &Rc<RefCell<TargetNode<'a>>>,
     output_name: &str,
     includes_var_name: &str,
-    src_var_name: &str
+    src_var_name: &str,
+    cpp_modules_var_name: &str,
+    requires_cpp_modules: bool
   ) -> io::Result<()> {
     let target_name: String;
     let alias_name: String;
@@ -3411,12 +3481,14 @@ impl<'a> CMakeListsWriter<'a> {
     )?;
 
     writeln!(&self.cmakelists_file,
-      "gcmake_apply_lib_files( {} {} \"${{{}}}\" {} {} )",
+      "gcmake_apply_lib_files( {} {} \"${{{}}}\" {} {} {} {} )",
       target_name,
       lib_spec_string,
       entry_file_varname,
+      true_or_false_str(requires_cpp_modules),
       src_var_name,
-      includes_var_name
+      includes_var_name,
+      cpp_modules_var_name
     )?;
 
     writeln!(&self.cmakelists_file,
@@ -3447,8 +3519,8 @@ impl<'a> CMakeListsWriter<'a> {
     self.write_flag_and_define_vars_for_output(output_name, output_data)?;
     self.write_defines_for_output(output_name, output_data, &target_name)?;
     self.write_target_link_options_for_output(output_name, output_data, &target_name)?;
-    self.write_target_compile_options_for_output(output_name, output_data, &target_name)?;
-    self.write_language_features_for_output(output_data, &target_name)?;
+    self.write_target_compile_options_for_output(output_name, output_data, &target_name, None)?;
+    self.write_language_features_for_output(output_data, &target_name, None)?;
     self.write_newline()?;
 
     self.write_links_for_output(&target_name, output_data, output_target_node, true)?;
@@ -3461,7 +3533,8 @@ impl<'a> CMakeListsWriter<'a> {
     output_target_node: &Rc<RefCell<TargetNode<'a>>>,
     output_name: &str,
     src_var_name: &str,
-    includes_var_name: &str
+    includes_var_name: &str,
+    cpp_modules_var_name: &str
   ) -> io::Result<String> {
     let borrowed_node: &TargetNode = &output_target_node.as_ref().borrow();
     let target_name: &str = borrowed_node.get_cmake_target_base_name();
@@ -3548,12 +3621,13 @@ impl<'a> CMakeListsWriter<'a> {
       )?;
 
       writeln!(&self.cmakelists_file,
-        "gcmake_apply_exe_files( {} {} \n\t{}\n\t{}\n\t{}\n)",
+        "gcmake_apply_exe_files( {} {} \n\t{}\n\t{}\n\t{}\n\t{}\n)",
         target_name,
         receiver_lib_name,
         self.cmake_absolute_entry_file_path(output_data.get_entry_file()),
         src_var_name,
-        includes_var_name
+        includes_var_name,
+        cpp_modules_var_name
       )?;
       self.write_newline()?;
     }
@@ -3579,8 +3653,8 @@ impl<'a> CMakeListsWriter<'a> {
     self.write_flag_and_define_vars_for_output(output_name, output_data)?;
     self.write_defines_for_output(output_name, output_data, receiver_lib_name)?;
     self.write_target_link_options_for_output(output_name, output_data, target_name)?;
-    self.write_target_compile_options_for_output(output_name, output_data, target_name)?;
-    self.write_language_features_for_output(output_data, target_name)?;
+    self.write_target_compile_options_for_output(output_name, output_data, target_name, Some(receiver_lib_name))?;
+    self.write_language_features_for_output(output_data, target_name, Some(receiver_lib_name))?;
     self.write_newline()?;
 
     self.write_links_for_output(

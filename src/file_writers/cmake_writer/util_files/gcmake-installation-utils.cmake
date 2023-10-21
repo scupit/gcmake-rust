@@ -69,6 +69,8 @@ function( configure_installation
         COMPONENT ${project_component_name}
         FILE_SET HEADERS
           DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/${PROJECT_INCLUDE_PREFIX}"
+        FILE_SET CXX_MODULES
+          DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/${PROJECT_INCLUDE_PREFIX}"
       )
     endif()
   endforeach()
@@ -100,6 +102,8 @@ function( configure_installation
       # without them even if the target's file_set isn't ever needed. That's really annoying.
       # We'll install these to the _unused directory so we can at least see they aren't needed.
       FILE_SET HEADERS
+        DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/_unused"
+      FILE_SET CXX_MODULES
         DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/_unused"
       INCLUDES DESTINATION
         # TODO: I might need to separate this into its own variable. I'll leave it for now though, since it
@@ -143,6 +147,9 @@ function( configure_installation
         ARCHIVE
           DESTINATION "${DEPENDENCY_INSTALL_LIBDIR}"
         FILE_SET HEADERS
+          # associated_relative_header_dir is already prefixed with ${CMAKE_INSTALL_INCLUDEDIR}.
+          DESTINATION "${associated_relative_header_dir}"
+        FILE_SET CXX_MODULES
           # associated_relative_header_dir is already prefixed with ${CMAKE_INSTALL_INCLUDEDIR}.
           DESTINATION "${associated_relative_header_dir}"
         INCLUDES DESTINATION

@@ -112,7 +112,7 @@ pub fn parse_given_str<'a, E>(
   }
 
   return Ok(Some(ParseSuccess {
-    value: str_parsing_for.clone(),
+    value: str_parsing_for,
     rest: &s[str_parsing_for.len()..]
   }))
 }

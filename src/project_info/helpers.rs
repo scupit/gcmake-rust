@@ -9,9 +9,19 @@ use super::{raw_data_in::{RawProject, RawSubproject, OutputItemType, RawTestProj
 pub enum CodeFileLang {
   C,
   Cpp {
-    used_grammar: CppFileGrammar
+    used_grammar: CppFileGrammar,
+    is_module: bool
   },
   Cuda
+}
+
+impl CodeFileLang {
+  pub fn is_cpp_module(&self) -> bool {
+    return match self {
+      Self::Cpp { used_grammar: _, is_module: true } => true,
+      _ => false
+    };
+  }
 }
 
 #[derive(Clone)]
@@ -28,7 +38,13 @@ impl RetrievedCodeFileType {
     return match self {
       RetrievedCodeFileType::Header(lang) => Some(lang.clone()),
       RetrievedCodeFileType::Source(lang) => Some(lang.clone()),
-      RetrievedCodeFileType::TemplateImpl => Some(CodeFileLang::Cpp { used_grammar: CppFileGrammar::Cpp1 }),
+      RetrievedCodeFileType::TemplateImpl => Some(CodeFileLang::Cpp {
+        used_grammar: CppFileGrammar::Cpp1,
+        // I believe "template implementation" files and their method of inclusion have been replaced
+        // by C++ 'Module Partitions'.
+        // https://en.cppreference.com/w/cpp/language/modules#Module_partitions
+        is_module: false
+      }),
       RetrievedCodeFileType::Unknown => None
     }
   }
@@ -42,7 +58,14 @@ impl RetrievedCodeFileType {
 
   pub fn is_normal_header(&self) -> bool {
     match self {
-      Self::Header(_) => true,
+      Self::Header(lang) => !lang.is_cpp_module(),
+      _ => false
+    }
+  }
+
+  pub fn is_cpp_module(&self) -> bool {
+    match self {
+      Self::Header(lang) => lang.is_cpp_module(),
       _ => false
     }
   }
@@ -62,15 +85,28 @@ pub fn code_file_type(any_path_type: impl AsRef<Path>) -> RetrievedCodeFileType 
 
   return match the_path.extension() {
     Some(extension) => match extension.to_str().unwrap() {
-      "cpp2"                          => RetrievedCodeFileType::Source(CodeFileLang::Cpp { used_grammar: CppFileGrammar::Cpp2 }),
+      "cpp2"                          => RetrievedCodeFileType::Source(CodeFileLang::Cpp {
+                                          used_grammar: CppFileGrammar::Cpp2,
+                                          is_module: false
+                                        }),
       "c"                             => RetrievedCodeFileType::Source(CodeFileLang::C),
-      "cc"| "cpp" | "cxx"             => RetrievedCodeFileType::Source(CodeFileLang::Cpp { used_grammar: CppFileGrammar::Cpp1 }),
+      "cc"| "cpp" | "cxx"             => RetrievedCodeFileType::Source(CodeFileLang::Cpp {
+                                          used_grammar: CppFileGrammar::Cpp1,
+                                          is_module: false
+                                        }),
       "cu"                            => RetrievedCodeFileType::Source(CodeFileLang::Cuda),
       // NOTE: I'm treating ".h" headers as C only. Any C++ projects which use ".h" for
       // C++ headers will also contain C++ source files (therefore requiring a C++ language configuration
       // for the project), so this shouldn't cause any errors.
       "h"                             => RetrievedCodeFileType::Header(CodeFileLang::C),
-      "hh" | "hpp" | "hxx"            => RetrievedCodeFileType::Header(CodeFileLang::Cpp { used_grammar: CppFileGrammar::Cpp1 }),
+      "hh" | "hpp" | "hxx"            => RetrievedCodeFileType::Header(CodeFileLang::Cpp {
+                                          used_grammar: CppFileGrammar::Cpp1,
+                                          is_module: false
+                                        }),
+      "ixx" | "cppm" | "mpp"          => RetrievedCodeFileType::Header(CodeFileLang::Cpp {
+                                          used_grammar: CppFileGrammar::Cpp1,
+                                          is_module: true
+                                        }),
       "cuh"                           => RetrievedCodeFileType::Header(CodeFileLang::Cuda),
       "tpp" | "tcc" | "txx" | "inl"   => RetrievedCodeFileType::TemplateImpl,
       _                               => RetrievedCodeFileType::Unknown

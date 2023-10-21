@@ -262,7 +262,8 @@ pub struct CodeFileStats {
   num_cpp2_files: i32,
   num_cuda_files: i32,
   num_cpp_files: i32,
-  num_c_files: i32
+  num_c_files: i32,
+  num_cpp_modules: i32
 }
 
 impl CodeFileStats {
@@ -271,12 +272,17 @@ impl CodeFileStats {
       num_cpp2_files: 0,
       num_cuda_files: 0,
       num_cpp_files: 0,
-      num_c_files: 0
+      num_c_files: 0,
+      num_cpp_modules: 0
     };
   }
 
   pub fn requires_cuda(&self) -> bool {
     self.num_cuda_files > 0
+  }
+
+  pub fn requires_cpp_modules(&self) -> bool {
+    self.num_cpp_modules > 0
   }
 
   pub fn requires_cpp(&self) -> bool {
@@ -624,6 +630,19 @@ impl FinalProjectData {
       PathBuf::from(finalized_project_data.get_include_dir_relative_to_cwd()).as_path(),
       &mut finalized_project_data.public_headers,
       &|file_path| match code_file_type(file_path) {
+        // As far as I understand, C++ modules serve conceptually the same purpose as
+        // header files. For now, I'll just include modules in the "header files" list.
+        RetrievedCodeFileType::Header(_) => true,
+        _ => false
+      }
+    )
+      .map_err(|err| ProjectLoadFailureReason::Other(err.to_string()))?;
+
+    populate_existing_files(
+      usable_project_root.as_path(),
+      PathBuf::from(finalized_project_data.get_include_dir_relative_to_cwd()).as_path(),
+      &mut finalized_project_data.public_headers,
+      &|file_path| match code_file_type(file_path) {
         RetrievedCodeFileType::Header(_) => true,
         _ => false
       }
@@ -724,9 +743,15 @@ impl FinalProjectData {
     self.iter_all_code_files(&mut |code_file| {
       match code_file.language().unwrap() {
         CodeFileLang::C => file_stats.num_c_files += 1,
-        CodeFileLang::Cpp { used_grammar } => match used_grammar {
-          CppFileGrammar::Cpp1 => file_stats.num_cpp_files += 1,
-          CppFileGrammar::Cpp2 => file_stats.num_cpp2_files += 1
+        CodeFileLang::Cpp { used_grammar, is_module } => {
+          if is_module {
+            file_stats.num_cpp_modules += 1;
+          }
+
+          match used_grammar {
+            CppFileGrammar::Cpp1 => file_stats.num_cpp_files += 1,
+            CppFileGrammar::Cpp2 => file_stats.num_cpp2_files += 1
+          }
         },
         CodeFileLang::Cuda => file_stats.num_cuda_files += 1
       }
@@ -1226,7 +1251,7 @@ impl FinalProjectData {
       .collect();
 
     for (_, output) in &self.output {
-      if let RetrievedCodeFileType::Source(CodeFileLang::Cpp { used_grammar }) = output.entry_file.code_file_type() {
+      if let RetrievedCodeFileType::Source(CodeFileLang::Cpp { used_grammar, is_module: _ }) = output.entry_file.code_file_type() {
         if grammar == used_grammar {
           source_file_set.insert(output.get_entry_file());
         }
@@ -1448,9 +1473,9 @@ impl FinalProjectData {
         | OutputItemType::SharedLib
         | OutputItemType::HeaderOnlyLib =>
       {
-        if !entry_file_type.is_normal_header() {
+        if !(entry_file_type.is_normal_header() || entry_file_type.is_cpp_module()) {
           return Err(format!(
-            "The entry_file for {} library in project '{}' should be a header file, but isn't.",
+            "The entry_file for {} library in project '{}' should be a header file or C++ module, but isn't.",
             item_name,
             self.get_project_base_name()
           ));
