@@ -37,6 +37,7 @@ Support for:
   generator expression. That might not be possible with Visual Studio though (see notes on the linked page).
 - [ ] Research and add some more useful default flags (for example, `-Wold-style-cast` for GCC/Clang).
 - [ ] Now that minimal installs are implemented, add ability to specify exactly which executables are installed.
+- [ ] Maybe use the s flag for [asyncify](https://emscripten.org/docs/porting/asyncify.html) in Emscripten code by default.
 
 ### CLI TODO
 
@@ -88,6 +89,7 @@ The command set for viewing project metadata.
 - [ ] OpenSceneGraph (maybe) (NOTE: has cmake package config file)
 - [x] OpenSSL
 - [ ] PNG
+- [ ] PostgreSQL
 - [x] SDL2
 - [x] SQLite (3)
 - [x] Threads
@@ -98,7 +100,9 @@ The command set for viewing project metadata.
 
 #### Other CMake projects
 
+- [ ] [lpq++](https://github.com/jtv/libpqxx) PostgreSQL C++ client API
 - [ ] [Qt6](https://www.qt.io/product/qt6)
+- [ ] [raylib](https://github.com/raysan5/raylib) (Also [works with WebAssembly](https://github.com/raysan5/raylib/wiki/Working-for-Web-(HTML5)))
 - [x] [nlohmann json](https://github.com/nlohmann/json)
 - [x] [SFML](https://www.sfml-dev.org/)
 - [x] [fmt](https://github.com/fmtlib/fmt)
