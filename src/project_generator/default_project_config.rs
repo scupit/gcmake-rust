@@ -117,8 +117,8 @@ fn build_configs_debug_default(project_config: &DefaultProjectConfigOptions) -> 
       defines: None
     }),
     (BuildConfigCompilerSpecifier::Emscripten, RawBuildConfig {
-      compiler_flags: Some(create_string_set([ "-O0", "-g", "-gsource-map" ])),
-      link_time_flags: None,
+      compiler_flags: Some(create_string_set([ "-O0", "-g", "-gsource-map"])),
+      link_time_flags: Some(create_string_set([ "-sASSERTIONS=1", "-sASYNCIFY" ])),
       linker_flags: None,
       defines: None
     })
@@ -161,7 +161,7 @@ fn build_configs_release_default(project_config: &DefaultProjectConfigOptions) -
     }),
     (BuildConfigCompilerSpecifier::Emscripten, RawBuildConfig {
       compiler_flags: Some(create_string_set([ "-O3" ])),
-      link_time_flags: None,
+      link_time_flags: Some(create_string_set([ "-sASSERTIONS=0", "-sASYNCIFY" ])),
       linker_flags: None,
       defines: None
     })
@@ -204,7 +204,7 @@ fn build_configs_minsizerel_default(project_config: &DefaultProjectConfigOptions
     }),
     (BuildConfigCompilerSpecifier::Emscripten, RawBuildConfig {
       compiler_flags: Some(create_string_set([ "-Oz" ])),
-      link_time_flags: None,
+      link_time_flags: Some(create_string_set([ "-sASSERTIONS=0", "-sASYNCIFY" ])),
       linker_flags: None,
       defines: None
     })
@@ -247,7 +247,7 @@ fn build_configs_relwithdebinfo_default(project_config: &DefaultProjectConfigOpt
     }),
     (BuildConfigCompilerSpecifier::Emscripten, RawBuildConfig {
       compiler_flags: Some(create_string_set([ "-O2", "-g", "-gsource-map" ])),
-      link_time_flags: None,
+      link_time_flags: Some(create_string_set([ "-sASSERTIONS=1", "-sASYNCIFY" ])),
       linker_flags: None,
       defines: None
     })

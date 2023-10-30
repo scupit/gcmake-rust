@@ -534,7 +534,7 @@ pub fn do_new_project_subcommand(
     _ => true
   };
 
-  match get_parent_project_for_new_project(&given_root_dir.clone(), dep_config, requires_project_operating_on) {
+  match get_parent_project_for_new_project(&given_root_dir, dep_config, requires_project_operating_on) {
     Ok(maybe_project_info) => {
       let maybe_general_new_project_info = handle_create_project(
         command,
