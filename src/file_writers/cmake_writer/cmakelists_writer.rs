@@ -12,7 +12,15 @@ lazy_static! {
       maybe_valid_feature_list: None,
       is_before_output_name: false
     }
-  ).unwrap().unwrap() .value;
+  ).unwrap().unwrap().value;
+
+  static ref MINGW_CONSTRAINT: SystemSpecifierWrapper = parse_leading_constraint_spec(
+    "(( mingw ))",
+    GivenConstraintSpecParseContext {
+      maybe_valid_feature_list: None,
+      is_before_output_name: false
+    }
+  ).unwrap().unwrap().value;
 }
 
 const RUNTIME_BUILD_DIR_VAR: &'static str = "${MY_RUNTIME_OUTPUT_DIR}";
@@ -3241,7 +3249,19 @@ impl<'a> CMakeListsWriter<'a> {
       )?;
     }
 
-    writeln!(&self.cmakelists_file, ")")?;
+    writeln!(&self.cmakelists_file, ")\n")?;
+
+    // https://cmake.org/cmake/help/latest/prop_tgt/NO_SYSTEM_FROM_IMPORTED.html#prop_tgt:NO_SYSTEM_FROM_IMPORTED
+    // Fixes a weird issue I encountered using MinGW GCC where <stdlib.h> couldn't be found when including
+    // <cstdlib>. According to this answer:
+    // https://stackoverflow.com/questions/46555273/stdlib-h-not-found-in-mingw-when-mingw-include-directory-is-added-to-search-pa
+    // this might be an issue with the internal call to #include_next. Using NO_SYSTEM_FROM_IMPORTED
+    // causes libraries to be included using -I instead of -isystem, which fixed the issue.
+    writeln!(&self.cmakelists_file,
+      "if( {} )\n\tset_target_properties( {} PROPERTIES \n\t\tNO_SYSTEM_FROM_IMPORTED TRUE\n\t)\nendif()",
+      system_contstraint_conditional_expression(&MINGW_CONSTRAINT),
+      output_name
+    )?;
     Ok(())
   }
 
