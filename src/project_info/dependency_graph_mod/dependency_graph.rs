@@ -1,4 +1,4 @@
-use std::{cell::{RefCell}, rc::{Rc, Weak}, hash::{Hash, Hasher}, collections::{BTreeMap, BTreeSet, VecDeque}, path::{Path, PathBuf}, iter::FromIterator, cmp::Ordering};
+use std::{cell::RefCell, rc::{Rc, Weak}, hash::{Hash, Hasher}, collections::{BTreeMap, BTreeSet, VecDeque}, path::{Path, PathBuf}, iter::FromIterator, cmp::Ordering};
 
 use crate::{project_info::{LinkMode, CompiledOutputItem, PreBuildScript, OutputItemLinks, final_project_data::{FinalProjectData, CodeFileStats}, final_dependencies::{FinalGCMakeDependency, FinalPredefinedDependencyConfig, GCMakeDependencyStatus, FinalRequirementSpecifier, FinalTargetConfig, FinalExternalRequirementSpecifier, FinalPredepInfo}, LinkSpecifier, FinalProjectType, parsers::{link_spec_parser::{LinkAccessMode, LinkSpecTargetList, LinkSpecifierTarget}, system_spec::platform_spec_parser::SystemSpecifierWrapper}, raw_data_in::{dependencies::internal_dep_config::raw_dep_common::RawEmscriptenConfig, OutputItemType}, FinalFeatureEnabler, PreBuildScriptType, SystemSpecExpressionTree, SingleSystemSpec}};
 
@@ -1593,6 +1593,9 @@ impl<'a> DependencyGraph<'a> {
           is equally or more permissive than the link which would be created otherwise. Return an error
           message if this is not the case.
   */
+  // TODO: Refactor this function. The length and level of nesting that goes on here is a pain to
+  // read and tiring to modify. I'll leave it for now because it works, but this should be a priority
+  // (along with this whole file really) during the next large refactor.
   fn ensure_proper_predefined_dep_links(&self) -> Result<(), GraphLoadFailureReason<'a>> {
     self.associate_plugin_libs_with_dependent_targets()?;
 
@@ -1614,16 +1617,18 @@ impl<'a> DependencyGraph<'a> {
                   // guaranteed to exist, but NOT guaranteed to have been imported by the project. The
                   // target name is also guaranteed to exist in that project, but as a result can only
                   // be retrieved if that project has also been imported.
-                  let required_predep_name: &str = link_spec.get_namespace_queue().iter().nth(0).unwrap();
+                  let required_predep_project_name: &str = link_spec.get_namespace_queue().iter().nth(0).unwrap();
                   let required_lib_name: &str = link_spec.get_target_list().iter().nth(0).unwrap().get_name();
 
-                  match self.predefined_deps.get(required_predep_name) {
+                  match self.predefined_deps.get(required_predep_project_name) {
                     None => {
                       one_of_target_list.push(MaybePresentNonOwningTarget::NotImported {
                         namespaced_yaml_name: link_spec.original_spec_str().to_string()
                       });
                     },
                     Some(required_predep_project) => {
+                      // The target is guaranteed to exist because "external requirements"
+                      // check that the required target actually exists.
                       let matching_target = required_predep_project
                         .as_ref().borrow()
                         .get_target_in_current_namespace(required_lib_name)
@@ -1663,6 +1668,27 @@ impl<'a> DependencyGraph<'a> {
         if let ProjectWrapper::PredefinedDependency(_) = &link_target_graph._project_wrapper {
           let mut checked_predef_targets: BTreeMap<TargetId, Rc<RefCell<TargetNode>>> = BTreeMap::new();
           let mut predef_targets_checking_stack: Vec<(TargetId, Rc<RefCell<TargetNode>>)> = Vec::new();
+
+          for complex_requirement in &link_target.complex_requirements {
+            if let NonOwningComplexTargetRequirement::OneOf(lib_list) = complex_requirement {
+              if lib_list.len() == 1 {
+                if let MaybePresentNonOwningTarget::Populated(populated_target_weak) = lib_list.get(0).unwrap() {
+                  let populated_target_rc = Weak::upgrade(populated_target_weak).unwrap();
+                  let populated_target_id: TargetId = populated_target_rc.as_ref().borrow().unique_target_id();
+
+                  // External requirement targets are not explicitly "linked" to predefined dependency targets
+                  // because it's possible the external requirement project hasn't been loaded into our project yet.
+                  // This covers the edge case where only one external requirement target can be applied,
+                  // and its project is available. In that case, we know we can process it as a regular
+                  // dependency target which can be applied to our output item.
+                  predef_targets_checking_stack.push((
+                    populated_target_id,
+                    populated_target_rc
+                  ));
+                }
+              }
+            }
+          }
 
           for (predef_target_id, predef_requirement_target) in &link_target.depends_on {
             predef_targets_checking_stack.push(

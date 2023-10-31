@@ -188,7 +188,7 @@ pub fn load_graph(
         ref failed_requirement
       } => {
         let base_message: String = format!(
-          "Target '{}' in project '{}' failed to satisfy a requirement of its linked dependency target '{}':\n\t",
+          "Target '{}' in project [{}] failed to satisfy a requirement of its linked dependency target '{}':\n\t",
           borrow_target(target).get_name(),
           borrow_project(target_project).project_debug_name(),
           borrow_target(dependency).get_yaml_namespaced_target_name()
@@ -210,10 +210,23 @@ pub fn load_graph(
               // .join(", ");
               .join(" or ");
 
-            format!(
-              "The target must link to one of: ({})",
-              target_list_str
-            )
+            if target_list.len() == 1 {
+              let needed_project_name: String = target_list_str.split("::").nth(0).unwrap().to_string();
+              format!(
+                "Your target '{}' must link to {}.\nThis error probably happened because you haven't listed \"{}\" as a dependency of your project. If you list \"{}\" as a project dependency, the link should happen automatically.",
+                borrow_target(target).get_name(),
+                target_list_str.yellow(),
+                needed_project_name.bright_magenta(),
+                needed_project_name.bright_magenta()
+              )
+            }
+            else {
+              format!(
+                "Your target '{}' must link to one of: ({})",
+                borrow_target(target).get_name(),
+                target_list_str
+              )
+            }
           },
           OwningComplexTargetRequirement::ExclusiveFrom(excluded_target) => {
             format!(

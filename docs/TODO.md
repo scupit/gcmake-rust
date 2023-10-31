@@ -2,11 +2,6 @@
 
 There are a whole bunch of things which need doing. This is the place to list them.
 
-- Rename `predefined_dependencies` to something more intuitive. These dependencies are not gcmake projects,
-  but can be configured to work with gcmake by providing a 'yaml dependency glue' config. Those glue configs
-  should be contained in a separate repository, should function as a sort of "registry" updateable by the
-  gcmake tool.
-
 ## Priorities
 
 - [x] Warn on dependencies which are never used, since that's almost always a mistake.
@@ -22,22 +17,27 @@ There are a whole bunch of things which need doing. This is the place to list th
   as dependencies because their information is never "forward declared" anywhere, unlike predefined dependencies.
   As a result, we can only generate a proper CMakeLists.txt and fully analyze the project tree once all GCMake
   projects have already been downloaded (by running a CMake configuration). This is not ideal. The end goal
-  is to have a package registry for GCMake projects, and this is a good first step towards that.
+  is to have a package registry for GCMake projects so that the full analysis and generation steps can be
+  done in one pass without the dependency projects already being present. This would be a good first
+  step towards that.
+- [ ] Rename `predefined_dependencies` to something more intuitive. These dependencies are not gcmake
+  projects, but can be configured to work with gcmake by providing a 'yaml dependency glue' config. Those
+  glue configs should be contained in a separate repository, should function as a sort of "registry"
+  updateable by the gcmake tool.
 
 ## Configuration TODO
 
 ### General
-
-Support for:
-
-- Intel C/C++ compiler?
 
 - [ ] Allow `(( lang:c and lang:cpp ))` constraints for flags and defines courtesy of CMake's
   [$<COMPILE_LANGAUGE>](https://cmake.org/cmake/help/latest/manual/cmake-generator-expressions.7.html#genex:COMPILE_LANGUAGE)
   generator expression. That might not be possible with Visual Studio though (see notes on the linked page).
 - [ ] Research and add some more useful default flags (for example, `-Wold-style-cast` for GCC/Clang).
 - [ ] Now that minimal installs are implemented, add ability to specify exactly which executables are installed.
-- [ ] Maybe use the s flag for [asyncify](https://emscripten.org/docs/porting/asyncify.html) in Emscripten code by default.
+
+#### Explicit Compiler Support
+
+- [ ] Intel C/C++ compiler
 
 ### CLI TODO
 
@@ -102,7 +102,7 @@ The command set for viewing project metadata.
 
 - [ ] [lpq++](https://github.com/jtv/libpqxx) PostgreSQL C++ client API
 - [ ] [Qt6](https://www.qt.io/product/qt6)
-- [ ] [raylib](https://github.com/raysan5/raylib) (Also [works with WebAssembly](https://github.com/raysan5/raylib/wiki/Working-for-Web-(HTML5)))
+- [x] [raylib](https://github.com/raysan5/raylib) (Also [works with WebAssembly](https://github.com/raysan5/raylib/wiki/Working-for-Web-(HTML5)))
 - [x] [nlohmann json](https://github.com/nlohmann/json)
 - [x] [SFML](https://www.sfml-dev.org/)
 - [x] [fmt](https://github.com/fmtlib/fmt)
@@ -131,6 +131,7 @@ The command set for viewing project metadata.
 - [ ] [opus](https://opus-codec.org/)
 - [ ] [Vorbis](https://xiph.org/vorbis/)
 - [ ] [glaze](https://github.com/stephenberry/glaze) JSON
+- [ ] [smk](https://github.com/ArthurSonzogni/smk)
 
 #### Support when FetchContent ready
 
