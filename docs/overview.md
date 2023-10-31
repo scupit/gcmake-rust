@@ -13,6 +13,8 @@ Documentation is found in [Docs_Home.md](./Docs_Home.md).
 
 ## Usage Requirements
 
+<!-- https://cmake.org/cmake/help/latest/module/ExternalProject.html#id6 (FetchContent has a lot of
+      the same constraints as ExternalProject) -->
 - [Git](https://git-scm.com/) **1.6.5 or higher** must be installed on the system
 - [CMake](https://cmake.org/download/) **3.25** or higher
 
