@@ -100,6 +100,8 @@ The command set for viewing project metadata.
 
 #### Other CMake projects
 
+- [ ] [cppcoro (maintained fork)](https://github.com/andreasbuhr/cppcoro)
+- [x] [libwebsockets](https://github.com/warmcat/libwebsockets)
 - [ ] [lpq++](https://github.com/jtv/libpqxx) PostgreSQL C++ client API
 - [ ] [Qt6](https://www.qt.io/product/qt6)
 - [x] [raylib](https://github.com/raysan5/raylib) (Also [works with WebAssembly](https://github.com/raysan5/raylib/wiki/Working-for-Web-(HTML5)))
