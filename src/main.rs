@@ -89,7 +89,7 @@ fn main() {
               do_new_files_subcommand(
                 CreateFilesCommand {
                   language: match new_project_info.project_lang {
-                    MainFileLanguage::C => FileCreationLang::Cpp,
+                    MainFileLanguage::C => FileCreationLang::C,
                     MainFileLanguage::Cpp => FileCreationLang::Cpp,
                     MainFileLanguage::Cpp2 => FileCreationLang::Cpp2
                   },
