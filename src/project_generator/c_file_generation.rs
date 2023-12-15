@@ -25,6 +25,8 @@ const C_COMPILED_LIB_MAIN: &'static str =
 inline int @EXPORT_MACRO@ placeholderFunc(void) {
   return 2;
 }
+
+#endif
 ";
 
 const C_HEADER_ONLY_MAIN: &'static str =
