@@ -174,7 +174,14 @@ fn write_header(
           &file_info.shared_name_c_ident
         )?;
       },
-      FileCreationLang::Cpp | FileCreationLang::Cuda => {
+      FileCreationLang::Cpp => {
+        writeln!(
+          header_file,
+          "\nclass {}\n{{\n\tpublic:\n\t\tvoid printName();\n}};\n",
+          &file_info.shared_name_c_ident
+        )?;
+      },
+      FileCreationLang::Cuda => {
         writeln!(
           header_file,
           "\n#include <vector>\n\nstd::vector<float> placeholder_{}(const std::vector<float>& xs, const std::vector<float>& ys);\n",
