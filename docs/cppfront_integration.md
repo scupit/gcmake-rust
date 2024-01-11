@@ -33,11 +33,11 @@ predefined_dependencies:
 
 When not cross-compiling, the CppFront compiler will be built as part of your project by default and
 wll transform all *.cpp2* files before the rest of your project is built. If you'd rather use a pre-existing
-CppFront installation on your system, set the `EMBED_EMSCRIPTEN` CMake cache variable to `OFF` before
+CppFront installation on your system, set the `EMBED_CPPFRONT` CMake cache variable to `OFF` before
 configuring. This will use *find_package* to search for cppfront instead of building it as a subproject.
 
 ``` sh
-cmake -DEMBED_EMSCRIPTEN=OFF
+cmake -DEMBED_CPPFRONT=OFF
 ```
 
 ### Cpp2 Project Generation
@@ -71,7 +71,7 @@ gcmake-rust gen-file cpp2 SomeFile Another/NestedFile
 ## CppFront with Emscripten
 
 CppFront works just fine with Emscripten, except for one catch.
-**When using Emscripten, cppfront cannot be embedded in the project.** `EMBED_EMSCRIPTEN` will be set
+**When using Emscripten, cppfront cannot be embedded in the project.** `EMBED_CPPFRONT` will be set
 to `OFF` by default, and cannot be turned on. CMake will always search for an existing installation
 on the system using *find_package*.
 This is necessary because
@@ -85,7 +85,7 @@ just use an existing installation. To build and install CppFront on your system,
 ``` sh
 git clone 'git@github.com:scupit/cppfront-cmake-wrapper.git'
 cd cppfront-cmake-wrapper
-cmake -B build/ # ... any other CMake options such as -G 'Ninja'
+cmake -B build/ -DCMAKE_BUILD_TYPE=Release # ... any other CMake options such as -G 'Ninja'
 cmake --build build/ --parallel
 sudo cmake --install build/ # Or run in an Administrator prompt in Windows
 ```
