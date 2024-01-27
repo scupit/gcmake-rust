@@ -1,6 +1,6 @@
 use std::{collections::{HashSet, BTreeMap, BTreeSet }, fs::File, io::{self, Write, ErrorKind}, path::{PathBuf, Path}, rc::Rc, cell::{RefCell, Ref}, iter::FromIterator};
 
-use crate::{project_info::{final_project_data::{FinalProjectData, CppFileGrammar}, path_manipulation::relative_to_project_root, final_dependencies::{GitRevisionSpecifier, PredefinedCMakeComponentsModuleDep, PredefinedSubdirDep, PredefinedCMakeModuleDep, FinalPredepInfo, GCMakeDependencyStatus, FinalPredefinedDependencyConfig, PredefinedDepFunctionality, FinalDownloadMethod, FinalDebianPackagesConfig, GCMakeDepIDHash}, raw_data_in::{BuildType, BuildConfigCompilerSpecifier, SpecificCompilerSpecifier, OutputItemType, TargetSpecificBuildType, dependencies::internal_dep_config::CMakeModuleType, DefaultCompiledLibType}, FinalProjectType, CompiledOutputItem, LinkMode, FinalTestFramework, dependency_graph_mod::dependency_graph::{DependencyGraph, OrderedTargetInfo, ProjectWrapper, TargetNode, SimpleNodeOutputType, Link, EmscriptenLinkFlagInfo, ContainedItem}, SystemSpecifierWrapper, CompilerDefine, FinalBuildConfig, CompilerFlag, LinkerFlag, gcmake_constants::{SRC_DIR_NAME, INCLUDE_DIR_NAME}, platform_spec_parser::parse_leading_constraint_spec, CodeFileInfo, RetrievedCodeFileType, PreBuildScriptType, CodeFileLang, GivenConstraintSpecParseContext, SystemSpecFeatureType, SystemSpecExpressionTree, SingleSystemSpec}, file_writers::cmake_writer::cmake_writer_helpers::system_constraint_generator_expression};
+use crate::{project_info::{final_project_data::{FinalProjectData, CppFileGrammar}, path_manipulation::{cleaned_pathbuf, relative_to_project_root, unix_style}, final_dependencies::{GitRevisionSpecifier, PredefinedCMakeComponentsModuleDep, PredefinedSubdirDep, PredefinedCMakeModuleDep, FinalPredepInfo, GCMakeDependencyStatus, FinalPredefinedDependencyConfig, PredefinedDepFunctionality, FinalDownloadMethod, FinalDebianPackagesConfig, GCMakeDepIDHash}, raw_data_in::{BuildType, BuildConfigCompilerSpecifier, SpecificCompilerSpecifier, OutputItemType, TargetSpecificBuildType, dependencies::internal_dep_config::CMakeModuleType, DefaultCompiledLibType}, FinalProjectType, CompiledOutputItem, LinkMode, FinalTestFramework, dependency_graph_mod::dependency_graph::{DependencyGraph, OrderedTargetInfo, ProjectWrapper, TargetNode, SimpleNodeOutputType, Link, EmscriptenLinkFlagInfo, ContainedItem}, SystemSpecifierWrapper, CompilerDefine, FinalBuildConfig, CompilerFlag, LinkerFlag, gcmake_constants::{SRC_DIR_NAME, INCLUDE_DIR_NAME}, platform_spec_parser::parse_leading_constraint_spec, CodeFileInfo, RetrievedCodeFileType, PreBuildScriptType, CodeFileLang, GivenConstraintSpecParseContext, SystemSpecFeatureType, SystemSpecExpressionTree, SingleSystemSpec}, file_writers::cmake_writer::cmake_writer_helpers::system_constraint_generator_expression};
 
 use super::{cmake_utils_writer::CMakeUtilWriter, cmake_writer_helpers::{system_contstraint_conditional_expression, language_feature_name}};
 use colored::*;
@@ -331,8 +331,9 @@ impl<'a> CMakeListsWriter<'a> {
       }
     };
 
-    let cmakelists_file_name: String = format!("{}/CMakeLists.txt", project_data.get_project_root_relative_to_cwd());
-
+    let cmakelists_file_name: PathBuf = project_data.get_project_root_relative_to_cwd()
+      .join("CMakeLists.txt");
+    
     drop(borrowed_graph);
 
     let project_name: &str = project_data.get_project_base_name();
@@ -473,7 +474,6 @@ impl<'a> CMakeListsWriter<'a> {
         });
 
       let root_project_info = self.dep_graph_ref().project_wrapper().clone().unwrap_normal_project();
-      let root_project_root_path: &str = root_project_info.get_project_root_relative_to_cwd();
 
       for some_project_graph in ordered_projects_in_this_tree {
         let borrowed_graph = some_project_graph.as_ref().borrow();
@@ -483,9 +483,12 @@ impl<'a> CMakeListsWriter<'a> {
           self.write_pre_build_and_outputs()?;
         }
         else if !subproject_data.is_test_project() {
-          writeln!( &self.cmakelists_file,
+          writeln!(&self.cmakelists_file,
             "gcmake_configure_subproject(\n\t\"${{CMAKE_CURRENT_SOURCE_DIR}}/{}\"\n)",
-            relative_to_project_root(root_project_root_path, PathBuf::from(subproject_data.get_project_root_relative_to_cwd())).to_str().unwrap()
+            unix_style(relative_to_project_root(
+              root_project_info.get_project_root_relative_to_cwd(),
+              PathBuf::from(subproject_data.get_project_root_relative_to_cwd())
+            ))
           )?;
         }
       }
@@ -1049,7 +1052,7 @@ impl<'a> CMakeListsWriter<'a> {
           if entry_file.uses_cpp2_grammar() {
             self.set_code_file_collection(
               "pre_build_entry_dummy_list",
-              "./",
+              Path::new("."),
               &self.entry_file_root_var,
               &self.generated_src_root_var,
               &BTreeSet::from_iter([entry_file]),
@@ -1369,7 +1372,7 @@ impl<'a> CMakeListsWriter<'a> {
 
     self.set_code_file_collection(
       "all_cpp2_files",
-      "./",
+      Path::new("./"),
       &self.entry_file_root_var,
       &self.generated_src_root_var,
       &all_cpp2_source_list,
@@ -2155,7 +2158,7 @@ impl<'a> CMakeListsWriter<'a> {
     code_file_info: &CodeFileInfo
   ) -> String {
     return self.cmake_absolute_code_file_path(
-      "./",
+      Path::new("."),
       code_file_info,
       &self.entry_file_root_var,
       &self.generated_src_root_var,
@@ -2165,34 +2168,28 @@ impl<'a> CMakeListsWriter<'a> {
 
   fn cmake_absolute_code_file_path(
     &self,
-    file_root_dir_str: &str,
+    file_root_dir: &Path,
     code_file_info_in: &CodeFileInfo,
     cmake_absolute_dir_prefix: &str,
     cmake_generated_src_dir_prefix: &str,
     options: &CodeFileTransformOptions
   ) -> String {
-    let mut fixed_file_path: String = code_file_info_in.get_file_path()
-      .to_str()
-      .unwrap()
-      .to_string();
+    let mut fixed_file_path: PathBuf = code_file_info_in.get_file_path().to_path_buf();
 
-    if fixed_file_path.starts_with(file_root_dir_str) && !(code_file_info_in.uses_cpp2_grammar() && !options.should_retain_cpp2_paths) {
-      fixed_file_path = fixed_file_path.replace(file_root_dir_str, "");
+    if fixed_file_path.starts_with(file_root_dir) && !(code_file_info_in.uses_cpp2_grammar() && !options.should_retain_cpp2_paths) {
+      fixed_file_path = fixed_file_path.strip_prefix(file_root_dir).unwrap().to_path_buf();
     }
 
     let used_path_prefix_var: &str = match code_file_info_in.code_file_type() {
       RetrievedCodeFileType::Source(CodeFileLang::Cpp { used_grammar: CppFileGrammar::Cpp2 }) if !options.should_retain_cpp2_paths => {
         // cppfront (.cpp2) generated files are always .cpp
-        fixed_file_path = fixed_file_path.replace(".cpp2", ".cpp");
+        fixed_file_path.set_extension("cpp");
         cmake_generated_src_dir_prefix
       },
       _ => cmake_absolute_dir_prefix
     };
 
-    let relative_path: &str = if fixed_file_path.starts_with('/')
-      { &fixed_file_path[1..] }
-      else { &fixed_file_path[..] };
-    
+    let relative_path: String = unix_style(cleaned_pathbuf(fixed_file_path));
     let mut unquoted_result: String = format!("${{{}}}/{}", used_path_prefix_var, relative_path);
 
     if let CodeFileLang::Cuda = code_file_info_in.code_file_type().lang().unwrap() {
@@ -2205,7 +2202,7 @@ impl<'a> CMakeListsWriter<'a> {
   fn set_code_file_collection(
     &self,
     var_name: &str,
-    file_location_root: &str,
+    file_location_root: &Path,
     cmake_location_prefix: &str,
     cmake_generated_src_dir_prefix: &str,
     file_path_collection: &BTreeSet<impl AsRef<CodeFileInfo>>,

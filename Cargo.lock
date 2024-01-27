@@ -156,7 +156,6 @@ dependencies = [
  "colored",
  "enum-iterator",
  "lazy_static",
- "path-clean",
  "regex",
  "serde",
  "serde_yaml",
@@ -201,12 +200,6 @@ name = "memchr"
 version = "2.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "523dc4f511e55ab87b694dc30d0f820d60906ef06413f93d4d7a1385599cc149"
-
-[[package]]
-name = "path-clean"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ecba01bf2678719532c5e3059e0b5f0811273d94b397088b82e3bd0a78c78fdd"
 
 [[package]]
 name = "proc-macro2"

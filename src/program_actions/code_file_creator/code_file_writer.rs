@@ -61,10 +61,9 @@ pub fn write_code_files(
   )
 }
 
-fn ensure_directory_structure_helper(code_dir: &str, leading_dir_structure: &str) -> io::Result<PathBuf> {
+fn ensure_directory_structure_helper(code_dir: &Path, leading_dir_structure: &str) -> io::Result<PathBuf> {
   let full_project_path = cleaned_pathbuf(
-    Path::new(code_dir)
-      .join(leading_dir_structure)
+    code_dir.join(leading_dir_structure)
   );
 
   fs::create_dir_all(&full_project_path)?;
@@ -72,7 +71,7 @@ fn ensure_directory_structure_helper(code_dir: &str, leading_dir_structure: &str
 }
 
 fn ensure_directory_structure(
-  code_dir: &str,
+  code_dir: &Path,
   shared_file_info: &SharedFileInfo,
   extension_including_dot: &str
 ) -> io::Result<PathBuf> {
@@ -142,7 +141,7 @@ fn write_header(
   maybe_template_impl: &Option<PathBuf>,
   is_private: bool
 ) -> io::Result<PathBuf> {
-  let container_dir: &str = if is_private
+  let container_dir: &Path = if is_private
     { project_info.get_src_dir_relative_to_cwd() }
     else { project_info.get_include_dir_relative_to_cwd() };
 
@@ -369,7 +368,7 @@ fn write_template_impl(
   language: &FileCreationLang,
   is_private: bool
 ) -> io::Result<PathBuf> {
-  let container_dir: &str = if is_private
+  let container_dir: &Path = if is_private
     { project_info.get_src_dir_relative_to_cwd() }
     else { project_info.get_include_dir_relative_to_cwd() };
 

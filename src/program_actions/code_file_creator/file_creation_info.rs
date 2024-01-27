@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use crate::{project_info::{path_manipulation::{relative_to_project_root, cleaned_path_str}, raw_data_in::LanguageConfigMap}, cli_config::clap_cli_config::FileCreationLang};
 
@@ -83,7 +83,7 @@ pub struct SharedFileInfo {
 impl SharedFileInfo {
   pub fn new(
     file_class_name: &str,
-    project_root: &str
+    project_root: &Path
   ) -> Self {
     let cleaned_given_path: String = relative_to_project_root(
       project_root,

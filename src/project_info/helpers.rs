@@ -80,7 +80,7 @@ pub fn code_file_type(any_path_type: impl AsRef<Path>) -> RetrievedCodeFileType 
 }
 
 fn file_variants(
-  project_root: &str,
+  project_root: &Path,
   file_name_no_extensions: &str,
   possible_extensions: Vec<&str>
 ) -> Vec<PathBuf> {
@@ -93,7 +93,7 @@ fn file_variants(
 }
 
 fn first_existing_variant(
-  project_root: &str,
+  project_root: &Path,
   file_name_no_extensions: &str,
   possible_extensions: Vec<&str>
 ) -> Option<PathBuf> {
@@ -102,7 +102,7 @@ fn first_existing_variant(
     .find(|possible_file| possible_file.exists());
 }
 
-pub fn yaml_names_from_dir(project_root: &str) -> Vec<PathBuf> {
+pub fn yaml_names_from_dir(project_root: &Path) -> Vec<PathBuf> {
   return file_variants(project_root, "cmake_data", vec!["yaml"]);
 }
 
@@ -111,7 +111,7 @@ pub enum PrebuildScriptFile {
   Python(PathBuf)
 }
 
-pub fn find_doxyfile_in(project_docs_dir: &str) -> Option<PathBuf> {
+pub fn find_doxyfile_in(project_docs_dir: &Path) -> Option<PathBuf> {
   return first_existing_variant(project_docs_dir, "Doxyfile", vec!["in"])
 }
 
@@ -120,7 +120,7 @@ pub struct SphinxConfigFiles {
   pub conf_py_in: Option<PathBuf>
 }
 
-pub fn find_sphinx_files(project_docs_dir: &str) -> SphinxConfigFiles {
+pub fn find_sphinx_files(project_docs_dir: &Path) -> SphinxConfigFiles {
   return SphinxConfigFiles {
     index_rst: first_existing_variant(project_docs_dir, "index", vec!["rst"]),
     conf_py_in: first_existing_variant(project_docs_dir, "conf", vec!["py.in"]),
@@ -206,7 +206,7 @@ pub fn validate_doxyfile_in(doxyfile_in_path: &Path) -> Result<(), String> {
   );
 }
 
-pub fn find_prebuild_script(project_root: &str) -> Option<PrebuildScriptFile> {
+pub fn find_prebuild_script(project_root: &Path) -> Option<PrebuildScriptFile> {
   let pre_build_file_base_name: &str = "pre_build";
 
   for possible_exe_file in file_variants(project_root, pre_build_file_base_name, vec!["c", "cxx", "cpp", "cpp2", "cu"]) {
@@ -226,7 +226,7 @@ pub fn find_prebuild_script(project_root: &str) -> Option<PrebuildScriptFile> {
 
 type YamlParseResult<T> = Result<T, ProjectLoadFailureReason>;
 
-fn yaml_parse_helper<T: serde::de::DeserializeOwned>(project_root: &str) -> YamlParseResult<T> {
+fn yaml_parse_helper<T: serde::de::DeserializeOwned>(project_root: &Path) -> YamlParseResult<T> {
   for possible_cmake_data_file in yaml_names_from_dir(project_root) {
     if let io::Result::Ok(cmake_data_yaml_string) = fs::read_to_string(possible_cmake_data_file) {
 
@@ -239,19 +239,19 @@ fn yaml_parse_helper<T: serde::de::DeserializeOwned>(project_root: &str) -> Yaml
 
   return Err(ProjectLoadFailureReason::MissingYaml(format!(
     "Unable to find a cmake_data.yaml or cmake_data.yml file in {}",
-    project_root
+    project_root.to_str().unwrap()
   )));
 }
 
-pub fn parse_root_project_data(project_root: &str) -> YamlParseResult<RawProject> {
+pub fn parse_root_project_data(project_root: &Path) -> YamlParseResult<RawProject> {
   yaml_parse_helper(project_root)
 }
 
-pub fn parse_subproject_data(project_root: &str) -> YamlParseResult<RawSubproject> {
+pub fn parse_subproject_data(project_root: &Path) -> YamlParseResult<RawSubproject> {
   yaml_parse_helper(project_root)
 }
 
-pub fn parse_test_project_data(project_root: &str) -> YamlParseResult<RawTestProject> {
+pub fn parse_test_project_data(project_root: &Path) -> YamlParseResult<RawTestProject> {
   yaml_parse_helper(project_root)
 }
 
@@ -272,7 +272,7 @@ pub fn populate_existing_files<F>(
       }
       else if path.is_file() && filter_func(path.as_path()) {
         let file_info: CodeFileInfo = CodeFileInfo::from_path(
-          cleaned_pathbuf(relative_to_project_root(root_dir.to_str().unwrap(), path.as_path())),
+          cleaned_pathbuf(relative_to_project_root(root_dir, path.as_path())),
           false
         );
 

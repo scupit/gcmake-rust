@@ -55,7 +55,7 @@ fn find_matching_gcmake_dep_path(
 }
 
 fn resolve_prebuild_script(
-  project_root: &str,
+  project_root: &Path,
   pre_build_config: &PreBuildConfigIn,
   valid_feature_list: Option<&Vec<&str>>,
   file_root_group: &FileRootGroup
@@ -419,7 +419,7 @@ impl FinalProjectData {
     just_created_project_at: &Option<PathBuf>
   ) -> Result<FinalProjectData, ProjectLoadFailureReason> {
     let mut initial_project_data: InitialProjectData = make_initial_project_data(
-      unclean_project_root,
+      Path::new(unclean_project_root),
       &parent_project_info,
       all_dep_config,
       // just_created_project_at
@@ -1065,8 +1065,8 @@ impl FinalProjectData {
       "Project [{}] set documentation generator to {}, but is missing its '{}'. Please create '{}'.\n --> The command `{} {}` can be used to do this automatically.",
       self.get_name_for_error_messages(),
       doc_generator.to_str().yellow(),
-      format!("{}/{}", self.get_docs_dir_relative_to_project_root(), needed_file_name).yellow(),
-      format!("{}/{}", self.get_docs_dir_relative_to_cwd(), needed_file_name).yellow(),
+      format!("{}/{}", self.get_docs_dir_relative_to_project_root().to_str().unwrap(), needed_file_name).yellow(),
+      format!("{}/{}", self.get_docs_dir_relative_to_cwd().to_str().unwrap(), needed_file_name).yellow(),
       "gcmake-rust".bright_magenta(),
       example_command.bright_magenta()
     ));
@@ -1079,7 +1079,7 @@ impl FinalProjectData {
           "Project [{}] creates a header-only library, but contains private header files. A header-only library can't have private headers. To fix, remove all headers in the project's {}/ directory ({}).",
           self.get_name_for_error_messages().yellow(),
           SRC_DIR_NAME,
-          self.get_src_dir_relative_to_cwd().yellow()
+          self.get_src_dir_relative_to_cwd().to_str().unwrap().yellow()
         ));
       }
     }
@@ -1667,8 +1667,8 @@ impl FinalProjectData {
     &self.prebuild_script
   }
 
-  pub fn get_project_root_relative_to_cwd(&self) -> &str {
-    self.paths_and_prefixes.project_root_relative_to_cwd.as_str()
+  pub fn get_project_root_relative_to_cwd(&self) -> &Path {
+    self.paths_and_prefixes.project_root_relative_to_cwd.as_path()
   }
 
   pub fn get_absolute_project_root(&self) -> &Path {
@@ -1723,28 +1723,28 @@ impl FinalProjectData {
     &self.vendor
   }
 
-  pub fn get_src_dir_relative_to_cwd(&self) -> &str {
-    self.paths_and_prefixes.src_dir_relative_to_cwd.as_str()
+  pub fn get_src_dir_relative_to_cwd(&self) -> &Path {
+    self.paths_and_prefixes.src_dir_relative_to_cwd.as_path()
   }
 
-  pub fn get_src_dir_relative_to_project_root(&self) -> &str {
-    self.paths_and_prefixes.src_dir_relative_to_project_root.as_str()
+  pub fn get_src_dir_relative_to_project_root(&self) -> &Path {
+    self.paths_and_prefixes.src_dir_relative_to_project_root.as_path()
   }
 
-  pub fn get_include_dir_relative_to_cwd(&self) -> &str {
-    self.paths_and_prefixes.include_dir_relative_to_cwd.as_str()
+  pub fn get_include_dir_relative_to_cwd(&self) -> &Path {
+    self.paths_and_prefixes.include_dir_relative_to_cwd.as_path()
   }
 
-  pub fn get_include_dir_relative_to_project_root(&self) -> &str {
-    self.paths_and_prefixes.include_dir_relative_to_project_root.as_str()
+  pub fn get_include_dir_relative_to_project_root(&self) -> &Path {
+    self.paths_and_prefixes.include_dir_relative_to_project_root.as_path()
   }
 
-  pub fn get_docs_dir_relative_to_cwd(&self) -> &str {
-    self.paths_and_prefixes.docs_dir_relative_to_cwd.as_str()
+  pub fn get_docs_dir_relative_to_cwd(&self) -> &Path {
+    self.paths_and_prefixes.docs_dir_relative_to_cwd.as_path()
   }
 
-  pub fn get_docs_dir_relative_to_project_root(&self) -> &str {
-    self.paths_and_prefixes.docs_dir_relative_to_project_root.as_str()
+  pub fn get_docs_dir_relative_to_project_root(&self) -> &Path {
+    self.paths_and_prefixes.docs_dir_relative_to_project_root.as_path()
   }
 
   pub fn get_build_configs(&self) -> &FinalBuildConfigMap {
@@ -1870,11 +1870,12 @@ struct InitialProjectData {
 }
 
 fn make_initial_project_data(
-  unclean_project_root: &str,
+  unclean_project_root: &Path,
   parent_project_info: &Option<NeededParseInfoFromParent>,
   all_dep_config: &AllRawPredefinedDependencies,
   // just_created_project_at: &Option<PathBuf>
 ) -> Result<InitialProjectData, ProjectLoadFailureReason> {
+    let project_path: PathBuf = cleaned_pathbuf(unclean_project_root);
     // NOTE: Subprojects are still considered whole projects, however they are not allowed to specify
     // top level build configuration data. This means that language data, build configs, etc. are not
     // defined in subprojects, and shouldn't be written. Build configuration related data is inherited
@@ -1882,7 +1883,7 @@ fn make_initial_project_data(
     match &parent_project_info {
       None => {
         return make_initial_root_project_info(
-          unclean_project_root,
+          project_path.as_path(),
           all_dep_config
         );
       }
@@ -1899,10 +1900,9 @@ fn make_initial_project_data(
         target_namespace_prefix: _,
         inherited_features
       }) => {
-        let project_path = PathBuf::from(cleaned_path_str(unclean_project_root));
         let test_project_name: &str = project_path.file_name().unwrap().to_str().unwrap();
 
-        let mut raw_project: RawProject = parse_test_project_data(unclean_project_root)?
+        let mut raw_project: RawProject = parse_test_project_data(project_path.as_path())?
           .into_raw_subproject()
           .into();
 
@@ -1949,7 +1949,7 @@ fn make_initial_project_data(
         target_namespace_prefix: _,
         inherited_features
       }) => {
-        let mut raw_project: RawProject = parse_subproject_data(&unclean_project_root)?.into();
+        let mut raw_project: RawProject = parse_subproject_data(project_path.as_path())?.into();
         raw_project.name = actual_base_name.clone();
         raw_project.vendor = actual_vendor.clone();
 
@@ -1974,10 +1974,10 @@ fn make_initial_project_data(
 }
 
 fn make_initial_root_project_info(
-  unclean_project_root: &str,
+  unclean_project_root: &Path,
   all_dep_config: &AllRawPredefinedDependencies
 ) -> Result<InitialProjectData, ProjectLoadFailureReason> {
-  let raw_project = parse_root_project_data(&unclean_project_root)?;
+  let raw_project = parse_root_project_data(unclean_project_root)?;
   let features = obtain_feature_map(&raw_project)?;
   let valid_feature_list: Option<Vec<&str>> = feature_list_from(&features);
   let finalized_build_config = make_final_build_config_map(
@@ -2037,16 +2037,17 @@ struct ProjectPaths {
   base_include_prefix: String,
   full_include_prefix: String,
   target_namespace_prefix: String,
-  project_root_relative_to_cwd: String,
+
+  project_root_relative_to_cwd: PathBuf,
   absolute_project_root: PathBuf,
-  src_dir_relative_to_project_root: String,
-  src_dir_relative_to_cwd: String,
-  include_dir_relative_to_project_root: String,
-  include_dir_relative_to_cwd: String,
-  docs_dir_relative_to_project_root: String,
-  docs_dir_relative_to_cwd: String,
-  project_test_dir_path: PathBuf,
-  project_subproject_dir_path: PathBuf
+  src_dir_relative_to_project_root: PathBuf,
+  src_dir_relative_to_cwd: PathBuf,
+  include_dir_relative_to_project_root: PathBuf,
+  include_dir_relative_to_cwd: PathBuf,
+  docs_dir_relative_to_project_root: PathBuf,
+  docs_dir_relative_to_cwd: PathBuf,
+  test_dir_relative_to_cwd: PathBuf,
+  subproject_dir_relative_to_cwd: PathBuf
 }
 
 fn obtain_prefixes_and_dirs(
@@ -2079,48 +2080,22 @@ fn obtain_prefixes_and_dirs(
     }
   }
 
-  let project_root_relative_to_cwd: String = cleaned_path_str(&unclean_project_root).to_string();
-  let docs_dir_relative_to_project_root = String::from(DOCS_DIR_NAME);
-  let src_dir_relative_to_project_root: String = format!(
-    "{}/{}",
-    SRC_DIR_NAME,
-    &full_include_prefix
-  );
-  let include_dir_relative_to_project_root: String = format!(
-    "{}/{}",
-    INCLUDE_DIR_NAME,
-    &full_include_prefix
-  );
+  let project_root_relative_to_cwd: PathBuf = cleaned_pathbuf(&unclean_project_root);
+  let docs_dir_relative_to_project_root: PathBuf = PathBuf::from(DOCS_DIR_NAME);
+  let src_dir_relative_to_project_root: PathBuf = Path::new(SRC_DIR_NAME)
+    .join(&full_include_prefix);
+  let include_dir_relative_to_project_root: PathBuf = Path::new(INCLUDE_DIR_NAME)
+    .join(&full_include_prefix);
 
   return Ok(ProjectPaths {
-    src_dir_relative_to_cwd: format!(
-      "{}/{}",
-      &project_root_relative_to_cwd,
-      &src_dir_relative_to_project_root
-    ),
+    src_dir_relative_to_cwd: project_root_relative_to_cwd.join(src_dir_relative_to_project_root.as_path()),
     src_dir_relative_to_project_root,
-    include_dir_relative_to_cwd: format!(
-      "{}/{}",
-      &project_root_relative_to_cwd,
-      &include_dir_relative_to_project_root
-    ),
+    include_dir_relative_to_cwd: project_root_relative_to_cwd.join(include_dir_relative_to_project_root.as_path()),
     include_dir_relative_to_project_root,
-    docs_dir_relative_to_cwd: format!(
-      "{}/{}",
-      &project_root_relative_to_cwd,
-      &docs_dir_relative_to_project_root
-    ),
+    docs_dir_relative_to_cwd: project_root_relative_to_cwd.join(docs_dir_relative_to_project_root.as_path()),
     docs_dir_relative_to_project_root,
-    project_test_dir_path: PathBuf::from(format!(
-      "{}/{}",
-      &project_root_relative_to_cwd,
-      TESTS_DIR_NAME
-    )),
-    project_subproject_dir_path: PathBuf::from(format!(
-      "{}/{}",
-      &project_root_relative_to_cwd,
-      SUBPROJECTS_DIR_NAME
-    )),
+    test_dir_relative_to_cwd: project_root_relative_to_cwd.join(TESTS_DIR_NAME),
+    subproject_dir_relative_to_cwd: project_root_relative_to_cwd.join(SUBPROJECTS_DIR_NAME),
     absolute_project_root: absolute_path(&project_root_relative_to_cwd)
       .map_err(ProjectLoadFailureReason::Other)?,
     project_root_relative_to_cwd,
@@ -2138,8 +2113,8 @@ fn obtain_test_projects(
 ) -> Result<SubprojectMap, ProjectLoadFailureReason> {
   let mut test_project_map: SubprojectMap = SubprojectMap::new();
 
-  if project_paths.project_test_dir_path.is_dir() {
-    let tests_dir_iter = fs::read_dir(project_paths.project_test_dir_path.as_path())
+  if project_paths.test_dir_relative_to_cwd.is_dir() {
+    let tests_dir_iter = fs::read_dir(project_paths.test_dir_relative_to_cwd.as_path())
       .map_err(|err| ProjectLoadFailureReason::Other(err.to_string()))?;
 
     for dir_entry in tests_dir_iter {
@@ -2196,8 +2171,8 @@ fn obtain_subprojects(
 ) -> Result<SubprojectMap, ProjectLoadFailureReason> {
   let mut subproject_map = SubprojectMap::new();
 
-  if project_paths.project_subproject_dir_path.is_dir() {
-    let subprojects_dir_iter = fs::read_dir(project_paths.project_subproject_dir_path.as_path())
+  if project_paths.subproject_dir_relative_to_cwd.is_dir() {
+    let subprojects_dir_iter = fs::read_dir(project_paths.subproject_dir_relative_to_cwd.as_path())
       .map_err(|err| ProjectLoadFailureReason::Other(err.to_string()))?;
 
     for dir_entry in subprojects_dir_iter {

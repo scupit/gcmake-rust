@@ -76,7 +76,7 @@ fn create_single_file_set(
     FileGuardStyle::IncludeGuard(guard_specifier_string)
   };
 
-  let used_include_path: &str = if command.should_files_be_private
+  let used_include_path: &Path = if command.should_files_be_private
     { project_data.get_src_dir_relative_to_cwd() }
     else { project_data.get_include_dir_relative_to_cwd() };
 
@@ -89,18 +89,18 @@ fn create_single_file_set(
     (used_include_path, CodeFileType::TemplateImpl(command.language.clone()))
   ]
     .map(|(code_root, code_file_type)| {
-      let file_name = format!(
-        "{}/{}/{}{}",
-        code_root,
-        &shared_file_info.leading_dir_path,
-        &shared_file_info.shared_name,
-        extension_for(code_file_type.clone(), command.should_files_be_private)
-      );
+      let file_path: PathBuf = code_root
+        .join(&shared_file_info.leading_dir_path)
+        .join(format!(
+          "{}{}",
+          &shared_file_info.shared_name,
+          extension_for(code_file_type.clone(), command.should_files_be_private)
+        ));
 
-      (file_name, code_file_type)
+      (file_path, code_file_type)
     });
 
-  for (file_name, ref code_file_type) in maybe_existing_files {
+  for (file_path, ref code_file_type) in maybe_existing_files {
     match global_file_collision_option {
       FileCollisionHandleOption::ReplaceAll => continue,
       FileCollisionHandleOption::CancelRest => {
@@ -112,19 +112,14 @@ fn create_single_file_set(
 
     let is_file_about_to_be_written: bool = which_generating.get_is_generating(code_file_type.clone());
 
-    if is_file_about_to_be_written && Path::new(&file_name).exists() {
-      let file_path_relative_to_working_dir = absolute_path(file_name)?
-        .to_str()
-        .unwrap()
-        .replace(
-          &format!("{}/", project_data.get_absolute_project_root().to_str().unwrap()),
-          ""
-        );
+    if is_file_about_to_be_written && file_path.exists() {
+      let file_path_absolute: PathBuf = absolute_path(file_path)?;
+      let file_path_relative_to_working_dir: &Path = file_path_absolute.strip_prefix(project_data.get_absolute_project_root()).unwrap();
 
       let local_collision_mode: FileCollisionHandleOption = prompt_until_custom(
         &format!(
           "\nFile '{}' already exists.\n[{}]kip it, [{}]verwrite it, [{}]ancel rest, or replace [{}]ll?",
-          file_path_relative_to_working_dir.yellow(),
+          file_path_relative_to_working_dir.to_str().unwrap().yellow(),
           "s".cyan(),
           "o".cyan(),
           "c".cyan(),
