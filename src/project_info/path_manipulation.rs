@@ -130,13 +130,11 @@ mod tests {
   fn test_eliminate_current_dir() {
     let test_cases = vec![
       ("./", "."),
-      (".\\", "."),
       ("/./", "/"),
       ("./test", "test"),
       ("./test/./path", "test/path"),
       ("/test/./path/", "/test/path"),
       ("test/path/.", "test/path"),
-      ("C:\\test\\path/.", "C:/test/path"),
     ];
 
     check_transformation_results(&test_cases);
@@ -168,8 +166,11 @@ mod tests {
   }
 
   #[test]
+  #[cfg(target_os = "windows")]
   fn test_windows_paths() {
     let test_cases = vec![
+      ("C:\\test\\path/.", "C:/test/path"),
+      (".\\", "."),
       ("\\..", "\\"),
       ("\\..\\test", "\\test"),
       ("\\\\remote\\path\\.", "\\\\remote\\path"),
