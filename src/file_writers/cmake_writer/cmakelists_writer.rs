@@ -365,6 +365,11 @@ impl<'a> CMakeListsWriter<'a> {
       writeln!(&self.cmakelists_file, "gcmake_begin_config_file()")?;
       self.write_toplevel_tweaks()?;
       self.write_features()?;
+
+      // Set language configuration info before dependencies so that
+      // dependency configurations have access to the language version.
+      self.write_section_header("Language Configuration")?;
+      self.write_language_config()?;
     }
 
     if self.project_data.has_predefined_dependencies() {
@@ -395,9 +400,6 @@ impl<'a> CMakeListsWriter<'a> {
         "if( NOT TARGET_SYSTEM_IS_WINDOWS )\n\t{}\nendif()",
         "set( CMAKE_INSTALL_LIBDIR \"${ORIGINAL_CMAKE_INSTALL_LIBDIR}\" CACHE PATH \"Library installation dir\" FORCE )"
       )?;
-
-      self.write_section_header("Language Configuration")?;
-      self.write_language_config()?;
 
       self.write_section_header("Build Configurations")?;
       self.write_build_config_section()?;
