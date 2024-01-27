@@ -1,6 +1,17 @@
 use clap::{Subcommand, Args, Parser, ValueEnum};
+use clap::builder::styling::{AnsiColor, Styles};
 
 const SKY: &'static str = "Skylar Cupit";
+
+// Modified example styling from this Clap issue:
+// https://github.com/clap-rs/clap/issues/3234
+// I can't find this referenced anywhere in their documentation.
+fn help_styling() -> Styles {
+  return Styles::styled()
+    .literal(AnsiColor::Cyan.on_default())
+    // .placeholder(AnsiColor::Green.on_default())
+    .placeholder(AnsiColor::Yellow.on_default())
+}
 
 #[derive(ValueEnum, Clone)]
 pub enum CLIProjectOutputTypeIn {
@@ -12,7 +23,7 @@ pub enum CLIProjectOutputTypeIn {
 }
 
 #[derive(Parser)]
-#[command(version = "1.6.6", author = SKY)]
+#[command(version = "1.6.6", author = SKY, styles = help_styling())]
 pub struct Opts {
   #[arg(default_value = ".")]
   pub project_root: String,
