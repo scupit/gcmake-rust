@@ -16,6 +16,17 @@ For configuration and installation instructions, see the
 - [My CppFront CMake wrapper](https://github.com/scupit/cppfront-cmake-wrapper): This is the compatibility repository which allows GCMake to easily use CppFront. It is also just a standalone way to build and install CppFront on your system.
 - [gcmake-dependency-configs/cppfront](https://github.com/scupit/gcmake-dependency-configs/tree/develop/cppfront)
 
+## IMPORTANT NOTE
+
+As of commit [8dd89ec8c9cfe9633286b2768ad0404455e342c7](https://github.com/hsutter/cppfront/commit/8dd89ec8c9cfe9633286b2768ad0404455e342c7),
+the latest MinGW ld.exe (GNU binutils 2.40) distributed by msys2 fails to link cppfront.exe when
+compiling with optimizations off (Debug mode). If you're building in Debug mode with MinGW g++,
+you must use the `-fuse-ld=lld` flag to use LLVM's lld linker in place of ld (need to install Clang first).
+
+**You must set the CMake options `-DGCMAKE_ADDITIONAL_COMPILER_FLAGS='fuse-ld=lld'` and `-DGCMAKE_ADDITIONAL_LINK_TIME_FLAGS='-fuse-ld=lld'` if compiling with MinGW.**
+
+See the [GCMake cppfront configuration README](https://github.com/scupit/gcmake-dependency-configs/blob/develop/cppfront/README.md) for full details.
+
 ## Using CppFront in a GCMake Project
 
 CppFront is essentially supported out-of-the-box in GCMake. To use it, just:

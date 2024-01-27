@@ -23,6 +23,11 @@ directory, among other places.
 2. Put a copy of MinGW's *libstdc++-6.dll* in the binary directory so the executable doesn't need to
   look in PATH for an alternative one.
 
+## Undefined reference errors when linking cppfront
+
+When using MinGW, you'll have to link using Clang's `lld` linker instead of the
+default `ld`. See the [cppfront integration page IMPORTANT NOTE](./cppfront_integration.md#important-note) for instructions and a full explanation.
+
 ## Emscripten
 
 Instead of duplicating them here, see the [Emscripten doc page](./emscripten.md) for 
