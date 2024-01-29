@@ -1,7 +1,32 @@
+use colored::Colorize;
+
 use crate::{project_info::{final_project_data::FinalProjectData, path_manipulation::cleaned_pathbuf, ProjectOutputType, CompiledOutputItem}, cli_config::clap_cli_config::FileCreationLang};
 
 use super::file_creation_info::{FileTypeGeneratingInfo, SharedFileInfo, FileGuardStyle};
 use std::{io::{self, Write}, path::{PathBuf, Path}, fs::{self, File}};
+
+pub fn validate_shared_file_info_for_generation(shared_info: &SharedFileInfo) -> Result<(), String> {
+  let given_path: &str = shared_info.cleaned_given_path.to_str().unwrap();
+
+  if shared_info.shared_name.contains('.') {
+    return Err(format!(
+      "Given file name '{}' should not have an extension, but does. Please remove the '{}' extension.",
+      given_path.red(),
+      format!(".{}",
+        shared_info.cleaned_given_path.extension().unwrap().to_str().unwrap()
+      ).yellow()
+    ));
+  }
+
+  if shared_info.cleaned_given_path.starts_with("..") {
+    return Err(format!(
+      "When specifying files to be generated, the file paths should not reference a parent directory. However, the given path \"{}\" will end up in a parent directory. Please remove any leading \"..\".",
+      given_path.red()
+    ));
+  }
+
+  Ok(())
+}
 
 pub fn write_code_files(
   which_generating: &FileTypeGeneratingInfo,
@@ -61,10 +86,8 @@ pub fn write_code_files(
   )
 }
 
-fn ensure_directory_structure_helper(code_dir: &Path, leading_dir_structure: &str) -> io::Result<PathBuf> {
-  let full_project_path = cleaned_pathbuf(
-    code_dir.join(leading_dir_structure)
-  );
+fn ensure_directory_structure_helper(code_dir: &Path, leading_dir_structure: &Path) -> io::Result<PathBuf> {
+  let full_project_path: PathBuf = cleaned_pathbuf(code_dir.join(leading_dir_structure));
 
   fs::create_dir_all(&full_project_path)?;
   Ok(full_project_path)
@@ -77,7 +100,7 @@ fn ensure_directory_structure(
 ) -> io::Result<PathBuf> {
   let the_buf = ensure_directory_structure_helper(
     code_dir,
-    &shared_file_info.leading_dir_path
+    shared_file_info.leading_dir_path.as_path()
   )?.join(format!("{}{}", &shared_file_info.shared_name, extension_including_dot));
 
   Ok(cleaned_pathbuf(the_buf))

@@ -49,8 +49,10 @@ pub fn without_leading_dot(some_path_or_extension: impl AsRef<str>) -> String {
   }
 }
 
-pub fn relative_to_project_root(project_root: &Path, file_path: impl AsRef<Path>) -> PathBuf {
-  return cleaned_pathbuf(file_path.as_ref().strip_prefix(project_root).unwrap());
+pub fn file_relative_to_dir(project_root: &Path, file_path: impl AsRef<Path>) -> PathBuf {
+  let absolute_project_root: PathBuf = absolute_path(project_root).unwrap();
+  let absolute_file_path: PathBuf = absolute_path(file_path).unwrap();
+  return cleaned_pathbuf(absolute_file_path.strip_prefix(absolute_project_root).unwrap());
 }
 
 pub fn unix_style(path: impl AsRef<Path>) -> String {

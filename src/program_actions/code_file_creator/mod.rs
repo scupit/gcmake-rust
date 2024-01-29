@@ -1,7 +1,7 @@
 use std::{path::{Path, PathBuf}, rc::Rc};
 
-use crate::{project_info::{final_project_data::FinalProjectData, path_manipulation::{relative_to_project_root, absolute_path}}, cli_config::clap_cli_config::CreateFilesCommand, common::prompt::{prompt_until_custom}};
-use self::{file_creation_info::{FileTypeGeneratingInfo, validate_which_generating, SharedFileInfo, validate_shared_file_info, FileGuardStyle}, code_file_writer::{write_code_files, extension_for, CodeFileType}};
+use crate::{project_info::{final_project_data::FinalProjectData, path_manipulation::{file_relative_to_dir, absolute_path}}, cli_config::clap_cli_config::CreateFilesCommand, common::prompt::{prompt_until_custom}};
+use self::{file_creation_info::{FileTypeGeneratingInfo, validate_which_generating, SharedFileInfo, FileGuardStyle}, code_file_writer::{extension_for, validate_shared_file_info_for_generation, write_code_files, CodeFileType}};
 
 mod code_file_writer;
 mod file_creation_info;
@@ -53,13 +53,10 @@ fn create_single_file_set(
   project_data: &Rc<FinalProjectData>,
   command: &CreateFilesCommand,
   mut which_generating: FileTypeGeneratingInfo,
-  file_name: &str
+  full_file_path_spec: &str
 ) -> Result<(), String> {
-  let shared_file_info: SharedFileInfo = SharedFileInfo::new(
-    &file_name,
-    project_data.get_project_root_relative_to_cwd()
-  );
-  validate_shared_file_info(&shared_file_info)?;
+  let shared_file_info: SharedFileInfo = SharedFileInfo::new(full_file_path_spec)?;
+  validate_shared_file_info_for_generation(&shared_file_info)?;
 
   let file_guard: FileGuardStyle = if command.use_pragma_guards {
     FileGuardStyle::PragmaOnce
@@ -162,7 +159,7 @@ fn create_single_file_set(
         for file_path in created_files {
           println!(
             "Created: {}",
-            relative_to_project_root(&project_data.get_project_root_relative_to_cwd(), file_path).to_str().unwrap().cyan()
+            file_relative_to_dir(&project_data.get_project_root_relative_to_cwd(), file_path).to_str().unwrap().cyan()
           );
         }
       }

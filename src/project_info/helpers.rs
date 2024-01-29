@@ -3,7 +3,7 @@ use std::{path::{PathBuf, Path}, fs::{self}, io::{self}, collections::BTreeSet};
 use colored::Colorize;
 use regex::Regex;
 
-use super::{raw_data_in::{RawProject, RawSubproject, OutputItemType, RawTestProject}, path_manipulation::{cleaned_pathbuf, relative_to_project_root}, final_project_data::{ProjectLoadFailureReason, CppFileGrammar}, CodeFileInfo};
+use super::{raw_data_in::{RawProject, RawSubproject, OutputItemType, RawTestProject}, path_manipulation::{cleaned_pathbuf, file_relative_to_dir}, final_project_data::{ProjectLoadFailureReason, CppFileGrammar}, CodeFileInfo};
 
 #[derive(Clone, Copy)]
 pub enum CodeFileLang {
@@ -272,7 +272,7 @@ pub fn populate_existing_files<F>(
       }
       else if path.is_file() && filter_func(path.as_path()) {
         let file_info: CodeFileInfo = CodeFileInfo::from_path(
-          cleaned_pathbuf(relative_to_project_root(root_dir, path.as_path())),
+          cleaned_pathbuf(file_relative_to_dir(root_dir, path.as_path())),
           false
         );
 

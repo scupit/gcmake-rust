@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 
-use crate::{project_info::{path_manipulation::{relative_to_project_root, cleaned_path_str}, raw_data_in::LanguageConfigMap}, cli_config::clap_cli_config::FileCreationLang};
+use crate::{project_info::{path_manipulation::cleaned_pathbuf, raw_data_in::LanguageConfigMap}, cli_config::clap_cli_config::FileCreationLang};
 
 use super::code_file_writer::CodeFileType;
 use colored::*;
@@ -74,48 +74,41 @@ impl FileGuardStyle {
 }
 
 pub struct SharedFileInfo {
+  // Base name for the file. For example, "some-file" could be used
+  // to create some-file.cpp and some-file.hpp
   pub shared_name: String,
   pub shared_name_c_ident: String,
-  pub leading_dir_path: String,
-  pub cleaned_given_path: String
+  
+  // gcmake gen-file cpp deeply/nested/second-file
+  // 
+  // first-file has a leading_dir_path of "deeply/nested"
+  // and a shared_name of "second-file".
+  pub leading_dir_path: PathBuf,
+  pub cleaned_given_path: PathBuf
 }
 
 impl SharedFileInfo {
-  pub fn new(
-    file_class_name: &str,
-    project_root: &Path
-  ) -> Self {
-    let cleaned_given_path: String = relative_to_project_root(
-      project_root,
-      PathBuf::from(cleaned_path_str(file_class_name))
-    ).to_str().unwrap().to_string();
+  pub fn new(file_class_name: &str) -> Result<Self, String> {
+    let cleaned_path: PathBuf = cleaned_pathbuf(file_class_name);
 
-    return if let Some(last_slash_index) = cleaned_given_path.rfind('/') {
-      let shared_name: String = String::from(&cleaned_given_path[last_slash_index + 1..]); 
-      let shared_name_c_ident: String = shared_name
+    let shared_name: String = match cleaned_path.file_name() {
+      Some(file_name) => file_name.to_string_lossy().to_string(),
+      None => return Err(format!("The path \"{}\" doesn't contain a file name.", cleaned_path.to_str().unwrap()))
+    };
+
+    let leading_dir_path: &Path = match cleaned_path.parent() {
+      Some(parent_dir) => parent_dir,
+      None => Path::new(".")
+    };
+
+    return Ok(SharedFileInfo {
+      shared_name_c_ident: shared_name
         .replace(" ", "_")
-        .replace("-", "_");
-
-      Self {
-        shared_name,
-        shared_name_c_ident,
-        leading_dir_path: String::from(&cleaned_given_path[0..last_slash_index]),
-        cleaned_given_path
-      }
-    }
-    else {
-      let shared_name: String = cleaned_given_path.clone();
-      let shared_name_c_ident: String = shared_name
-        .replace(" ", "_")
-        .replace("-", "_");
-
-      Self {
-        shared_name,
-        shared_name_c_ident,
-        cleaned_given_path,
-        leading_dir_path: String::from("."),
-      }
-    }
+        .replace("-", "_"),
+      shared_name,
+      leading_dir_path: leading_dir_path.to_path_buf(),
+      cleaned_given_path: cleaned_path
+    });
   }
 }
 
@@ -162,18 +155,6 @@ pub fn validate_which_generating(
         ));
       }
     }
-  }
-
-  Ok(())
-}
-
-pub fn validate_shared_file_info(shared_info: &SharedFileInfo) -> Result<(), String> {
-  if shared_info.shared_name.contains('.') {
-    return Err(format!(
-      "Given file name '{}' should not have an extension, but does. Please remove the extension from {}",
-      shared_info.shared_name,
-      shared_info.cleaned_given_path
-    ));
   }
 
   Ok(())
