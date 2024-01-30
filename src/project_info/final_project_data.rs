@@ -2,7 +2,7 @@ use std::{collections::{HashMap, HashSet, BTreeMap, BTreeSet}, path::{Path, Path
 
 use crate::{project_info::path_manipulation::cleaned_pathbuf, logger, program_actions::gcmake_dep_cache_dir, common::base64_encoded};
 
-use super::{path_manipulation::{cleaned_path_str, file_relative_to_dir, absolute_path}, final_dependencies::{FinalGCMakeDependency, FinalPredefinedDependencyConfig, relative_hash_file_path}, raw_data_in::{RawProject, dependencies::internal_dep_config::AllRawPredefinedDependencies, BuildType, LanguageConfigMap, OutputItemType, PreBuildConfigIn, SpecificCompilerSpecifier, BuildConfigCompilerSpecifier, TargetSpecificBuildType, LinkSection, RawTestFramework, DefaultCompiledLibType, RawCompiledItem, RawDocumentationGeneratorConfig, RawDocGeneratorName, LanguageFeatureSection}, final_project_configurables::FinalProjectType, CompiledOutputItem, helpers::{parse_subproject_data, parse_root_project_data, populate_existing_files, find_prebuild_script, PrebuildScriptFile, validate_raw_project_outputs, ProjectOutputType, RetrievedCodeFileType, code_file_type, parse_test_project_data, find_doxyfile_in, validate_doxyfile_in, SphinxConfigFiles, find_sphinx_files, validate_conf_py_in}, PreBuildScript, FinalTestFramework, base_include_prefix_for_test, gcmake_constants::{SRC_DIR_NAME, INCLUDE_DIR_NAME, TESTS_DIR_NAME, SUBPROJECTS_DIR_NAME, DOCS_DIR_NAME}, FinalInstallerConfig, CompilerDefine, FinalBuildConfigMap, make_final_build_config_map, FinalTargetBuildConfigMap, FinalGlobalProperties, FinalShortcutConfig, parsers::{version_parser::ThreePartVersion, general_parser::ParseSuccess}, platform_spec_parser::parse_leading_constraint_spec, SystemSpecifierWrapper, FinalFeatureConfig, FinalFeatureEnabler, CodeFileInfo, FileRootGroup, PreBuildScriptType, FinalDocGeneratorName, FinalDocumentationInfo, CodeFileLang, GivenConstraintSpecParseContext};
+use super::{path_manipulation::{cleaned_path_str, file_relative_to_dir, absolute_path}, final_dependencies::{FinalGCMakeDependency, FinalPredefinedDependencyConfig, relative_hash_file_path}, raw_data_in::{dependencies::RawPredefinedDependencyMap, BuildConfigCompilerSpecifier, BuildType, DefaultCompiledLibType, LanguageConfigMap, LanguageFeatureSection, LinkSection, OutputItemType, PreBuildConfigIn, RawCompiledItem, RawDocGeneratorName, RawDocumentationGeneratorConfig, RawProject, RawTestFramework, SpecificCompilerSpecifier, TargetSpecificBuildType}, final_project_configurables::FinalProjectType, CompiledOutputItem, helpers::{parse_subproject_data, parse_root_project_data, populate_existing_files, find_prebuild_script, PrebuildScriptFile, validate_raw_project_outputs, ProjectOutputType, RetrievedCodeFileType, code_file_type, parse_test_project_data, find_doxyfile_in, validate_doxyfile_in, SphinxConfigFiles, find_sphinx_files, validate_conf_py_in}, PreBuildScript, FinalTestFramework, base_include_prefix_for_test, gcmake_constants::{SRC_DIR_NAME, INCLUDE_DIR_NAME, TESTS_DIR_NAME, SUBPROJECTS_DIR_NAME, DOCS_DIR_NAME}, FinalInstallerConfig, CompilerDefine, FinalBuildConfigMap, make_final_build_config_map, FinalTargetBuildConfigMap, FinalGlobalProperties, FinalShortcutConfig, parsers::{version_parser::ThreePartVersion, general_parser::ParseSuccess}, platform_spec_parser::parse_leading_constraint_spec, SystemSpecifierWrapper, FinalFeatureConfig, FinalFeatureEnabler, CodeFileInfo, FileRootGroup, PreBuildScriptType, FinalDocGeneratorName, FinalDocumentationInfo, CodeFileLang, GivenConstraintSpecParseContext};
 use colored::*;
 
 const SUBPROJECT_JOIN_STR: &'static str = "_S_";
@@ -361,7 +361,7 @@ pub struct FinalProjectData {
 impl FinalProjectData {
   pub fn new(
     unclean_given_root: &str,
-    dep_config: &AllRawPredefinedDependencies,
+    dep_config: &RawPredefinedDependencyMap,
     project_load_context: FinalProjectLoadContext
   ) -> Result<UseableFinalProjectDataGroup, ProjectLoadFailureReason> {
     let cleaned_given_root: String = cleaned_path_str(unclean_given_root);
@@ -415,7 +415,7 @@ impl FinalProjectData {
   fn create_new(
     unclean_project_root: &str,
     parent_project_info: Option<NeededParseInfoFromParent>,
-    all_dep_config: &AllRawPredefinedDependencies,
+    all_dep_config: &RawPredefinedDependencyMap,
     just_created_project_at: &Option<PathBuf>
   ) -> Result<FinalProjectData, ProjectLoadFailureReason> {
     let mut initial_project_data: InitialProjectData = make_initial_project_data(
@@ -1872,7 +1872,7 @@ struct InitialProjectData {
 fn make_initial_project_data(
   unclean_project_root: &Path,
   parent_project_info: &Option<NeededParseInfoFromParent>,
-  all_dep_config: &AllRawPredefinedDependencies,
+  all_dep_config: &RawPredefinedDependencyMap,
   // just_created_project_at: &Option<PathBuf>
 ) -> Result<InitialProjectData, ProjectLoadFailureReason> {
     let project_path: PathBuf = cleaned_pathbuf(unclean_project_root);
@@ -1975,7 +1975,7 @@ fn make_initial_project_data(
 
 fn make_initial_root_project_info(
   unclean_project_root: &Path,
-  all_dep_config: &AllRawPredefinedDependencies
+  all_dep_config: &RawPredefinedDependencyMap
 ) -> Result<InitialProjectData, ProjectLoadFailureReason> {
   let raw_project = parse_root_project_data(unclean_project_root)?;
   let features = obtain_feature_map(&raw_project)?;
@@ -2108,7 +2108,7 @@ fn obtain_prefixes_and_dirs(
 fn obtain_test_projects(
   project_paths: &ProjectPaths,
   initial_project_data: &InitialProjectData,
-  all_dep_config: &AllRawPredefinedDependencies,
+  all_dep_config: &RawPredefinedDependencyMap,
   just_created_project_at: &Option<PathBuf>
 ) -> Result<SubprojectMap, ProjectLoadFailureReason> {
   let mut test_project_map: SubprojectMap = SubprojectMap::new();
@@ -2166,7 +2166,7 @@ fn obtain_test_projects(
 fn obtain_subprojects(
   project_paths: &ProjectPaths,
   initial_project_data: &InitialProjectData,
-  all_dep_config: &AllRawPredefinedDependencies,
+  all_dep_config: &RawPredefinedDependencyMap,
   just_created_project_at: &Option<PathBuf>
 ) -> Result<SubprojectMap, ProjectLoadFailureReason> {
   let mut subproject_map = SubprojectMap::new();
@@ -2223,7 +2223,7 @@ fn obtain_subprojects(
 
 fn obtain_gcmake_dep_projects(
   initial_project_data: &InitialProjectData,
-  all_dep_config: &AllRawPredefinedDependencies,
+  all_dep_config: &RawPredefinedDependencyMap,
   just_created_project_at: &Option<PathBuf>
 ) -> Result<GCMakeDependencyMap, ProjectLoadFailureReason> {
   let mut gcmake_dep_project_map = GCMakeDependencyMap::new();
@@ -2342,7 +2342,7 @@ fn obtain_output_items(
 fn obtain_predefined_dependencies(
   valid_feature_list: Option<&Vec<String>>,
   initial_project_data: &InitialProjectData,
-  all_dep_config: &AllRawPredefinedDependencies
+  all_dep_config: &RawPredefinedDependencyMap
 ) -> Result<PredefinedDepMap, ProjectLoadFailureReason> {
   let mut predefined_dependencies = PredefinedDepMap::new();
 

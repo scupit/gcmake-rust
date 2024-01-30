@@ -10,8 +10,8 @@ pub use raw_components_builtin_find_module::*;
 pub use raw_builtin_find_module::*;
 pub use raw_target_config_common::*;
 
-use std::{collections::HashMap, path::{PathBuf, Path}, fs, io, rc::Rc};
-use serde::{Deserialize};
+use std::{path::{PathBuf, Path}, fs, io, rc::Rc};
+use serde::Deserialize;
 
 use self::raw_dep_common::RawPredepCommon;
 
@@ -77,6 +77,3 @@ pub struct RawPredefinedDependencyInfo {
   pub custom_populate: Option<Rc<PredefinedCMakeDepHookFile>>,
   pub custom_find_module: Option<Rc<PredefinedCMakeDepHookFile>>
 }
-
-// Container for all dependency types defined in supported_dependencies.yaml
-pub type AllRawPredefinedDependencies = HashMap<String, RawPredefinedDependencyInfo>;

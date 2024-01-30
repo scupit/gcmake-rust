@@ -1,6 +1,6 @@
-use std::collections::{HashMap};
+use std::collections::HashMap;
 
-use serde::{Deserialize};
+use serde::Deserialize;
 use super::{raw_target_config_common::RawPredefinedTargetMapIn, RawMutualExclusionSet, raw_dep_common::{RawPredepCommon, RawEmscriptenConfig, RawDebianPackagesConfig, RawDepConfigOption}};
 
 #[derive(Deserialize, Clone)]

@@ -17,7 +17,7 @@ use logger::exit_error_log;
 use program_actions::*;
 use project_generator::{DefaultProjectInfo};
 
-use crate::{project_info::{raw_data_in::dependencies::{all_raw_supported_dependency_configs, internal_dep_config::AllRawPredefinedDependencies}}, project_generator::configuration::{MainFileLanguage, CreationProjectOutputType}, cli_config::clap_cli_config::{Opts, SubCommandStruct, DepConfigSubCommand, CreateFilesCommand, FileCreationLang}};
+use crate::{project_info::{raw_data_in::dependencies::{all_raw_supported_dependency_configs, RawPredefinedDependencyMap}}, project_generator::configuration::{MainFileLanguage, CreationProjectOutputType}, cli_config::clap_cli_config::{Opts, SubCommandStruct, DepConfigSubCommand, CreateFilesCommand, FileCreationLang}};
 
 // fn print_project_info(project_data_group: UseableFinalProjectDataGroup) {
 //   println!("PROJECT INFORMATION\n----------------------------------------");
@@ -47,7 +47,7 @@ fn main() {
     return;
   }
 
-  let dep_config: AllRawPredefinedDependencies = match all_raw_supported_dependency_configs() {
+  let dep_config: RawPredefinedDependencyMap = match all_raw_supported_dependency_configs() {
     Ok(config) => config,
     Err(error_message) => exit_error_log(&error_message)
   };

@@ -18,7 +18,7 @@ use crate::project_info::{platform_spec_parser::parse_leading_constraint_spec, p
 
 use self::{final_target_map_common::FinalTargetConfigMap};
 
-use super::raw_data_in::dependencies::{internal_dep_config::{AllRawPredefinedDependencies, RawPredefinedDependencyInfo, PredefinedCMakeDepHookFile, raw_dep_common::RawEmscriptenConfig, CMakeModuleType}, user_given_dep_config::UserGivenPredefinedDependencyConfig};
+use super::raw_data_in::dependencies::{internal_dep_config::{RawPredefinedDependencyInfo, PredefinedCMakeDepHookFile, raw_dep_common::RawEmscriptenConfig, CMakeModuleType}, user_given_dep_config::UserGivenPredefinedDependencyConfig, RawPredefinedDependencyMap};
 
 type HookScriptContainer = Option<Rc<PredefinedCMakeDepHookFile>>;
 
@@ -83,7 +83,7 @@ pub struct FinalPredefinedDependencyConfig {
 
 impl FinalPredefinedDependencyConfig {
   pub fn new(
-    all_raw_dep_configs: &AllRawPredefinedDependencies,
+    all_raw_dep_configs: &RawPredefinedDependencyMap,
     user_given_config: &UserGivenPredefinedDependencyConfig,
     dep_name: &str,
     valid_feature_list: Option<&Vec<&str>>
@@ -136,7 +136,7 @@ impl FinalPredefinedDependencyConfig {
               let the_namespace: &str = link_spec.get_namespace_queue().iter().nth(0).unwrap();
               let required_lib_name: &str = link_spec.get_target_list().iter().nth(0).unwrap().get_name();
 
-              match all_raw_dep_configs.get(the_namespace) {
+              match all_raw_dep_configs.get(the_namespace)? {
                 None => {
                   return Err(format!(
                     "The external dependency '{}' of target '{}::{}' requires a library from predefined dependency '{}', however there is no predefined dependency named '{}'.",
@@ -192,7 +192,7 @@ impl FinalPredefinedDependencyConfig {
       custom_populate,
       custom_find_module,
       ..
-    } = all_raw_dep_configs.get(dep_name).unwrap(); 
+    } = all_raw_dep_configs.get(dep_name)?.unwrap(); 
 
     match &predep_info {
       FinalPredepInfo::CMakeModule(module_dep) => match (module_dep.module_type(), custom_find_module) {
@@ -333,13 +333,13 @@ struct PredefinedDependencyAllConfigs {
 
 impl PredefinedDependencyAllConfigs {
   pub fn new(
-    all_raw_dep_configs: &AllRawPredefinedDependencies,
+    all_raw_dep_configs: &RawPredefinedDependencyMap,
     user_given_config: &UserGivenPredefinedDependencyConfig,
     dep_name: &str,
     valid_feature_list: Option<&Vec<&str>>
   ) -> Result<Self, String> {
 
-    let dep_info: &RawPredefinedDependencyInfo = match all_raw_dep_configs.get(dep_name) {
+    let dep_info: &RawPredefinedDependencyInfo = match all_raw_dep_configs.get(dep_name)? {
       Some(info) => info,
       None => {
         return Err(format!(

@@ -9,14 +9,14 @@ pub use code_file_creator::*;
 pub use manage_dependencies::*;
 use std::{io, path::PathBuf, fs, cell::RefCell, rc::Rc, collections::BTreeMap, iter::FromIterator};
 
-use crate::{cli_config::{clap_cli_config::{UseFilesCommand, CreateFilesCommand, UpdateDependencyConfigsCommand, TargetInfoCommand, ProjectInfoCommand, PredepInfoCommand, ToolInfoCommand, CreateDefaultFilesCommand, CreateDefaultFileOption, SpecificToolPartSubcommand}, CLIProjectGenerationInfo, CLIProjectTypeGenerating}, common::{prompt::prompt_until_boolean}, logger::exit_error_log, project_info::{raw_data_in::dependencies::internal_dep_config::AllRawPredefinedDependencies, final_project_data::{UseableFinalProjectDataGroup, ProjectLoadFailureReason, FinalProjectData, FinalProjectLoadContext}, path_manipulation::absolute_path, dep_graph_loader::load_graph, dependency_graph_mod::dependency_graph::{DependencyGraphInfoWrapper, DependencyGraph, TargetNode, BasicTargetSearchResult, DependencyGraphWarningMode, BasicProjectSearchResult}, LinkSpecifier, validators::{is_valid_target_name, is_valid_project_name}, feature_map_for_lang, SystemSpecFeatureType}, file_writers::write_configurations, project_generator::GeneralNewProjectInfo, program_actions::info_printers::{target_info_print_funcs::{print_target_header, print_export_header_include_path, print_target_type}, project_info_print_funcs::{print_project_header, print_project_include_prefix, print_immediate_subprojects, print_project_repo_url, print_project_can_cross_compile, print_project_supports_emscripten, print_project_output_list, print_project_dependencies}}};
+use crate::{cli_config::{clap_cli_config::{UseFilesCommand, CreateFilesCommand, UpdateDependencyConfigsCommand, TargetInfoCommand, ProjectInfoCommand, PredepInfoCommand, ToolInfoCommand, CreateDefaultFilesCommand, CreateDefaultFileOption, SpecificToolPartSubcommand}, CLIProjectGenerationInfo, CLIProjectTypeGenerating}, common::{prompt::prompt_until_boolean}, logger::exit_error_log, project_info::{dep_graph_loader::load_graph, dependency_graph_mod::dependency_graph::{DependencyGraphInfoWrapper, DependencyGraph, TargetNode, BasicTargetSearchResult, DependencyGraphWarningMode, BasicProjectSearchResult}, feature_map_for_lang, final_project_data::{UseableFinalProjectDataGroup, ProjectLoadFailureReason, FinalProjectData, FinalProjectLoadContext}, path_manipulation::absolute_path, raw_data_in::dependencies::RawPredefinedDependencyMap, validators::{is_valid_target_name, is_valid_project_name}, LinkSpecifier, SystemSpecFeatureType}, file_writers::write_configurations, project_generator::GeneralNewProjectInfo, program_actions::info_printers::{target_info_print_funcs::{print_target_header, print_export_header_include_path, print_target_type}, project_info_print_funcs::{print_project_header, print_project_include_prefix, print_immediate_subprojects, print_project_repo_url, print_project_can_cross_compile, print_project_supports_emscripten, print_project_output_list, print_project_dependencies}}};
 
 use self::{info_printers::predef_dep_info_print_funcs::{print_predef_dep_header, print_predep_targets, print_predep_repo_url, print_predep_github_url, print_predep_can_cross_compile, print_predep_supports_emscripten, print_predep_supported_download_methods, print_predep_doc_link}, default_file_creator::{write_default_doxyfile, write_default_sphinx_files}};
 use colored::*;
 
 fn parse_project_info(
   project_root_dir: &str,
-  dep_config: &AllRawPredefinedDependencies,
+  dep_config: &RawPredefinedDependencyMap,
   project_load_context: FinalProjectLoadContext
 ) -> Result<UseableFinalProjectDataGroup, ProjectLoadFailureReason> {
   FinalProjectData::new(
@@ -36,7 +36,7 @@ fn parse_project_info(
 
 fn get_project_info_or_exit(
   project_root_dir: &str,
-  dep_config: &AllRawPredefinedDependencies,
+  dep_config: &RawPredefinedDependencyMap,
   project_load_context: FinalProjectLoadContext
 ) -> UseableFinalProjectDataGroup {
   match parse_project_info(project_root_dir, dep_config, project_load_context) {
@@ -78,7 +78,7 @@ fn get_project_graph_or_exit<'a>(
 pub fn print_target_info(
   command: &TargetInfoCommand,
   given_root_dir: &str,
-  dep_config: &AllRawPredefinedDependencies
+  dep_config: &RawPredefinedDependencyMap
 ) {
   if command.selectors.is_empty() {
     // TODO: When no selector is provided, just print the info for all project targets.
@@ -152,7 +152,7 @@ pub fn print_target_info(
 pub fn print_project_info(
   command: &ProjectInfoCommand,
   given_root_dir: &str,
-  dep_config: &AllRawPredefinedDependencies
+  dep_config: &RawPredefinedDependencyMap
 ) {
   let selectors: Vec<String> = if command.selectors.is_empty()
     { vec![String::from("self")] }
@@ -282,10 +282,10 @@ pub fn print_tool_info(command: ToolInfoCommand) {
 
 pub fn print_predep_info(
   command: &PredepInfoCommand,
-  dep_config: &AllRawPredefinedDependencies
+  dep_config: &RawPredefinedDependencyMap
 ) {
   if command.selectors.is_empty() {
-    let mut dep_names: Vec<&String> = dep_config.keys().collect();
+    let mut dep_names: Vec<&String> = dep_config.available_dep_names().iter().collect();
     dep_names.sort_by(|name1, name2| name1.to_lowercase().cmp(&name2.to_lowercase()));
 
     for dep_name in dep_names {
@@ -296,7 +296,7 @@ pub fn print_predep_info(
     for dep_name in &command.selectors {
       print_predef_dep_header(dep_name);
 
-      match dep_config.get(dep_name) {
+      match dep_config.get(dep_name).unwrap() {
         None => println!("Unable to find predefined dependency \"{}\"", dep_name),
         Some(raw_predep_config) => match raw_predep_config.dep_configs.get_common() {
           Err(err_msg) => {
@@ -345,7 +345,7 @@ pub fn print_predep_info(
 pub fn copy_default_file(
   command: &UseFilesCommand,
   given_root_dir: &str,
-  dep_config: &AllRawPredefinedDependencies
+  dep_config: &RawPredefinedDependencyMap
 ) -> io::Result<()> {
   let file_name_str: &str = command.file.to_file_name();
   let project_info: UseableFinalProjectDataGroup = get_project_info_or_exit(
@@ -414,7 +414,7 @@ pub fn copy_default_file(
 pub fn generate_default_file(
   command: &CreateDefaultFilesCommand,
   given_root_dir: &str,
-  dep_config: &AllRawPredefinedDependencies
+  dep_config: &RawPredefinedDependencyMap
 ) -> io::Result<()> {
   let about_to_generate_doxyfile: bool = match command.file {
     CreateDefaultFileOption::Doxyfile => true,
@@ -457,7 +457,7 @@ pub fn generate_default_file(
 
 pub fn do_generate_project_configs(
   given_root_dir: &str,
-  dep_config: &AllRawPredefinedDependencies
+  dep_config: &RawPredefinedDependencyMap
 ) {
   let project_data_group: UseableFinalProjectDataGroup = get_project_info_or_exit(
     &given_root_dir,
@@ -497,7 +497,7 @@ pub fn do_generate_project_configs(
 pub fn do_new_files_subcommand(
   command: CreateFilesCommand,
   given_root_dir: &str,
-  dep_config: &AllRawPredefinedDependencies,
+  dep_config: &RawPredefinedDependencyMap,
   just_created_library_project_at: Option<String>
 ) {
   let project_data_group: UseableFinalProjectDataGroup = get_project_info_or_exit(
@@ -525,7 +525,7 @@ pub fn do_new_files_subcommand(
 
 pub fn do_new_project_subcommand(
   command: CLIProjectGenerationInfo,
-  dep_config: &AllRawPredefinedDependencies,
+  dep_config: &RawPredefinedDependencyMap,
   given_root_dir: &str,
   should_generate_cmakelists: &mut bool
 ) -> Option<GeneralNewProjectInfo> {
@@ -590,7 +590,7 @@ pub fn do_dependency_config_update_subcommand(command: UpdateDependencyConfigsCo
 
 pub fn get_parent_project_for_new_project(
   current_root: &str,
-  dep_config: &AllRawPredefinedDependencies,
+  dep_config: &RawPredefinedDependencyMap,
   requires_all_yaml_files_present: bool
 ) -> Result<Option<UseableFinalProjectDataGroup>, String> {
   match parse_project_info(
