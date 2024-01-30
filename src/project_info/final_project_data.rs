@@ -2,7 +2,7 @@ use std::{collections::{HashMap, HashSet, BTreeMap, BTreeSet}, path::{Path, Path
 
 use crate::{project_info::path_manipulation::cleaned_pathbuf, logger, program_actions::gcmake_dep_cache_dir, common::base64_encoded};
 
-use super::{path_manipulation::{cleaned_path_str, file_relative_to_dir, absolute_path}, final_dependencies::{FinalGCMakeDependency, FinalPredefinedDependencyConfig, relative_hash_file_path}, raw_data_in::{dependencies::RawPredefinedDependencyMap, BuildConfigCompilerSpecifier, BuildType, DefaultCompiledLibType, LanguageConfigMap, LanguageFeatureSection, LinkSection, OutputItemType, PreBuildConfigIn, RawCompiledItem, RawDocGeneratorName, RawDocumentationGeneratorConfig, RawProject, RawTestFramework, SpecificCompilerSpecifier, TargetSpecificBuildType}, final_project_configurables::FinalProjectType, CompiledOutputItem, helpers::{parse_subproject_data, parse_root_project_data, populate_existing_files, find_prebuild_script, PrebuildScriptFile, validate_raw_project_outputs, ProjectOutputType, RetrievedCodeFileType, code_file_type, parse_test_project_data, find_doxyfile_in, validate_doxyfile_in, SphinxConfigFiles, find_sphinx_files, validate_conf_py_in}, PreBuildScript, FinalTestFramework, base_include_prefix_for_test, gcmake_constants::{SRC_DIR_NAME, INCLUDE_DIR_NAME, TESTS_DIR_NAME, SUBPROJECTS_DIR_NAME, DOCS_DIR_NAME}, FinalInstallerConfig, CompilerDefine, FinalBuildConfigMap, make_final_build_config_map, FinalTargetBuildConfigMap, FinalGlobalProperties, FinalShortcutConfig, parsers::{version_parser::ThreePartVersion, general_parser::ParseSuccess}, platform_spec_parser::parse_leading_constraint_spec, SystemSpecifierWrapper, FinalFeatureConfig, FinalFeatureEnabler, CodeFileInfo, FileRootGroup, PreBuildScriptType, FinalDocGeneratorName, FinalDocumentationInfo, CodeFileLang, GivenConstraintSpecParseContext};
+use super::{path_manipulation::{cleaned_path_str, file_relative_to_dir, absolute_path}, final_dependencies::{FinalGCMakeDependency, FinalPredefinedDependencyConfig, relative_hash_file_path}, raw_data_in::{dependencies::RawPredefinedDependencyMap, BuildConfigCompilerSpecifier, BuildType, DefaultCompiledLibType, LanguageConfigMap, LanguageFeatureSection, LinkSection, OutputItemType, PreBuildConfigIn, RawCompiledItem, RawDocGeneratorName, RawDocumentationGeneratorConfig, RawProject, RawTestFramework, SpecificCompilerSpecifier, TargetSpecificBuildType}, final_project_configurables::FinalProjectType, CompiledOutputItem, helpers::{parse_subproject_data, parse_root_project_data, find_prebuild_script, PrebuildScriptFile, validate_raw_project_outputs, ProjectOutputType, RetrievedCodeFileType, code_file_type, parse_test_project_data, find_doxyfile_in, validate_doxyfile_in, SphinxConfigFiles, find_sphinx_files, validate_conf_py_in}, PreBuildScript, FinalTestFramework, base_include_prefix_for_test, gcmake_constants::{SRC_DIR_NAME, INCLUDE_DIR_NAME, TESTS_DIR_NAME, SUBPROJECTS_DIR_NAME, DOCS_DIR_NAME}, FinalInstallerConfig, CompilerDefine, FinalBuildConfigMap, make_final_build_config_map, FinalTargetBuildConfigMap, FinalGlobalProperties, FinalShortcutConfig, parsers::{version_parser::ThreePartVersion, general_parser::ParseSuccess}, platform_spec_parser::parse_leading_constraint_spec, SystemSpecifierWrapper, FinalFeatureConfig, FinalFeatureEnabler, CodeFileInfo, FileRootGroup, PreBuildScriptType, FinalDocGeneratorName, FinalDocumentationInfo, CodeFileLang, GivenConstraintSpecParseContext};
 use colored::*;
 
 const SUBPROJECT_JOIN_STR: &'static str = "_S_";
@@ -28,6 +28,49 @@ fn standard_cmp(
     _ => None
   }
 }
+
+pub fn populate_project_files<F>(
+  // Project root directory is used to get file paths relative to the project root.
+  project_root_dir: &Path,
+  // Root directory from which files will actually be used. For example, "src/FULL/INCLUDE/PREFIX"
+  used_dir: &Path,
+  current_dir_checking: &Path,
+  file_list: &mut BTreeSet<CodeFileInfo>,
+  filter_func: &F
+) -> io::Result<()>
+  where F: Fn(&Path) -> bool
+{
+  if current_dir_checking.is_dir() {
+    for dirent in fs::read_dir(current_dir_checking)? {
+      let path: PathBuf = dirent?.path();
+
+      if path.is_dir() {
+        populate_project_files(project_root_dir, used_dir, &path, file_list, filter_func)?;
+      }
+      else if path.is_file() && filter_func(path.as_path()) {
+        if current_dir_checking.starts_with(used_dir) {
+          let file_info: CodeFileInfo = CodeFileInfo::from_path(
+            file_relative_to_dir(project_root_dir, path.as_path()),
+            false
+          );
+
+          // Rust sets don't overwrite existing values. Since generated files are always added to
+          // file sets first, we don't ever overwrite the generated files.
+          file_list.insert(file_info);
+        }
+        else {
+          logger::warn(format!(
+            "Ignoring file '{}' because it is outside of the directory '{}'",
+            path.to_str().unwrap().yellow(),
+            used_dir.to_str().unwrap().yellow()
+          ));
+        }
+      }
+    }
+  }
+  Ok(())
+}
+
 
 fn find_matching_gcmake_dep_path(
   dep_name: &str,
@@ -596,9 +639,10 @@ impl FinalProjectData {
 
     let usable_project_root = PathBuf::from(finalized_project_data.get_project_root_relative_to_cwd());
 
-    populate_existing_files(
+    populate_project_files(
       usable_project_root.as_path(),
       PathBuf::from(finalized_project_data.get_src_dir_relative_to_cwd()).as_path(),
+      usable_project_root.join(SRC_DIR_NAME).as_path(),
       &mut finalized_project_data.src_files,
       &|file_path| match code_file_type(file_path) {
         RetrievedCodeFileType::Source { .. } => true,
@@ -607,9 +651,10 @@ impl FinalProjectData {
     )
       .map_err(|err| ProjectLoadFailureReason::Other(err.to_string()))?;
 
-    populate_existing_files(
+    populate_project_files(
       usable_project_root.as_path(),
       PathBuf::from(finalized_project_data.get_src_dir_relative_to_cwd()).as_path(),
+      usable_project_root.join(SRC_DIR_NAME).as_path(),
       &mut finalized_project_data.private_headers,
       &|file_path| match code_file_type(file_path) {
         RetrievedCodeFileType::Header(_)
@@ -619,9 +664,10 @@ impl FinalProjectData {
     )
       .map_err(|err| ProjectLoadFailureReason::Other(err.to_string()))?;
 
-    populate_existing_files(
+    populate_project_files(
       usable_project_root.as_path(),
       PathBuf::from(finalized_project_data.get_include_dir_relative_to_cwd()).as_path(),
+      usable_project_root.join(INCLUDE_DIR_NAME).as_path(),
       &mut finalized_project_data.public_headers,
       &|file_path| match code_file_type(file_path) {
         RetrievedCodeFileType::Header(_) => true,
@@ -630,9 +676,10 @@ impl FinalProjectData {
     )
       .map_err(|err| ProjectLoadFailureReason::Other(err.to_string()))?;
 
-    populate_existing_files(
+    populate_project_files(
       usable_project_root.as_path(),
       PathBuf::from(finalized_project_data.get_include_dir_relative_to_cwd()).as_path(),
+      usable_project_root.join(INCLUDE_DIR_NAME).as_path(),
       &mut finalized_project_data.template_impl_files,
       &|file_path| match code_file_type(file_path) {
         RetrievedCodeFileType::TemplateImpl => true,

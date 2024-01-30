@@ -1,9 +1,9 @@
-use std::{path::{PathBuf, Path}, fs::{self}, io::{self}, collections::BTreeSet};
+use std::{path::{PathBuf, Path}, fs::{self}, io::{self}};
 
 use colored::Colorize;
 use regex::Regex;
 
-use super::{raw_data_in::{RawProject, RawSubproject, OutputItemType, RawTestProject}, path_manipulation::{cleaned_pathbuf, file_relative_to_dir}, final_project_data::{ProjectLoadFailureReason, CppFileGrammar}, CodeFileInfo};
+use super::{raw_data_in::{RawProject, RawSubproject, OutputItemType, RawTestProject}, path_manipulation::cleaned_pathbuf, final_project_data::{ProjectLoadFailureReason, CppFileGrammar}};
 
 #[derive(Clone, Copy)]
 pub enum CodeFileLang {
@@ -253,36 +253,6 @@ pub fn parse_subproject_data(project_root: &Path) -> YamlParseResult<RawSubproje
 
 pub fn parse_test_project_data(project_root: &Path) -> YamlParseResult<RawTestProject> {
   yaml_parse_helper(project_root)
-}
-
-pub fn populate_existing_files<F>(
-  root_dir: &Path,
-  current_dir_checking: &Path,
-  file_list: &mut BTreeSet<CodeFileInfo>,
-  filter_func: &F
-) -> io::Result<()>
-  where F: Fn(&Path) -> bool
-{
-  if current_dir_checking.is_dir() {
-    for dirent in fs::read_dir(current_dir_checking)? {
-      let path: PathBuf = dirent?.path();
-
-      if path.is_dir() {
-        populate_existing_files(root_dir, &path, file_list, filter_func)?;
-      }
-      else if path.is_file() && filter_func(path.as_path()) {
-        let file_info: CodeFileInfo = CodeFileInfo::from_path(
-          cleaned_pathbuf(file_relative_to_dir(root_dir, path.as_path())),
-          false
-        );
-
-        // Rust sets don't overwrite existing values. Since generated files are always added to
-        // file sets first, we don't ever overwrite the generated files.
-        file_list.insert(file_info);
-      }
-    }
-  }
-  Ok(())
 }
 
 pub enum ProjectOutputType {

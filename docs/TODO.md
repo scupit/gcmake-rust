@@ -7,7 +7,7 @@ There are a whole bunch of things which need doing. This is the place to list th
 - [x] Warn on dependencies which are never used, since that's almost always a mistake.
 - [x] Support for parallelism systems ([CUDA](https://developer.nvidia.com/cuda-toolkit), [Kokkos](https://github.com/kokkos/kokkos), and [compiler-builtin OpenMP](https://www.openmp.org/))
   - Don't support HIP because it doesn't support Windows. OpenSYCL barely has experimental Windows support, but its build process looks like a pain in general. OpenCL seems extremely portable, but I couldn't get it to work in a basic CMake project so I won't support it yet.
-- [ ] Warn when files exist inside *include/* or *src/*, but aren't inside the dir with the include prefix
+- [x] Warn when files exist inside *include/* or *src/*, but aren't inside the dir with the include prefix
   (like *include/MY_INCLUDE_PREXIX* or *src/MY_INCLUDE_PREFIX*).
 - [ ] Now that predefined dependency configurations are lazy-loaded, add a command for checking the correctness of any given config (or all configs at once). "Correctness checking" just means the config can be loaded without errors.
 - [ ] Add CLI commands for cleaning and updating the dep-cache. Not exactly sure how updating should work yet.
@@ -22,9 +22,7 @@ There are a whole bunch of things which need doing. This is the place to list th
   done in one pass without the dependency projects already being present. This would be a good first
   step towards that.
 - [ ] Rename `predefined_dependencies` to something more intuitive. These dependencies are not gcmake
-  projects, but can be configured to work with gcmake by providing a 'yaml dependency glue' config. Those
-  glue configs should be contained in a separate repository, should function as a sort of "registry"
-  updateable by the gcmake tool.
+  projects, but can be configured to work with gcmake by providing a 'yaml dependency glue' config.
 
 ## Configuration TODO
 
