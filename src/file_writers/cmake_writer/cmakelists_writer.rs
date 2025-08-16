@@ -1054,8 +1054,8 @@ impl<'a> CMakeListsWriter<'a> {
           if entry_file.uses_cpp2_grammar() {
             self.set_code_file_collection(
               "pre_build_entry_dummy_list",
-              self.project_data.get_src_dir_relative_to_project_root(),
-              &self.src_root_var,
+              Path::new(""),
+              "CMAKE_CURRENT_SOURCE_DIR",
               &self.generated_src_root_var,
               &BTreeSet::from_iter([entry_file]),
               &CodeFileTransformOptions {
