@@ -93,6 +93,7 @@ With those assumptions in mind, here are some valid link specifiers:
 output:
   my-lib:
     output_type: CompiledLib
+    # File must be located at: include/FULL_INCLUDE_PREFIX/my-lib.hpp
     entry_file: my-lib.hpp
     link:
       # Need to categorize links because this is a compiled library. Links don't need to be categorized
@@ -114,6 +115,7 @@ output:
 output:
   nested-lib:
     output_type: CompiledLib
+    # File must be located at: include/FULL_INCLUDE_PREFIX/nested-lib.hpp
     entry_file: nested-lib.hpp
     link:
       private:
@@ -144,6 +146,7 @@ features:
 output:
   my-exe:
     output_type: Executable
+    # File must be located at: src/FULL_INCLUDE_PREFIX/main.cpp
     entry_file: main.cpp
     link:
       # When the use-fmt feature is disabled, fmt::fmt will not be linked to my-exe.

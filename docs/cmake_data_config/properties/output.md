@@ -67,7 +67,10 @@ output:
 
 Sets the output's entry point.
 
-Entry files are specified relative to the project's directory.
+Entry files are specified as **filenames only** (not full paths) in the configuration. The system automatically resolves these filenames to the correct directories based on the output type:
+
+- **Executable entry files** are resolved from and must be placed in `src/FULL_INCLUDE_PREFIX/`
+- **Library entry files** are resolved from and must be placed in `include/FULL_INCLUDE_PREFIX/`
 
 An **Executable** entry file must be a source file (*.c* or *.cpp*), while any **library** entry file
 must be a header (*.h* or *.hpp*).
@@ -75,23 +78,29 @@ must be a header (*.h* or *.hpp*).
 Executable example:
 
 ``` yaml
+# For a project with include_prefix: "MyProject"
 output:
   my-exe:
     output_type: Executable
+    # File must be located at: src/MyProject/main.cpp
     entry_file: main.cpp
 ```
 
 Library example:
 
 ``` yaml
+# For a project with include_prefix: "MyProject"
 output:
   my-lib:
     output_type: CompiledLib
     # output_type: HeaderOnlyLib
     # output_type: StaticLib
     # output_type: SharedLib
+    # File must be located at: include/MyProject/my-lib.hpp
     entry_file: my-lib.hpp
 ```
+
+**Note:** Entry files are specified as filenames only in the configuration, but must be physically placed in the immediate root of the appropriate directory (`src/FULL_INCLUDE_PREFIX/` for executables, `include/FULL_INCLUDE_PREFIX/` for libraries) - they cannot be nested in subdirectories within these locations.
 
 ### windows_icon
 
@@ -111,6 +120,7 @@ This configuration:
 output:
   my-exe:
     output_type: Executable
+    # File must be located at: src/FULL_INCLUDE_PREFIX/main.cpp
     entry_file: main.cpp
     windows_icon: icons/Smiley.ico
 ```
@@ -133,6 +143,7 @@ For example, assume the root project contains the directory `shell-files/` and t
 output:
   my-exe:
     output_type: Executable
+    # File must be located at: src/FULL_INCLUDE_PREFIX/main.cpp
     entry_file: main.cpp
     emscripten_html_shell: shell-files/my-awesome-shell-file.html
 ```
@@ -192,6 +203,7 @@ predefined_dependencies:
 output:
   my-headeronly-lib:
     output_type: HeaderOnlyLib
+    # File must be located at: include/FULL_INCLUDE_PREFIX/my-headeronly-lib.hpp
     entry_file: my-headeronly-lib.hpp
     link:
       - fmt::fmt
@@ -212,6 +224,7 @@ output:
     output_type: CompiledLib
     # output_type: StaticLib
     # output_type: SharedLib
+    # File must be located at: include/FULL_INCLUDE_PREFIX/my-compiled-lib.hpp
     entry_file: my-compiled-lib.hpp
     link:
       public:

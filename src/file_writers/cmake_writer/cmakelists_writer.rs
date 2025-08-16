@@ -1052,8 +1052,8 @@ impl<'a> CMakeListsWriter<'a> {
           if entry_file.uses_cpp2_grammar() {
             self.set_code_file_collection(
               "pre_build_entry_dummy_list",
-              Path::new("."),
-              &self.entry_file_root_var,
+              self.project_data.get_src_dir_relative_to_project_root(),
+              &self.src_root_var,
               &self.generated_src_root_var,
               &BTreeSet::from_iter([entry_file]),
               &CodeFileTransformOptions {
@@ -1372,8 +1372,8 @@ impl<'a> CMakeListsWriter<'a> {
 
     self.set_code_file_collection(
       "all_cpp2_files",
-      Path::new("./"),
-      &self.entry_file_root_var,
+      self.project_data.get_src_dir_relative_to_project_root(),
+      &self.src_root_var,
       &self.generated_src_root_var,
       &all_cpp2_source_list,
       &CodeFileTransformOptions {
@@ -1940,15 +1940,23 @@ impl<'a> CMakeListsWriter<'a> {
     // Variables shared between all targets in the current project
     self.set_basic_var("", "PROJECT_INCLUDE_PREFIX", &format!("\"{}\"", self.project_data.get_full_include_prefix()))?;
     self.set_basic_var("", "PROJECT_BASE_NAME", self.project_data.get_project_base_name())?;
-    self.set_basic_var("", &self.entry_file_root_var, "\"${CMAKE_CURRENT_SOURCE_DIR}\"")?;
-    // src_root path always has to be prefixed inside the entry file root for gcmake_copy_mirrored to work
-    // when transforming cppfront (.cpp2) files. Luckily, this is always the case since entry files are
-    // always in the project root.
-    self.set_basic_var("", &self.src_root_var, &format!("\"${{{}}}/{}/${{PROJECT_INCLUDE_PREFIX}}\"", self.entry_file_root_var, SRC_DIR_NAME))?;
+    
+    // Define the base directory variables first
+    self.set_basic_var("", &self.src_root_var, &format!("\"${{CMAKE_CURRENT_SOURCE_DIR}}/{}/${{PROJECT_INCLUDE_PREFIX}}\"", SRC_DIR_NAME))?;
     self.set_basic_var("", &self.generated_src_root_var, &format!("\"${{CMAKE_CURRENT_BINARY_DIR}}/GENERATED_SOURCES\""))?;
     self.set_basic_var("", &self.header_root_var, &format!("\"${{CMAKE_CURRENT_SOURCE_DIR}}/{}/${{PROJECT_INCLUDE_PREFIX}}\"", INCLUDE_DIR_NAME))?;
     self.set_basic_var("", &self.public_include_dir_var, &format!("\"${{CMAKE_CURRENT_SOURCE_DIR}}/{}\"", INCLUDE_DIR_NAME))?;
     self.set_basic_var("", &self.private_include_dir_var, &format!("\"${{CMAKE_CURRENT_SOURCE_DIR}}/{}\"", SRC_DIR_NAME))?;
+
+    // Set ENTRY_ROOT to the appropriate directory based on project type
+    let has_executable_outputs = self.project_data.get_outputs().values()
+      .any(|output| output.is_executable_type());
+    let entry_root_value = if has_executable_outputs {
+      format!("\"${{{}}}\"", &self.src_root_var)
+    } else {
+      format!("\"${{{}}}\"", &self.header_root_var)
+    };
+    self.set_basic_var("", &self.entry_file_root_var, &entry_root_value)?;
 
     self.write_newline()?;
 
@@ -2155,12 +2163,20 @@ impl<'a> CMakeListsWriter<'a> {
 
   fn cmake_absolute_entry_file_path(
     &self,
-    code_file_info: &CodeFileInfo
+    code_file_info: &CodeFileInfo,
+    output_data: &CompiledOutputItem
   ) -> String {
+    // Use the appropriate directory based on output type
+    let (dir_var, file_root_dir) = if output_data.is_executable_type() {
+      (&self.src_root_var, self.project_data.get_src_dir_relative_to_project_root())
+    } else {
+      (&self.header_root_var, self.project_data.get_include_dir_relative_to_project_root())
+    };
+    
     return self.cmake_absolute_code_file_path(
-      Path::new("."),
+      file_root_dir,
       code_file_info,
-      &self.entry_file_root_var,
+      dir_var,
       &self.generated_src_root_var,
       &CodeFileTransformOptions::default()
     )
@@ -3421,7 +3437,7 @@ impl<'a> CMakeListsWriter<'a> {
     self.set_basic_var(
       "",
       &entry_file_varname,
-      &self.cmake_absolute_entry_file_path(output_data.get_entry_file())
+      &self.cmake_absolute_entry_file_path(output_data.get_entry_file(), output_data)
     )?;
 
     writeln!(&self.cmakelists_file,
@@ -3430,12 +3446,20 @@ impl<'a> CMakeListsWriter<'a> {
     )?;
 
     writeln!(&self.cmakelists_file,
-      "gcmake_apply_lib_files( {} {} \"${{{}}}\" {} {} )",
+      "gcmake_apply_lib_files( {} {} \"${{{}}}\" {} {} \"${{{}}}/{}\" )",
       target_name,
       lib_spec_string,
       entry_file_varname,
       src_var_name,
-      includes_var_name
+      includes_var_name,
+      // TODO: Maybe this combination should be handled inside gcmake_apply_lib_files()
+      // instead? For now it doesn't matter. This just ensures the install tree
+      // for the whole project remains uniform for the whole project (including
+      // subprojects). This is possible because we enforce the fact that
+      // subprojects have composite include prefixes on top of the main
+      // project's include prefix.
+      &self.public_include_dir_var,
+      "${TOPLEVEL_INCLUDE_PREFIX}"
     )?;
 
     writeln!(&self.cmakelists_file,
@@ -3499,7 +3523,7 @@ impl<'a> CMakeListsWriter<'a> {
       writeln!(&self.cmakelists_file,
         "add_executable( {} {} )",
         target_name,
-        self.cmake_absolute_entry_file_path(output_data.get_entry_file())
+        self.cmake_absolute_entry_file_path(output_data.get_entry_file(), output_data)
       )?;
     }
     else {
@@ -3570,7 +3594,7 @@ impl<'a> CMakeListsWriter<'a> {
         "gcmake_apply_exe_files( {} {} \n\t{}\n\t{}\n\t{}\n)",
         target_name,
         receiver_lib_name,
-        self.cmake_absolute_entry_file_path(output_data.get_entry_file()),
+        self.cmake_absolute_entry_file_path(output_data.get_entry_file(), output_data),
         src_var_name,
         includes_var_name
       )?;

@@ -149,32 +149,42 @@ For a full explanation, see [output.md](output.md).
 #### Concise executable example
 
 ``` yaml
+# Note: Entry files must be placed in src/FULL_INCLUDE_PREFIX/ for executables
+# but are specified as filenames only in the configuration
 output:
   my-exe:
     type: Executable
+    # File must be located at: src/FULL_INCLUDE_PREFIX/main.cpp
     entry_file: main.cpp
   another-program:
     type: Executable
+    # File must be located at: src/FULL_INCLUDE_PREFIX/a-second-main.cpp
     entry_file: a-second-main.cpp
 ```
 
 #### Concise compiled library example
 
 ``` yaml
+# Note: Entry files must be placed in include/FULL_INCLUDE_PREFIX/ for libraries
+# but are specified as filenames only in the configuration
 output:
   my-compiled-lib:
     type: CompiledLib
     # type: StaticLib
     # type: SharedLib
+    # File must be located at: include/FULL_INCLUDE_PREFIX/my-compiled-lib.hpp
     entry_file: my-compiled-lib.hpp
 ```
 
 #### Concise header-only library example
 
 ``` yaml
+# Note: Entry files must be placed in include/FULL_INCLUDE_PREFIX/ for libraries
+# but are specified as filenames only in the configuration
 output:
   its-header-only:
     type: HeaderOnlyLib
+    # File must be located at: include/FULL_INCLUDE_PREFIX/its-header-only.hpp
     entry_file: its-header-only.hpp
 ```
 
@@ -400,6 +410,7 @@ Example:
 output:
   my-exe:
     output_type: Executable
+    # File must be located at: src/FULL_INCLUDE_PREFIX/main.cpp
     entry_file: main.cpp
     link:
       - SFML::{ system, window, graphics }
@@ -569,6 +580,7 @@ supported_compilers:
 output:
   my-executable:
     output_type: Executable
+    # File must be located at: src/FULL_INCLUDE_PREFIX/main.cpp
     entry_file: main.cpp
 
 build_config:

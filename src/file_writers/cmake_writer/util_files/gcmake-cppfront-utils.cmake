@@ -1,7 +1,7 @@
 function( gcmake_transform_cppfront_files
   cpp2_file_list_var
 )
-  set( generated_files_initial_prefix "${${PROJECT_BASE_NAME}_ENTRY_ROOT}")
+  set( generated_files_initial_prefix "${CMAKE_CURRENT_SOURCE_DIR}")
   set( generated_files_dir "${${PROJECT_BASE_NAME}_GENERATED_SOURCE_ROOT}" )
 
   foreach( file_transforming_in IN LISTS ${cpp2_file_list_var} )

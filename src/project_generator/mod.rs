@@ -166,6 +166,16 @@ pub fn create_project_at(
     }
 
     let mut main_file_path = project_root.to_owned();
+    match &output_type_selection {
+      CreationProjectOutputType::Executable => {
+        main_file_path.push(SRC_DIR_NAME);
+        main_file_path.push(&folder_generation_include_prefix);
+      },
+      CreationProjectOutputType::Library(_) => {
+        main_file_path.push(INCLUDE_DIR_NAME);
+        main_file_path.push(&folder_generation_include_prefix);
+      }
+    }
     main_file_path.push(main_file_name(project_name, &lang_selection, &output_type_selection));
 
     match &project_type_creating {

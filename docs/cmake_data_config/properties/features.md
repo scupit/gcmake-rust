@@ -100,11 +100,13 @@ global_defines:
 output:
   (( feature:all-exes )) additional-exe:
     output_type: Executable
+    # File must be located at: src/FULL_INCLUDE_PREFIX/additional-main.cpp
     entry_file: additional-main.cpp
     link:
       - (( feature:use-fmt )) fmt::fmt
   display-tables:
     output_type: Executable
+    # File must be located at: src/FULL_INCLUDE_PREFIX/main.cpp
     entry_file: main.cpp
     link:
       - (( feature:fancy-printing )) my-tui-lib::my-tui-lib

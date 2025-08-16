@@ -498,17 +498,69 @@ impl CompiledOutputItem {
     }
   }
 
+  fn resolve_entry_file_path(
+    entry_file: &str,
+    output_type: &OutputItemType,
+    src_dir_relative_to_project_root: &std::path::Path,
+    include_dir_relative_to_project_root: &std::path::Path
+  ) -> Result<String, String> {
+    // Check if the entry file contains directory separators
+    if entry_file.contains('/') || entry_file.contains('\\') {
+      return Err(format!(
+        "Entry file '{}' must be specified as just a filename, not a full path. \
+        The directory will be automatically determined based on the output type:\n\
+        - For executables: files go in src/{{FULL_INCLUDE_PREFIX}}/\n\
+        - For libraries: files go in include/{{FULL_INCLUDE_PREFIX}}/\n\
+        Please specify only the filename (e.g., 'main.cpp' or 'mylib.hpp')",
+        entry_file
+      ));
+    }
+    
+    // Resolve the full path based on output type
+    let resolved_path = match output_type {
+      OutputItemType::Executable => {
+        // Executables go in src/FULL_INCLUDE_PREFIX/
+        src_dir_relative_to_project_root.join(entry_file)
+      },
+      OutputItemType::CompiledLib
+        | OutputItemType::StaticLib
+        | OutputItemType::SharedLib
+        | OutputItemType::HeaderOnlyLib => {
+        // Libraries go in include/FULL_INCLUDE_PREFIX/
+        include_dir_relative_to_project_root.join(entry_file)
+      }
+    };
+    
+    Ok(resolved_path.to_string_lossy().to_string())
+  }
+
   // root_directory must be absolute.
   pub fn make_from(
     output_name: &str,
     raw_output_item: &RawCompiledItem,
     maybe_system_specifier: Option<SystemSpecifierWrapper>,
-    valid_feature_list: Option<&Vec<&str>>
+    valid_feature_list: Option<&Vec<&str>>,
+    src_dir_relative_to_project_root: &std::path::Path,
+    include_dir_relative_to_project_root: &std::path::Path,
+    is_prebuild_script: bool
   ) -> Result<CompiledOutputItem, String> {
+    // Resolve entry file path based on output type (skip for pre-build scripts as they're already resolved)
+    let resolved_entry_file_path = if is_prebuild_script {
+      // Pre-build scripts already have their entry file path resolved correctly
+      raw_output_item.entry_file.clone()
+    } else {
+      // Regular outputs need path resolution from filename to full path
+      Self::resolve_entry_file_path(
+        &raw_output_item.entry_file,
+        &raw_output_item.output_type,
+        src_dir_relative_to_project_root,
+        include_dir_relative_to_project_root
+      )?
+    };
+
     let mut final_output_item = CompiledOutputItem {
       output_type: raw_output_item.output_type,
-      // TODO: Constrain entry file to only the project root
-      entry_file: CodeFileInfo::from_path(&raw_output_item.entry_file, false),
+      entry_file: CodeFileInfo::from_path(&resolved_entry_file_path, false),
       links: OutputItemLinks::new_empty(),
       language_features: OutputItemLinks::new_empty(),
       system_specifier: maybe_system_specifier.unwrap_or_default(),

@@ -59,6 +59,7 @@ predefined_dependencies:
 output:
   my-exe:
     output_type: Executable
+    # File must be located at: src/FULL_INCLUDE_PREFIX/main.cpp
     entry_file: main.cpp
     link:
       # Only link the fmt library if the fancy-printing feature is enabled.
@@ -99,6 +100,7 @@ global_defines:
 output:
   my-exe:
     output_type: Executable
+    # File must be located at: src/FULL_INCLUDE_PREFIX/main.cpp
     entry_file: main.cpp
 ```
 
@@ -272,6 +274,7 @@ predefined_dependencies:
 output:
   my-exe:
     output_type: Executable
+    # File must be located at: src/FULL_INCLUDE_PREFIX/main.cpp
     entry_file: main.cpp
     link:
       - SFML::{ system, ((windows)) main }

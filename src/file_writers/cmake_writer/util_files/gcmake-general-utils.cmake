@@ -155,19 +155,17 @@ function( gcmake_apply_exe_files
   endif()
 endfunction()
 
-function( get_entry_file_alias_dir
-  out_var
-)
-  set( ${out_var} "${CMAKE_BINARY_DIR}/aliased_entry_files/include" PARENT_SCOPE )
-endfunction()
-
 function( gcmake_apply_lib_files
   lib_target
   lib_type_spec
   entry_file
   source_list_var
   header_list_var
+  given_relative_toplevel_include_dir
 )
+  # given_relative_toplevel_include_dir: Base include directory with toplevel prefix
+  # (e.g., "${PROJECT_INCLUDE_DIR}/${TOPLEVEL_INCLUDE_PREFIX}")
+  # Used for FILE_SET HEADERS BASE_DIRS to ensure proper project namespacing
   set( _valid_lib_type_specs "COMPILED_LIB" "HEADER_ONLY_LIB" )
   if( NOT lib_type_spec IN_LIST _valid_lib_type_specs )
     message( FATAL_ERROR "Invalid lib type spec '${lib_type_spec}' given to gcmake_apply_lib_files(...)" )
@@ -187,26 +185,6 @@ function( gcmake_apply_lib_files
     endif()
   endif()
 
-  cmake_path( GET entry_file FILENAME entry_file_name )
-
-  # Want to make sure entry files can be included with "TOPLEVEL_INCLUDE_PREFIX/entry_file_name.extension"
-  # Both when building and after installation in order to eliminate possible include issues.
-  get_entry_file_alias_dir( entry_file_alias_dir )
-  set( full_entry_file_alias_dir "${entry_file_alias_dir}/${TOPLEVEL_INCLUDE_PREFIX}")
-  set( aliased_entry_file_path "${full_entry_file_alias_dir}/${entry_file_name}" )
-
-  # I can't make this a PRE_BUILD command for the target because the target might be a
-  # header-only library, and INTERFACE libraries can't have any associated build event
-  # commands. It's annoying, but makes sense since they aren't actually ever built.
-  add_custom_target( _${lib_target}_alias_file ALL
-    COMMAND ${CMAKE_COMMAND} -E make_directory "${full_entry_file_alias_dir}"
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different "${entry_file}" "${full_entry_file_alias_dir}"
-    DEPENDS "${entry_file}"
-    VERBATIM
-  )
-
-  add_dependencies( ${lib_target} _${lib_target}_alias_file )
-
   if( "${lib_type_spec}" STREQUAL "HEADER_ONLY_LIB" )
     set( header_inheritance_mode INTERFACE )
   else()
@@ -221,6 +199,13 @@ function( gcmake_apply_lib_files
 
   target_sources( ${lib_target} ${header_inheritance_mode}
     FILE_SET HEADERS
+      BASE_DIRS
+        # Don't use generator expressions here. BASE_DIRS only refers to the
+        # directory in the build tree. The install tree is handled automatically
+        # by the CMake install architecture. BASE_DIRS just sets the uppermost
+        # directory CMake uses when building the folder structure in the
+        # install tree.
+        ${given_relative_toplevel_include_dir}
       FILES
         ${all_headers_install}
         # The "build interface" headers don't need to be specified at all for the build
@@ -239,8 +224,7 @@ function( gcmake_apply_include_dirs
   project_src_dir
 )
   if( "${target_type}" STREQUAL "COMPILED_LIB" OR "${target_type}" STREQUAL "HEADER_ONLY_LIB" )
-    get_entry_file_alias_dir( entry_file_alias_dir )
-    set( BUILD_INTERFACE_INCLUDE_DIRS "${entry_file_alias_dir}" "${project_include_dir}")
+    set( BUILD_INTERFACE_INCLUDE_DIRS "${project_include_dir}")
   elseif( "${target_type}" STREQUAL "EXE_RECEIVER" OR "${target_type}")
     set( BUILD_INTERFACE_INCLUDE_DIRS "${project_include_dir}")
   else()
@@ -265,7 +249,6 @@ function( gcmake_apply_include_dirs
   target_include_directories( ${target}
     ${include_dir_inheritance_mode}
       "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>"
-      "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/${TOPLEVEL_INCLUDE_PREFIX}/include>"
       # Some libraries (like SFML 2.6.x) hardcode the include dir installation path to 'include/'.
       # This is fixed in SFML's master branch, but most people are going to want a stable branch.
       # This allows targets to access include files for libraries which hardcode their installation dir.

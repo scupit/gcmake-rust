@@ -28,3 +28,10 @@ subproject would use the directories:
 - src/PARENT_PREFIX/SUB_PREFIX/
 - include/PARENT_PREFIX/SUB_PREFIX/
 - resources/PARENT_PREFIX/SUB_PREFIX/
+
+**Entry File Placement**: Entry files for subprojects must also follow the accumulated include prefix structure:
+
+- Executable entry files must be placed in the immediate root of `src/PARENT_PREFIX/SUB_PREFIX/`
+- Library entry files must be placed in the immediate root of `include/PARENT_PREFIX/SUB_PREFIX/`
+
+**Important:** In the `cmake_data.yaml` configuration, entry files are specified as **filenames only** (e.g., `entry_file: main.cpp`), not full paths. The system automatically resolves these filenames to the correct directories based on the output type and the subproject's accumulated include prefix.

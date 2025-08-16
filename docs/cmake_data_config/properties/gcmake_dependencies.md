@@ -33,6 +33,7 @@ Minimal Example:
 output:
   my-exe:
     output_type: Executable
+    # File must be located at: src/FULL_INCLUDE_PREFIX/main.cpp
     entry_file: main.cpp
     link:
       # my-project must contain both first-lib and second-lib libraries
@@ -50,6 +51,7 @@ Full Example:
 output:
   my-exe:
     output_type: Executable
+    # File must be located at: src/FULL_INCLUDE_PREFIX/main.cpp
     entry_file: main.cpp
     link:
       # Assumes my-project 

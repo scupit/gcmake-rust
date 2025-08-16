@@ -36,7 +36,8 @@ pub fn populate_project_files<F>(
   used_dir: &Path,
   current_dir_checking: &Path,
   file_list: &mut BTreeSet<CodeFileInfo>,
-  filter_func: &F
+  filter_func: &F,
+  excluded_files: &BTreeSet<String>
 ) -> io::Result<()>
   where F: Fn(&Path) -> bool
 {
@@ -45,18 +46,21 @@ pub fn populate_project_files<F>(
       let path: PathBuf = dirent?.path();
 
       if path.is_dir() {
-        populate_project_files(project_root_dir, used_dir, &path, file_list, filter_func)?;
+        populate_project_files(project_root_dir, used_dir, &path, file_list, filter_func, excluded_files)?;
       }
       else if path.is_file() && filter_func(path.as_path()) {
         if current_dir_checking.starts_with(used_dir) {
-          let file_info: CodeFileInfo = CodeFileInfo::from_path(
-            file_relative_to_dir(project_root_dir, path.as_path()),
-            false
-          );
+          let relative_path = file_relative_to_dir(project_root_dir, path.as_path());
+          let relative_path_str = relative_path.to_str().unwrap_or("");
+          
+          // Skip files that are in the exclusion set
+          if !excluded_files.contains(relative_path_str) {
+            let file_info: CodeFileInfo = CodeFileInfo::from_path(relative_path, false);
 
-          // Rust sets don't overwrite existing values. Since generated files are always added to
-          // file sets first, we don't ever overwrite the generated files.
-          file_list.insert(file_info);
+            // Rust sets don't overwrite existing values. Since generated files are always added to
+            // file sets first, we don't ever overwrite the generated files.
+            file_list.insert(file_info);
+          }
         }
         else {
           logger::warn(format!(
@@ -101,7 +105,8 @@ fn resolve_prebuild_script(
   project_root: &Path,
   pre_build_config: &PreBuildConfigIn,
   valid_feature_list: Option<&Vec<&str>>,
-  file_root_group: &FileRootGroup
+  file_root_group: &FileRootGroup,
+  project_paths: &ProjectPaths
 ) -> Result<Option<PreBuildScript>, String> {
   let mut generated_file_set: BTreeSet<CodeFileInfo> = BTreeSet::new();
 
@@ -169,7 +174,10 @@ fn resolve_prebuild_script(
             "Pre-build script",
             &raw_output_item,
             None,
-            valid_feature_list
+            valid_feature_list,
+            &project_paths.src_dir_relative_to_project_root,
+            &project_paths.include_dir_relative_to_project_root,
+            true // This is a pre-build script
           )?)        
         }));
       },
@@ -499,7 +507,8 @@ impl FinalProjectData {
         language_features: None
       }),
       referenced_feature_list(valid_feature_list.as_ref()).as_ref(),
-      &file_root_group
+      &file_root_group,
+      &project_paths
     ).map_err(ProjectLoadFailureReason::Other)?;
 
     let maybe_version: Option<ThreePartVersion> = ThreePartVersion::from_str(initial_project_data.raw_project.get_version());
@@ -561,6 +570,7 @@ impl FinalProjectData {
       output: obtain_output_items(
         valid_feature_list.as_ref(),
         &mut initial_project_data,
+        &project_paths,
       )?,
       predefined_dependencies: obtain_predefined_dependencies(
         valid_feature_list.as_ref(),
@@ -639,6 +649,12 @@ impl FinalProjectData {
 
     let usable_project_root = PathBuf::from(finalized_project_data.get_project_root_relative_to_cwd());
 
+    // Collect entry file paths to exclude from auto-discovery
+    let mut excluded_entry_files: BTreeSet<String> = BTreeSet::new();
+    for output_item in finalized_project_data.output.values() {
+      excluded_entry_files.insert(output_item.get_entry_file().get_file_path().to_string_lossy().to_string());
+    }
+
     populate_project_files(
       usable_project_root.as_path(),
       PathBuf::from(finalized_project_data.get_src_dir_relative_to_cwd()).as_path(),
@@ -647,7 +663,8 @@ impl FinalProjectData {
       &|file_path| match code_file_type(file_path) {
         RetrievedCodeFileType::Source { .. } => true,
         _ => false
-      }
+      },
+      &excluded_entry_files
     )
       .map_err(|err| ProjectLoadFailureReason::Other(err.to_string()))?;
 
@@ -660,7 +677,8 @@ impl FinalProjectData {
         RetrievedCodeFileType::Header(_)
           | RetrievedCodeFileType::TemplateImpl => true,
         _ => false
-      }
+      },
+      &excluded_entry_files
     )
       .map_err(|err| ProjectLoadFailureReason::Other(err.to_string()))?;
 
@@ -672,7 +690,8 @@ impl FinalProjectData {
       &|file_path| match code_file_type(file_path) {
         RetrievedCodeFileType::Header(_) => true,
         _ => false
-      }
+      },
+      &excluded_entry_files
     )
       .map_err(|err| ProjectLoadFailureReason::Other(err.to_string()))?;
 
@@ -684,7 +703,8 @@ impl FinalProjectData {
       &|file_path| match code_file_type(file_path) {
         RetrievedCodeFileType::TemplateImpl => true,
         _ => false
-      }
+      },
+      &excluded_entry_files
     )
       .map_err(|err| ProjectLoadFailureReason::Other(err.to_string()))?;
 
@@ -1399,7 +1419,8 @@ impl FinalProjectData {
   fn validate_entry_file_path(
     &self,
     item_name: &str,
-    output_item: &CompiledOutputItem
+    output_item: &CompiledOutputItem,
+    is_prebuild_script: bool
   ) -> Result<(), String> {
     let absolute_entry_file_path: PathBuf = absolute_path(
       Path::new(self.get_project_root_relative_to_cwd())
@@ -1407,25 +1428,33 @@ impl FinalProjectData {
     )?;
     let entry_file_directory: &Path = absolute_entry_file_path.parent().unwrap();
 
-    if entry_file_directory != self.get_absolute_project_root() {
-      let is_in_subdirectory_of_root: bool = entry_file_directory.starts_with(self.get_absolute_project_root());
+    // Determine expected directory based on output type
+    let (expected_directory, expected_dir_description) = if is_prebuild_script {
+      // Pre-build scripts must be in the project root directory
+      let expected_dir = absolute_path(self.get_project_root_relative_to_cwd())?;
+      let description = "project root".to_string();
+      (expected_dir, description)
+    } else if output_item.is_executable_type() {
+      // Regular executables must be in src/FULL_INCLUDE_PREFIX/
+      let expected_dir = absolute_path(self.get_src_dir_relative_to_cwd())?;
+      let description = format!("src/{}/", self.get_full_include_prefix());
+      (expected_dir, description)
+    } else {
+      // Libraries must be in include/FULL_INCLUDE_PREFIX/
+      let expected_dir = absolute_path(self.get_include_dir_relative_to_cwd())?;
+      let description = format!("include/{}/", self.get_full_include_prefix());
+      (expected_dir, description)
+    };
 
-      if is_in_subdirectory_of_root {
-        return Err(format!(
-          "The entry_file \"{}\" for {} is in a subdirectory of its project root \"{}\". Entry files can only be placed in the immediate root directory of the project which contains them.",
-          absolute_entry_file_path.to_str().unwrap().magenta(),
-          item_name.yellow(),
-          self.get_absolute_project_root().to_str().unwrap().magenta()
-        ));
-      }
-      else {
-        return Err(format!(
-          "The entry_file \"{}\" for {} is not in the project's root directory \"{}\". Entry files can only be placed in the immediate root directory of the project which contains them.",
-          absolute_entry_file_path.to_str().unwrap().magenta(),
-          item_name.yellow(),
-          self.get_absolute_project_root().to_str().unwrap().magenta()
-        ));
-      }
+    if entry_file_directory != expected_directory {
+      return Err(format!(
+        "The entry_file \"{}\" for {} is not in the correct directory. Entry files must be placed in the immediate root of '{}'. Expected file at: \"{}/{}\"",
+        absolute_entry_file_path.to_str().unwrap().magenta(),
+        item_name.yellow(),
+        expected_dir_description.magenta(),
+        expected_directory.to_str().unwrap(),
+        absolute_entry_file_path.file_name().unwrap().to_str().unwrap().magenta()
+      ));
     }
     else if !absolute_entry_file_path.exists() {
       let without_filename: &str = absolute_entry_file_path.parent().unwrap().to_str().unwrap();
@@ -1447,10 +1476,10 @@ impl FinalProjectData {
     &self,
     item_name: &str,
     output_item: &CompiledOutputItem,
-    _is_prebuild_script: bool
+    is_prebuild_script: bool
   ) -> Result<(), String> {
     self.validate_entry_file_type(item_name, output_item)?;
-    self.validate_entry_file_path(item_name, output_item)?;
+    self.validate_entry_file_path(item_name, output_item, is_prebuild_script)?;
 
     self.validate_output_specific_build_config(
       item_name,
@@ -2324,6 +2353,7 @@ fn obtain_gcmake_dep_projects(
 fn obtain_output_items(
   valid_feature_list: Option<&Vec<String>>,
   initial_project_data: &mut InitialProjectData,
+  project_paths: &ProjectPaths,
 ) -> Result<OutputItemMap, ProjectLoadFailureReason> {
   let mut output_item_map = OutputItemMap::new();
 
@@ -2375,7 +2405,10 @@ fn obtain_output_items(
         actual_output_name,
         raw_output_item,
         system_spec,
-        referenced_feature_list(valid_feature_list).as_ref()
+        referenced_feature_list(valid_feature_list).as_ref(),
+        &project_paths.src_dir_relative_to_project_root,
+        &project_paths.include_dir_relative_to_project_root,
+        false // Not a pre-build script
       )
         .map_err(|err_message| ProjectLoadFailureReason::Other(
           format!("When creating output item named '{}':\n{}", output_name, err_message)

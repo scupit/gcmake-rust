@@ -23,6 +23,7 @@ There are a whole bunch of things which need doing. This is the place to list th
   step towards that.
 - [ ] Rename `predefined_dependencies` to something more intuitive. These dependencies are not gcmake
   projects, but can be configured to work with gcmake by providing a 'yaml dependency glue' config.
+- [ ] Look into the `CODEGEN` targets added in [CMake 3.31](https://cmake.org/cmake/help/v3.31/release/3.31.html)
 
 ## Configuration TODO
 

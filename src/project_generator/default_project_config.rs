@@ -366,6 +366,9 @@ pub fn get_default_project_config(
     _ => false
   };
 
+  // Entry file is now specified as just the filename - the directory is determined automatically
+  let entry_file_name: String = main_file_name(project_name, &project_lang, &project_output_type);
+
   RawProject {
     name: project_name.to_string(),
     include_prefix: include_prefix.to_string(),
@@ -380,7 +383,7 @@ pub fn get_default_project_config(
     languages: language_config(&config_options, requires_cppfront),
     output: HashMap::from_iter([
       (format!("{}", project_name), RawCompiledItem {
-        entry_file: String::from(main_file_name(project_name, &project_lang, &project_output_type)),
+        entry_file: entry_file_name,
         output_type: match project_output_type {
           CreationProjectOutputType::Executable => OutputItemType::Executable,
           CreationProjectOutputType::Library(lib_type) => match lib_type {

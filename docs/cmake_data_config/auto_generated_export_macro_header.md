@@ -30,6 +30,7 @@ include_prefix: MY_PREFIX
 output:
   my-lib:
     output_type: CompiledLib
+    # File must be located at: include/FULL_INCLUDE_PREFIX/my-lib.hpp
     entry_file: my-lib.hpp
 ```
 

@@ -17,6 +17,22 @@
 | `docs/` | Documentation configuration files such as *Doxyfile.in*, *conf.py.in*, and *index.rst* go in this directory. When the project is [configured to use a documentation generator](documenting_your_project.md#configuration), this directory is searched for any configuration files. |
 | `cmake/` | **AUTO-CONFIGURED:** The directory which contains GCMake's CMake utility scripts. This is auto-generated every time GCMake configures the project. This should be committed in your source control. |
 
+### Entry File Placement
+
+Entry files (the single "entrypoint" for each output) must be placed in specific locations based on the output type:
+
+- **Executable entry files** must be placed in the immediate root of `src/FULL_INCLUDE_PREFIX/`
+- **Library entry files** must be placed in the immediate root of `include/FULL_INCLUDE_PREFIX/`
+
+For example, in a project with `include_prefix: "MyProject"`:
+
+- An executable's `main.cpp` must be at `src/MyProject/main.cpp`
+- A library's `my-lib.hpp` must be at `include/MyProject/my-lib.hpp`
+
+**Important:** In the `cmake_data.yaml` configuration, entry files are specified as **filenames only** (e.g., `entry_file: main.cpp`), not full paths. The system automatically resolves these filenames to the correct directories based on the output type.
+
+Entry files cannot be nested in subdirectories within these locations.
+
 | File | Description |
 | ---- | ----------- |
 | `cmake_data.yaml` | This is the [GCMake configuration file](cmake_data_config/cmake_data.md). |
