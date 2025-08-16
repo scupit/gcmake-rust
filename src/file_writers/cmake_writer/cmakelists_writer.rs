@@ -505,7 +505,9 @@ impl<'a> CMakeListsWriter<'a> {
       // 3.25:
       //    - FetchContent_Declare uses SYSTEM argument so that compiler warnings are turned off for dependencies.
       //    - LINUX and CMAKE_HOST_LINUX variables
-      writeln!(&self.cmakelists_file, "cmake_minimum_required( VERSION 3.25 )")?;
+      // 3.30: A version of FetchContent_Populate CPM used to use is deprecated.
+      // 4.0: Update to latest major version.
+      writeln!(&self.cmakelists_file, "cmake_minimum_required( VERSION 4.0 )")?;
     }
 
     let file_stats = self.project_data.get_code_file_stats();
