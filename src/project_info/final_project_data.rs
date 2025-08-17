@@ -2,7 +2,7 @@ use std::{collections::{HashMap, HashSet, BTreeMap, BTreeSet}, path::{Path, Path
 
 use crate::{project_info::path_manipulation::cleaned_pathbuf, logger, program_actions::gcmake_dep_cache_dir, common::base64_encoded};
 
-use super::{path_manipulation::{cleaned_path_str, file_relative_to_dir, absolute_path}, final_dependencies::{FinalGCMakeDependency, FinalPredefinedDependencyConfig, relative_hash_file_path}, raw_data_in::{dependencies::RawPredefinedDependencyMap, BuildConfigCompilerSpecifier, BuildType, DefaultCompiledLibType, LanguageConfigMap, LanguageFeatureSection, LinkSection, OutputItemType, PreBuildConfigIn, RawCompiledItem, RawDocGeneratorName, RawDocumentationGeneratorConfig, RawProject, RawTestFramework, SpecificCompilerSpecifier, TargetSpecificBuildType}, final_project_configurables::FinalProjectType, CompiledOutputItem, helpers::{parse_subproject_data, parse_root_project_data, find_prebuild_script, PrebuildScriptFile, validate_raw_project_outputs, ProjectOutputType, RetrievedCodeFileType, code_file_type, parse_test_project_data, find_doxyfile_in, validate_doxyfile_in, SphinxConfigFiles, find_sphinx_files, validate_conf_py_in}, PreBuildScript, FinalTestFramework, base_include_prefix_for_test, gcmake_constants::{SRC_DIR_NAME, INCLUDE_DIR_NAME, TESTS_DIR_NAME, SUBPROJECTS_DIR_NAME, DOCS_DIR_NAME}, FinalInstallerConfig, CompilerDefine, FinalBuildConfigMap, make_final_build_config_map, FinalTargetBuildConfigMap, FinalGlobalProperties, FinalShortcutConfig, parsers::{version_parser::ThreePartVersion, general_parser::ParseSuccess}, platform_spec_parser::parse_leading_constraint_spec, SystemSpecifierWrapper, FinalFeatureConfig, FinalFeatureEnabler, CodeFileInfo, FileRootGroup, PreBuildScriptType, FinalDocGeneratorName, FinalDocumentationInfo, CodeFileLang, GivenConstraintSpecParseContext};
+use super::{path_manipulation::{cleaned_path_str, file_relative_to_dir, absolute_path, unix_style}, final_dependencies::{FinalGCMakeDependency, FinalPredefinedDependencyConfig, relative_hash_file_path}, raw_data_in::{dependencies::RawPredefinedDependencyMap, BuildConfigCompilerSpecifier, BuildType, DefaultCompiledLibType, LanguageConfigMap, LanguageFeatureSection, LinkSection, OutputItemType, PreBuildConfigIn, RawCompiledItem, RawDocGeneratorName, RawDocumentationGeneratorConfig, RawProject, RawTestFramework, SpecificCompilerSpecifier, TargetSpecificBuildType}, final_project_configurables::FinalProjectType, CompiledOutputItem, helpers::{parse_subproject_data, parse_root_project_data, find_prebuild_script, PrebuildScriptFile, validate_raw_project_outputs, ProjectOutputType, RetrievedCodeFileType, code_file_type, parse_test_project_data, find_doxyfile_in, validate_doxyfile_in, SphinxConfigFiles, find_sphinx_files, validate_conf_py_in}, PreBuildScript, FinalTestFramework, base_include_prefix_for_test, gcmake_constants::{SRC_DIR_NAME, INCLUDE_DIR_NAME, TESTS_DIR_NAME, SUBPROJECTS_DIR_NAME, DOCS_DIR_NAME, ASSETS_DIR_NAME}, FinalInstallerConfig, CompilerDefine, FinalBuildConfigMap, make_final_build_config_map, FinalTargetBuildConfigMap, FinalGlobalProperties, FinalShortcutConfig, parsers::{version_parser::ThreePartVersion, general_parser::ParseSuccess}, platform_spec_parser::parse_leading_constraint_spec, SystemSpecifierWrapper, FinalFeatureConfig, FinalFeatureEnabler, CodeFileInfo, FileRootGroup, PreBuildScriptType, FinalDocGeneratorName, FinalDocumentationInfo, CodeFileLang, GivenConstraintSpecParseContext};
 use colored::*;
 
 const SUBPROJECT_JOIN_STR: &'static str = "_S_";
@@ -1035,6 +1035,68 @@ impl FinalProjectData {
     Ok(())
   }
 
+  fn has_misplaced_assets(&self) -> Result<bool, String> {
+    let resources_dir = Path::new(self.get_project_root_relative_to_cwd()).join(ASSETS_DIR_NAME);
+    
+    // Only check if resources directory exists
+    if !resources_dir.exists() || !resources_dir.is_dir() {
+      return Ok(false);
+    }
+
+    let prefix_parts: Vec<&str> = self.get_full_include_prefix().split('/').collect();
+
+    // Check each level of the prefix path for misplaced assets
+    let mut current_dir = resources_dir.clone();
+    
+    for expected_part in prefix_parts.iter() {
+      match fs::read_dir(&current_dir) {
+        Err(e) => {
+          return Err(format!(
+            "Failed to read directory {}: {}",
+            current_dir.display(),
+            e
+          ));
+        },
+        Ok(entries) => {
+          for entry in entries {
+            if let Ok(entry) = entry {
+              let entry_name = entry.file_name();
+              let entry_name_str = entry_name.to_string_lossy();
+
+              // Make sure we allow the expected directory path.
+              if entry_name_str != *expected_part {
+                return Ok(true);
+              }
+            }
+          }
+        }
+      }
+      
+      current_dir = current_dir.join(expected_part);
+      if !current_dir.exists() || !current_dir.is_dir() {
+        return Ok(false);
+      }
+    }
+
+    return Ok(false);
+  }
+
+     fn validate_resource_directory_structure(&self) -> Result<(), String> {
+     if self.has_misplaced_assets()? {
+       let intended_resource_dir = self.get_project_root_relative_to_cwd()
+         .join(ASSETS_DIR_NAME)
+         .join(self.get_full_include_prefix());
+       
+       logger::warn(format!(
+         "Project [{}]: All assets you want to be copied to the build should be placed directly in `{}`. You currently have assets outside of this folder. This is not an error - just know they won't be copied.",
+         self.get_name_for_error_messages().purple(),
+         unix_style(&intended_resource_dir)
+       ));
+     }
+
+     return Ok(());
+   }
+
   fn validate_correctness(&self, project_load_context: &FinalProjectLoadContext) -> Result<(), String> {
     if self.get_project_base_name().contains(' ') {
       return Err(format!(
@@ -1095,6 +1157,7 @@ impl FinalProjectData {
     }
 
     self.validate_installer_config()?;
+    self.validate_resource_directory_structure()?;
 
     Ok(())
   }

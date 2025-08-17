@@ -24,6 +24,8 @@ configuration work together.
 
 - ["Include prefix" accumulation](cmake_data_config/subproject_config.md#include-prefix-accumulation):
   How project hierarchy affects each subproject's file inclusion prefix.
+- [Resource directory structure](project_structure.md#resource-directory-structure):
+  Required prefixed directory structure for assets and validation behavior.
 - [Output item rules and constraints](cmake_data_config/properties/output.md#general-output-rules):
   Rules dictating output type and quantity per project instance.
 - [Configuration data formats](cmake_data_config/data_formats.md)

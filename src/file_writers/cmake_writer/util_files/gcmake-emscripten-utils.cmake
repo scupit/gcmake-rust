@@ -33,11 +33,12 @@ endif()
 function( apply_emscripten_specifics
   preload_flags_receiver
   actual_target
+  relative_resource_dir
 )
   if( USING_EMSCRIPTEN )
     set( target_file_base "${MY_RUNTIME_OUTPUT_DIR}/${actual_target}" )
 
-    file( GLOB_RECURSE all_resource_file_paths CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/resources/**" )
+    file( GLOB_RECURSE all_resource_file_paths CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/${relative_resource_dir}/**" )
     list( LENGTH all_resource_file_paths all_resources_count )
 
     if( all_resources_count GREATER 0 )
@@ -51,7 +52,16 @@ function( apply_emscripten_specifics
         set( resource_inheritance_mode PUBLIC )
       endif()
 
-      target_link_options( ${preload_flags_receiver} ${resource_inheritance_mode} --preload-file "${CMAKE_CURRENT_SOURCE_DIR}/resources@/resources/" )
+      # Emscripten file preloading: Package files into the virtual filesystem at runtime
+      # - Uses SHELL: prefix to prevent CMake's option de-duplication from breaking up the --preload-file argument
+      #   (see https://cmake.org/cmake/help/latest/command/target_link_options.html#option-de-duplication)
+      # - The @ symbol maps source paths to virtual filesystem paths (like Docker volume mounting)
+      # - Format: source_path@virtual_path where:
+      #   * source_path: Physical files to package (${CMAKE_CURRENT_SOURCE_DIR}/${relative_resource_dir})
+      #   * virtual_path: Where files appear in Emscripten's virtual filesystem (/${relative_resource_dir}/)
+      # - This preserves the prefixed directory structure inside the virtual filesystem to prevent asset conflicts
+      # - Files are packaged into a .data file and loaded automatically when the WebAssembly module starts
+      target_link_options( ${preload_flags_receiver} ${resource_inheritance_mode} "SHELL:--preload-file ${CMAKE_CURRENT_SOURCE_DIR}/${relative_resource_dir}@/${relative_resource_dir}/" )
 
       set( hook_file_dir "${CMAKE_BINARY_DIR}/pre-js-hooks" )
       file( MAKE_DIRECTORY "${hook_file_dir}" )

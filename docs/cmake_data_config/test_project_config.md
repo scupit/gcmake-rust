@@ -41,6 +41,8 @@ test project would use the directories:
 - include/PARENT_PREFIX/TEST/MY_TEST_PREFIX/
 - resources/PARENT_PREFIX/TEST/MY_TEST_PREFIX/
 
+**Resource Directory Enforcement**: Assets must be placed in the properly prefixed `resources/PARENT_PREFIX/TEST/MY_TEST_PREFIX/` directory in order to be copied to the build. GCMake will warn if assets are found outside this directory, but won't copy them to the build.
+
 ## Running the Tests
 
 Use CMake to configure the project build and ensure the project's tests are enabled. Build the project,

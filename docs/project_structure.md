@@ -11,7 +11,7 @@
 | --------- | ----------- |
 | `src/FULL_INCLUDE_PREFIX/` | Project source files (*.c*, *.cpp*) and private headers/template-implementations (*.private.h*, *.private.hpp*, *.private.tpp*) go here. The files will be recursively found and added to the build. |
 | `include/FULL_INCLUDE_PREFIX/` | Project header files (*.h*, *.hpp*) and template implementation files (*.tpp*, *.inl*) go here. The files will be recursively found and added to the build. |
-| `resources/FULL_INCLUDE_PREFIX/` | Any assets needed by the project at runtime go here. The `resources/` directory recursively copied into the build directory at build time, and is also fully installed as part of the installation tree. |
+| `resources/FULL_INCLUDE_PREFIX/` | **REQUIRED:** Any assets needed by the project at runtime go here. Assets **must** be placed in the properly prefixed directory to be copied to the build. The system will warn if assets are found outside this directory, but will not prevent the build from succeeding. This is to allow "work-in-progress" assets to be placed in the regular *resources/* directory without breaking the build. |
 | `subprojects/` | Subprojects go in this directory. Each subproject in this directory is automatically found and configured by GCMake as a subproject. Instead of creating these by hand, use `gcmake-rust new subproject 'your-subproject-name'` |
 | `tests/` | Test projects go in this directory. Each test project in this directory is automatically found and configured by GCMake. Instead of creating these by hand, use `gcmake-rust new test 'your-test-name'` |
 | `docs/` | Documentation configuration files such as *Doxyfile.in*, *conf.py.in*, and *index.rst* go in this directory. When the project is [configured to use a documentation generator](documenting_your_project.md#configuration), this directory is searched for any configuration files. |
@@ -32,6 +32,36 @@ For example, in a project with `include_prefix: "MyProject"`:
 **Important:** In the `cmake_data.yaml` configuration, entry files are specified as **filenames only** (e.g., `entry_file: main.cpp`), not full paths. The system automatically resolves these filenames to the correct directories based on the output type.
 
 Entry files cannot be nested in subdirectories within these locations.
+
+### Resource Directory Structure
+
+**Important:** The resource directory structure follows the same "include prefix" requirements as src/ and include/. This ensures that assets from different projects don't conflict with each other in the build directory.
+
+**Correct Structure:**
+```
+resources/FULL_INCLUDE_PREFIX/
+├── textures/
+│   └── sprite.png
+├── sounds/
+│   └── music.ogg
+└── config.json
+```
+
+**Incorrect Structure (will trigger warnings):**
+```
+resources/
+├── sprite.png          ❌ Not in prefixed directory
+├── music.ogg           ❌ Not in prefixed directory
+└── FULL_INCLUDE_PREFIX/
+    └── config.json     ✅ Correctly placed
+```
+
+**Validation Behavior:**
+
+- GCMake will warn you if assets are found outside the properly prefixed directory.
+- Assets outside the prefixed directory **will not be copied** to the build directory
+- The warning is informational only - it won't stop your build
+- This applies to all project types: root projects, subprojects, and test projects
 
 | File | Description |
 | ---- | ----------- |

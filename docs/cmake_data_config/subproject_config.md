@@ -29,6 +29,8 @@ subproject would use the directories:
 - include/PARENT_PREFIX/SUB_PREFIX/
 - resources/PARENT_PREFIX/SUB_PREFIX/
 
+**Resource Directory Enforcement**: Assets must be placed in the properly prefixed `resources/PARENT_PREFIX/SUB_PREFIX/` directory in order to be copied to the build. GCMake will warn if assets are found outside this directory, but won't copy them to the build.
+
 **Entry File Placement**: Entry files for subprojects must also follow the accumulated include prefix structure:
 
 - Executable entry files must be placed in the immediate root of `src/PARENT_PREFIX/SUB_PREFIX/`

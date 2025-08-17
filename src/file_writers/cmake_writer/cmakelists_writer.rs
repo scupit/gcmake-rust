@@ -1,6 +1,6 @@
 use std::{collections::{HashSet, BTreeMap, BTreeSet }, fs::File, io::{self, Write, ErrorKind}, path::{PathBuf, Path}, rc::Rc, cell::{RefCell, Ref}, iter::FromIterator};
 
-use crate::{project_info::{final_project_data::{FinalProjectData, CppFileGrammar}, path_manipulation::{cleaned_pathbuf, file_relative_to_dir, unix_style}, final_dependencies::{GitRevisionSpecifier, PredefinedCMakeComponentsModuleDep, PredefinedSubdirDep, PredefinedCMakeModuleDep, FinalPredepInfo, GCMakeDependencyStatus, FinalPredefinedDependencyConfig, PredefinedDepFunctionality, FinalDownloadMethod, FinalDebianPackagesConfig, GCMakeDepIDHash}, raw_data_in::{BuildType, BuildConfigCompilerSpecifier, SpecificCompilerSpecifier, OutputItemType, TargetSpecificBuildType, dependencies::internal_dep_config::CMakeModuleType, DefaultCompiledLibType}, FinalProjectType, CompiledOutputItem, LinkMode, FinalTestFramework, dependency_graph_mod::dependency_graph::{DependencyGraph, OrderedTargetInfo, ProjectWrapper, TargetNode, SimpleNodeOutputType, Link, EmscriptenLinkFlagInfo, ContainedItem}, SystemSpecifierWrapper, CompilerDefine, FinalBuildConfig, CompilerFlag, LinkerFlag, gcmake_constants::{SRC_DIR_NAME, INCLUDE_DIR_NAME}, platform_spec_parser::parse_leading_constraint_spec, CodeFileInfo, RetrievedCodeFileType, PreBuildScriptType, CodeFileLang, GivenConstraintSpecParseContext, SystemSpecFeatureType, SystemSpecExpressionTree, SingleSystemSpec}, file_writers::cmake_writer::cmake_writer_helpers::system_constraint_generator_expression};
+use crate::{project_info::{final_project_data::{FinalProjectData, CppFileGrammar}, path_manipulation::{cleaned_pathbuf, file_relative_to_dir, unix_style}, final_dependencies::{GitRevisionSpecifier, PredefinedCMakeComponentsModuleDep, PredefinedSubdirDep, PredefinedCMakeModuleDep, FinalPredepInfo, GCMakeDependencyStatus, FinalPredefinedDependencyConfig, PredefinedDepFunctionality, FinalDownloadMethod, FinalDebianPackagesConfig, GCMakeDepIDHash}, raw_data_in::{BuildType, BuildConfigCompilerSpecifier, SpecificCompilerSpecifier, OutputItemType, TargetSpecificBuildType, dependencies::internal_dep_config::CMakeModuleType, DefaultCompiledLibType}, FinalProjectType, CompiledOutputItem, LinkMode, FinalTestFramework, dependency_graph_mod::dependency_graph::{DependencyGraph, OrderedTargetInfo, ProjectWrapper, TargetNode, SimpleNodeOutputType, Link, EmscriptenLinkFlagInfo, ContainedItem}, SystemSpecifierWrapper, CompilerDefine, FinalBuildConfig, CompilerFlag, LinkerFlag, gcmake_constants::{SRC_DIR_NAME, INCLUDE_DIR_NAME, ASSETS_DIR_NAME}, platform_spec_parser::parse_leading_constraint_spec, CodeFileInfo, RetrievedCodeFileType, PreBuildScriptType, CodeFileLang, GivenConstraintSpecParseContext, SystemSpecFeatureType, SystemSpecExpressionTree, SingleSystemSpec}, file_writers::cmake_writer::cmake_writer_helpers::system_constraint_generator_expression};
 
 use super::{cmake_utils_writer::CMakeUtilWriter, cmake_writer_helpers::{system_contstraint_conditional_expression, language_feature_name}};
 use colored::*;
@@ -296,7 +296,8 @@ struct CMakeListsWriter<'a> {
   //    Header root:  include/FULL/PROJECT/INCLUDE_PREFIX
   header_root_var: String,
   generated_src_root_var: String,
-  entry_file_root_var: String
+  entry_file_root_var: String,
+  relative_resource_dir_var: String
 }
 
 impl<'a> CMakeListsWriter<'a> {
@@ -346,6 +347,7 @@ impl<'a> CMakeListsWriter<'a> {
       entry_file_root_var: format!("{}_ENTRY_ROOT", project_name),
       // Make sure this is the same in gcmake-cppfront-utils.cmake::gcmake_transform_cppfront_files
       generated_src_root_var: format!("{}_GENERATED_SOURCE_ROOT", project_name),
+      relative_resource_dir_var: format!("{}_RELATIVE_RESOURCE_DIR", project_name),
       dep_graph,
       sorted_target_info: sorted_target_info,
       project_data,
@@ -1093,12 +1095,10 @@ impl<'a> CMakeListsWriter<'a> {
     Ok(())
   }
 
-  // TODO: Change how this works. Currently, all files and folders in all resource dirs are merged into
-  // a single toplevel one. This is bound to cause issues due to files overwriting each other. 
   fn write_resource_dir_copier(&self) -> io::Result<()> {
     writeln!(&self.cmakelists_file,
-      "copy_resource_dir_if_exists(\n\t${{CMAKE_CURRENT_SOURCE_DIR}}/resources\n\t{}/resources\n)",
-      RUNTIME_BUILD_DIR_VAR
+      "copy_resource_dir_if_exists(\n\t\"${{{}}}\"\n)",
+      &self.relative_resource_dir_var
     )?;
 
     Ok(())
@@ -1949,6 +1949,7 @@ impl<'a> CMakeListsWriter<'a> {
     self.set_basic_var("", &self.header_root_var, &format!("\"${{CMAKE_CURRENT_SOURCE_DIR}}/{}/${{PROJECT_INCLUDE_PREFIX}}\"", INCLUDE_DIR_NAME))?;
     self.set_basic_var("", &self.public_include_dir_var, &format!("\"${{CMAKE_CURRENT_SOURCE_DIR}}/{}\"", INCLUDE_DIR_NAME))?;
     self.set_basic_var("", &self.private_include_dir_var, &format!("\"${{CMAKE_CURRENT_SOURCE_DIR}}/{}\"", SRC_DIR_NAME))?;
+    self.set_basic_var("", &self.relative_resource_dir_var, &format!("\"{}/${{PROJECT_INCLUDE_PREFIX}}\"", ASSETS_DIR_NAME))?;
 
     // Set ENTRY_ROOT to the appropriate directory based on project type
     let has_executable_outputs = self.project_data.get_outputs().values()
@@ -3400,9 +3401,10 @@ impl<'a> CMakeListsWriter<'a> {
 
     writeln!(&self.cmakelists_file, "if( USING_EMSCRIPTEN )")?;
     writeln!(&self.cmakelists_file,
-      "\tapply_emscripten_specifics( {} {} )",
+      "\tapply_emscripten_specifics( {} {} ${{{}}} )",
       target_name,
-      target_name
+      target_name,
+      &self.relative_resource_dir_var
     )?;
     writeln!(&self.cmakelists_file, "endif()")?;
 
@@ -3523,9 +3525,9 @@ impl<'a> CMakeListsWriter<'a> {
 
     if is_pre_build_script {
       writeln!(&self.cmakelists_file,
-        "add_executable( {} {} )",
+        "add_executable( {} \"${{CMAKE_CURRENT_SOURCE_DIR}}/{}\" )",
         target_name,
-        self.cmake_absolute_entry_file_path(output_data.get_entry_file(), output_data)
+        output_data.get_entry_file().get_file_path().to_string_lossy()
       )?;
     }
     else {
@@ -3544,9 +3546,10 @@ impl<'a> CMakeListsWriter<'a> {
 
     writeln!(&self.cmakelists_file, "if( USING_EMSCRIPTEN )")?;
     writeln!(&self.cmakelists_file,
-      "\tapply_emscripten_specifics( {} {} )",
+      "\tapply_emscripten_specifics( {} {} ${{{}}} )",
       receiver_lib_name,
-      target_name
+      target_name,
+      &self.relative_resource_dir_var
     )?;
 
     if let Some(emscripten_html_shell_relative_path) = &output_data.emscripten_html_shell_relative_to_project_root {

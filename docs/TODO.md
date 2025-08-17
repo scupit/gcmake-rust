@@ -23,7 +23,8 @@ There are a whole bunch of things which need doing. This is the place to list th
   step towards that.
 - [ ] Rename `predefined_dependencies` to something more intuitive. These dependencies are not gcmake
   projects, but can be configured to work with gcmake by providing a 'yaml dependency glue' config.
-- [ ] Look into the `CODEGEN` targets added in [CMake 3.31](https://cmake.org/cmake/help/v3.31/release/3.31.html)
+- [x] Look into the `CODEGEN` targets added in [CMake 3.31](https://cmake.org/cmake/help/v3.31/release/3.31.html)
+  - **NOTE:** This isn't useful for this project because it can only be specified when `add_custom_command` is called "freely" (i.e. not as a pre-build event). The way we use `BYPRODUCTS` is more sufficient for this use case.
 
 ## Configuration TODO
 
