@@ -30,10 +30,16 @@ if( NOT ALREADY_CONFIGURED_EMSCRIPTEN_GCMAKE_UTIL )
   set( ALREADY_CONFIGURED_EMSCRIPTEN_GCMAKE_UTIL TRUE )
 endif()
 
+
+# Configures Emscripten-specific build settings and populates a target-specific
+# variable with sidecar files (.wasm, .wasm.map, .data, .js) that can be used
+# by the caller for conditional installation. The sidecar files variable is
+# propagated to the parent scope using RETURN PROPAGATE.
 function( apply_emscripten_specifics
   preload_flags_receiver
   actual_target
   relative_resource_dir
+  sidecar_files_var_name
 )
   if( USING_EMSCRIPTEN )
     set( target_file_base "${MY_RUNTIME_OUTPUT_DIR}/${actual_target}" )
@@ -41,14 +47,24 @@ function( apply_emscripten_specifics
     file( GLOB_RECURSE all_resource_file_paths CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/${relative_resource_dir}/**" )
     list( LENGTH all_resource_file_paths all_resources_count )
 
+    # Determine if asset files are present for conditional .data file handling
     if( all_resources_count GREATER 0 )
-      get_target_property( target_type ${preload_flags_receiver} TYPE )
+      set( at_least_one_asset_file_present TRUE )
+    else()
+      set( at_least_one_asset_file_present FALSE )
+    endif()
 
-      if( target_type STREQUAL "EXECUTABLE" )
-        set( resource_inheritance_mode PRIVATE )
-      elseif( target_type STREQUAL "INTERFACE_LIBRARY" )
+    # Get target type for resource handling (should be INTERFACE_LIBRARY for executables
+    # or a compiled library type for libraries)
+    get_target_property( preload_flags_receiver_type ${preload_flags_receiver} TYPE )
+
+    if( at_least_one_asset_file_present )
+
+      if( preload_flags_receiver_type STREQUAL "EXECUTABLE" )
+        message( FATAL_ERROR "apply_emscripten_specifics: preload_flags_receiver should not be an EXECUTABLE target. This indicates a bug in the calling code." )
+      elseif( preload_flags_receiver_type STREQUAL "INTERFACE_LIBRARY" )
         set( resource_inheritance_mode INTERFACE )
-      else() # Is compiled library
+      else() # Is compiled library (STATIC_LIBRARY, SHARED_LIBRARY, etc.)
         set( resource_inheritance_mode PUBLIC )
       endif()
 
@@ -104,22 +120,48 @@ function( apply_emscripten_specifics
       )
     endif()
 
-    set( additional_files_list
-      "${target_file_base}.data"
-      "${target_file_base}.wasm"
-      "${target_file_base}.wasm.map"
-    )
+    # Get the actual target type to determine if we should generate sidecar files
+    get_target_property( actual_target_type ${actual_target} TYPE )
 
-    if( EMSCRIPTEN_MODE STREQUAL "WITH_HTML" )
-      list( APPEND additional_files_list "${target_file_base}.js" )
+    # Emscripten sidecar files (.wasm, .wasm.map, .data, .js) are only generated
+    # for executable targets. Libraries are compiled to static libraries without
+    # associated sidecar files. Any resources attached to libraries are inherited
+    # by executables that link to them.
+    if( actual_target_type STREQUAL "EXECUTABLE" )
+      # Always include .wasm and .wasm.map files for executables
+      set( additional_files_list
+        "${target_file_base}.wasm"
+        "${target_file_base}.wasm.map"
+      )
+
+      # Only include .data file if resources are present to avoid CPack install failures
+      if( at_least_one_asset_file_present )
+        list( APPEND additional_files_list "${target_file_base}.data" )
+      endif()
+
+      if( EMSCRIPTEN_MODE STREQUAL "WITH_HTML" )
+        list( APPEND additional_files_list "${target_file_base}.js" )
+      endif()
+
+      set_property(
+        TARGET ${actual_target}
+        APPEND PROPERTY
+        ADDITIONAL_CLEAN_FILES ${additional_files_list}
+      )
+
+      # Set the target-specific variable with the sidecar files list
+      set( ${sidecar_files_var_name} ${additional_files_list} )
+    else()
+      # Set empty list for non-executable targets
+      set( ${sidecar_files_var_name} "" )
     endif()
-
-    set_property(
-      TARGET ${actual_target}
-      APPEND PROPERTY
-      ADDITIONAL_CLEAN_FILES ${additional_files_list}
-    )
+  else()
+    # Set empty list when not using Emscripten
+    set( ${sidecar_files_var_name} "" )
   endif()
+
+  # Propagate the sidecar files variable to parent scope
+  return( PROPAGATE ${sidecar_files_var_name} )
 endfunction()
 
 macro( configure_emscripten_mode

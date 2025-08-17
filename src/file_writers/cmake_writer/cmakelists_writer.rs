@@ -2257,6 +2257,62 @@ impl<'a> CMakeListsWriter<'a> {
     Ok(())
   }
 
+  /// Writes CMake code to add Emscripten sidecar files to the installation list.
+  ///
+  /// ## Problem This Solves
+  /// 
+  /// Emscripten executables generate multiple output files beyond the main executable:
+  /// - `.wasm` - The WebAssembly binary
+  /// - `.wasm.map` - Source map for debugging
+  /// - `.data` - Preloaded resources (when resources exist)
+  /// - `.js` - JavaScript loader (in WITH_HTML mode)
+  ///
+  /// These sidecar files are essential for the executable to run properly, but CMake's
+  /// standard installation system only knows about the main target file. Without this
+  /// function, CPack would generate incomplete packages missing the WebAssembly binary
+  /// and other runtime dependencies.
+  ///
+  /// ## Design Decision Process:
+  ///
+  /// **Initial Approach**: We first tried having `apply_emscripten_specifics()` directly
+  /// add files to `MY_NEEDED_BIN_FILES`, but this caused problems:
+  /// - Pre-build scripts (never installed) would still add their sidecar files
+  /// - Test executables would pollute the installation with unnecessary files
+  /// - The coupling was too tight and implicit
+  ///
+  /// **Current Approach**: We use a two-phase system:
+  /// 1. `apply_emscripten_specifics()` populates a target-specific variable with sidecar files
+  /// 2. Installation logic conditionally processes this variable only for installed targets
+  ///
+  /// This function handles phase 2 by iterating through the target-specific sidecar files
+  /// list and adding each file to `MY_NEEDED_BIN_FILES` for installation. It's called
+  /// only within installation conditionals, ensuring sidecar files are included only
+  /// when the target itself is being installed.
+  ///
+  /// ## Usage
+  /// 
+  /// This function is called within installation conditionals for both libraries and
+  /// executables, eliminating code duplication across three different installation modes:
+  /// - Library FULL installs
+  /// - Library MINIMAL installs  
+  /// - Executable installs
+  /// 
+  /// NOTE that no conditionals are needed because the sidecar file list
+  /// if empty if non needed.
+  fn write_emscripten_sidecar_file_lift(&self, target_name: &str) -> io::Result<()> {
+    writeln!(&self.cmakelists_file,
+      "\tforeach( sidecar_file IN LISTS TARGET_{}_EMSCRIPTEN_ADDITIONAL_BUILT_FILES )",
+      target_name
+    )?;
+    writeln!(&self.cmakelists_file,
+      "\t\tadd_to_needed_bin_files_list( \"${{sidecar_file}}\" )"
+    )?;
+    writeln!(&self.cmakelists_file,
+      "\tendforeach()"
+    )?;
+    Ok(())
+  }
+
   fn write_outputs(&self) -> io::Result<()> {
     let project_name: &str = self.project_data.get_project_base_name();
 
@@ -3401,10 +3457,11 @@ impl<'a> CMakeListsWriter<'a> {
 
     writeln!(&self.cmakelists_file, "if( USING_EMSCRIPTEN )")?;
     writeln!(&self.cmakelists_file,
-      "\tapply_emscripten_specifics( {} {} ${{{}}} )",
+      "\tapply_emscripten_specifics( {} {} ${{{}}} TARGET_{}_EMSCRIPTEN_ADDITIONAL_BUILT_FILES )",
       target_name,
       target_name,
-      &self.relative_resource_dir_var
+      &self.relative_resource_dir_var,
+      target_name
     )?;
     writeln!(&self.cmakelists_file, "endif()")?;
 
@@ -3419,6 +3476,7 @@ impl<'a> CMakeListsWriter<'a> {
       "if( \"${{TARGET_{}_INSTALL_MODE}}\" STREQUAL \"FULL\" )",
       target_name
     )?;
+    self.write_emscripten_sidecar_file_lift(&target_name)?;
     writeln!(&self.cmakelists_file,
       "\tadd_to_target_installation_list( {} )",
       target_name
@@ -3427,6 +3485,7 @@ impl<'a> CMakeListsWriter<'a> {
       "elseif( \"${{TARGET_{}_INSTALL_MODE}}\" STREQUAL \"MINIMAL\" )",
       target_name
     )?;
+    self.write_emscripten_sidecar_file_lift(&target_name)?;
     writeln!(&self.cmakelists_file,
       "\tadd_to_minimal_installs( {} \"\" )",
       target_name
@@ -3546,10 +3605,11 @@ impl<'a> CMakeListsWriter<'a> {
 
     writeln!(&self.cmakelists_file, "if( USING_EMSCRIPTEN )")?;
     writeln!(&self.cmakelists_file,
-      "\tapply_emscripten_specifics( {} {} ${{{}}} )",
+      "\tapply_emscripten_specifics( {} {} ${{{}}} TARGET_{}_EMSCRIPTEN_ADDITIONAL_BUILT_FILES )",
       receiver_lib_name,
       target_name,
-      &self.relative_resource_dir_var
+      &self.relative_resource_dir_var,
+      target_name
     )?;
 
     if let Some(emscripten_html_shell_relative_path) = &output_data.emscripten_html_shell_relative_to_project_root {
@@ -3582,6 +3642,7 @@ impl<'a> CMakeListsWriter<'a> {
         "if( DEFINED TARGET_{}_INSTALL_MODE )",
         target_name
       )?;
+      self.write_emscripten_sidecar_file_lift(target_name)?;
       writeln!(&self.cmakelists_file,
         "\tadd_to_target_installation_list( {} )",
         target_name

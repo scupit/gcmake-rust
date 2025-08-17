@@ -425,6 +425,16 @@ macro( raise_needed_bin_files_list)
   set( LATEST_SUBPROJECT_NEEDED_BIN_FILES_LIST ${MY_NEEDED_BIN_FILES} PARENT_SCOPE )
 endmacro()
 
+# Directly raises the MY_NEEDED_BIN_FILES list to the parent scope.
+# This ensures that any function calling this macro will automatically propagate
+# its bin files list upward without requiring caller modifications.
+# 
+# Generally, try to avoid using this. I only use it inside of the emscripten
+# config for now because it's easy.
+macro( inner_raise_needed_bin_files_list_directly )
+  set( MY_NEEDED_BIN_FILES ${MY_NEEDED_BIN_FILES} PARENT_SCOPE )
+endmacro()
+
 macro( initialize_mingw_dll_install_options )
   if( NOT USING_MINGW )
     message( FATAL_ERROR "Tried to initialize MinGW dll install options while not using a MinGW compiler. This should only be called when using MinGW." )
