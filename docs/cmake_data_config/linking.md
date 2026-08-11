@@ -81,7 +81,7 @@ gcmake_dependencies:
   some-gcmake-dep:
     # ...
 predefined_dependencies:
-  SFML:
+  sfml:
     # ...
 ```
 
@@ -104,7 +104,7 @@ output:
         # However due to the target scope rule, first-lib has access to the nested-lib
         # output, which is why the above multi-format specifier works.
         - second-lib::second-lib
-        - SFML::{ system, window, ((windows)) main } # Notice the ((windows)) system specifier
+        - sfml::{ system, window, ((windows)) main } # Notice the ((windows)) system specifier
         - some-gcmake-dep::{ some-lib, another-lib }
         # This would fail, because we can't nest namespaces when resolving a dependency.
         # some-gcmake-dep::some-lib::some-lib
@@ -124,7 +124,7 @@ output:
         # Same as above -> root::second-lib::second-lib
         # also the same -> parent::parent::second-lib
         # another same  -> parent::parent::second-lib::second-lib
-        - SFML::{ system, window, ((windows)) main }
+        - sfml::{ system, window, ((windows)) main }
         - some-gcmake-dep::{ some-lib, another-lib }
 ```
 

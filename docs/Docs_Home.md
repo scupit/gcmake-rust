@@ -22,6 +22,8 @@ configuration work together.
 
 ## Important Concepts
 
+- [Naming rules](cmake_data_config/properties/properties_list.md#naming-rules):
+  Project, output, feature, and dependency names must be lowercase.
 - ["Include prefix" accumulation](cmake_data_config/subproject_config.md#include-prefix-accumulation):
   How project hierarchy affects each subproject's file inclusion prefix.
 - [Resource directory structure](project_structure.md#resource-directory-structure):

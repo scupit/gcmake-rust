@@ -42,8 +42,8 @@ Dependencies which can be cross compiled contain the line `can_cross_compile: tr
 **In short, if your project uses no dependencies or only uses self-contained dependencies built as**
 **a subdirectory of your project, you can probably trivially cross-compile your project.**
 
-However, dependencies such as [wxWidgets](/gcmake-dependency-configs/wxWidgets/) and
-[SFML](/gcmake-dependency-configs/SFML/) are marked as projects which block trivial cross compilation.
+However, dependencies such as [wxwidgets](/gcmake-dependency-configs/wxwidgets/) and
+[sfml](/gcmake-dependency-configs/sfml/) are marked as projects which block trivial cross compilation.
 
 ## Caveats
 

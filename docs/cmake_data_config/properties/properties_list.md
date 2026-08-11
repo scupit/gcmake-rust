@@ -47,11 +47,41 @@ supported for a specific project type.
 >
 > **REQUIRED** `String`
 
-Name of the project. *Cannot contain spaces*.
+Name of the project. Must follow the [naming rules](#naming-rules).
 
 ``` yaml
 name: the-project-name
 ```
+
+### Naming Rules
+
+GCMake requires the identifiers you choose to be **lowercase**. A name is valid when it matches
+`^[a-z0-9_-]+$`, meaning it may only contain:
+
+- lowercase letters (`a-z`)
+- numbers (`0-9`)
+- hyphens (`-`)
+- underscores (`_`)
+
+This rule applies to:
+
+| Identifier | Where it comes from |
+| ---------- | ------------------- |
+| [Project name](#name) | The `name` property of a root project |
+| Subproject and test project names | **The project's directory name**, inside *subprojects/* or *tests/* |
+| [Output names](#output) | Keys of the `output` map |
+| [Feature names](#features) | Keys of the `features` map |
+| [Predefined dependency names](#predefined_dependencies) | Keys of the `predefined_dependencies` map |
+| [GCMake dependency names](#gcmake_dependencies) | Keys of the `gcmake_dependencies` map |
+
+Using a name which breaks the naming convention is an error, and GCMake will refuse to configure the project.
+
+> **NOTE** that [include_prefix](#include_prefix) is **exempt** from this rule. Include prefixes are
+> UPPERCASE by convention (for example `MY_PROJECT`), since they become directory names used in
+> `#include` paths.
+
+Build configuration keys such as `Debug`, `Release`, `GCC`, `MSVC`, and `AllCompilers` are not lowercase. They must
+be written with the exact casing as they are written here (and in examples).
 
 ### include_prefix
 
@@ -350,17 +380,17 @@ In the map, each dependency name must have a matching configuration directory in
 
 | Dependency type | Example | Description |
 | --------------- | ------- | ----------- |
-| CMake Subdirectory | [SFML](/gcmake-dependency-configs/SFML/) | The dependency will be copied into `YOUR_PROJECT_ROOT/dep/DEP_NAME` and built as a subdirectory of your project. The download step will be done using either Git or HTTPS, depending on the [dependency configuration options](#subdirectory-dependency-configuration-options) specified. |
-| CMake Installed Module | [SDL2](/gcmake-dependency-configs/SDL2/) | A CMake project which must be manually built and installed on the system manually before use. Internally, the project is located using CMake's [find_package](https://cmake.org/cmake/help/latest/command/find_package.html#id4) in *Config* mode. |
-| CMake Find Module | [OpenGL](/gcmake-dependency-configs/) | A library which is already installed on the system. These are usually system libraries. Currently, only a **subset of** [CMake Find Modules](https://cmake.org/cmake/help/latest/manual/cmake-modules.7.html#find-modules) are supported. In the future I'd like to be able to configure custom find modules as well, but that currently isn't supported. |
-| CMake Components Module | [wxWidgets](/gcmake-dependency-configs/wxWidgets/) | This is the same as the CMake Find Module dependency type, except that the internal CMake `find_package` call specifies `COMPONENTS`. |
+| CMake Subdirectory | [sfml](/gcmake-dependency-configs/sfml/) | The dependency will be copied into `<YOUR_PROJECT_ROOT>/dep/DEP_NAME` and built as a subdirectory of your project. The download step will be done using either Git or HTTPS, depending on the [dependency configuration options](#subdirectory-dependency-configuration-options) specified. |
+| CMake Installed Module | [sdl2](/gcmake-dependency-configs/sdl2/) | A CMake project which must be manually built and installed on the system manually before use. Internally, the project is located using CMake's [find_package](https://cmake.org/cmake/help/latest/command/find_package.html#id4) in *Config* mode. |
+| CMake Find Module | [opengl](/gcmake-dependency-configs/opengl/) | A library which is already installed on the system. These are usually system libraries. Currently, only a **subset of** [CMake Find Modules](https://cmake.org/cmake/help/latest/manual/cmake-modules.7.html#find-modules) are supported. In the future I'd like to be able to configure custom find modules as well, but that currently isn't supported. |
+| CMake Components Module | [wxwidgets](/gcmake-dependency-configs/wxwidgets/) | This is the same as the CMake Find Module dependency type, except that the internal CMake `find_package` call specifies `COMPONENTS`. |
 
 Usage example
 
 ``` yaml
 predefined_dependencies:
-  SFML:
-    # Since SFML is a subdirectory dependency, either a git_tag or commit_hash must be specified
+  sfml:
+    # Since sfml is a subdirectory dependency, either a git_tag or commit_hash must be specified
     # in order to keep versioning consistent. To always use the latest version, you could just
     # specify the "master" branch for the git tag.
     # git_tag: master
@@ -374,9 +404,9 @@ predefined_dependencies:
   imgui:
     git_tag: v1.88
     # file_version: v1.88.0
-  SDL2: { }
-  OpenGL: { }
-  wxWidgets: { }
+  sdl2: { }
+  opengl: { }
+  wxwidgets: { }
 ```
 
 #### Subdirectory dependency configuration options
@@ -385,7 +415,7 @@ Subdirectory dependencies can either be cloned as a Git repository, or downloade
 (zip, tar.gz, etc.) and unpacked. Specifying configuration options for a download mode will result in that
 download mode being used. **NOTE** that dependencies are not required to support any download methods.
 For a list of download methods available to a dependency, run `gcmake-rust predep-info -d the-dep-name`.
-For example, `gcmake-rust predep-info -d SFML nlohmann_json`
+For example, `gcmake-rust predep-info -d sfml nlohmann_json`
 
 > If any Git mode options are specified, then Git will be used to download the repository.
 
@@ -413,9 +443,9 @@ output:
     # File must be located at: src/FULL_INCLUDE_PREFIX/main.cpp
     entry_file: main.cpp
     link:
-      - SFML::{ system, window, graphics }
+      - sfml::{ system, window, graphics }
 predefined_dependencies:
-  SFML:
+  sfml:
     # Either git_tag or commit_hash is required to be speciifed.
     git_tag: "2.5.1"
     # commit_hash: "2f11710abc5aa478503a7ff3f9e654bd2078ebab"
@@ -466,7 +496,7 @@ Catch2 example:
 
 ``` yaml
 test_framework:
-  Catch2:
+  catch2:
     git_tag: v3.1.0
 ```
 
@@ -474,7 +504,7 @@ GoogleTest example:
 
 ``` yaml
 test_framework:
-  GoogleTest:
+  googletest:
     git_tag: v1.12.2
 ```
 

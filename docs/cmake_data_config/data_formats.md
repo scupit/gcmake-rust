@@ -264,12 +264,12 @@ global_defines:
   - ((not windows)) MY_SYSTEM="Heck yeah, not on Windows!"
 ```
 
-Another use case is to constrain when libraries are linked. For example, *SFML::main* can only be used
+Another use case is to constrain when libraries are linked. For example, *sfml::main* can only be used
 on Windows, so we'll want to make sure to only link it when targeting Windows:
 
 ``` yaml
 predefined_dependencies:
-  SFML:
+  sfml:
     # ...
 output:
   my-exe:
@@ -277,7 +277,7 @@ output:
     # File must be located at: src/FULL_INCLUDE_PREFIX/main.cpp
     entry_file: main.cpp
     link:
-      - SFML::{ system, ((windows)) main }
+      - sfml::{ system, ((windows)) main }
 ```
 
 The linking use case is especially useful for optional library support.
@@ -377,7 +377,7 @@ Link specifiers may also be prefixed with [system specifiers](data_formats.md#co
 - `((unix)) namespace::{ lib1, lib2 }`
 - `namespace::{ lib1, ((windows)) lib2 }`
 
-- `SFML::{ window, ((windows)) main }`
+- `sfml::{ window, ((windows)) main }`
 - `(( feature:uses-fmt )) fmt::fmt`
 
 However, a system specifier may only prefix the entire link specifier or individual libraries in

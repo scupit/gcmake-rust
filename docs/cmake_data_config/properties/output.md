@@ -180,7 +180,7 @@ Executable example:
 
 ``` yaml
 predefined_dependencies:
-  SFML:
+  sfml:
     git_tag: "2.5.1"
   fmt:
     git_tag: "9.1.0"
@@ -191,7 +191,7 @@ output:
     link:
       - fmt::fmt
       # This is a good example of combining a system specifier and a link specifier
-      - SFML::{ system, window, ((windows)) main }
+      - sfml::{ system, window, ((windows)) main }
 ```
 
 Header-only library example:
@@ -215,7 +215,7 @@ Compiled library example:
 
 ``` yaml
 predefined_dependencies:
-  SFML:
+  sfml:
     git_tag: "2.5.1"
   fmt:
     git_tag: "9.1.0"
@@ -230,7 +230,7 @@ output:
       public:
         - fmt::fmt
       private:
-        - SFML::{ system, window, ((windows)) main }
+        - sfml::{ system, window, ((windows)) main }
 ```
 
 Here, `fmt::fmt` is propagated to any library which links to *my-compiled-lib*. The linked SFML libraries,

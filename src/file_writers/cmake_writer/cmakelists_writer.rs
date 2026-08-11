@@ -1620,7 +1620,7 @@ impl<'a> CMakeListsWriter<'a> {
 
     if let Some(hash_info) = project_hash_to_write {
       writeln!(&self.cmakelists_file,
-        "gcmake_write_dep_hash_file_if_missing( \"${{{}_SOURCE_DIR}}/{}\" \"{}\" )",
+        "gcmake_write_dep_hash_file( \"${{{}_SOURCE_DIR}}/{}\" \"{}\" )",
         dep_name,
         hash_info.relative_hash_file,
         hash_info.hash_string

@@ -3,6 +3,7 @@ use std::{collections::{HashMap, HashSet, BTreeMap, BTreeSet}, path::{Path, Path
 use crate::{project_info::path_manipulation::cleaned_pathbuf, logger, program_actions::gcmake_dep_cache_dir, common::base64_encoded};
 
 use super::{path_manipulation::{cleaned_path_str, file_relative_to_dir, absolute_path, unix_style}, final_dependencies::{FinalGCMakeDependency, FinalPredefinedDependencyConfig, relative_hash_file_path}, raw_data_in::{dependencies::RawPredefinedDependencyMap, BuildConfigCompilerSpecifier, BuildType, DefaultCompiledLibType, LanguageConfigMap, LanguageFeatureSection, LinkSection, OutputItemType, PreBuildConfigIn, RawCompiledItem, RawDocGeneratorName, RawDocumentationGeneratorConfig, RawProject, RawTestFramework, SpecificCompilerSpecifier, TargetSpecificBuildType}, final_project_configurables::FinalProjectType, CompiledOutputItem, helpers::{parse_subproject_data, parse_root_project_data, find_prebuild_script, PrebuildScriptFile, validate_raw_project_outputs, ProjectOutputType, RetrievedCodeFileType, code_file_type, parse_test_project_data, find_doxyfile_in, validate_doxyfile_in, SphinxConfigFiles, find_sphinx_files, validate_conf_py_in}, PreBuildScript, FinalTestFramework, base_include_prefix_for_test, gcmake_constants::{SRC_DIR_NAME, INCLUDE_DIR_NAME, TESTS_DIR_NAME, SUBPROJECTS_DIR_NAME, DOCS_DIR_NAME, ASSETS_DIR_NAME}, FinalInstallerConfig, CompilerDefine, FinalBuildConfigMap, make_final_build_config_map, FinalTargetBuildConfigMap, FinalGlobalProperties, FinalShortcutConfig, parsers::{version_parser::ThreePartVersion, general_parser::ParseSuccess}, platform_spec_parser::parse_leading_constraint_spec, SystemSpecifierWrapper, FinalFeatureConfig, FinalFeatureEnabler, CodeFileInfo, FileRootGroup, PreBuildScriptType, FinalDocGeneratorName, FinalDocumentationInfo, CodeFileLang, GivenConstraintSpecParseContext};
+use super::validators::{is_valid_lowercase_identifier, lowercase_identifier_help};
 use colored::*;
 
 const SUBPROJECT_JOIN_STR: &'static str = "_S_";
@@ -80,7 +81,12 @@ fn find_matching_gcmake_dep_path(
   dep_name: &str,
   expected_hash: &str
 ) -> io::Result<Option<PathBuf>> {
-  let search_root: PathBuf = gcmake_dep_cache_dir().join(dep_name);
+  // CPM lowercases the package name when building its cache directory path
+  // (see 'string( TOLOWER ${CPM_ARGS_NAME} lower_case_name )' in CPM.cmake), so we must do the same
+  // when looking that directory back up. Without this, the lookup only succeeds on case-insensitive
+  // filesystems. NOTE that dependency names are also required to be lowercase, but that check runs
+  // in validate_correctness(...) which happens after this lookup.
+  let search_root: PathBuf = gcmake_dep_cache_dir().join(dep_name.to_lowercase());
 
   if !search_root.is_dir() {
     return Ok(None);
@@ -1118,6 +1124,7 @@ impl FinalProjectData {
       ))
     }
 
+    self.validate_identifier_names()?;
     self.validate_features()?;
     self.validate_header_names()?;
     self.ensure_doc_generator_correctness(project_load_context)?;
@@ -1345,14 +1352,10 @@ impl FinalProjectData {
     should_include_pre_build_entry: bool
   ) -> HashSet<&CodeFileInfo> {
     let mut source_file_set: HashSet<&CodeFileInfo> = self.src_files.iter()
-      .filter_map(|code_file_info|
-        if code_file_info.uses_cpp2_grammar() {
-          Some(code_file_info)
-        }
-        else {
-          None
-        }
-      )
+      .filter(|code_file_info| match code_file_info.code_file_type() {
+        RetrievedCodeFileType::Source(CodeFileLang::Cpp { used_grammar }) => grammar == used_grammar,
+        _ => false
+      })
       .collect();
 
     for (_, output) in &self.output {
@@ -1384,7 +1387,9 @@ impl FinalProjectData {
 
     for cpp2_file_info in self.all_cpp_sources_by_grammar(CppFileGrammar::Cpp2, true) {
       let cpp2_file: &Path = cpp2_file_info.get_file_path();
-      let generated_file_name: PathBuf = cpp2_file.with_extension("").with_extension(".cpp");
+      // NOTE: Must match how the generated file name is computed when writing the CMake
+      // configuration. See cmake_absolute_code_file_path(...) in cmakelists_writer.rs.
+      let generated_file_name: PathBuf = cpp2_file.with_extension("cpp");
 
       if existing_normal_cpp_files.contains(&CodeFileInfo::from_path(generated_file_name.as_path(), false)) {
         return Err(format!(
@@ -1393,6 +1398,82 @@ impl FinalProjectData {
           generated_file_name.to_str().unwrap().yellow(),
           generated_file_name.to_str().unwrap().yellow(),
         ));
+      }
+    }
+
+    Ok(())
+  }
+
+  // Enforces GCMake's project-level naming standard. NOTE that 'include_prefix' is intentionally
+  // not checked here, since include prefixes are UPPERCASE by convention.
+  fn validate_identifier_names(&self) -> Result<(), String> {
+    if !is_valid_lowercase_identifier(self.get_project_base_name()) {
+      let name_source: String = if self.is_root_project() {
+        format!("the '{}' property in {}", "name".purple(), CONFIG_FILE_NAME)
+      }
+      else {
+        // Subproject and test project names are taken from their containing directory's name,
+        // so that's what has to be renamed.
+        format!(
+          "its directory name '{}'",
+          unix_style(self.get_project_root_relative_to_cwd()).yellow()
+        )
+      };
+
+      return Err(format!(
+        "Project name \"{}\" (taken from {}) is not a valid name. {}",
+        self.get_project_base_name().red(),
+        name_source,
+        lowercase_identifier_help(self.get_project_base_name())
+      ));
+    }
+
+    for output_name in self.output.keys() {
+      if !is_valid_lowercase_identifier(output_name) {
+        return Err(format!(
+          "Project [{}] declares an output named \"{}\", which is not a valid name. {}",
+          self.get_name_for_error_messages().yellow(),
+          output_name.red(),
+          lowercase_identifier_help(output_name)
+        ));
+      }
+    }
+
+    // Features and dependencies can only be declared by a root project. The feature map in
+    // particular is shared with subprojects by reference, so only checking it here avoids
+    // reporting the same invalid name once per subproject.
+    if self.is_root_project() {
+      for feature_name in self.features.keys() {
+        if !is_valid_lowercase_identifier(feature_name) {
+          return Err(format!(
+            "Project [{}] declares a feature named \"{}\", which is not a valid name. {}",
+            self.get_name_for_error_messages().yellow(),
+            feature_name.red(),
+            lowercase_identifier_help(feature_name)
+          ));
+        }
+      }
+
+      for dep_name in self.predefined_dependencies.keys() {
+        if !is_valid_lowercase_identifier(dep_name) {
+          return Err(format!(
+            "Project [{}] uses a predefined dependency named \"{}\", which is not a valid name. {}",
+            self.get_name_for_error_messages().yellow(),
+            dep_name.red(),
+            lowercase_identifier_help(dep_name)
+          ));
+        }
+      }
+
+      for dep_name in self.gcmake_dependency_projects.keys() {
+        if !is_valid_lowercase_identifier(dep_name) {
+          return Err(format!(
+            "Project [{}] uses a GCMake dependency named \"{}\", which is not a valid name. {}",
+            self.get_name_for_error_messages().yellow(),
+            dep_name.red(),
+            lowercase_identifier_help(dep_name)
+          ));
+        }
       }
     }
 
@@ -1411,7 +1492,7 @@ impl FinalProjectData {
       for FinalFeatureEnabler { dep_name, feature_name: feature_name_to_enable } in &feature_config.enables {
         // Dependency feature enablers are checked in the dependency graph's
         // do_additional_project_checks(...) function.
-        if dep_name.is_none() && !self.features.contains_key(feature_name) {
+        if dep_name.is_none() && !self.features.contains_key(feature_name_to_enable) {
           return Err(format!(
             "Feature \"{}\" specifies that it should enable another feature named \"{}\", but the project doesn't define a feature called {}.",
             feature_name.purple(),
@@ -2374,12 +2455,21 @@ fn obtain_gcmake_dep_projects(
       // write this hash into a file at configure time. Then when gcmake-rust is run again,
       // we can find the matching dependency repository by checking whether the contents of that
       // hash file match what we expect.
+      // The revision must be part of the hash. Without it, two checkouts of the same repo at
+      // different revisions produce identical hash files, and find_matching_gcmake_dep_path(...)
+      // below could bind this project to the wrong version's source tree.
+      // NOTE: git_tag takes precedence over commit_hash here so that this matches the revision
+      // actually used to clone the repo. See GitRevisionSpecifier resolution in
+      // FinalGCMakeDependency::new(...).
+      let revision_for_hash: String = dep_config.git_tag.clone()
+        .or_else(|| dep_config.commit_hash.clone())
+        .unwrap_or_default();
+
       let expected_hash: String = base64_encoded(format!(
         "{}->{}->{}",
         dep_name,
         dep_config.repo_url,
-        dep_config.commit_hash.clone()
-          .unwrap_or(dep_config.commit_hash.clone().unwrap_or_default())
+        revision_for_hash
       ));
 
       let maybe_dep_path: Option<PathBuf> = find_matching_gcmake_dep_path(dep_name, &expected_hash)
@@ -2394,6 +2484,26 @@ fn obtain_gcmake_dep_projects(
           just_created_project_at
         )?))
       };
+
+      // The name a GCMake dependency is given here is used to namespace its targets until the
+      // dependency has actually been downloaded. Once it's available, its own project name is used
+      // instead. If the two don't match, the link targets written before and after the first CMake
+      // configure run will silently differ, and the ones written first won't exist.
+      if let Some(available_dep_project) = &maybe_dep_project {
+        let real_project_name: &str = available_dep_project.get_project_base_name();
+
+        if dep_name != real_project_name {
+          logger::warn(format!(
+            "GCMake dependency \"{}\" is actually a project named \"{}\". Until the dependency is downloaded, GCMake namespaces its targets as '{}', but uses '{}' afterward. Rename the dependency to \"{}\" in {} so the generated links stay consistent.",
+            dep_name.yellow(),
+            real_project_name.green(),
+            format!("{}::...", dep_name).yellow(),
+            format!("{}::...", real_project_name).green(),
+            real_project_name.green(),
+            CONFIG_FILE_NAME
+          ));
+        }
+      }
 
       gcmake_dep_project_map.insert(
         dep_name.clone(),

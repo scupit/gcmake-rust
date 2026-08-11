@@ -1,14 +1,30 @@
-function( gcmake_write_dep_hash_file_if_missing
+function( gcmake_write_dep_hash_file
   file_path
   hash_string
 )
   cmake_path( GET file_path PARENT_PATH file_dir )
   cmake_path( ABSOLUTE_PATH file_dir NORMALIZE )
-  if( NOT EXISTS file_dir )
+
+  # NOTE: if( EXISTS ... ) does not dereference a bare variable name, so these must be written
+  # as "${file_dir}" / "${file_path}".
+  if( NOT EXISTS "${file_dir}" )
     file( MAKE_DIRECTORY "${file_dir}" )
   endif()
 
-  if( NOT EXISTS file_path )
+  # Rewrite the hash file whenever its contents don't match what gcmake-rust expects. A stale
+  # hash file would make gcmake-rust either fail to locate this dependency's source tree or
+  # bind to the wrong one, so "write only if missing" is not sufficient here.
+  set( _should_write TRUE )
+
+  if( EXISTS "${file_path}" )
+    file( READ "${file_path}" _existing_hash )
+
+    if( "${_existing_hash}" STREQUAL "${hash_string}" )
+      set( _should_write FALSE )
+    endif()
+  endif()
+
+  if( _should_write )
     file( WRITE "${file_path}" "${hash_string}" )
   endif()
 endfunction()
