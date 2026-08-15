@@ -165,6 +165,7 @@ fn resolve_prebuild_script(
         let raw_output_item = RawCompiledItem {
           output_type: OutputItemType::Executable,
           requires_custom_main: None,
+          inherits_from_exe: None,
           emscripten_html_shell: None,
           windows_icon: None,
           defines: None,
@@ -1132,6 +1133,7 @@ impl FinalProjectData {
 
     for (_, test_project) in &self.tests {
       if let ProjectOutputType::ExeProject = &test_project.project_output_type {
+        self.validate_test_output_inheritance(test_project)?;
         test_project.validate_correctness(&project_load_context)?;
       }
       else {
@@ -1165,6 +1167,80 @@ impl FinalProjectData {
 
     self.validate_installer_config()?;
     self.validate_resource_directory_structure()?;
+
+    Ok(())
+  }
+
+  fn validate_test_output_inheritance(&self, test_project: &FinalProjectData) -> Result<(), String> {
+    let core_exe_names: Vec<&str> = match &self.project_output_type {
+      ProjectOutputType::ExeProject => self.output.keys().map(|output_name| output_name.as_str()).collect(),
+      // Compiled and header-only library projects define exactly one output, which is not an executable.
+      _ => Vec::new()
+    };
+
+    for (test_output_name, test_output) in test_project.get_outputs() {
+      match &test_output.inherits_from_exe {
+        None => {
+          if core_exe_names.len() > 1 {
+            return Err(format!(
+              "Project [{}] defines multiple executables, so each of its test executables must explicitly specify from which output executable it inherits code, links, and defines. Add '{}' to test executable '{}' in test project [{}], naming one of: {}",
+              self.get_name_for_error_messages(),
+              "inherits_from_exe".purple(),
+              test_output_name.yellow(),
+              test_project.get_name_for_error_messages(),
+              core_exe_names.iter()
+                .map(|exe_name| format!("'{}'", exe_name.green()))
+                .collect::<Vec<String>>()
+                .join(", ")
+            ));
+          }
+        },
+        Some(given_exe_name) => {
+          if given_exe_name.contains("::") {
+            let last_segment: &str = given_exe_name.rsplit("::").next().unwrap();
+            let maybe_suggestion: String = if core_exe_names.contains(&last_segment)
+              { format!(" Did you mean '{}'?", last_segment.green()) }
+              else { String::new() };
+
+            return Err(format!(
+              "'{}' for test executable '{}' in test project [{}] is given the value '{}', which looks like a link specifier. It must instead be the plain name of an executable output defined by project [{}].{}",
+              "inherits_from_exe".purple(),
+              test_output_name.yellow(),
+              test_project.get_name_for_error_messages(),
+              given_exe_name.yellow(),
+              self.get_name_for_error_messages(),
+              maybe_suggestion
+            ));
+          }
+
+          if core_exe_names.is_empty() {
+            return Err(format!(
+              "Test executable '{}' in test project [{}] specifies '{}', but project [{}] builds a library and therefore defines no executables. The test already inherits the library automatically, so just remove '{}'.",
+              test_output_name.yellow(),
+              test_project.get_name_for_error_messages(),
+              "inherits_from_exe".purple(),
+              self.get_name_for_error_messages(),
+              "inherits_from_exe".purple()
+            ));
+          }
+
+          if !core_exe_names.contains(&given_exe_name.as_str()) {
+            return Err(format!(
+              "'{}' for test executable '{}' in test project [{}] names '{}', which is not an executable output defined by project [{}]. Valid executable names: {}",
+              "inherits_from_exe".purple(),
+              test_output_name.yellow(),
+              test_project.get_name_for_error_messages(),
+              given_exe_name.yellow(),
+              self.get_name_for_error_messages(),
+              core_exe_names.iter()
+                .map(|exe_name| format!("'{}'", exe_name.green()))
+                .collect::<Vec<String>>()
+                .join(", ")
+            ));
+          }
+        }
+      }
+    }
 
     Ok(())
   }
@@ -2531,6 +2607,16 @@ fn obtain_output_items(
   let mut output_item_map = OutputItemMap::new();
 
   for (output_name, raw_output_item) in initial_project_data.raw_project.get_output_mut() {
+    if raw_output_item.inherits_from_exe.is_some() && !matches!(&initial_project_data.project_type, FinalProjectType::Test { .. }) {
+      return Err(ProjectLoadFailureReason::Other(format!(
+        "Output item '{}' in project '{}' specifies '{}', but '{}' is not a test project. inherits_from_exe may only be given to test executables.",
+        output_name.yellow(),
+        initial_project_data.raw_project.name,
+        "inherits_from_exe".purple(),
+        initial_project_data.raw_project.name
+      )));
+    }
+
     if let FinalProjectType::Test { framework } = &initial_project_data.project_type {
       if raw_output_item.link.is_none() {
         raw_output_item.link = Some(LinkSection::Uncategorized(Vec::new()));

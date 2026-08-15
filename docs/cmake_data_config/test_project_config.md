@@ -16,11 +16,38 @@
   otherwise an error will be thrown when trying to generate or configure a test project.
 2. Test projects cannot have subprojects.
 3. Test projects can only build executables. No sense building a test that can't be run.
-4. Each test executable automatically has access to both the specified test framework
-  and all code used to build the library or executables in the current project (same level only).
-  See [output.md](properties/output.md) for some additional info.
-5. The [output.requires_custom_main](properties/output.md#requires_custom_main) property only affects
+4. Each test executable automatically has access to the specified test framework, and inherits code,
+  links, and defines from **exactly one** output of the project being tested.
+  See [Automatic Inheritance](#automatic-inheritance) below.
+5. The [output.requires_custom_main](properties/output.md#requires_custom_main) and
+  [output.inherits_from_exe](properties/output.md#inherits_from_exe) properties only affect
   test project executables.
+
+## Automatic Inheritance
+
+The purpose of tests is to verify assumptions developers make about a project's code. Each test must
+therefore have access to the source code, libraries, and configuration used to build a project's library
+or executables. GCMake handles this inheritance automatically;
+**Each test executable always inherits source code, linked libraries, and compiler defines from exactly one output of the project being
+tested (its direct parent project).** This is done automatically when possible, but sometimes requires minimal configuration from you:
+
+- If the parent project defines a **single output** (its library, or its only executable), that
+  output is inherited automatically. Nothing needs to be configured.
+- If the parent project defines **multiple executables**, each test executable must specify which
+  executable it inherits from using [inherits_from_exe](properties/output.md#inherits_from_exe):
+
+``` yaml
+# tests/my-test/cmake_data.yaml, where the parent project defines
+# executables 'first-exe' and 'second-exe'.
+output:
+  my-test:
+    output_type: Executable
+    entry_file: main.cpp
+    inherits_from_exe: first-exe
+```
+
+Regular [link](properties/output.md#link) entries may still be used to add extra dependencies to a
+test executable, but they never replace the inheritance described above.
 
 ## Include Prefix Accumulation
 

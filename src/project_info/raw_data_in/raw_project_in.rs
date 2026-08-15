@@ -340,6 +340,7 @@ impl LinkSection {
 #[serde(deny_unknown_fields)]
 pub struct RawCompiledItem {
   pub requires_custom_main: Option<bool>, // Used for tests executables only
+  pub inherits_from_exe: Option<String>, // Used for test executables only
   pub output_type: OutputItemType,
   pub entry_file: String,
   pub windows_icon: Option<String>, 

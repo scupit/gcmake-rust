@@ -1851,7 +1851,7 @@ impl<'a> DependencyGraph<'a> {
   // Makes these associations within a project:
   //    Tests -> project outputs -> pre-build
   // Which ensures that pre-build scripts are built before project outputs, and project outputs are
-  // built before tests. Also ensures that all tests in a project depend on all immediate outputs
+  // built before tests. Also ensures that all tests in a project depend on immediate outputs
   // of the project.
   fn make_auto_inner_project_link_associations(&self) -> Result<(), GraphLoadFailureReason<'a>> {
     if let Some(pre_build_target) = &self.pre_build_wrapper {
@@ -1873,25 +1873,43 @@ impl<'a> DependencyGraph<'a> {
     }
 
     for (_, test_project) in &self.test_projects {
-      // Each target in a test project must depend on every target output from the project.
-      // This is because tests should be able to make use of all code used by executables in the
-      // project (or for libraries, make use of the library). As a result, all tests must be built after
-      // project output.
+      // Each target in a test project depends on exactly one output of the project being tested,
+      // so inheritance of code, links, and defines is always unambiguous. When the project defines
+      // a single output (its library, or its only executable), that output is inherited implicitly.
+      // When the project defines multiple executables, the test target's 'inherits_from_exe'
+      // (guaranteed present and valid by project load validation) names the executable to inherit
+      // from. This link also guarantees tests are built after the project output they test.
       for (_, test_target_rc) in test_project.as_ref().borrow().targets.borrow().iter() {
         let test_target: &mut TargetNode = &mut test_target_rc.as_ref().borrow_mut();
 
-        for (project_output_name, project_output_rc) in self.targets.borrow().iter() {
-          let spec_info_clone: SystemSpecifierWrapper = {
-            project_output_rc.as_ref().borrow().system_specifier_info.clone()
-          };
+        let borrowed_project_targets = self.targets.borrow();
 
-          test_target.insert_link(Link::new(
-            project_output_name.to_string(),
-            spec_info_clone,
-            Rc::downgrade(project_output_rc),
-            LinkMode::Private
-          ));
+        // TODO: Refactor this. Works, but could be cleaner.
+        let (inherited_output_name, inherited_output_rc) = if borrowed_project_targets.len() == 1 {
+          let (single_output_name, single_output_rc) = borrowed_project_targets.iter().next().unwrap();
+          (single_output_name.to_string(), single_output_rc)
         }
+        else {
+          let named_exe: String = test_target.maybe_regular_output()
+            .and_then(|test_output| test_output.inherits_from_exe.clone())
+            .expect("A test executable in a multi-executable project always specifies inherits_from_exe (validated at project load).");
+
+          let matching_output_rc = borrowed_project_targets.get(&named_exe)
+            .expect("inherits_from_exe always names an existing executable output of the project being tested (validated at project load).");
+
+          (named_exe, matching_output_rc)
+        };
+
+        let spec_info_clone: SystemSpecifierWrapper = {
+          inherited_output_rc.as_ref().borrow().system_specifier_info.clone()
+        };
+
+        test_target.insert_link(Link::new(
+          inherited_output_name,
+          spec_info_clone,
+          Rc::downgrade(inherited_output_rc),
+          LinkMode::Private
+        ));
       }
 
       test_project.as_ref().borrow().make_auto_inner_project_link_associations()?;

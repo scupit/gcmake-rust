@@ -136,7 +136,7 @@ impl<T: Clone> ChoiceResolver<T> for ChoiceValue<T> {
   }
 }
 
-type PromptChoice<'a, T> = (&'a str, &'a dyn ChoiceResolver<T>);
+pub type PromptChoice<'a, T> = (&'a str, &'a dyn ChoiceResolver<T>);
 
 pub fn prompt_with_choices<T>(
   prompt_title: impl Display,

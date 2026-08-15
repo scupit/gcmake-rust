@@ -9,7 +9,7 @@ use serde::Serialize;
 
 use std::{fs::{File, remove_dir_all, create_dir_all, self}, io::{self, ErrorKind}, path::{Path, PathBuf}};
 
-use crate::{program_actions::{ProjectTypeCreating, gcmake_config_root_dir}, common::prompt::{prompt_until_boolean, prompt_until_satisfies_or_default}, project_info::{base_include_prefix_for_test, gcmake_constants::{SRC_DIR_NAME, INCLUDE_DIR_NAME, ASSETS_DIR_NAME, SUBPROJECTS_DIR_NAME, TESTS_DIR_NAME}, validators::{is_valid_base_include_prefix}, FinalTestFramework}, project_generator::{project_generator_prompts::{prompt_for_project_output_type, prompt_for_language, prompt_for_vendor, prompt_for_description, prompt_for_needs_custom_main}, c_file_generation::generate_c_main, cpp_file_generation::{generate_cpp_main, TestMainInitInfo}}};
+use crate::{program_actions::{ProjectTypeCreating, gcmake_config_root_dir}, common::prompt::{prompt_until_boolean, prompt_until_satisfies_or_default}, project_info::{base_include_prefix_for_test, gcmake_constants::{SRC_DIR_NAME, INCLUDE_DIR_NAME, ASSETS_DIR_NAME, SUBPROJECTS_DIR_NAME, TESTS_DIR_NAME}, validators::{is_valid_base_include_prefix}, FinalTestFramework}, project_generator::{project_generator_prompts::{prompt_for_project_output_type, prompt_for_language, prompt_for_vendor, prompt_for_description, prompt_for_needs_custom_main, prompt_for_inherits_from_exe}, c_file_generation::generate_c_main, cpp_file_generation::{generate_cpp_main, TestMainInitInfo}}};
 use colored::*;
 
 pub struct GeneralNewProjectInfo {
@@ -108,6 +108,24 @@ pub fn create_project_at(
       _ => None
     };
 
+    // Tests in a project which defines multiple executables must explicitly state which
+    // executable they inherit from. When the parent project only defines a single output,
+    // inheritance is implicit and unambiguous, so nothing needs to be written.
+    let inherits_from_exe: Option<String> = match &project_type_creating {
+      ProjectTypeCreating::Test { parent_project } => {
+        let mut exe_names: Vec<&str> = parent_project.get_outputs()
+          .keys()
+          .map(|output_name| output_name.as_str())
+          .collect();
+        exe_names.sort();
+
+        if exe_names.len() > 1
+          { Some(prompt_for_inherits_from_exe(&exe_names)?) }
+          else { None }
+      },
+      _ => None
+    };
+
     let project_info: DefaultProjectInfo = build_default_project_info(
       &project_type_creating,
       project_name,
@@ -116,7 +134,8 @@ pub fn create_project_at(
       &output_type_selection,
       &project_description,
       &project_vendor,
-      requires_custom_main
+      requires_custom_main,
+      inherits_from_exe
     );
 
     // ----------------------------------------
@@ -288,7 +307,8 @@ fn build_default_project_info(
   output_type_selection: &CreationProjectOutputType,
   project_description: &str,
   project_vendor: &str,
-  requires_custom_main: Option<bool>
+  requires_custom_main: Option<bool>,
+  inherits_from_exe: Option<String>
 ) -> DefaultProjectInfo {
   match project_type_creating {
     ProjectTypeCreating::RootProject { .. } => {
@@ -301,7 +321,8 @@ fn build_default_project_info(
           project_type_creating,
           project_description,
           project_vendor,
-          requires_custom_main
+          requires_custom_main,
+          None
         )
       )
     },
@@ -327,7 +348,8 @@ fn build_default_project_info(
           output_type_selection,
           project_type_creating,
           project_description,
-          requires_custom_main
+          requires_custom_main,
+          inherits_from_exe
         )
       )
     }

@@ -357,7 +357,9 @@ pub struct CompiledOutputItem {
   pub emscripten_html_shell_relative_to_project_root: Option<PathBuf>,
   pub build_config: Option<FinalTargetBuildConfigMap>,
   pub system_specifier: SystemSpecifierWrapper,
-  pub requires_custom_main: bool
+  pub requires_custom_main: bool,
+  // Used for test executables only. Docs explain in more detail.
+  pub inherits_from_exe: Option<String>
 }
 
 impl CompiledOutputItem {
@@ -571,7 +573,8 @@ impl CompiledOutputItem {
         .clone()
         .map(PathBuf::from),
       build_config: Self::resolve_full_build_config(raw_output_item, valid_feature_list)?,
-      requires_custom_main: raw_output_item.requires_custom_main.unwrap_or(false)
+      requires_custom_main: raw_output_item.requires_custom_main.unwrap_or(false),
+      inherits_from_exe: raw_output_item.inherits_from_exe.clone()
     };
 
     if let Some(raw_links) = &raw_output_item.link {

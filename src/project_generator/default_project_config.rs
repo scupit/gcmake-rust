@@ -355,7 +355,8 @@ pub fn get_default_project_config(
   project_type_creating: &ProjectTypeCreating,
   project_description: &str,
   project_vendor: &str,
-  requires_custom_main: Option<bool>
+  requires_custom_main: Option<bool>,
+  inherits_from_exe: Option<String>
 ) -> RawProject {
   let config_options = DefaultProjectConfigOptions {
     supported_compilers: supported_compilers(project_type_creating)
@@ -399,7 +400,8 @@ pub fn get_default_project_config(
         link: None,
         language_features: None,
         build_config: None,
-        requires_custom_main
+        requires_custom_main,
+        inherits_from_exe
       })
     ]),
     predefined_dependencies: needed_predefined_dependencies(&config_options, requires_cppfront),
@@ -443,7 +445,8 @@ pub fn get_default_subproject_config(
       project_type_creaing,
       project_description,
       "VENDOR FIELD NOT USED FOR SUBPROJECTS",
-      requires_custom_main
+      requires_custom_main,
+      None
     )
   )
 }
@@ -455,7 +458,8 @@ pub fn get_default_test_project_config(
   project_output_type: &CreationProjectOutputType,
   project_type_creaing: &ProjectTypeCreating,
   project_description: &str,
-  requires_custom_main: Option<bool>
+  requires_custom_main: Option<bool>,
+  inherits_from_exe: Option<String>
 ) -> RawTestProject {
   RawTestProject::from(RawSubproject::from(
     get_default_project_config(
@@ -466,7 +470,8 @@ pub fn get_default_test_project_config(
       project_type_creaing,
       project_description,
       "VENDOR FIELD NOT USED FOR TEST PROJECTS",
-      requires_custom_main
+      requires_custom_main,
+      inherits_from_exe
     )
   ))
 }

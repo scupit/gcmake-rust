@@ -2401,24 +2401,37 @@ impl<'a> CMakeListsWriter<'a> {
 
       if self.project_data.is_test_project() {
         let parent_project_id = self.dep_graph_ref().parent_project().unwrap().as_ref().borrow().project_id();
-        
-        // Only build the test if every target we're testing is actually also built.
-        let parent_target_existence_check: String = self.sorted_target_info.regular_targets_with_project_id(parent_project_id)
+
+        // Only build the test if every target it actually depends on from the project being
+        // tested (its inherited output plus any explicitly linked outputs) is also built.
+        let needed_parent_target_names: BTreeSet<String> = self.sorted_target_info
+          .regular_dependencies_by_mode(&unwrapped_target)
+          .into_iter()
+          .flat_map(|(_, dep_node_list)| dep_node_list)
+          .filter(|dep_node| dep_node.as_ref().borrow().container_project_id() == parent_project_id)
+          .map(|dep_node| dep_node.as_ref().borrow().get_name().to_string())
+          .collect();
+
+        let parent_target_existence_check: String = needed_parent_target_names
           .iter()
-          .map(|parent_target|
-            format!(
-              "DEFINED TARGET_{}_INSTALL_MODE",
-              parent_target.0.as_ref().borrow().get_name().to_string()
-            )
-          )
+          .map(|parent_target_name| format!("DEFINED TARGET_{}_INSTALL_MODE", parent_target_name))
           .collect::<Vec<String>>()
           .join(" AND ");
 
-        writeln!(&self.cmakelists_file,
-          "if( {} AND ({}) )",
-          parent_target_existence_check,
-          system_contstraint_conditional_expression(unwrapped_target.as_ref().borrow().get_system_spec_info())
-        )?;
+        let system_constraint_check: String = system_contstraint_conditional_expression(
+          unwrapped_target.as_ref().borrow().get_system_spec_info()
+        );
+
+        if parent_target_existence_check.is_empty() {
+          writeln!(&self.cmakelists_file, "if( ({}) )", system_constraint_check)?;
+        }
+        else {
+          writeln!(&self.cmakelists_file,
+            "if( {} AND ({}) )",
+            parent_target_existence_check,
+            system_constraint_check
+          )?;
+        }
       }
       else {
         writeln!(&self.cmakelists_file,

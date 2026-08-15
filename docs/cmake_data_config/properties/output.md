@@ -18,15 +18,13 @@ dependencies to their consumers.
 `CompiledLib`, `SharedLib`, and `StaticLib` libraries pass their compiler defines and *public* linked
 dependencies to their consumers.
 
-## Test Executables
+### Test Executables
 
-Executables build by test projects have a few additional properties:
+Executables built by [test projects](../test_project_config.md) have a few additional properties:
 
 1. They automatically declare the project's test framework as a dependency.
-2. If the project builds a library, then that library is automatically linked to each test executable.
-  If the project builds executables, then all dependencies for each executable are automatically linked to
-  each test executable. Essentially, test executables automatically have access to the project's test framework
-  and all code written for the project.
+2. They inherit code, linked libraries, and compiler defines from **exactly one**
+  output of the project being tested. See [Automatic Inheritance](../test_project_config.md#automatic-inheritance) for additional information on the rule. See [inherits_from_exe](#inherits_from_exe) below for details on the property itself.
 
 ## Property list
 
@@ -41,6 +39,7 @@ Executables build by test projects have a few additional properties:
 | [build_config](#build_config) | *Optional* | `Map` (see the property for more info.) | Define additional build configuration which is specific to the output item only. |
 | [defines](#defines) | *Optional* | `List<String>` | This is an 'alias' property for setting compiler defines for a target which are always applied (AllConfigs, AllCompilers). |
 | [requires_custom_main](#requires_custom_main) | *Optional* | boolean | **Applies to test executables only.** Dictates whether or not the test executable must provide its own main function. |
+| [inherits_from_exe](#inherits_from_exe) | *Optional*, unless the tested project defines multiple executables | `String` (plain executable output name) | **Applies to test executables only.** Names the executable output of the tested project from which this test inherits code, links, and defines. |
 
 ### output_type
 
@@ -406,4 +405,85 @@ output:
     output_type: Executable
     entry_file: main.cpp
     requires_custom_main: true
+```
+
+### inherits_from_exe
+
+> *Optional* `String` (plain executable output name), **unless the tested project defines multiple
+> executables**, in which case it is required.
+>
+> **NOTE:** This property applies to test executables only.
+
+When a project defines multiple executable outputs, this property must be used to disambiguate which of those executables each test inherits
+links, flags, and defines from. Refer to [Automatic Inheritance](../test_project_config.md#automatic-inheritance) for more information on the rule.
+
+The value must be the plain name of an executable output defined by the tested project — never a
+[link specifier](../data_formats.md#link-specifier). Values containing `::` are rejected.
+
+For example, let's say we have an executable project configured with these outputs:
+
+```yaml
+# <project-directory>/cmake_data.yaml
+name: example-project
+include_prefix: EXAMPLE_PROJECT
+description: Example project used to demonstrate inherits_from_exe
+vendor: john-ceeplusplus
+version: 0.0.1
+default_build_type: Debug
+
+languages:
+  cpp:
+    min_standard: 17
+
+supported_compilers:
+  - GCC
+  - Clang
+  - MSVC
+
+test_framework:
+  catch2:
+    git_tag: v3.3.2
+
+predefined_dependencies:
+  nlohmann_json:
+    git_tag: v3.11.2
+  fmt:
+    git_tag: "9.1.0"
+
+output:
+  first-exe:
+    output_type: Executable
+    entry_file: first-exe.cpp
+    link:
+      - nlohmann_json::nlohmann_json
+  second-exe:
+    output_type: Executable
+    entry_file: second-exe.cpp
+    link:
+      - nlohmann_json::nlohmann_json
+    defines:
+      - IS_PLUGIN_SYSTEM_ENABLED=1
+
+build_configs:
+  Debug: {}
+  Release: {}
+```
+
+You could have a test project configured like so:
+
+``` yaml
+# Project being tested defines executables 'first-exe' and 'second-exe'.
+#
+# <project-directory>/tests/<some-test-project-directory>/cmake_data.yaml
+output:
+  my-test:
+    output_type: Executable
+    entry_file: main.cpp
+    # This test compiles with second-exe's code, links, and defines.
+    # They're essentially the same as first-exe, but you get IS_PLUGIN_SYSTEM_ENABLED=1
+    # as well.
+    inherits_from_exe: second-exe
+    link:
+      # Extra dependencies may still be added, but never replace the inheritance above.
+      - fmt::fmt
 ```

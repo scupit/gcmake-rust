@@ -128,6 +128,16 @@ output:
         - some-gcmake-dep::{ some-lib, another-lib }
 ```
 
+## Test Executable Links
+
+Test executables automatically inherit the code, links, and defines of **exactly one** output of the
+project they test. When the tested project defines multiple outputs, each test executable must
+name which output it inherits from using
+[inherits_from_exe](properties/output.md#inherits_from_exe). If the project being testest only specifies a single output
+(i.e., library projects, or an executable project with only one output), then the inheritance is inferred and `inherits_from_exe`
+doesn't need to be specified. In either case, regular links may still be added to a test executable. See
+[test project configuration](test_project_config.md#automatic-inheritance) for details.
+
 ## Conditional Dependencies
 
 [gcmake_dependencies](./properties/gcmake_dependencies.md) and
