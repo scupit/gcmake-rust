@@ -133,7 +133,6 @@ workaround and its catalog note.
 | URL fallback when git is missing on the user's system | (writer TODO) | Both-methods configs still require the user to pick one |
 | `config_file_project_name` recorded but unused by the writer | glfw | Informational only |
 | `predep-info` prints raw config only, never resolved project info | (info printer TODO) | Acceptable |
-| Per-header stb targets incomplete ("There are more") | stb | Add alongside next stb touch |
 | kokkos internal component targets unexposed | kokkos | Facade target only; components commented out pending need |
 
 ## Staleness
@@ -150,10 +149,10 @@ upstream CMake has likely moved.
 | 2022-11 | re2, pugixml, asio, brotli, catch2, cli11, crow, doctest, emscripten, googletest, zstd, freetype, ftxui, yaml-cpp |
 | 2023-01 | curl, glew, opengl, threads, zlib |
 | 2023-06/07 | fmt, imgui, kokkos, openmp, cuda |
-| 2023-10 | sqlite3, stb, glfw |
+| 2023-10 | sqlite3, glfw |
 | 2023-12 | raylib, lws, sdl2, wxwidgets |
 | 2024-01 | cppfront, glm |
-| 2026-08 | openssl (README only), sfml |
+| 2026-08 | openssl (README only), sfml, stb |
 
 High-priority refresh candidates, weighing staleness × upstream churn × user impact: **imgui**
 (defect 2), **catch2/googletest** (test frameworks, widely used), **crow** (the pinned

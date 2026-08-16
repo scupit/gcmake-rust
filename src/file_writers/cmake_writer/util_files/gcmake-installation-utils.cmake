@@ -7,11 +7,28 @@ endif()
 function( configure_installation
   project_component_name_var
 )
-  set( additional_installs ${MY_ADDITIONAL_DEPENDENCY_INSTALL_TARGETS} )
-  list( REMOVE_DUPLICATES additional_installs )
+  # MY_ADDITIONAL_DEPENDENCY_INSTALL_TARGETS and MY_ADDITIONAL_RELATIVE_DEP_PATHS are parallel
+  # lists, so duplicates must be removed pairwise. Deduplicating each list on its own desyncs
+  # the ZIP_LISTS pairing whenever multiple targets from one dependency share a relative dep
+  # path (e.g. stb's per-header targets all using "dep/stb"): the paths list collapses, and
+  # every target after the first gets an empty FILE_SET install destination which doesn't
+  # match the INSTALL_INTERFACE include dir its exported target advertises.
+  set( _paired_additional_installs )
+  foreach( _additional_target _additional_dep_path IN ZIP_LISTS MY_ADDITIONAL_DEPENDENCY_INSTALL_TARGETS MY_ADDITIONAL_RELATIVE_DEP_PATHS )
+    list( APPEND _paired_additional_installs "${_additional_target}|${_additional_dep_path}" )
+  endforeach()
+  list( REMOVE_DUPLICATES _paired_additional_installs )
 
-  set( additional_relative_dep_paths ${MY_ADDITIONAL_RELATIVE_DEP_PATHS} )
-  list( REMOVE_DUPLICATES additional_relative_dep_paths )
+  set( additional_installs )
+  set( additional_relative_dep_paths )
+  foreach( _install_pair IN LISTS _paired_additional_installs )
+    string( REPLACE "|" ";" _install_pair_parts "${_install_pair}" )
+    list( GET _install_pair_parts 0 _additional_target )
+    list( GET _install_pair_parts 1 _additional_dep_path )
+    list( APPEND additional_installs ${_additional_target} )
+    list( APPEND additional_relative_dep_paths "${_additional_dep_path}" )
+  endforeach()
+
   list( TRANSFORM additional_relative_dep_paths PREPEND "${CMAKE_INSTALL_INCLUDEDIR}/" )
 
   list( LENGTH MY_INSTALLABLE_TARGETS has_targets_to_install )
