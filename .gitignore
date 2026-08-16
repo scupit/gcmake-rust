@@ -10,3 +10,6 @@ src/program_actions/default_file_creator/sphinx/mod.rs
 .mypy_cache/
 /target
 install-gcmake.ps1
+
+# Easy place for me to clone repositories I'm writing dependency configurations for.
+reference-repos/
