@@ -103,7 +103,7 @@ violation from an existing config, even a config this document cites as an exemp
 - **4.9** `debian_packages` SHOULD be provided for module-type deps that Debian packages
   (runtime and dev separated correctly). Subdirectory deps SHOULD NOT list packages for the
   dependency itself (the project builds its own copy), but SHOULD list packages for **system
-  libraries their targets link at runtime** (sfml's openal/vorbis/X11/freetype lists). The one
+  libraries their targets link at runtime** (sfml's vorbis/harfbuzz/X11/freetype lists). The one
   existing self-listing (sqlite3) is a confirmed mistake tracked in
   [known issues](dependency_config_known_issues.md#minor-defects).
 - **4.10** User-tunable passthrough values MUST go through `config_options` (with a

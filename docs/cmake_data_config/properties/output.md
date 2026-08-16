@@ -180,7 +180,7 @@ Executable example:
 ``` yaml
 predefined_dependencies:
   sfml:
-    git_tag: "2.5.1"
+    git_tag: "3.1.0"
   fmt:
     git_tag: "9.1.0"
 output:
@@ -215,7 +215,7 @@ Compiled library example:
 ``` yaml
 predefined_dependencies:
   sfml:
-    git_tag: "2.5.1"
+    git_tag: "3.1.0"
   fmt:
     git_tag: "9.1.0"
 output:

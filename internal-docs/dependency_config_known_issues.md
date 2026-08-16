@@ -67,6 +67,25 @@ catch2-style mechanism ([PC-bundled-tooling](dependency_problem_classes.md#pc-bu
 a registry `post_load.cmake` appending `${doctest_SOURCE_DIR}/scripts/cmake` to
 `CMAKE_MODULE_PATH` plus a writer change to `include( doctest )`.
 
+### 4. `target_compile_features` requests `c_std_*` even when C isn't an enabled project language (gcmake-rust side)
+
+**Status: Confirmed (2026-08 session, discovered while verifying the sfml refresh) · Severity:
+medium · Owner: gcmake-rust, not the registry**
+
+`cmakelists_writer.rs`'s per-output `target_compile_features(...)` block emits
+`c_std_${PROJECT_C_LANGUAGE_MINIMUM_STANDARD}` whenever `cmake_data.yaml`'s `languages.c` section
+is present (`language_config.c.is_some()`), regardless of whether `project( LANGUAGES ... )` (built
+from `_language_list`, which is keyed off whether any output actually has C source files) actually
+enabled C. A pure-C++ root project generated with `gcmake-rust new root-project --cpp` still gets a
+default `languages.c` entry in its `cmake_data.yaml`, so `project()` only declares `CXX`, no C
+compiler is ever identified, and configure fails: `target_compile_features no known features for C
+compiler ""`. Reproduced with no predefined dependencies involved — this isn't sfml/registry-
+specific, it just happened to surface while building the sfml verification scratch project.
+**Workaround used during verification:** delete the `languages.c` section from the scratch
+project's `cmake_data.yaml`. **Fix plan:** either stop defaulting `languages.c` into freshly
+generated C++-only projects, or gate the `c_std_*` compile-feature line on `_language_list`
+actually including `C` rather than on `language_config.c.is_some()`.
+
 ## Minor defects
 
 | Where | Problem | Fix |
@@ -128,15 +147,14 @@ upstream CMake has likely moved.
 | Last touched | Configs |
 | ------------ | ------- |
 | 2022-10 | argparse, cxxopts, magic_enum, nlohmann_json, spdlog |
-| 2022-11 | re2, pugixml, asio, brotli, catch2, cli11, crow, doctest, emscripten, googletest, zstd, freetype, ftxui, sfml, yaml-cpp |
+| 2022-11 | re2, pugixml, asio, brotli, catch2, cli11, crow, doctest, emscripten, googletest, zstd, freetype, ftxui, yaml-cpp |
 | 2023-01 | curl, glew, opengl, threads, zlib |
 | 2023-06/07 | fmt, imgui, kokkos, openmp, cuda |
 | 2023-10 | sqlite3, stb, glfw |
 | 2023-12 | raylib, lws, sdl2, wxwidgets |
 | 2024-01 | cppfront, glm |
-| 2026-08 | openssl (README only) |
+| 2026-08 | openssl (README only), sfml |
 
 High-priority refresh candidates, weighing staleness × upstream churn × user impact: **imgui**
-(defect 2), **catch2/googletest** (test frameworks, widely used), **sfml** (2.6.x → 3.x upstream
-rewrite changed target names and namespaces), **crow** (the pinned master-branch situation has
-had years to change).
+(defect 2), **catch2/googletest** (test frameworks, widely used), **crow** (the pinned
+master-branch situation has had years to change).

@@ -80,7 +80,9 @@ that implement its solution.
 - **Standard solution ladder** (least to most ownership):
   1. **Pin a branch/version and document why** — crow `master` (release needs Boost), yaml-cpp
      `master` (CMake bug #22909 hides `YAML_CPP_INSTALL` via `cmake_dependent_option` on the
-     release branch), sfml `2.6.x` (respects `CMAKE_INSTALL_LIBDIR`), glm `>= 1.0.0`.
+     release branch), sfml `>= 3.0.0` (2.x's targets aren't the `SFML::`-namespaced ones this
+     config links against; `2.6.x`+ was the old 2.x-era floor for respecting
+     `CMAKE_INSTALL_LIBDIR`), glm `>= 1.0.0`.
   2. **Fork and patch** — glm's unconditional `uninstall` target collided with GLFW's guarded one;
      `repo_url` points at the fork until upstream merges.
   3. **Author a wrapper repository** — cppfront-cmake-wrapper (build abstraction over a compiler
@@ -123,8 +125,11 @@ that implement its solution.
 - **Root cause:** GCMake needs one stable, lowercase, namespaced linking surface
   (`depname::target`) over an ecosystem of ad-hoc naming.
 - **Standard solution:** `actual_target_name` maps YAML names to real names;
-  `namespace_config.cmakelists_linking` handles true namespaces (`spdlog::`), prefixes (`sfml-`),
-  and empty namespaces (glfw, freetype, raylib, lws); intra-dep `requires` encodes prerequisite
+  `namespace_config.cmakelists_linking` handles true namespaces (`spdlog::`) and empty namespaces
+  (glfw, freetype, raylib, lws) — the plain-prefix style (`cmakelists_linking: "sfml-"`) no longer
+  has a live exemplar as of the SFML 3 refresh (2026-08), which switched to SFML's own new
+  `SFML::` alias targets, but the mechanism still supports it if a future dependency needs it;
+  intra-dep `requires` encodes prerequisite
   graphs (wxWidgets components; sdl2 `main` requires `sdl2 or static`); `mutually_exclusive`
   encodes can't-link-both flavor sets; `((windows))` / `(( cuda ))` prefixes platform-gate
   individual targets; `or` alternatives express "any one satisfies" (no preference ordering).
@@ -236,7 +241,9 @@ that implement its solution.
   `PDB_OUTPUT_DIRECTORY` → `MY_RUNTIME_OUTPUT_DIR` and `LIBRARY_OUTPUT_DIRECTORY` /
   `ARCHIVE_OUTPUT_DIRECTORY` / `COMPILE_PDB_OUTPUT_DIRECTORY` → `MY_LIBRARY_OUTPUT_DIR`
   (`COMPILE_PDB` covers MSVC static-library PDBs, which belong with archives).
-- **Exemplars:** [googletest](../gcmake-dependency-configs/googletest/post_load.cmake).
+- **Exemplars:** [googletest](../gcmake-dependency-configs/googletest/post_load.cmake),
+  [sfml](../gcmake-dependency-configs/sfml/post_load.cmake) (SFML 3 added this in its rewrite —
+  its 2.x branch didn't have it).
 - **Status:** Permanent.
 
 ### PC-lost-usage-reqs
@@ -462,7 +469,7 @@ that implement its solution.
   mode. Primarily for module-type deps (system libraries). Subdirectory deps that build their own
   copy generally don't need packages for *themselves* (deliberately removed in Oct 2022) — but
   SHOULD list packages for **system libraries their targets link at runtime** (sfml's
-  openal/vorbis/X11/freetype lists). sqlite3's self-referential listing is a confirmed
+  vorbis/harfbuzz/X11/freetype lists). sqlite3's self-referential listing is a confirmed
   mistake slated for removal (see [known issues](dependency_config_known_issues.md#minor-defects)).
 - **Exemplars:** [sdl2](../gcmake-dependency-configs/sdl2/dep_config.yaml),
   [wxwidgets](../gcmake-dependency-configs/wxwidgets/dep_config.yaml),
@@ -529,7 +536,7 @@ deserves a look.
 | raylib | PC-sibling-discovery, PC-cross-dep-requires, PC-option-hygiene, PC-emscripten (PLATFORM + ASYNCIFY gap), PC-version-impedance |
 | re2 | PC-option-hygiene |
 | sdl2 | PC-dll-distribution, PC-target-surface (exclusions, `main` requires), PC-emscripten (port flag), PC-debian-packages, PC-human-channel |
-| sfml | PC-global-pollution, PC-broken-upstream (2.6.x pin), PC-target-surface (prefix namespace, `((windows)) main`), PC-debian-packages, PC-human-channel |
+| sfml | PC-hardcoded-placement, PC-global-pollution (narrowed to `CMAKE_BUILD_TYPE` only as of the SFML 3 refresh), PC-broken-upstream (`>= 3.0.0` floor), PC-target-surface (`SFML::` namespace, `((windows)) main`), PC-debian-packages, PC-human-channel |
 | spdlog | PC-cross-dep-requires, PC-option-hygiene, PC-global-pollution, PC-install-toggle |
 | sqlite3 | Shape C; PC-version-impedance (year URLs), PC-system-libs, PC-emscripten (port flag), PC-debian-packages |
 | stb | Shape C; PC-system-libs, PC-target-surface (per-header targets) |

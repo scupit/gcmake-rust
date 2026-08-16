@@ -394,7 +394,7 @@ predefined_dependencies:
     # in order to keep versioning consistent. To always use the latest version, you could just
     # specify the "master" branch for the git tag.
     # git_tag: master
-    git_tag: "2.5.1"
+    git_tag: "3.1.0"
     # commit_hash: "2f11710abc5aa478503a7ff3f9e654bd2078ebab"
   nlohmann_json:
     # Downloads the source code as an archive (zip, tar.gz) using URL mode insted of Git.
@@ -447,7 +447,7 @@ output:
 predefined_dependencies:
   sfml:
     # Either git_tag or commit_hash is required to be speciifed.
-    git_tag: "2.5.1"
+    git_tag: "3.1.0"
     # commit_hash: "2f11710abc5aa478503a7ff3f9e654bd2078ebab"
 ```
 
