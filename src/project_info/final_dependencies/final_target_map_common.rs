@@ -1,8 +1,8 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap, HashSet};
 use std::hash::Hash;
 use std::iter::FromIterator;
 
-use crate::project_info::{LinkSpecifier, GivenConstraintSpecParseContext};
+use crate::project_info::{LinkSpecifier, FeatureValidationContext, GivenConstraintSpecParseContext};
 use crate::project_info::parsers::general_parser::ParseSuccess;
 use crate::project_info::parsers::link_spec_parser::LinkAccessMode;
 use crate::project_info::parsers::system_spec::platform_spec_parser::{SystemSpecifierWrapper, parse_leading_constraint_spec};
@@ -82,19 +82,22 @@ type NameParsedTargetMapIn<'a> = HashMap<String, (Option<SystemSpecifierWrapper>
 
 fn name_parsed_target_map<'a>(
   raw_target_map: &'a RawPredefinedTargetMapIn,
-  maybe_valid_feature_list: Option<&Vec<&str>>
+  dep_name: &str,
+  declared_features: &BTreeSet<String>
 ) -> Result<NameParsedTargetMapIn<'a>, String> {
   let mut resulting_map = NameParsedTargetMapIn::new();
-  
+
   for (target_name_with_system_spec, raw_target_config) in raw_target_map {
 
     let maybe_system_spec: Option<SystemSpecifierWrapper>;
     let target_name_only: &str;
 
     {
+      // Feature constraints written in a registry config always refer to the
+      // dependency's OWN declared features, never the consuming project's.
       let parsing_context = GivenConstraintSpecParseContext {
         is_before_output_name: false,
-        maybe_valid_feature_list
+        feature_context: FeatureValidationContext::PredefinedDep { dep_name, declared_features }
       };
 
       match parse_leading_constraint_spec(target_name_with_system_spec, parsing_context)? {
@@ -121,12 +124,13 @@ fn name_parsed_target_map<'a>(
 pub fn make_final_target_config_map(
   dep_name: &str,
   dep_info: &dyn RawPredepCommon,
-  valid_feature_list: Option<&Vec<&str>>
+  declared_features: &BTreeSet<String>
 ) -> Result<FinalTargetConfigMap, String> {
   let mut final_map = FinalTargetConfigMap::new();
   let raw_target_config_map_with_parsed_names: NameParsedTargetMapIn = name_parsed_target_map(
     dep_info.raw_target_map_in(),
-    valid_feature_list
+    dep_name,
+    declared_features
   )?;
 
   for (target_name, (maybe_system_spec, raw_target_config)) in &raw_target_config_map_with_parsed_names {
@@ -166,7 +170,7 @@ pub fn make_final_target_config_map(
           .map(|link_spec_str| LinkSpecifier::parse_from(
             link_spec_str,
             LinkAccessMode::UserFacing,
-            valid_feature_list
+            FeatureValidationContext::PredefinedDep { dep_name, declared_features }
           ))
           .collect::<Result<_, String>>()?;
 
@@ -180,14 +184,14 @@ pub fn make_final_target_config_map(
         for link_spec in &given_link_specs {
           if link_spec.get_target_list().len() > 1 {
             return Err(format!(
-              "Each link specifier in a predefined dependency's 'external_requirements' must only contain one library, however the given specifier \"{}\" contains multiple. Specify that as a list of singles instead.",
+              "Each link specifier in a predefined dependency's 'external_requires' must only contain one library, however the given specifier \"{}\" contains multiple. Specify that as a list of singles instead.",
               link_spec.original_spec_str()
             ));
           }
 
           if link_spec.get_namespace_queue().len() > 1 {
             return Err(format!(
-              "Each link specifier in a predefined dependency's 'external_requirements' must not have nested namespaces, however the given specifier \"{}\" nests namespaces.",
+              "Each link specifier in a predefined dependency's 'external_requires' must not have nested namespaces, however the given specifier \"{}\" nests namespaces.",
               link_spec.original_spec_str()
             ));
           }

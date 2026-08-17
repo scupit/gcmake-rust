@@ -61,7 +61,8 @@ that implement its solution.
   README ([PC-human-channel](#pc-human-channel)).
 - **Exemplars:** [sqlite3](../gcmake-dependency-configs/sqlite3/dep_config.yaml) (year URLs +
   digit concatenation), [kokkos](../gcmake-dependency-configs/kokkos/dep_config.yaml),
-  [imgui](../gcmake-dependency-configs/imgui/dep_config.yaml) (`v{{MAJOR}}.{{MINOR}}`),
+  [imgui](../gcmake-dependency-configs/imgui/dep_config.yaml) (two-part tags until v1.89, then
+  three-part, plus letter-suffix hotfix tags like `v1.92.9b` only reachable via git mode),
   [nlohmann_json](../gcmake-dependency-configs/nlohmann_json/dep_config.yaml),
   [freetype](../gcmake-dependency-configs/freetype/README.md).
 - **Status:** Partially blocked on tooling — raylib's 5.0 tag (no patch) needs range-based
@@ -171,9 +172,14 @@ that implement its solution.
   [raylib](../gcmake-dependency-configs/raylib/dep_config.yaml) (glfw + opengl),
   [imgui](../gcmake-dependency-configs/imgui/dep_config.yaml) (per-backend),
   [crow](../gcmake-dependency-configs/crow/dep_config.yaml).
-- **Status:** Permanent — but crow shows the *feature-conditional* variant is blocked on
-  predefined-dependency features (see [known issues](dependency_config_known_issues.md#tool-feature-gaps)):
-  until then, crow force-enables all features and unconditionally requires asio+openssl+zlib.
+- **Feature-conditional variant (supported as of 2026-08):** an `external_requires` entry may be
+  gated on one of the dependency's own declared features:
+  `- (( feature:ssl )) openssl::ssl`. The edge (and the required dep's download/import) is then
+  live only when the feature is enabled; an enabled feature whose required dep isn't imported
+  fails at CMake configure time with a generated guard, while unconditional requirements keep the
+  hard load-time error. Exemplars: crow (`ssl`→openssl, `compression`→zlib, list_var mode),
+  imgui (`freetype`→freetype, hook reads the feature's bool var).
+- **Status:** Permanent.
 
 ## Group III — Import-time damage control (subdirectory deps)
 
@@ -511,7 +517,7 @@ deserves a look.
 | catch2 | PC-option-hygiene, PC-bundled-tooling, PC-target-surface (mutual exclusion) |
 | cli11 | PC-target-surface (`actual_target_name`) |
 | cppfront | PC-broken-upstream (wrapper repo), PC-emscripten (incompatible-embed guard), `config_options`, PC-human-channel |
-| crow | PC-cross-dep-requires, PC-option-hygiene (feature workaround), PC-broken-upstream (master pin), PC-human-channel |
+| crow | PC-cross-dep-requires (feature-conditional: ssl/compression gate openssl/zlib), PC-broken-upstream (master pin), PC-human-channel |
 | cuda | PC-dll-distribution (glob+regex variant), PC-target-surface (`(( cuda ))` gates), PC-debian-packages |
 | curl | PC-dll-distribution (config-dir arithmetic), PC-debian-packages, PC-human-channel |
 | cxxopts | PC-install-toggle |
@@ -524,7 +530,7 @@ deserves a look.
 | glfw | PC-option-hygiene (FORCE'd), PC-identity-mismatch (`glfw3`), PC-emscripten (link-only flag), PC-install-toggle |
 | glm | PC-broken-upstream (fork), PC-option-hygiene (C++ std propagation), PC-target-surface (export-set fix), PC-install-toggle, PC-human-channel |
 | googletest | PC-hardcoded-placement, PC-install-toggle (default off), PC-target-surface (mutual exclusion) |
-| imgui | Shape C; PC-target-surface (system×API matrix, platform gates), PC-cross-dep-requires, PC-system-libs, PC-version-impedance |
+| imgui | Shape C; PC-target-surface (system×API matrix, platform gates), PC-cross-dep-requires (feature-conditional: freetype feature gates freetype dep), PC-system-libs, PC-version-impedance |
 | kokkos | PC-version-impedance (`{{PATCH:2}}`), PC-target-surface (facade-only exposure) |
 | lws | PC-cross-dep-requires, PC-dll-distribution, PC-target-surface (empty namespace), PC-debian-packages, PC-human-channel |
 | magic_enum | PC-install-toggle |

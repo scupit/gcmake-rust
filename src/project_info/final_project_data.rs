@@ -2,7 +2,7 @@ use std::{collections::{HashMap, HashSet, BTreeMap, BTreeSet}, path::{Path, Path
 
 use crate::{project_info::path_manipulation::cleaned_pathbuf, logger, program_actions::gcmake_dep_cache_dir, common::base64_encoded};
 
-use super::{path_manipulation::{cleaned_path_str, file_relative_to_dir, absolute_path, unix_style}, final_dependencies::{FinalGCMakeDependency, FinalPredefinedDependencyConfig, relative_hash_file_path}, raw_data_in::{dependencies::RawPredefinedDependencyMap, BuildConfigCompilerSpecifier, BuildType, DefaultCompiledLibType, LanguageConfigMap, LanguageFeatureSection, LinkSection, OutputItemType, PreBuildConfigIn, RawCompiledItem, RawDocGeneratorName, RawDocumentationGeneratorConfig, RawProject, RawTestFramework, SpecificCompilerSpecifier, TargetSpecificBuildType}, final_project_configurables::FinalProjectType, CompiledOutputItem, helpers::{parse_subproject_data, parse_root_project_data, find_prebuild_script, PrebuildScriptFile, validate_raw_project_outputs, ProjectOutputType, RetrievedCodeFileType, code_file_type, parse_test_project_data, find_doxyfile_in, validate_doxyfile_in, SphinxConfigFiles, find_sphinx_files, validate_conf_py_in}, PreBuildScript, FinalTestFramework, base_include_prefix_for_test, gcmake_constants::{SRC_DIR_NAME, INCLUDE_DIR_NAME, TESTS_DIR_NAME, SUBPROJECTS_DIR_NAME, DOCS_DIR_NAME, ASSETS_DIR_NAME}, FinalInstallerConfig, CompilerDefine, FinalBuildConfigMap, make_final_build_config_map, FinalTargetBuildConfigMap, FinalGlobalProperties, FinalShortcutConfig, parsers::{version_parser::ThreePartVersion, general_parser::ParseSuccess}, platform_spec_parser::parse_leading_constraint_spec, SystemSpecifierWrapper, FinalFeatureConfig, FinalFeatureEnabler, CodeFileInfo, FileRootGroup, PreBuildScriptType, FinalDocGeneratorName, FinalDocumentationInfo, CodeFileLang, GivenConstraintSpecParseContext};
+use super::{path_manipulation::{cleaned_path_str, file_relative_to_dir, absolute_path, unix_style}, final_dependencies::{FinalGCMakeDependency, FinalPredefinedDependencyConfig, relative_hash_file_path}, raw_data_in::{dependencies::RawPredefinedDependencyMap, BuildConfigCompilerSpecifier, BuildType, DefaultCompiledLibType, LanguageConfigMap, LanguageFeatureSection, LinkSection, OutputItemType, PreBuildConfigIn, RawCompiledItem, RawDocGeneratorName, RawDocumentationGeneratorConfig, RawProject, RawTestFramework, SpecificCompilerSpecifier, TargetSpecificBuildType}, final_project_configurables::FinalProjectType, CompiledOutputItem, helpers::{parse_subproject_data, parse_root_project_data, find_prebuild_script, PrebuildScriptFile, validate_raw_project_outputs, ProjectOutputType, RetrievedCodeFileType, code_file_type, parse_test_project_data, find_doxyfile_in, validate_doxyfile_in, SphinxConfigFiles, find_sphinx_files, validate_conf_py_in}, PreBuildScript, FinalTestFramework, base_include_prefix_for_test, gcmake_constants::{SRC_DIR_NAME, INCLUDE_DIR_NAME, TESTS_DIR_NAME, SUBPROJECTS_DIR_NAME, DOCS_DIR_NAME, ASSETS_DIR_NAME}, FinalInstallerConfig, CompilerDefine, FinalBuildConfigMap, make_final_build_config_map, FinalTargetBuildConfigMap, FinalGlobalProperties, FinalShortcutConfig, parsers::{version_parser::ThreePartVersion, general_parser::ParseSuccess}, platform_spec_parser::parse_leading_constraint_spec, SystemSpecifierWrapper, FinalFeatureConfig, FinalFeatureEnabler, CodeFileInfo, FileRootGroup, PreBuildScriptType, FinalDocGeneratorName, FinalDocumentationInfo, CodeFileLang, GivenConstraintSpecParseContext, FeatureValidationContext};
 use super::validators::{is_valid_lowercase_identifier, lowercase_identifier_help};
 use colored::*;
 
@@ -580,7 +580,6 @@ impl FinalProjectData {
         &project_paths,
       )?,
       predefined_dependencies: obtain_predefined_dependencies(
-        valid_feature_list.as_ref(),
         &initial_project_data,
         all_dep_config
       )?,
@@ -2293,8 +2292,7 @@ fn make_initial_root_project_info(
       let test_framework_lib: Rc<FinalPredefinedDependencyConfig> = FinalPredefinedDependencyConfig::new(
         all_dep_config,
         raw_framework_info.lib_config(),
-        raw_framework_info.name(),
-        valid_feature_list.as_ref()
+        raw_framework_info.name()
       )
         .map(|config| Rc::new(config))
         .map_err(ProjectLoadFailureReason::Other)?;
@@ -2643,7 +2641,7 @@ fn obtain_output_items(
     {
       let usable_feature_list = referenced_feature_list(valid_feature_list);
       let parsing_context = GivenConstraintSpecParseContext {
-        maybe_valid_feature_list: usable_feature_list.as_ref(),
+        feature_context: FeatureValidationContext::ConsumingProject { valid_feature_list: usable_feature_list.as_ref() },
         is_before_output_name: true
       };
 
@@ -2684,7 +2682,6 @@ fn obtain_output_items(
 }
 
 fn obtain_predefined_dependencies(
-  valid_feature_list: Option<&Vec<String>>,
   initial_project_data: &InitialProjectData,
   all_dep_config: &RawPredefinedDependencyMap
 ) -> Result<PredefinedDepMap, ProjectLoadFailureReason> {
@@ -2704,8 +2701,7 @@ fn obtain_predefined_dependencies(
       let finalized_dep = FinalPredefinedDependencyConfig::new(
         all_dep_config,
         user_given_config,
-        dep_name,
-        referenced_feature_list(valid_feature_list).as_ref()
+        dep_name
       )
         .map_err(ProjectLoadFailureReason::Other)?;
 

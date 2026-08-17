@@ -446,6 +446,8 @@ motivating example is listed — that's usually the fastest way to understand th
 | `emscripten_config` | no | See §10. |
 | `debian_packages.runtime` / `.dev` | no | apt package names for CPack DEB dependency metadata. |
 | `config_options` | no | User-settable passthrough options: `{ name: { cmake_var, cache_description } }` (cppfront's `CPPFRONT_REVISION`/`CPPFRONT_REPOSITORY`). Values arrive via the user's `options:` map. |
+| `features` | no | Features the dependency declares: `{ name: { default, enables?, list_value? } }` (imgui's `freetype`; crow's `ssl`/`compression`). `enables` may only name features of the SAME dep. Feature names gate `external_requires` entries via `(( feature:<name> ))` prefixes (validated against the dep's own declared set), and each feature is exposed to hooks as a `GCMAKE_PREDEP_<dep>_FEATURE_<name>` boolean, registered and resolved in the consumer root's generated file BEFORE any Phase A block (all shapes support this; the field also exists on the module-dep structs). Users enable them via `features:` / `use_default_features:` on the import entry, or a project feature's `enables: [dep/feature]`. Unmet feature-gated requirements become configure-time FATAL_ERROR guards instead of load errors. |
+| `feature_mode.list_var` | no | Name of a CMake list variable which receives every enabled feature's `list_value` before hooks run (crow's `CROW_FEATURES`). Invalid without `features`. |
 | `links.github` / `links.gcmake_readme` | no | Info links for `predep-info`. |
 
 ### 8.2 `cmake_module` (`RawModuleDep`)

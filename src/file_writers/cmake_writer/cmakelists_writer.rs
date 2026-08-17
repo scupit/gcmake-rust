@@ -1,15 +1,15 @@
 use std::{collections::{HashSet, BTreeMap, BTreeSet }, fs::File, io::{self, Write, ErrorKind}, path::{PathBuf, Path}, rc::Rc, cell::{RefCell, Ref}, iter::FromIterator};
 
-use crate::{project_info::{final_project_data::{FinalProjectData, CppFileGrammar}, path_manipulation::{cleaned_pathbuf, file_relative_to_dir, unix_style}, final_dependencies::{GitRevisionSpecifier, PredefinedCMakeComponentsModuleDep, PredefinedSubdirDep, PredefinedCMakeModuleDep, FinalPredepInfo, GCMakeDependencyStatus, FinalPredefinedDependencyConfig, PredefinedDepFunctionality, FinalDownloadMethod, FinalDebianPackagesConfig, GCMakeDepIDHash}, raw_data_in::{BuildType, BuildConfigCompilerSpecifier, SpecificCompilerSpecifier, OutputItemType, TargetSpecificBuildType, dependencies::internal_dep_config::CMakeModuleType, DefaultCompiledLibType}, FinalProjectType, CompiledOutputItem, LinkMode, FinalTestFramework, dependency_graph_mod::dependency_graph::{DependencyGraph, OrderedTargetInfo, ProjectWrapper, TargetNode, SimpleNodeOutputType, Link, EmscriptenLinkFlagInfo, ContainedItem}, SystemSpecifierWrapper, CompilerDefine, FinalBuildConfig, CompilerFlag, LinkerFlag, gcmake_constants::{SRC_DIR_NAME, INCLUDE_DIR_NAME, ASSETS_DIR_NAME}, platform_spec_parser::parse_leading_constraint_spec, CodeFileInfo, RetrievedCodeFileType, PreBuildScriptType, CodeFileLang, GivenConstraintSpecParseContext, SystemSpecFeatureType, SystemSpecExpressionTree, SingleSystemSpec}, file_writers::cmake_writer::cmake_writer_helpers::system_constraint_generator_expression};
+use crate::{project_info::{final_project_data::{FinalProjectData, CppFileGrammar}, path_manipulation::{cleaned_pathbuf, file_relative_to_dir, unix_style}, final_dependencies::{GitRevisionSpecifier, PredefinedCMakeComponentsModuleDep, PredefinedSubdirDep, PredefinedCMakeModuleDep, FinalPredepInfo, GCMakeDependencyStatus, FinalPredefinedDependencyConfig, PredefinedDepFunctionality, FinalDownloadMethod, FinalDebianPackagesConfig, GCMakeDepIDHash}, raw_data_in::{BuildType, BuildConfigCompilerSpecifier, SpecificCompilerSpecifier, OutputItemType, TargetSpecificBuildType, dependencies::internal_dep_config::CMakeModuleType, DefaultCompiledLibType}, FinalProjectType, CompiledOutputItem, LinkMode, FinalTestFramework, dependency_graph_mod::dependency_graph::{DependencyGraph, OrderedTargetInfo, ProjectWrapper, TargetNode, SimpleNodeOutputType, Link, EmscriptenLinkFlagInfo, ContainedItem}, SystemSpecifierWrapper, CompilerDefine, FinalBuildConfig, CompilerFlag, LinkerFlag, gcmake_constants::{SRC_DIR_NAME, INCLUDE_DIR_NAME, ASSETS_DIR_NAME}, platform_spec_parser::parse_leading_constraint_spec, CodeFileInfo, RetrievedCodeFileType, PreBuildScriptType, CodeFileLang, GivenConstraintSpecParseContext, FeatureValidationContext, SystemSpecFeatureType, SystemSpecExpressionTree, SingleSystemSpec}, file_writers::cmake_writer::cmake_writer_helpers::system_constraint_generator_expression};
 
-use super::{cmake_utils_writer::CMakeUtilWriter, cmake_writer_helpers::{system_contstraint_conditional_expression, language_feature_name}};
+use super::{cmake_utils_writer::CMakeUtilWriter, cmake_writer_helpers::{system_contstraint_conditional_expression, language_feature_name, predep_feature_owner_token}};
 use colored::*;
 
 lazy_static! {
   static ref CUDA_CONSTRAINT: SystemSpecifierWrapper = parse_leading_constraint_spec(
     "(( cuda ))",
     GivenConstraintSpecParseContext {
-      maybe_valid_feature_list: None,
+      feature_context: FeatureValidationContext::TrustedReparse,
       is_before_output_name: false
     }
   ).unwrap().unwrap().value;
@@ -17,7 +17,7 @@ lazy_static! {
   static ref MINGW_CONSTRAINT: SystemSpecifierWrapper = parse_leading_constraint_spec(
     "(( mingw ))",
     GivenConstraintSpecParseContext {
-      maybe_valid_feature_list: None,
+      feature_context: FeatureValidationContext::TrustedReparse,
       is_before_output_name: false
     }
   ).unwrap().unwrap().value;
@@ -368,6 +368,11 @@ impl<'a> CMakeListsWriter<'a> {
       writeln!(&self.cmakelists_file, "gcmake_begin_config_file()")?;
       self.write_toplevel_tweaks()?;
       self.write_features()?;
+      // Predefined dependency features must be registered and resolved BEFORE any Phase A
+      // dependency import block. Dependency blocks are emitted in dependency order, so a
+      // gated dependency (e.g. freetype) appears before the dependency whose feature gates
+      // it (imgui), and its usage conditional reads the gating dep's feature variable.
+      self.write_predefined_dep_features()?;
 
       // Set language configuration info before dependencies so that
       // dependency configurations have access to the language version.
@@ -1257,6 +1262,31 @@ impl<'a> CMakeListsWriter<'a> {
             "if( {} )",
             usage_conditional.full_conditional_string_or(true)
           )?;
+
+          // Configure-time guards for unmet feature-gated requirements. Emitted inside this
+          // dependency's usage conditional so they only fire when the dependency is actually
+          // used, and before its hooks so a bad configuration fails fast with a clear message.
+          // Feature variables are guaranteed resolved here: the dep-feature pass runs before
+          // every Phase A block.
+          if let Some(dep_guards) = self.dep_graph_ref().get_gated_predep_requirement_guards().borrow().get(dep_name) {
+            for guard in dep_guards {
+              // The gate is rendered in yaml constraint syntax (like "((feature:freetype))")
+              // so the message names the exact feature(s) the user could disable instead of
+              // importing the missing dependency.
+              let rendered_gate: String = if guard.constraint.includes_all()
+                { String::from("(always)") }
+                else { guard.constraint.unwrap_specific_ref().to_string() };
+
+              writeln!(&self.cmakelists_file,
+                "if( {} )\n\tmessage( FATAL_ERROR \"'{}' (from predefined dependency '{}') requires {} whenever {} is enabled, but none of the dependencies which can satisfy that requirement are imported by this project. Either add one of them to your project's predefined_dependencies, or disable the feature(s) in that condition.\" )\nendif()",
+                system_contstraint_conditional_expression(&guard.constraint),
+                guard.requiring_target_yaml_name,
+                dep_name,
+                guard.alternative_yaml_names.join(" or "),
+                rendered_gate
+              )?;
+            }
+          }
 
           for (_, option_config) in dep_info.as_common().config_options_map() {
             write!(&self.cmakelists_file,
@@ -3103,7 +3133,7 @@ impl<'a> CMakeListsWriter<'a> {
                   "((not emscripten))",
                   GivenConstraintSpecParseContext {
                     is_before_output_name: false,
-                    maybe_valid_feature_list: None
+                    feature_context: FeatureValidationContext::TrustedReparse
                   }
                 )
                   .unwrap()
@@ -3151,7 +3181,7 @@ impl<'a> CMakeListsWriter<'a> {
               "((emscripten))",
               GivenConstraintSpecParseContext {
                 is_before_output_name: false,
-                maybe_valid_feature_list: None
+                feature_context: FeatureValidationContext::TrustedReparse
               }
             )
               .unwrap()
@@ -3953,7 +3983,7 @@ impl<'a> CMakeListsWriter<'a> {
       }
 
       write!(&self.cmakelists_file,
-        "gcmake_register_feature( NAME {}",
+        "gcmake_register_feature( ${{LOCAL_TOPLEVEL_PROJECT_NAME}} NAME {}",
         feature_name
       )?;
 
@@ -3971,18 +4001,24 @@ impl<'a> CMakeListsWriter<'a> {
       if !dep_enable_pairs.is_empty() {
         writeln!(&self.cmakelists_file, "\n\tDEP_ENABLES")?;
 
-        for (gcmake_dep_identifier, enables_feature_name) in dep_enable_pairs {
-          let internal_gcmake_dep_project_name: String = self.dep_graph_ref()
+        for (dep_identifier, enables_feature_name) in dep_enable_pairs {
+          // The graph has already validated the identifier as either a gcmake dependency
+          // or a predefined dependency (checked in that order), so a name which isn't a
+          // gcmake dependency here is guaranteed to be a predefined one.
+          let dep_owner_name: String = match self.dep_graph_ref()
             .root_project().as_ref().borrow()
             .get_gcmake_dependencies()
-            .get(gcmake_dep_identifier)
-            .unwrap().as_ref().borrow()
-            .internal_project_name()
-            .to_string();
-            
+            .get(dep_identifier)
+          {
+            Some(gcmake_dep) => gcmake_dep.as_ref().borrow()
+              .internal_project_name()
+              .to_string(),
+            None => predep_feature_owner_token(dep_identifier)
+          };
+
           writeln!(&self.cmakelists_file,
             "\t\t\"{}\" \"{}\"",
-            internal_gcmake_dep_project_name,
+            dep_owner_name,
             enables_feature_name
           )?;
         }
@@ -4009,9 +4045,118 @@ impl<'a> CMakeListsWriter<'a> {
 
     for (feature_name, _) in self.project_data.get_features() {
       writeln!(&self.cmakelists_file,
-        "gcmake_enable_feature_if_marked( {} )",
+        "gcmake_enable_feature_if_marked( ${{LOCAL_TOPLEVEL_PROJECT_NAME}} {} )",
         feature_name
       )?;
+    }
+
+    Ok(())
+  }
+
+  fn write_predefined_dep_features(&self) -> io::Result<()> {
+    // BTreeMap for deterministic emission order. Relative order between dependencies is
+    // irrelevant to correctness: this pass only initializes and resolves each dependency's
+    // own variables, and nothing here reads another dependency's.
+    let sorted_predefined_deps: BTreeMap<&str, &Rc<FinalPredefinedDependencyConfig>> = self.project_data
+      .get_predefined_dependencies()
+      .iter()
+      .map(|(dep_name, dep_config)| (&dep_name[..], dep_config))
+      .collect();
+
+    for (dep_name, dep_config) in sorted_predefined_deps {
+      let dep_features = dep_config.as_common().dep_features_map();
+
+      if dep_features.is_empty() {
+        continue;
+      }
+
+      let owner_token: String = predep_feature_owner_token(dep_name);
+
+      writeln!(&self.cmakelists_file,
+        "\n# ==== Features: predefined dependency '{}' ====",
+        dep_name
+      )?;
+
+      // The NOT DEFINED guard lets an outer project (when this project is itself consumed as
+      // a gcmake dependency) pre-set the value before this scope runs, mirroring how project
+      // feature defaults work.
+      writeln!(&self.cmakelists_file,
+        "if( NOT DEFINED {}_USE_DEFAULT_FEATURES )\n\tgcmake_set_use_default_features( {} {} )\nendif()",
+        owner_token,
+        owner_token,
+        if dep_config.is_using_default_features() { "ON" } else { "OFF" }
+      )?;
+
+      for (feature_name, feature_config) in dep_features {
+        write!(&self.cmakelists_file,
+          "gcmake_register_feature( {} NAME {}",
+          owner_token,
+          feature_name
+        )?;
+
+        if !feature_config.enables.is_empty() {
+          write!(&self.cmakelists_file, " ENABLES")?;
+
+          for enabled_feature_name in &feature_config.enables {
+            write!(&self.cmakelists_file, " {}", enabled_feature_name)?;
+          }
+        }
+
+        if feature_config.list_value != *feature_name {
+          write!(&self.cmakelists_file,
+            " LIST_VALUE \"{}\"",
+            feature_config.list_value
+          )?;
+        }
+
+        writeln!(&self.cmakelists_file, " )")?;
+      }
+
+      for user_enabled_feature in dep_config.specified_features() {
+        writeln!(&self.cmakelists_file,
+          "gcmake_mark_for_enable( {} {} )",
+          owner_token,
+          user_enabled_feature
+        )?;
+      }
+
+      let default_enabled_names: Vec<&str> = dep_features.iter()
+        .filter(|(_, feature_config)| feature_config.is_enabled_by_default)
+        .map(|(feature_name, _)| &feature_name[..])
+        .collect();
+
+      if !default_enabled_names.is_empty() {
+        writeln!(&self.cmakelists_file,
+          "if( {}_USE_DEFAULT_FEATURES )",
+          owner_token
+        )?;
+
+        for default_feature_name in default_enabled_names {
+          writeln!(&self.cmakelists_file,
+            "\tgcmake_mark_for_enable( {} {} )",
+            owner_token,
+            default_feature_name
+          )?;
+        }
+
+        writeln!(&self.cmakelists_file, "endif()")?;
+      }
+
+      for (feature_name, _) in dep_features {
+        writeln!(&self.cmakelists_file,
+          "gcmake_enable_feature_if_marked( {} {} )",
+          owner_token,
+          feature_name
+        )?;
+      }
+
+      if let Some(list_var_name) = dep_config.as_common().dep_feature_list_var() {
+        writeln!(&self.cmakelists_file,
+          "gcmake_get_enabled_feature_values( {} {} )",
+          owner_token,
+          list_var_name
+        )?;
+      }
     }
 
     Ok(())

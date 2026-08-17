@@ -42,20 +42,7 @@ already lowercase when written. **Fix plan:** verify once via
 check on any one config (sdl2 is easiest), then batch-fix all eight and re-verify sdl2 + one
 finder-based config (zlib).
 
-### 2. imgui custom_populate references renamed upstream headers
-
-**Status: Confirmed · Severity: medium · Class:** Shape C / upstream drift
-
-`imgui/custom_populate.cmake` core header list names `imgui_rectpack.h`, `imgui_textedit.h`,
-`imgui_truetype.h`; upstream's files are `imstb_rectpack.h`, `imstb_textedit.h`,
-`imstb_truetype.h`. Not a bug at time of writing (2023) — upstream renamed. Additionally, line
-~54 appends the opengl3 loader header to `imgui_${api}_headers` while every other reference uses
-`_imgui_${api}_headers` (leading underscore), so `imgui_impl_opengl3_loader.h` is never wrapped
-into the header file set. **Fix plan:** part of an imgui config refresh via
-[Procedure C](dependency_config_procedures.md#procedure-c--update-an-existing-configuration)
-(last touched 2023-06-28; check out imgui from that era first).
-
-### 3. doctest test-framework include path breaks with the dep cache (gcmake-rust side)
+### 2. doctest test-framework include path breaks with the dep cache (gcmake-rust side)
 
 **Status: Confirmed (2026-08 session) · Severity: medium · Owner: gcmake-rust, not the registry**
 
@@ -67,7 +54,7 @@ catch2-style mechanism ([PC-bundled-tooling](dependency_problem_classes.md#pc-bu
 a registry `post_load.cmake` appending `${doctest_SOURCE_DIR}/scripts/cmake` to
 `CMAKE_MODULE_PATH` plus a writer change to `include( doctest )`.
 
-### 4. `target_compile_features` requests `c_std_*` even when C isn't an enabled project language (gcmake-rust side)
+### 3. `target_compile_features` requests `c_std_*` even when C isn't an enabled project language (gcmake-rust side)
 
 **Status: Confirmed (2026-08 session, discovered while verifying the sfml refresh) · Severity:
 medium · Owner: gcmake-rust, not the registry**
@@ -86,6 +73,50 @@ project's `cmake_data.yaml`. **Fix plan:** either stop defaulting `languages.c` 
 generated C++-only projects, or gate the `c_std_*` compile-feature line on `_language_list`
 actually including `C` rather than on `language_config.c.is_some()`.
 
+### 4. Interface-source dependencies are compiled twice when linked through a `SharedLib` output
+
+**Status: Confirmed (2026-08-16, MSVC + MinGW) · Severity: medium · Owner: design question,
+affects gcmake-rust and any custom-populate dep**
+
+A custom-populate dependency's sources are attached as `INTERFACE`, so they compile into whichever
+target links them. Those usage requirements propagate through a `public` link, so when project
+output A is a `SharedLib` that PUBLIC-links imgui and output B (an exe) links A, **B compiles
+imgui's sources again on top of the copy already inside A's DLL**. Verified with Visual Studio 18
+2026: `scratch-imgui.exe`'s build compiles `imgui.cpp` and `imgui_draw.cpp` despite
+`scratch-lib.dll` already containing them. Each copy gets its own `GImGui`, so ImGui contexts
+don't cross the boundary.
+
+Harmless for `StaticLib` outputs (archive semantics mean the duplicate member is never pulled) and
+for `private` links (`$<LINK_ONLY:>` strips usage requirements). Documented as a user-facing
+caveat in [imgui's README](../gcmake-dependency-configs/imgui/README.md) rather than worked around,
+since upstream ImGui explicitly advises against shared-library use for the same reason.
+
+**Related, same session:** MSVC will not export a custom-populate dep's symbols from a `SharedLib`
+output at all (ImGui's `IMGUI_API` is empty by default and has no two-state export/import form like
+CMake's `generate_export_header` produces), so consumers of the install who call ImGui directly get
+`LNK2019 unresolved external symbol`. MinGW masks this by auto-exporting all DLL symbols.
+
+**`FILE_SET SOURCES` does NOT fix this — tested and rejected 2026-08-16.** CMake 4.4's new
+`FILE_SET SOURCES` has identical propagation semantics to plain `INTERFACE_SOURCES`. A/B tested
+under Visual Studio 18 2026 with the same target layout (INTERFACE dep → PUBLIC-linked SHARED lib
+→ exe): the exe compiled the dependency a second time in *both* variants. The CMake docs state it
+directly — "The sources specified by the INTERFACE_SOURCES property are propagated, transitively,
+to all the dependents." Nor can its install be skipped: an exported target with an interface file
+set MUST install that set, and wrapping the `FILES` entries in `$<BUILD_INTERFACE:...>` does not
+help (the set's *existence* triggers the requirement, not its contents). Adopting it would mean
+the same in-tree double-compile, plus forced source installation, plus a CMake >= 4.4 floor on
+every downstream consumer — strictly worse than the current build-interface-only approach.
+
+**Possible future fix:** teach the writer not to propagate a custom-populate dep's interface
+sources past a compiled output, or build the dep as a real static library so there are no
+interface sources to propagate. The static-library route became viable when features for
+predefined dependencies landed (2026-08): the original blocker was that ImGui's compile-time
+configuration (`IMGUI_ENABLE_FREETYPE`) wasn't knowable before the dependency was built, but
+`GCMAKE_PREDEP_imgui_FEATURE_freetype` is now fully resolved before any dependency block runs,
+so `custom_populate.cmake` could compile a `STATIC` imgui_core with the define baked in. Still
+a real redesign of the imgui config (and vcpkg's port is the model), deferred until the
+double-compile actually bites someone.
+
 ## Minor defects
 
 | Where | Problem | Fix |
@@ -97,11 +128,12 @@ actually including `C` rather than on `language_config.c.is_some()`.
 | freetype/dep_config.yaml | `links:` present but all entries commented out (empty object) | Populate or remove |
 | sqlite3/dep_config.yaml | Lists `libsqlite3-0`/`libsqlite3-dev` although the dependency is always built into the project (subdirectory + custom populate) — confirmed a mistake by the author (2026-08) | Remove the `debian_packages` section on sqlite3's next touch; [standards 4.9](dependency_config_standards.md#4-dep_configyaml-standards) scopes subdirectory-dep deb packages to system-library prerequisites. Revisit only if sqlite3 ever gains a system-installed (module-type) configuration |
 | lws/post_load.cmake | Error message interpolates `${the_file_base_name}`, a variable that's never set in that hook (copied from zstd's) | Fix message; superseded if the error check is standardized into a util function (the hook's own TODO) |
+| freetype (install) | A project PUBLIC-linking `freetype::freetype` installs an export whose `INTERFACE_INCLUDE_DIRECTORIES` names `<prefix>/include/freetype2`, but nothing installs that directory, so every downstream consumer fails at configure: `Imported target "..." includes non-existent path ".../include/freetype2"`. Found 2026-08-16 while verifying imgui's freetype extension; not investigated further (imgui was isolated to finish that test) | Determine whether freetype's headers should be installed under the dep path like other subdirectory deps, or whether the exported include dir is simply wrong. Reproduce with a scratch project PUBLIC-linking freetype — no imgui needed |
 
 ## Design inconsistencies (standardization candidates, not bugs)
 
 - **Bundled test-tooling exposure has two mechanisms** — catch2 via registry post_load +
-  `CMAKE_MODULE_PATH`; doctest via writer-side literal include (currently broken, see defect 3).
+  `CMAKE_MODULE_PATH`; doctest via writer-side literal include (currently broken, see defect 2).
   Standards now prefer the module-path mechanism.
 - **DLL-copy opt-out option** (`<X>_WIN_SHOULD_COPY_DLL`) exists for sdl2, lws, glew but not
   openssl, zlib, zstd, brotli, curl, cuda, wxwidgets. Standards
@@ -124,7 +156,6 @@ workaround and its catalog note.
 
 | Gap | Carried by | Workaround in place |
 | --- | ---------- | ------------------- |
-| Features for predefined dependencies (`(( feature:x ))` constraints) | crow | pre_load force-enables all Crow features; asio+openssl+zlib unconditionally required (over-linking) |
 | Range-/version-conditional `version_transform` | raylib | URL method effectively unusable for the 5.0 tag (no patch component); git method works; design sketch in the YAML comments |
 | Per-target Debian packages | cuda | All packages listed dependency-wide |
 | Propagating link flags from a dep target to dependents (`-sASYNCIFY`) | raylib | GCMake passes `-sASYNCIFY` by default; `_raylib_compat` INTERFACE-target idea noted in YAML |
@@ -146,14 +177,14 @@ upstream CMake has likely moved.
 | Last touched | Configs |
 | ------------ | ------- |
 | 2022-10 | argparse, cxxopts, magic_enum, nlohmann_json, spdlog |
-| 2022-11 | re2, pugixml, asio, brotli, catch2, cli11, crow, doctest, emscripten, googletest, zstd, freetype, ftxui, yaml-cpp |
+| 2022-11 | re2, pugixml, asio, brotli, catch2, cli11, doctest, emscripten, googletest, zstd, freetype, ftxui, yaml-cpp |
 | 2023-01 | curl, glew, opengl, threads, zlib |
-| 2023-06/07 | fmt, imgui, kokkos, openmp, cuda |
+| 2023-06/07 | fmt, kokkos, openmp, cuda |
 | 2023-10 | sqlite3, glfw |
 | 2023-12 | raylib, lws, sdl2, wxwidgets |
 | 2024-01 | cppfront, glm |
-| 2026-08 | openssl (README only), sfml, stb |
+| 2026-08 | openssl (README only), sfml, stb, imgui, crow (features migration; the master-branch pin itself was NOT re-verified) |
 
-High-priority refresh candidates, weighing staleness × upstream churn × user impact: **imgui**
-(defect 2), **catch2/googletest** (test frameworks, widely used), **crow** (the pinned
-master-branch situation has had years to change).
+High-priority refresh candidates, weighing staleness × upstream churn × user impact:
+**catch2/googletest** (test frameworks, widely used), **crow's master-branch pin** (the
+features migration didn't re-check whether a Boost-free release now exists).

@@ -14,7 +14,11 @@ pub use final_predefined_cmake_module_dep::*;
 pub use final_target_map_common::{FinalRequirementSpecifier, FinalTargetConfig, FinalExternalRequirementSpecifier};
 pub use predep_module_common::{PredefinedDepFunctionality, FinalDebianPackagesConfig};
 
-use crate::project_info::{platform_spec_parser::parse_leading_constraint_spec, parsers::general_parser::ParseSuccess, GivenConstraintSpecParseContext};
+use std::collections::BTreeSet;
+
+use colored::Colorize;
+
+use crate::project_info::{platform_spec_parser::parse_leading_constraint_spec, parsers::general_parser::ParseSuccess, FeatureValidationContext, GivenConstraintSpecParseContext};
 
 use self::{final_target_map_common::FinalTargetConfigMap};
 
@@ -78,21 +82,21 @@ pub struct FinalPredefinedDependencyConfig {
   pre_load: HookScriptContainer,
   post_load: HookScriptContainer,
   custom_populate: HookScriptContainer,
-  custom_find_module: HookScriptContainer
+  custom_find_module: HookScriptContainer,
+  user_enabled_features: BTreeSet<String>,
+  use_default_features: bool
 }
 
 impl FinalPredefinedDependencyConfig {
   pub fn new(
     all_raw_dep_configs: &RawPredefinedDependencyMap,
     user_given_config: &UserGivenPredefinedDependencyConfig,
-    dep_name: &str,
-    valid_feature_list: Option<&Vec<&str>>
+    dep_name: &str
   ) -> Result<Self, String> {
     let configs = PredefinedDependencyAllConfigs::new(
       all_raw_dep_configs,
       user_given_config,
-      dep_name,
-      valid_feature_list
+      dep_name
     )?;
 
     let predep_info: FinalPredepInfo = if let Some(subdir_dep) = configs.as_subdirectory {
@@ -149,11 +153,21 @@ impl FinalPredefinedDependencyConfig {
                 },
                 Some(raw_predep_config) => {
                   let mut has_matching_target_name: bool = false;
+                  let other_dep_common = raw_predep_config.dep_configs.get_common()?;
 
-                  for (unparsed_target_name, _) in raw_predep_config.dep_configs.get_common()?.raw_target_map_in() {
+                  // Constraint prefixes on the OTHER dependency's target keys refer to that
+                  // dependency's own declared features, so validate against its set here.
+                  let other_dep_declared_features: BTreeSet<String> = other_dep_common.features_map()
+                    .map(|features| features.keys().cloned().collect())
+                    .unwrap_or_default();
+
+                  for (unparsed_target_name, _) in other_dep_common.raw_target_map_in() {
                     let parsing_context = GivenConstraintSpecParseContext {
                       is_before_output_name: false,
-                      maybe_valid_feature_list: valid_feature_list
+                      feature_context: FeatureValidationContext::PredefinedDep {
+                        dep_name: the_namespace,
+                        declared_features: &other_dep_declared_features
+                      }
                     };
 
                     let raw_target_name: &str = match parse_leading_constraint_spec(unparsed_target_name, parsing_context)? {
@@ -215,14 +229,72 @@ impl FinalPredefinedDependencyConfig {
       _ => ()
     }
     
+    let declared_dep_features = {
+      let dep_common: &dyn PredefinedDepFunctionality = match &predep_info {
+        FinalPredepInfo::Subdirectory(subdir_dep) => subdir_dep,
+        FinalPredepInfo::CMakeModule(module_dep) => module_dep,
+        FinalPredepInfo::CMakeComponentsModule(components_dep) => components_dep
+      };
+      dep_common.dep_features_map()
+    };
+
+    let user_enabled_features: BTreeSet<String> = user_given_config.features.clone()
+      .map(|feature_set| feature_set.into_iter().collect())
+      .unwrap_or_default();
+
+    if !user_enabled_features.is_empty() && declared_dep_features.is_empty() {
+      return Err(format!(
+        "The configuration for predefined dependency '{}' enables features, but '{}' doesn't declare any features.",
+        dep_name.yellow(),
+        dep_name
+      ));
+    }
+
+    for user_feature_name in &user_enabled_features {
+      if !declared_dep_features.contains_key(user_feature_name) {
+        let valid_feature_list_str: String = declared_dep_features.keys()
+          .map(|key| &key[..])
+          .collect::<Vec<&str>>()
+          .join(", ");
+
+        return Err(format!(
+          "The configuration for predefined dependency '{}' enables the feature '{}', but '{}' doesn't declare a feature with that name.\n\tValid features are [{}]",
+          dep_name.yellow(),
+          user_feature_name.red(),
+          dep_name,
+          valid_feature_list_str.green()
+        ));
+      }
+    }
+
+    if user_given_config.use_default_features.is_some() && declared_dep_features.is_empty() {
+      return Err(format!(
+        "The configuration for predefined dependency '{}' sets use_default_features, but '{}' doesn't declare any features.",
+        dep_name.yellow(),
+        dep_name
+      ));
+    }
+
     return Ok(Self {
       name: dep_name.to_string(),
       predep_info,
       pre_load: pre_load.clone(),
       post_load: post_load.clone(),
       custom_populate: custom_populate.clone(),
-      custom_find_module: custom_find_module.clone()
+      custom_find_module: custom_find_module.clone(),
+      user_enabled_features,
+      use_default_features: user_given_config.use_default_features.unwrap_or(true)
     });
+  }
+
+  // Same accessor names as FinalGCMakeDependency so the writer code follows the
+  // existing gcmake-dependency feature-passing precedent.
+  pub fn is_using_default_features(&self) -> bool {
+    self.use_default_features
+  }
+
+  pub fn specified_features(&self) -> &BTreeSet<String> {
+    &self.user_enabled_features
   }
 
   pub fn can_trivially_cross_compile(&self) -> bool {
@@ -335,8 +407,7 @@ impl PredefinedDependencyAllConfigs {
   pub fn new(
     all_raw_dep_configs: &RawPredefinedDependencyMap,
     user_given_config: &UserGivenPredefinedDependencyConfig,
-    dep_name: &str,
-    valid_feature_list: Option<&Vec<&str>>
+    dep_name: &str
   ) -> Result<Self, String> {
 
     let dep_info: &RawPredefinedDependencyInfo = match all_raw_dep_configs.get(dep_name)? {
@@ -359,8 +430,7 @@ impl PredefinedDependencyAllConfigs {
       final_config.as_subdirectory = Some(PredefinedSubdirDep::from_subdir_dep(
         subdir_dep_info,
         user_given_config,
-        dep_name,
-        valid_feature_list
+        dep_name
       )?);
     }
 
@@ -368,8 +438,7 @@ impl PredefinedDependencyAllConfigs {
       let final_components_dep = PredefinedCMakeComponentsModuleDep::from_components_find_module_dep(
         components_find_module_dep,
         user_given_config,
-        dep_name,
-        valid_feature_list
+        dep_name
       )?;
 
       final_config.components_built_in_find_module = Some(final_components_dep);
@@ -379,8 +448,7 @@ impl PredefinedDependencyAllConfigs {
       let final_find_module_info = PredefinedCMakeModuleDep::from_find_module_dep(
         find_module_dep_info,
         user_given_config,
-        dep_name,
-        valid_feature_list
+        dep_name
       )?;
 
       final_config.built_in_find_module = Some(final_find_module_info);

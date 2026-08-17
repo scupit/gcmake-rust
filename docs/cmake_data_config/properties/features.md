@@ -62,8 +62,34 @@ gcmake_dependencies:
     git_tag: v1.0.0
 ```
 
-**NOTE** that gcmake_dependency features can also be configured when the dependency is imported. That
-is explained in the [gcmake_dependency property page](./gcmake_dependencies.md#general-info)
+> **NOTE** that gcmake_dependency features can also be configured when the dependency is imported. That
+> is explained in the [gcmake_dependency property page](./gcmake_dependencies.md#general-info)
+
+and/or features declared by a [predefined dependency](./properties_list.md#predefined_dependencies):
+
+``` yaml
+features:
+  fancy-fonts:
+    default: false
+    # Enables imgui's 'freetype' feature whenever this project's
+    # 'fancy-fonts' feature is enabled.
+    enables:
+      - imgui/freetype
+
+predefined_dependencies:
+  # Dependency import is always explicit: enabling a dependency's feature never
+  # imports the dependency (or the dependencies its feature requires) automatically.
+  freetype:
+    git_tag: VER-2-13-3
+  imgui:
+    git_tag: v1.92.9b
+```
+
+A predefined dependency's features can also be enabled directly on its import entry
+(`features: [ freetype ]`) - see
+[the predefined_dependencies property](./properties_list.md#predefined_dependencies). Names are
+resolved against gcmake_dependencies first, then predefined dependencies. Trying to enable a feature
+the dependency doesn't declare will result in a project load error.
 
 ## Example
 

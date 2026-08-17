@@ -196,22 +196,42 @@ pub fn load_graph(
 
         let requirement_specific_message: String = match failed_requirement {
           OwningComplexTargetRequirement::OneOf(target_list) => {
-            let target_list_str: String = target_list
+            // Each alternative is rendered as its plain "depname::target" name, prefixed with
+            // its constraint when it only applies conditionally. For example, an unsatisfied
+            // conditional requirement from Crow renders as "(( feature:ssl )) openssl::ssl",
+            // telling the user both which library is needed and under which condition.
+            // The plain name is kept separate because the single-alternative message below
+            // extracts the dependency name from it.
+            let name_constraint_pairs: Vec<(String, &SystemSpecifierWrapper)> = target_list
               .iter()
               .map(|needed_target| match needed_target {
-                MaybePresentOwningTarget::NotImported { namespaced_yaml_name } => namespaced_yaml_name.to_string(),
-                MaybePresentOwningTarget::Populated(populated_target) => {
-                  borrow_target(populated_target)
-                    .get_yaml_namespaced_target_name()
-                    .to_string()
+                MaybePresentOwningTarget::NotImported { namespaced_yaml_name, constraint } => {
+                  (namespaced_yaml_name.to_string(), constraint)
+                },
+                MaybePresentOwningTarget::Populated { target: populated_target, constraint } => {
+                  (
+                    borrow_target(populated_target)
+                      .get_yaml_namespaced_target_name()
+                      .to_string(),
+                    constraint
+                  )
                 }
               })
+              .collect();
+
+            let target_list_str: String = name_constraint_pairs
+              .iter()
+              .map(|(plain_name, constraint)| {
+                if constraint.includes_all()
+                  { plain_name.to_string() }
+                  else { format!("{} {}", constraint.unwrap_specific_ref().to_string(), plain_name) }
+              })
               .collect::<Vec<String>>()
-              // .join(", ");
               .join(" or ");
 
-            if target_list.len() == 1 {
-              let needed_project_name: String = target_list_str.split("::").nth(0).unwrap().to_string();
+            if name_constraint_pairs.len() == 1 {
+              let (plain_name, _) = name_constraint_pairs.get(0).unwrap();
+              let needed_project_name: String = plain_name.split("::").nth(0).unwrap().to_string();
               format!(
                 "Your target '{}' must link to {}.\nThis error probably happened because you haven't listed \"{}\" as a dependency of your project. If you list \"{}\" as a project dependency, the link should happen automatically.",
                 borrow_target(target).get_name(),
@@ -404,7 +424,7 @@ pub fn load_graph(
           feature_name_to_enable
         } => {
           return wrap_error_msg(format!(
-            "Feature '{}' in project [{}] tries to enable a dependency feature '{}/{}'. However, a GCMake dependency project named [{}] doesn't exist.",
+            "Feature '{}' in project [{}] tries to enable a dependency feature '{}/{}'. However, the project doesn't use a GCMake dependency or predefined dependency named [{}].",
             container_feature_name.yellow(),
             borrow_project(project).project_debug_name().yellow(),
             gcmake_dep_name.purple(),
@@ -418,7 +438,7 @@ pub fn load_graph(
           feature_name_to_enable
         } => {
           return wrap_error_msg(format!(
-            "Feature '{}' in project [{}] tries to enable a dependency feature '{}/{}'. However, the GCMake dependency project [{}] doesn't have a feature called '{}'.",
+            "Feature '{}' in project [{}] tries to enable a dependency feature '{}/{}'. However, the dependency [{}] doesn't declare a feature called '{}'.",
             container_feature_name.yellow(),
             borrow_project(project).project_debug_name().yellow(),
             gcmake_dep_name.purple(),

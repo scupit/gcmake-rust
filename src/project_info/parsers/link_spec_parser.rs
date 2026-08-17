@@ -1,7 +1,7 @@
 // TODO: Write tests. This is an easy module to unit test.
 use regex::Regex;
 
-use crate::project_info::GivenConstraintSpecParseContext;
+use crate::project_info::{FeatureValidationContext, GivenConstraintSpecParseContext};
 
 use super::{system_spec::platform_spec_parser::{SystemSpecifierWrapper, parse_leading_constraint_spec}, general_parser::ParseSuccess};
 
@@ -109,15 +109,15 @@ impl LinkSpecifier {
 
   pub fn parse_with_full_permissions(
     link_spec: impl AsRef<str>,
-    maybe_valid_feature_list: Option<&Vec<&str>>
+    feature_context: FeatureValidationContext
   ) -> Result<Self, String> {
-    Self::parse_from(link_spec, LinkAccessMode::Internal, maybe_valid_feature_list)
+    Self::parse_from(link_spec, LinkAccessMode::Internal, feature_context)
   }
 
   pub fn parse_from(
     link_spec: impl AsRef<str>,
     access_mode: LinkAccessMode,
-    maybe_valid_feature_list: Option<&Vec<&str>>
+    feature_context: FeatureValidationContext
   ) -> Result<Self, String> {
     let full_specifier_string: String = link_spec.as_ref().to_string();
 
@@ -127,7 +127,7 @@ impl LinkSpecifier {
     {
       let parsing_context = GivenConstraintSpecParseContext {
         is_before_output_name: false,
-        maybe_valid_feature_list
+        feature_context
       };
 
       match parse_leading_constraint_spec(&full_specifier_string, parsing_context)? {
@@ -175,7 +175,7 @@ impl LinkSpecifier {
       let target_list_parse_result = Self::parse_target_list(
         &specifiers_only_str[open_brace_index + 1..close_brace_index],
         &maybe_system_spec,
-        maybe_valid_feature_list
+        feature_context
       );
 
       let target_list: LinkSpecTargetList = match target_list_parse_result {
@@ -243,7 +243,7 @@ impl LinkSpecifier {
   fn parse_target_list(
     target_list_str: &str,
     full_link_set_system_spec: &Option<SystemSpecifierWrapper>,
-    maybe_valid_feature_list: Option<&Vec<&str>>
+    feature_context: FeatureValidationContext
   ) -> Result<LinkSpecTargetList, String> {
     let mut verified_targets: LinkSpecTargetList = Vec::new();
 
@@ -254,7 +254,7 @@ impl LinkSpecifier {
       {
         let parsing_context = GivenConstraintSpecParseContext {
           is_before_output_name: false,
-          maybe_valid_feature_list
+          feature_context
         };
 
         match parse_leading_constraint_spec(full_target_spec, parsing_context)? {

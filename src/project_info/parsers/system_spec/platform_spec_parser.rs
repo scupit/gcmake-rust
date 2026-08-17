@@ -82,6 +82,13 @@ impl SystemSpecifierWrapper {
       _ => false
     }
   }
+
+  pub fn references_project_defined_feature(&self) -> bool {
+    match self {
+      Self::All => false,
+      Self::Specific(tree) => tree.references_project_defined_feature()
+    }
+  }
 }
 
 impl Default for SystemSpecifierWrapper {

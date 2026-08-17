@@ -390,8 +390,12 @@ function( _populate_mydep )
     # Validate + tolerate upstream renames with a candidate list when needed:
     # find_file( mydep_main_header REQUIRED NO_CACHE NAMES "mydep.h" "mydep2.h" PATHS "${mydep_DEP_DIR}" )
 
-    # Both halves are required: BUILD_INTERFACE for building, INSTALL_INTERFACE because
-    # absolute dep-cache paths are illegal in installed export sets (reference §7.5).
+    # Wrap every file list — but the two halves are used differently (standards 5.4.9):
+    # SOURCES attach the build half ONLY. Attaching the install half writes an absolute
+    # dep-cache path into consumers' installed export sets, which only resolves on the
+    # machine that built the install (the defect imgui shipped until 2026-08).
+    # HEADERS attach both halves via FILE_SET HEADERS below, which CMake installs and
+    # relocates properly (reference §7.5).
     gcmake_wrap_dep_files_in_generators( mydep_sources mydep_s_b mydep_s_i )
     gcmake_wrap_dep_files_in_generators( mydep_headers mydep_h_b mydep_h_i )
 

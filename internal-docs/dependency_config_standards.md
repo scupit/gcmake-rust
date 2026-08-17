@@ -180,6 +180,12 @@ violation from an existing config, even a config this document cites as an exemp
 - **5.4.7** Platform system libraries required by the sources MUST be linked here
   ([PC-system-libs](dependency_problem_classes.md#pc-system-libs)).
 - **5.4.8** Optional executables (sqlite3's shell) MUST default OFF behind a namespaced option.
+- **5.4.9** Source-file lists MUST be attached using only the build-interface output of
+  `gcmake_wrap_dep_files_in_generators`; the install-interface half is for header `FILE_SET`s
+  only. An install-interface source entry expands to an absolute `~/.gcmake/dep-cache` path in
+  consuming projects' installed export sets, which only resolves on the machine that produced
+  the install (imgui shipped this defect until 2026-08 — the reasoning is documented in place
+  in [imgui's custom_populate.cmake](../gcmake-dependency-configs/imgui/custom_populate.cmake)).
 
 ## 6. Custom find module standards
 
@@ -279,7 +285,8 @@ upstream `option()` reviewed (5.2) · download methods per 4.3.
 
 **Subdirectory (custom populate):** `<dep>_RELATIVE_DEP_PATH` set to `dep/<name>` and consistent
 with all INSTALL_INTERFACE dirs (5.4.1) · generator wrapping + FILE_SET everywhere (5.4.3) ·
-SYSTEM includes, namespace aliases (5.4.4, 5.4.5) · platform system libs (5.4.7).
+SYSTEM includes, namespace aliases (5.4.4, 5.4.5) · platform system libs (5.4.7) · sources
+attached build-interface-only (5.4.9).
 
 **Module (ConfigFile/Builtin):** `module_name` and `found_var` verified (3.3, 4.5) · hint
 variables declared in pre_load with the module's own names (3.7) · README build/install

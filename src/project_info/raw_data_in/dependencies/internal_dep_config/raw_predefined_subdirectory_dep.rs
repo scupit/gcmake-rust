@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use serde::Deserialize;
-use super::{raw_target_config_common::RawPredefinedTargetMapIn, RawMutualExclusionSet, raw_dep_common::{RawPredepCommon, RawEmscriptenConfig, RawDebianPackagesConfig, RawDepConfigOption}};
+use super::{raw_target_config_common::RawPredefinedTargetMapIn, RawMutualExclusionSet, raw_dep_common::{RawPredepCommon, RawEmscriptenConfig, RawDebianPackagesConfig, RawDepConfigOption, RawDepFeatureConfig, RawDepFeatureMode}};
 
 #[derive(Deserialize, Clone)]
 #[serde(deny_unknown_fields)]
@@ -67,6 +67,8 @@ pub struct RawSubdirectoryDependency {
   pub emscripten_config: Option<RawEmscriptenConfig>,
   pub debian_packages: Option<RawDebianPackagesConfig>,
   pub config_options: Option<HashMap<String, RawDepConfigOption>>,
+  pub features: Option<HashMap<String, RawDepFeatureConfig>>,
+  pub feature_mode: Option<RawDepFeatureMode>,
 
   #[serde(default = "default_requires_custom_populate")]
   pub requires_custom_fetchcontent_populate: bool,
@@ -157,5 +159,13 @@ impl RawPredepCommon for RawSubdirectoryDependency {
 
   fn config_options_map(&self) -> Option<&HashMap<String, RawDepConfigOption>> {
     self.config_options.as_ref()
+  }
+
+  fn features_map(&self) -> Option<&HashMap<String, RawDepFeatureConfig>> {
+    self.features.as_ref()
+  }
+
+  fn feature_mode(&self) -> Option<&RawDepFeatureMode> {
+    self.feature_mode.as_ref()
   }
 }

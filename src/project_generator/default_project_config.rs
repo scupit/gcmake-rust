@@ -286,7 +286,9 @@ fn needed_predefined_dependencies(
         commit_hash: None,
         file_version: None,
         repo_url: None,
-        options: None
+        options: None,
+        use_default_features: None,
+        features: None
       }
     );
   }
@@ -299,7 +301,9 @@ fn needed_predefined_dependencies(
         commit_hash: None,
         file_version: None,
         repo_url: None,
-        options: None
+        options: None,
+        use_default_features: None,
+        features: None
       }
     );
   }

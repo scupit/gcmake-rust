@@ -431,6 +431,34 @@ For example, `gcmake-rust predep-info -d sfml nlohmann_json`
 | --------------- | ------------- | ----------- |
 | `file_version` | `"2.5.1"` or `v2.5.1` | Specifies the version of the release archive file to be downloaded. **This must always be given as a three-part version, even if the repository itself doesn't use a three-part version.** The given version will be transformed behind the scenes into a valid URL pointing to an existing archive file. For example, use `1.88.0` or `v1.88.0` for the ImGUI *v1.88* release. |
 
+#### Predefined dependency features
+
+Some predefined dependencies declare [features](./features.md#features) as well.
+Features can be configured on any predefined dependency's import entry, mirroring [gcmake_dependencies](./gcmake_dependencies.md#general-info):
+
+| Feature option | Example value | Description |
+| -------------- | ------------- | ----------- |
+| `features` | `[ freetype ]` | List of the dependency's features to enable. Every name must be a feature the dependency actually declares. |
+| `use_default_features` | `false` | When `false`, the dependency's default-enabled features are NOT enabled automatically. Defaults to `true`. |
+
+``` yaml
+predefined_dependencies:
+  freetype:
+    git_tag: VER-2-13-3
+  imgui:
+    git_tag: v1.92.9b
+    features:
+      - freetype
+```
+
+Feature-gated requirements are only downloaded and linked when their gating feature is enabled
+(imgui only pulls freetype when the imgui `freetype` feature is on). **Importing stays explicit**: enabling a
+feature never auto-imports the dependencies it requires. If a required dependency is missing,
+CMake configuration fails with an error naming the missing dependency. A project's own features can also enable a
+predefined dependency's features via `enables: [ imgui/freetype ]`; see [feature enabler expressions](./features.md#enabler-expressions).
+
+For examples of dependencies using features, see the [imgui](/gcmake-dependency-configs/imgui/) and [crow](/gcmake-dependency-configs/crow/) predefined dependency configurations.
+
 Any dependency added to the project can then be linked to any output or executable pre-build script
 throughout the entire project tree. See the [linking docs](../linking.md) for specifics.
 

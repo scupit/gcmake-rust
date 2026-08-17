@@ -1,10 +1,10 @@
-use std::collections::{HashMap, HashSet, BTreeMap};
+use std::collections::{HashMap, HashSet, BTreeMap, BTreeSet};
 
 use colored::Colorize;
 
 use crate::project_info::raw_data_in::dependencies::{internal_dep_config::{RawModuleDep, CMakeModuleType, raw_dep_common::{RawPredepCommon, RawEmscriptenConfig}}, user_given_dep_config::UserGivenPredefinedDependencyConfig};
 
-use super::{predep_module_common::{PredefinedDepFunctionality, FinalDebianPackagesConfig, FinalDepConfigOption, resolve_final_config_options}, final_target_map_common::{FinalTargetConfigMap, make_final_target_config_map}};
+use super::{predep_module_common::{PredefinedDepFunctionality, FinalDebianPackagesConfig, FinalDepConfigOption, FinalDepFeature, resolve_final_config_options, resolve_final_dep_features}, final_target_map_common::{FinalTargetConfigMap, make_final_target_config_map}};
 
 #[derive(Clone)]
 pub struct PredefinedCMakeModuleDep {
@@ -14,6 +14,7 @@ pub struct PredefinedCMakeModuleDep {
   cmake_namespaced_target_map: HashMap<String, String>,
   yaml_namespaced_target_map: HashMap<String, String>,
   config_options: BTreeMap<String, FinalDepConfigOption>,
+  dep_features: BTreeMap<String, FinalDepFeature>,
   _can_cross_compile: bool
 }
 
@@ -51,10 +52,17 @@ impl PredefinedCMakeModuleDep {
   pub fn from_find_module_dep(
     dep: &RawModuleDep,
     user_given_dep_config: &UserGivenPredefinedDependencyConfig,
-    dep_name: &str,
-    valid_feature_list: Option<&Vec<&str>>
+    dep_name: &str
   ) -> Result<Self, String> {
-    let target_map = make_final_target_config_map(dep_name, dep, valid_feature_list)
+    let dep_features = resolve_final_dep_features(
+      dep_name,
+      dep.features_map(),
+      dep.feature_mode()
+    )?;
+
+    let declared_feature_names: BTreeSet<String> = dep_features.keys().cloned().collect();
+
+    let target_map = make_final_target_config_map(dep_name, dep, &declared_feature_names)
       .map_err(|err_msg| format!(
         "When loading predefined CMake Module dependency \"{}\": \n\n{}",
         dep_name,
@@ -102,7 +110,8 @@ impl PredefinedCMakeModuleDep {
           "In configuration for predefined dependency '{}':\n{}",
           dep_name.yellow(),
           err_msg
-        ))?
+        ))?,
+      dep_features
     });
   }
 }
@@ -147,5 +156,13 @@ impl PredefinedDepFunctionality for PredefinedCMakeModuleDep {
 
   fn config_options_map(&self) -> &BTreeMap<String, FinalDepConfigOption> {
     &self.config_options
+  }
+
+  fn dep_features_map(&self) -> &BTreeMap<String, FinalDepFeature> {
+    &self.dep_features
+  }
+
+  fn dep_feature_list_var(&self) -> Option<&str> {
+    self.raw_dep.feature_mode().map(|mode| &mode.list_var[..])
   }
 }

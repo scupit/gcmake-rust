@@ -2,7 +2,8 @@ use std::collections::{HashSet, BTreeSet, HashMap, BTreeMap};
 
 use colored::Colorize;
 
-use crate::project_info::raw_data_in::dependencies::internal_dep_config::raw_dep_common::{RawEmscriptenConfig, RawDebianPackagesConfig, RawDepConfigOption};
+use crate::project_info::raw_data_in::dependencies::internal_dep_config::raw_dep_common::{RawEmscriptenConfig, RawDebianPackagesConfig, RawDepConfigOption, RawDepFeatureConfig, RawDepFeatureMode};
+use crate::project_info::validators::is_valid_lowercase_identifier;
 
 use super::final_target_map_common::FinalTargetConfigMap;
 
@@ -84,6 +85,75 @@ pub fn resolve_final_config_options(
   }
 }
 
+#[derive(Clone)]
+pub struct FinalDepFeature {
+  pub is_enabled_by_default: bool,
+  pub enables: BTreeSet<String>,
+  // See the comment on the raw data struct for more info.
+  pub list_value: String
+}
+
+pub fn resolve_final_dep_features(
+  dep_name: &str,
+  maybe_features_map: Option<&HashMap<String, RawDepFeatureConfig>>,
+  maybe_feature_mode: Option<&RawDepFeatureMode>
+) -> Result<BTreeMap<String, FinalDepFeature>, String> {
+  let features_map: &HashMap<String, RawDepFeatureConfig> = match maybe_features_map {
+    Some(the_map) if !the_map.is_empty() => the_map,
+    _ => {
+      // feature_mode's only job is communicating the enabled feature set, so it's meaningless
+      // (and definitely a config mistake) without any features to communicate.
+      if maybe_feature_mode.is_some() {
+        return Err(format!(
+          "Predefined dependency '{}' specifies a feature_mode, but doesn't declare any features. Either declare features or remove the feature_mode section.",
+          dep_name
+        ));
+      }
+
+      return Ok(BTreeMap::new());
+    }
+  };
+
+  let mut final_features: BTreeMap<String, FinalDepFeature> = BTreeMap::new();
+
+  for (feature_name, raw_feature) in features_map {
+    if !is_valid_lowercase_identifier(feature_name) {
+      return Err(format!(
+        "Predefined dependency '{}' declares feature '{}', which is an invalid feature name. Feature names must only contain lowercase letters, numbers, hyphens, and underscores.",
+        dep_name,
+        feature_name.red()
+      ));
+    }
+
+    let enables: BTreeSet<String> = raw_feature.enables.clone().unwrap_or_default();
+
+    for enabled_feature_name in &enables {
+      if !features_map.contains_key(enabled_feature_name) {
+        return Err(format!(
+          "Feature '{}' of predefined dependency '{}' enables '{}', but '{}' doesn't declare a feature named '{}'. NOTE that a predefined dependency's features may only enable other features of the same dependency.",
+          feature_name.green(),
+          dep_name,
+          enabled_feature_name.red(),
+          dep_name,
+          enabled_feature_name.red()
+        ));
+      }
+    }
+
+    final_features.insert(
+      feature_name.clone(),
+      FinalDepFeature {
+        is_enabled_by_default: raw_feature.default,
+        enables,
+        list_value: raw_feature.list_value.clone()
+          .unwrap_or_else(|| feature_name.clone())
+      }
+    );
+  }
+
+  return Ok(final_features);
+}
+
 pub trait PredefinedDepFunctionality {
   fn can_cross_compile(&self) -> bool;
   fn get_target_config_map(&self) -> &FinalTargetConfigMap;
@@ -94,4 +164,6 @@ pub trait PredefinedDepFunctionality {
   fn is_internally_supported_by_emscripten(&self) -> bool;
   fn debian_packages_config(&self) -> &FinalDebianPackagesConfig;
   fn config_options_map(&self) -> &BTreeMap<String, FinalDepConfigOption>;
+  fn dep_features_map(&self) -> &BTreeMap<String, FinalDepFeature>;
+  fn dep_feature_list_var(&self) -> Option<&str>;
 }

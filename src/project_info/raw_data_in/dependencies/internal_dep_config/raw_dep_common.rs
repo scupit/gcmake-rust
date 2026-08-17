@@ -25,6 +25,28 @@ pub struct RawEmscriptenConfig {
   pub is_flag_link_time_only: Option<bool>
 }
 
+#[derive(Deserialize, Clone)]
+#[serde(deny_unknown_fields)]
+pub struct RawDepFeatureConfig {
+  pub default: bool,
+  // Names of OTHER features of this same dependency which are transitively enabled
+  // when this one is. Cross-dependency enables are deliberately not supported here;
+  // If you need to constrain on other dependencies, use `external_requires` with a constraint
+  // expression instead.
+  pub enables: Option<BTreeSet<String>>,
+  // The actual string used in in the CMake variable defined by list_var.
+  // Defaults to the feature's name.
+  pub list_value: Option<String>
+}
+
+#[derive(Deserialize, Clone)]
+#[serde(deny_unknown_fields)]
+pub struct RawDepFeatureMode {
+  // Name of a CMake list variable which receives every enabled feature's list_value
+  // before the dependency's hooks and CMakeLists run (e.g. crow's CROW_FEATURES).
+  pub list_var: String
+}
+
 pub trait RawPredepCommon {
   fn find_module_base_name(&self) -> Option<&str>;
 
@@ -43,4 +65,6 @@ pub trait RawPredepCommon {
 
   fn raw_debian_packages_config(&self) -> Option<&RawDebianPackagesConfig>;
   fn config_options_map(&self) -> Option<&HashMap<String, RawDepConfigOption>>;
+  fn features_map(&self) -> Option<&HashMap<String, RawDepFeatureConfig>>;
+  fn feature_mode(&self) -> Option<&RawDepFeatureMode>;
 }

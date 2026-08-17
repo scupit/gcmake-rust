@@ -3,7 +3,7 @@ use std::hash::{ Hash, Hasher };
 
 use colored::Colorize;
 
-use super::{raw_data_in::{OutputItemType, RawCompiledItem, TargetBuildConfigMap, LinkSection, BuildConfigCompilerSpecifier, BuildType, TargetSpecificBuildType, RawBuildConfig, BuildTypeOptionMap, BuildConfigMap, RawGlobalPropertyConfig, DefaultCompiledLibType, RawShortcutConfig, RawFeatureConfig}, final_dependencies::FinalPredefinedDependencyConfig, LinkSpecifier, parsers::{link_spec_parser::LinkAccessMode, general_parser::ParseSuccess}, SystemSpecifierWrapper, platform_spec_parser::parse_leading_constraint_spec, helpers::{RetrievedCodeFileType, code_file_type, CodeFileLang}, path_manipulation::{cleaned_pathbuf}, final_project_data::CppFileGrammar, GivenConstraintSpecParseContext, LANGUAGE_FEATURE_BEGIN_TERMS, feature_map_for_lang, SystemSpecFeatureType};
+use super::{raw_data_in::{OutputItemType, RawCompiledItem, TargetBuildConfigMap, LinkSection, BuildConfigCompilerSpecifier, BuildType, TargetSpecificBuildType, RawBuildConfig, BuildTypeOptionMap, BuildConfigMap, RawGlobalPropertyConfig, DefaultCompiledLibType, RawShortcutConfig, RawFeatureConfig}, final_dependencies::FinalPredefinedDependencyConfig, LinkSpecifier, parsers::{link_spec_parser::LinkAccessMode, general_parser::ParseSuccess}, SystemSpecifierWrapper, platform_spec_parser::parse_leading_constraint_spec, helpers::{RetrievedCodeFileType, code_file_type, CodeFileLang}, path_manipulation::{cleaned_pathbuf}, final_project_data::CppFileGrammar, GivenConstraintSpecParseContext, FeatureValidationContext, LANGUAGE_FEATURE_BEGIN_TERMS, feature_map_for_lang, SystemSpecFeatureType};
 
 #[derive(Clone)]
 pub struct CodeFileInfo {
@@ -662,7 +662,11 @@ fn parse_all_links_into(
   mode: SpecParseMode
 ) -> Result<(), String> {
   for link_str in link_strings {
-    let parsed_spec = LinkSpecifier::parse_from(link_str, LinkAccessMode::UserFacing, valid_feature_list)?;
+    let parsed_spec = LinkSpecifier::parse_from(
+      link_str,
+      LinkAccessMode::UserFacing,
+      FeatureValidationContext::ConsumingProject { valid_feature_list }
+    )?;
 
     match mode {
       SpecParseMode::Link => (),
@@ -720,7 +724,7 @@ impl CompilerDefine {
     maybe_valid_feature_list: Option<&Vec<&str>>
   ) -> Result<Self, String> {
     let parsing_context = GivenConstraintSpecParseContext {
-      maybe_valid_feature_list,
+      feature_context: FeatureValidationContext::ConsumingProject { valid_feature_list: maybe_valid_feature_list },
       is_before_output_name: false
     };
 
@@ -771,7 +775,7 @@ impl CompilerFlag {
     maybe_valid_feature_list: Option<&Vec<&str>>
   ) -> Result<Self, String> {
     let parsing_context = GivenConstraintSpecParseContext {
-      maybe_valid_feature_list,
+      feature_context: FeatureValidationContext::ConsumingProject { valid_feature_list: maybe_valid_feature_list },
       is_before_output_name: false
     };
 

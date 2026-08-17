@@ -1,4 +1,4 @@
-use crate::project_info::{SystemSpecifierWrapper, SystemSpecExpressionTree, SingleSystemSpec, SystemSpecFeatureType, feature_map_for_lang};
+use crate::project_info::{SystemSpecifierWrapper, SystemSpecExpressionTree, SingleSystemSpec, SystemSpecFeatureType, FeatureOwner, feature_map_for_lang};
 
 pub fn system_contstraint_conditional_expression(system_spec: &SystemSpecifierWrapper) -> String {
   match system_spec {
@@ -25,11 +25,26 @@ pub fn system_constraint_generator_expression(
   }
 }
 
-pub fn project_feature_var(feature_name: &str) -> String {
-  return format!(
-    "${{LOCAL_TOPLEVEL_PROJECT_NAME}}_FEATURE_{}",
-    feature_name
-  );
+// CMake variable prefix used for all of a predefined dependency's feature-related variables.
+// This is a constant string (unlike ${LOCAL_TOPLEVEL_PROJECT_NAME}, which changes meaning inside
+// gcmake-dependency subdirectory scopes), so expressions referencing a dep's feature are valid
+// in ANY directory scope. It also can't collide with the dep's own upstream CMake variables.
+pub fn predep_feature_owner_token(dep_name: &str) -> String {
+  return format!("GCMAKE_PREDEP_{}", dep_name);
+}
+
+pub fn feature_var(owner: &FeatureOwner, feature_name: &str) -> String {
+  return match owner {
+    FeatureOwner::ConsumingProject => format!(
+      "${{LOCAL_TOPLEVEL_PROJECT_NAME}}_FEATURE_{}",
+      feature_name
+    ),
+    FeatureOwner::PredefinedDep(dep_name) => format!(
+      "{}_FEATURE_{}",
+      predep_feature_owner_token(dep_name),
+      feature_name
+    )
+  };
 }
 
 pub fn language_feature_name(
@@ -62,10 +77,10 @@ fn make_inner_system_spec_generator_expression(
         make_inner_system_spec_generator_expression(expr, CurrentSystemSpecContext::None)
       )
     },
-    SystemSpecExpressionTree::Feature { name: feature_name, feature_type } => match feature_type {
+    SystemSpecExpressionTree::Feature { name: feature_name, feature_type, owner } => match feature_type {
       SystemSpecFeatureType::ProjectDefined => format!(
         "$<BOOL:${{{}}}>",
-        project_feature_var(feature_name)
+        feature_var(owner, feature_name)
       ),
       _ => format!(
         "$<COMPILE_FEATURES:{}>",
@@ -145,14 +160,14 @@ fn make_inner_system_spec_conditional_expr(spec_tree: &SystemSpecExpressionTree)
         make_inner_system_spec_conditional_expr(expr)
       )
     },
-    SystemSpecExpressionTree::Feature { name: feature_name, feature_type } => {
+    SystemSpecExpressionTree::Feature { name: feature_name, feature_type, owner } => {
       assert!(
         *feature_type == SystemSpecFeatureType::ProjectDefined,
         "Only project-defined feature checks can be used in CMake 'if' statements. This is because language feature checks are tied to targets in CMake.\nThis is the check that failed: {}",
         spec_tree.to_string()
       );
 
-      project_feature_var(feature_name)
+      feature_var(owner, feature_name)
     },
     SystemSpecExpressionTree::Value(value) => {
       let var_name: &str = match value {

@@ -1,10 +1,10 @@
-use std::{collections::{HashMap, HashSet, BTreeMap}};
+use std::{collections::{HashMap, HashSet, BTreeMap, BTreeSet}};
 
 use colored::Colorize;
 
 use crate::project_info::{raw_data_in::dependencies::{internal_dep_config::{RawSubdirectoryDependency, raw_dep_common::{RawPredepCommon, RawEmscriptenConfig}, RawExtensionsByPlatform, RawSubdirDepUrlDownloadConfig}, user_given_dep_config::{UserGivenPredefinedDependencyConfig}}, parsers::{version_parser::{parse_version, ThreePartVersion}, version_transform_parser::transform_version}, path_manipulation::without_leading_dot};
 
-use super::{predep_module_common::{PredefinedDepFunctionality, FinalDebianPackagesConfig, FinalDepConfigOption, resolve_final_config_options}, final_target_map_common::{FinalTargetConfigMap, make_final_target_config_map}};
+use super::{predep_module_common::{PredefinedDepFunctionality, FinalDebianPackagesConfig, FinalDepConfigOption, FinalDepFeature, resolve_final_config_options, resolve_final_dep_features}, final_target_map_common::{FinalTargetConfigMap, make_final_target_config_map}};
 
 #[derive(Clone)]
 pub enum GitRevisionSpecifier {
@@ -277,7 +277,8 @@ pub struct PredefinedSubdirDep {
   requires_custom_populate: bool,
   installation_details: Option<SubdirDepInstallationConfig>,
   raw_dep: RawSubdirectoryDependency,
-  config_options: BTreeMap<String, FinalDepConfigOption>
+  config_options: BTreeMap<String, FinalDepConfigOption>,
+  dep_features: BTreeMap<String, FinalDepFeature>
 }
 
 impl PredefinedSubdirDep {
@@ -314,11 +315,19 @@ impl PredefinedSubdirDep {
   pub fn from_subdir_dep(
     subdir_dep: &RawSubdirectoryDependency,
     user_given_config: &UserGivenPredefinedDependencyConfig,
-    dep_name: &str,
-    valid_feature_list: Option<&Vec<&str>>
+    dep_name: &str
   ) -> Result<Self, String> {
-    
-    let target_map = make_final_target_config_map(dep_name, subdir_dep, valid_feature_list)
+    let dep_features = resolve_final_dep_features(
+      dep_name,
+      subdir_dep.features_map(),
+      subdir_dep.feature_mode()
+    )?;
+
+    // Feature constraints in this dependency's config are validated against its OWN
+    // declared feature names, so the declared set must be resolved before the target map.
+    let declared_feature_names: BTreeSet<String> = dep_features.keys().cloned().collect();
+
+    let target_map = make_final_target_config_map(dep_name, subdir_dep, &declared_feature_names)
       .map_err(|err_msg| format!(
         "When loading predefined subdirectory dependency \"{}\":\n\n{}",
         dep_name,
@@ -391,7 +400,8 @@ impl PredefinedSubdirDep {
             "In configuration for predefined dependency '{}':\n{}",
             dep_name.yellow(),
             err_msg
-          ))?
+          ))?,
+        dep_features
       }
     )
   }
@@ -437,5 +447,13 @@ impl PredefinedDepFunctionality for PredefinedSubdirDep {
 
   fn config_options_map(&self) -> &BTreeMap<String, FinalDepConfigOption> {
     &self.config_options
+  }
+
+  fn dep_features_map(&self) -> &BTreeMap<String, FinalDepFeature> {
+    &self.dep_features
+  }
+
+  fn dep_feature_list_var(&self) -> Option<&str> {
+    self.raw_dep.feature_mode().map(|mode| &mode.list_var[..])
   }
 }

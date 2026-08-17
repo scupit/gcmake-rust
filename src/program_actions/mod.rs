@@ -9,7 +9,7 @@ pub use code_file_creator::*;
 pub use manage_dependencies::*;
 use std::{io, path::PathBuf, fs, cell::RefCell, rc::Rc, collections::BTreeMap, iter::FromIterator};
 
-use crate::{cli_config::{clap_cli_config::{UseFilesCommand, CreateFilesCommand, UpdateDependencyConfigsCommand, TargetInfoCommand, ProjectInfoCommand, PredepInfoCommand, ToolInfoCommand, CreateDefaultFilesCommand, CreateDefaultFileOption, SpecificToolPartSubcommand}, CLIProjectGenerationInfo, CLIProjectTypeGenerating}, common::{prompt::prompt_until_boolean}, logger::exit_error_log, project_info::{dep_graph_loader::load_graph, dependency_graph_mod::dependency_graph::{DependencyGraphInfoWrapper, DependencyGraph, TargetNode, BasicTargetSearchResult, DependencyGraphWarningMode, BasicProjectSearchResult}, feature_map_for_lang, final_project_data::{UseableFinalProjectDataGroup, ProjectLoadFailureReason, FinalProjectData, FinalProjectLoadContext}, path_manipulation::absolute_path, raw_data_in::dependencies::RawPredefinedDependencyMap, validators::{is_valid_target_name, is_valid_project_name}, LinkSpecifier, SystemSpecFeatureType}, file_writers::write_configurations, project_generator::GeneralNewProjectInfo, program_actions::info_printers::{target_info_print_funcs::{print_target_header, print_export_header_include_path, print_target_type}, project_info_print_funcs::{print_project_header, print_project_include_prefix, print_immediate_subprojects, print_project_repo_url, print_project_can_cross_compile, print_project_supports_emscripten, print_project_output_list, print_project_dependencies}}};
+use crate::{cli_config::{clap_cli_config::{UseFilesCommand, CreateFilesCommand, UpdateDependencyConfigsCommand, TargetInfoCommand, ProjectInfoCommand, PredepInfoCommand, ToolInfoCommand, CreateDefaultFilesCommand, CreateDefaultFileOption, SpecificToolPartSubcommand}, CLIProjectGenerationInfo, CLIProjectTypeGenerating}, common::{prompt::prompt_until_boolean}, logger::exit_error_log, project_info::{dep_graph_loader::load_graph, dependency_graph_mod::dependency_graph::{DependencyGraphInfoWrapper, DependencyGraph, TargetNode, BasicTargetSearchResult, DependencyGraphWarningMode, BasicProjectSearchResult}, feature_map_for_lang, final_project_data::{UseableFinalProjectDataGroup, ProjectLoadFailureReason, FinalProjectData, FinalProjectLoadContext}, path_manipulation::absolute_path, raw_data_in::dependencies::RawPredefinedDependencyMap, validators::{is_valid_target_name, is_valid_project_name}, LinkSpecifier, FeatureValidationContext, SystemSpecFeatureType}, file_writers::write_configurations, project_generator::GeneralNewProjectInfo, program_actions::info_printers::{target_info_print_funcs::{print_target_header, print_export_header_include_path, print_target_type}, project_info_print_funcs::{print_project_header, print_project_include_prefix, print_immediate_subprojects, print_project_repo_url, print_project_can_cross_compile, print_project_supports_emscripten, print_project_output_list, print_project_dependencies}}};
 
 use self::{info_printers::predef_dep_info_print_funcs::{print_predef_dep_header, print_predep_targets, print_predep_repo_url, print_predep_github_url, print_predep_can_cross_compile, print_predep_supports_emscripten, print_predep_supported_download_methods, print_predep_doc_link}, default_file_creator::{write_default_doxyfile, write_default_sphinx_files}};
 use colored::*;
@@ -112,7 +112,9 @@ pub fn print_target_info(
       else {
         let search_result = operating_on.as_ref().borrow().find_targets_using_link_spec(
           false,
-          &LinkSpecifier::parse_with_full_permissions(selector, None)?
+          // FeatureValidationContext::TrustedReparse because command-line selectors are just used for lookups, and
+          // therefore don't need to be validated against anything.
+          &LinkSpecifier::parse_with_full_permissions(selector, FeatureValidationContext::TrustedReparse)?
         )?;
 
         Ok(search_result)
@@ -186,7 +188,9 @@ pub fn print_project_info(
       else {
         let search_result = operating_on.as_ref().borrow().find_projects_using_link_spec(
           false,
-          &LinkSpecifier::parse_with_full_permissions(selector, None)?
+          // Command-line selectors aren't feature-validated: they're used to look projects up,
+          // not to define constraints.
+          &LinkSpecifier::parse_with_full_permissions(selector, FeatureValidationContext::TrustedReparse)?
         )?;
 
         Ok(search_result)

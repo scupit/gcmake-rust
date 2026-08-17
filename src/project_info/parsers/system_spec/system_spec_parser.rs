@@ -1,4 +1,4 @@
-use std::{collections::{HashSet, BTreeSet, HashMap}};
+use std::{collections::{BTreeSet, HashMap}};
 
 use crate::project_info::parsers::general_parser::{self, parse_given_str};
 use colored::Colorize;
@@ -114,13 +114,35 @@ lazy_static! {
 }
 
 pub type SystemSpecParseResult<'a> = ParseResult<'a, SystemSpecExpressionTree, SpecParseError>;
+
+// Identifies which feature namespace a parsed `feature:` constraint belongs to, and which
+// feature list it should be validated against.
+#[derive(Clone, Copy)]
+pub enum FeatureValidationContext<'a> {
+  // Parsing a consuming project's cmake_data.yaml. `None` means the project declares zero
+  // features, in which case any `feature:` usage is an error (a feature constraint can never
+  // evaluate to true in a project with no features, so it's always a typo or a mistake).
+  ConsumingProject {
+    valid_feature_list: Option<&'a Vec<&'a str>>
+  },
+  // Parsing a registry dependency's dep_config.yaml. `feature:` names refer to the dependency's
+  // OWN declared feature set, never the consuming project's.
+  PredefinedDep {
+    dep_name: &'a str,
+    declared_features: &'a BTreeSet<String>
+  },
+  // Write-time re-parse of constant, already-validated constraint strings (e.g. "((cuda))").
+  // Skips feature-name validation explicitly. Never use this for user- or registry-supplied text.
+  TrustedReparse
+}
+
 struct SystemSpecParseOptions<'a> {
-  valid_feature_names: Option<HashSet<&'a str>>,
+  feature_context: FeatureValidationContext<'a>,
   is_before_output_name: bool
 }
 
 pub struct GivenConstraintSpecParseContext<'a> {
-  pub maybe_valid_feature_list: Option<&'a Vec<&'a str>>,
+  pub feature_context: FeatureValidationContext<'a>,
   pub is_before_output_name: bool
 }
 
@@ -190,6 +212,17 @@ pub enum SystemSpecFeatureType {
   CudaLang
 }
 
+// Which project's feature namespace a `feature:` constraint refers to. Determines both the
+// validation list at parse time and the generated CMake variable prefix at write time
+// (${LOCAL_TOPLEVEL_PROJECT_NAME}_FEATURE_<name> vs GCMAKE_PREDEP_<dep>_FEATURE_<name>).
+// Always ConsumingProject for language features.
+#[derive(Clone, PartialEq, Eq)]
+pub enum FeatureOwner {
+  ConsumingProject,
+  // Contains the registry dependency name ("imgui", "glfw", etc.).
+  PredefinedDep(String)
+}
+
 impl SystemSpecFeatureType {
   pub fn from_str(some_str: &str) -> Option<Self> {
     return match some_str {
@@ -225,7 +258,8 @@ pub enum SystemSpecExpressionTree {
   Value(SingleSystemSpec),
   Feature {
     feature_type: SystemSpecFeatureType,
-    name: String
+    name: String,
+    owner: FeatureOwner
   },
   Not(Box<SystemSpecExpressionTree>),
   And(Box<SystemSpecExpressionTree>, Box<SystemSpecExpressionTree>),
@@ -241,8 +275,7 @@ impl SystemSpecExpressionTree {
 
     let options: SystemSpecParseOptions = SystemSpecParseOptions {
       is_before_output_name: context.is_before_output_name,
-      valid_feature_names: context.maybe_valid_feature_list
-        .map(|names_vec| names_vec.iter().copied().collect()),
+      feature_context: context.feature_context
     };
 
     return parse_full_spec(s, &options);
@@ -258,10 +291,23 @@ impl SystemSpecExpressionTree {
     // }
   }
 
+  pub fn references_project_defined_feature(&self) -> bool {
+    match self {
+      Self::Value(_) => false,
+      Self::Feature { feature_type, .. } => *feature_type == SystemSpecFeatureType::ProjectDefined,
+      Self::Not(expr) => expr.references_project_defined_feature(),
+      Self::ParenGroup(expr) => expr.references_project_defined_feature(),
+      Self::And(left_expr, right_expr) | Self::Or(left_expr, right_expr) => {
+        left_expr.references_project_defined_feature() || right_expr.references_project_defined_feature()
+      }
+    }
+  }
+
   fn inner_to_string(&self) -> String {
     match self {
       Self::Value(single_spec) => single_spec.to_str().to_string(),
-      Self::Feature { name, feature_type } => format!("{}:{}", feature_type.to_left_side_str(), name),
+      // The owner isn't rendered: it's implied by which file the constraint was written in.
+      Self::Feature { name, feature_type, owner: _ } => format!("{}:{}", feature_type.to_left_side_str(), name),
       Self::Not(expr) => format!("not {}", expr.inner_to_string()),
       Self::And(left_expr, right_expr) => format!("{} and {}", left_expr.inner_to_string(), right_expr.inner_to_string()),
       Self::Or(left_expr, right_expr) => format!("{} or {}", left_expr.inner_to_string(), right_expr.inner_to_string()),
@@ -273,7 +319,10 @@ impl SystemSpecExpressionTree {
   fn exactly_matches_structure(&self, other: &SystemSpecExpressionTree) -> bool {
     match (self, other) {
       (SystemSpecExpressionTree::Value(value), SystemSpecExpressionTree::Value(other_val)) => value == other_val,
-      (SystemSpecExpressionTree::Feature { name: this_name, feature_type: this_feature_type }, SystemSpecExpressionTree::Feature { name: other_name, feature_type: other_feature_type }) => this_name == other_name && this_feature_type == other_feature_type,
+      (
+        SystemSpecExpressionTree::Feature { name: this_name, feature_type: this_feature_type, owner: this_owner },
+        SystemSpecExpressionTree::Feature { name: other_name, feature_type: other_feature_type, owner: other_owner }
+      ) => this_name == other_name && this_feature_type == other_feature_type && this_owner == other_owner,
       (SystemSpecExpressionTree::ParenGroup(group), SystemSpecExpressionTree::ParenGroup(other_group)) => {
         group.exactly_matches_structure(other_group)
       },
@@ -316,7 +365,15 @@ pub enum SpecParseError {
   InvalidFeatureName {
     parsed_from: String,
     received: String,
-    valid_names: BTreeSet<String>
+    valid_names: BTreeSet<String>,
+    // Tells us where the list of valid names comes from.
+    // "The project's features list", "the predefined dependency 'imgui'", etc..
+    feature_source_description: String
+  },
+  FeatureInFeaturelessContext {
+    parsed_from: String,
+    received: String,
+    context_description: String
   },
   LanguageFeatureInOutputName {
     parsed_from: String
@@ -368,15 +425,24 @@ pub fn parse_spec_with_diagnostic<'a>(
             point_to_position(expr_str, &parsed_from)
           ))
         },
-        SpecParseError::InvalidFeatureName { parsed_from, received, valid_names } => {
+        SpecParseError::InvalidFeatureName { parsed_from, received, feature_source_description, valid_names } => {
           let valid_names_str: String = valid_names.into_iter()
             .collect::<Vec<String>>()
             .join(", ");
 
           Err(format!(
-            "Failed to parse feature spec because it specifies the name \"{}\" which isn't in the specified features list. Must be one of: {}.\n{}",
+            "Failed to parse feature spec because it specifies the name \"{}\" which isn't declared by {}. Must be one of: {}.\n{}",
             received.yellow(),
+            feature_source_description,
             valid_names_str.green(),
+            point_to_position(expr_str, &parsed_from)
+          ))
+        },
+        SpecParseError::FeatureInFeaturelessContext { parsed_from, received, context_description } => {
+          Err(format!(
+            "Failed to parse feature spec \"{}\" because {} doesn't declare any features, so the feature constraint could never be satisfied. Declare the feature first, or remove the constraint.\n{}",
+            received.yellow(),
+            context_description,
             point_to_position(expr_str, &parsed_from)
           ))
         },
@@ -618,19 +684,53 @@ fn parse_feature_right_side<'a>(
 ) -> SystemSpecParseResult<'a> {
   return match parse_token(s, false)? {
     Some(ParseSuccess { value, rest }) => {
-      match using_features_from {
-        SystemSpecFeatureType::ProjectDefined => {
-          if let Some(valid_feature_names) = options.valid_feature_names.as_ref() {
-            if !valid_feature_names.contains(value) {
+      let feature_owner: FeatureOwner = match using_features_from {
+        SystemSpecFeatureType::ProjectDefined => match &options.feature_context {
+          FeatureValidationContext::ConsumingProject { valid_feature_list } => match valid_feature_list {
+            Some(valid_feature_names) => {
+              if !valid_feature_names.iter().any(|feature_name| *feature_name == value) {
+                return Err(ParseError::Custom(SpecParseError::InvalidFeatureName {
+                  parsed_from: s.to_string(),
+                  received: value.to_string(),
+                  feature_source_description: String::from("the project's features list"),
+                  valid_names: valid_feature_names.iter()
+                    .map(|feature_name| feature_name.to_string())
+                    .collect()
+                }))
+              }
+
+              FeatureOwner::ConsumingProject
+            },
+            // A project with no declared features can never satisfy a feature constraint,
+            // so this is always a mistake on the user's part.
+            None => return Err(ParseError::Custom(SpecParseError::FeatureInFeaturelessContext {
+              parsed_from: s.to_string(),
+              received: value.to_string(),
+              context_description: String::from("the project")
+            }))
+          },
+          FeatureValidationContext::PredefinedDep { dep_name, declared_features } => {
+            if declared_features.is_empty() {
+              return Err(ParseError::Custom(SpecParseError::FeatureInFeaturelessContext {
+                parsed_from: s.to_string(),
+                received: value.to_string(),
+                context_description: format!("predefined dependency '{}'", dep_name)
+              }))
+            }
+            else if !declared_features.contains(value) {
               return Err(ParseError::Custom(SpecParseError::InvalidFeatureName {
                 parsed_from: s.to_string(),
                 received: value.to_string(),
-                valid_names: valid_feature_names.clone().into_iter()
+                feature_source_description: format!("predefined dependency '{}'", dep_name),
+                valid_names: declared_features.iter()
                   .map(|feature_name| feature_name.to_string())
                   .collect()
               }))
             }
-          }
+
+            FeatureOwner::PredefinedDep(dep_name.to_string())
+          },
+          FeatureValidationContext::TrustedReparse => FeatureOwner::ConsumingProject
         },
         language_feature_type => {
           let feature_map = feature_map_for_lang(language_feature_type).unwrap();
@@ -638,18 +738,23 @@ fn parse_feature_right_side<'a>(
             return Err(ParseError::Custom(SpecParseError::InvalidFeatureName {
               parsed_from: s.to_string(),
               received: value.to_string(),
+              feature_source_description: format!("the {} language feature list", using_features_from.to_left_side_str()),
               valid_names: feature_map.keys()
                 .map(|feature_name| feature_name.to_string())
                 .collect()
             }))
           }
+
+          // Language features always belong to the consuming project's compilation context.
+          FeatureOwner::ConsumingProject
         }
-      }
+      };
 
       return Ok(Some(ParseSuccess {
         value: SystemSpecExpressionTree::Feature {
           name: value.to_string(),
-          feature_type: using_features_from
+          feature_type: using_features_from,
+          owner: feature_owner
         },
         rest
       }))
@@ -822,7 +927,8 @@ fn test_parser() {
         Box::new(SystemSpecExpressionTree::Value(SingleSystemSpec::CUDA)),
         Box::new(SystemSpecExpressionTree::Feature {
           name: String::from("20"),
-          feature_type: SystemSpecFeatureType::CudaLang
+          feature_type: SystemSpecFeatureType::CudaLang,
+          owner: FeatureOwner::ConsumingProject
         })
       ))
     },
@@ -987,28 +1093,32 @@ fn test_parser() {
       raw_expr: "(( feature:the-feature ))",
       expected_tree: Some(SystemSpecExpressionTree::Feature {
         name: String::from("the-feature"),
-        feature_type: SystemSpecFeatureType::ProjectDefined
+        feature_type: SystemSpecFeatureType::ProjectDefined,
+        owner: FeatureOwner::ConsumingProject
       })
     },
     ParserTestGroup {
       raw_expr: "(( cpp:override ))",
       expected_tree: Some(SystemSpecExpressionTree::Feature {
         name: String::from("override"),
-        feature_type: SystemSpecFeatureType::CppLang
+        feature_type: SystemSpecFeatureType::CppLang,
+        owner: FeatureOwner::ConsumingProject
       })
     },
     ParserTestGroup {
       raw_expr: "(( c:restrict ))",
       expected_tree: Some(SystemSpecExpressionTree::Feature {
         name: String::from("restrict"),
-        feature_type: SystemSpecFeatureType::CLang
+        feature_type: SystemSpecFeatureType::CLang,
+        owner: FeatureOwner::ConsumingProject
       })
     },
     ParserTestGroup {
       raw_expr: "(( cuda:23 ))",
       expected_tree: Some(SystemSpecExpressionTree::Feature {
         name: String::from("23"),
-        feature_type: SystemSpecFeatureType::CudaLang
+        feature_type: SystemSpecFeatureType::CudaLang,
+        owner: FeatureOwner::ConsumingProject
       })
     },
     ParserTestGroup {
@@ -1017,13 +1127,15 @@ fn test_parser() {
         Box::new(SystemSpecExpressionTree::Not(
           Box::new(SystemSpecExpressionTree::Feature {
             name: String::from("the-feature"),
-            feature_type: SystemSpecFeatureType::ProjectDefined
+            feature_type: SystemSpecFeatureType::ProjectDefined,
+            owner: FeatureOwner::ConsumingProject
           })
         )),
         Box::new(SystemSpecExpressionTree::And(
           Box::new(SystemSpecExpressionTree::Feature {
             name: String::from("other-feature"),
-            feature_type: SystemSpecFeatureType::ProjectDefined
+            feature_type: SystemSpecFeatureType::ProjectDefined,
+            owner: FeatureOwner::ConsumingProject
           }),
           Box::new(SystemSpecExpressionTree::Value(SingleSystemSpec::Windows))
         ))
@@ -1088,9 +1200,11 @@ fn test_parser() {
   ];
 
   for ParserTestGroup { raw_expr, expected_tree } in valid_expressions.iter().chain(invalid_expressions.iter()) {
+    // TrustedReparse skips feature-name validation, which is what this structural test suite
+    // needs. Validation behavior itself is covered by the dedicated tests below.
     let context = GivenConstraintSpecParseContext {
       is_before_output_name: false,
-      maybe_valid_feature_list: None
+      feature_context: FeatureValidationContext::TrustedReparse
     };
 
     match (expected_tree, parse_spec_with_diagnostic(raw_expr, context)) {
@@ -1120,5 +1234,117 @@ fn test_parser() {
         )
       }
     }
+  }
+}
+
+#[test]
+fn test_consuming_project_feature_validation() {
+  let feature_list: Vec<&str> = vec!["with-tools", "fancy-fonts"];
+
+  // Declared feature name parses and is owned by the consuming project.
+  let valid_result = parse_spec_with_diagnostic(
+    "(( feature:fancy-fonts ))",
+    GivenConstraintSpecParseContext {
+      is_before_output_name: false,
+      feature_context: FeatureValidationContext::ConsumingProject { valid_feature_list: Some(&feature_list) }
+    }
+  );
+  match valid_result {
+    Ok(Some(ParseSuccess { value, .. })) => {
+      assert!(value.exactly_matches_structure(&SystemSpecExpressionTree::Feature {
+        name: String::from("fancy-fonts"),
+        feature_type: SystemSpecFeatureType::ProjectDefined,
+        owner: FeatureOwner::ConsumingProject
+      }));
+    },
+    _ => panic!("A declared consuming-project feature should parse successfully.")
+  }
+
+  let invalid_result = parse_spec_with_diagnostic(
+    "(( feature:typo-name ))",
+    GivenConstraintSpecParseContext {
+      is_before_output_name: false,
+      feature_context: FeatureValidationContext::ConsumingProject { valid_feature_list: Some(&feature_list) }
+    }
+  );
+  assert!(invalid_result.is_err(), "An undeclared feature name must be a parse error.");
+
+  let featureless_result = parse_spec_with_diagnostic(
+    "(( feature:anything ))",
+    GivenConstraintSpecParseContext {
+      is_before_output_name: false,
+      feature_context: FeatureValidationContext::ConsumingProject { valid_feature_list: None }
+    }
+  );
+  assert!(
+    featureless_result.is_err(),
+    "feature: constraints in a project which declares no features must be a parse error."
+  );
+}
+
+#[test]
+fn test_predefined_dep_feature_validation() {
+  let declared: BTreeSet<String> = BTreeSet::from([String::from("freetype"), String::from("svg")]);
+
+  // A dep-config feature constraint is validated against the DEP's declared set and
+  // stamped with the dep's owner.
+  let valid_result = parse_spec_with_diagnostic(
+    "(( feature:freetype ))",
+    GivenConstraintSpecParseContext {
+      is_before_output_name: false,
+      feature_context: FeatureValidationContext::PredefinedDep { dep_name: "imgui", declared_features: &declared }
+    }
+  );
+  match valid_result {
+    Ok(Some(ParseSuccess { value, .. })) => {
+      assert!(value.exactly_matches_structure(&SystemSpecExpressionTree::Feature {
+        name: String::from("freetype"),
+        feature_type: SystemSpecFeatureType::ProjectDefined,
+        owner: FeatureOwner::PredefinedDep(String::from("imgui"))
+      }));
+    },
+    _ => panic!("A declared predefined-dependency feature should parse successfully.")
+  }
+
+  assert!(
+    parse_spec_with_diagnostic(
+      "(( feature:nonexistent ))",
+      GivenConstraintSpecParseContext {
+        is_before_output_name: false,
+        feature_context: FeatureValidationContext::PredefinedDep { dep_name: "imgui", declared_features: &declared }
+      }
+    ).is_err(),
+    "A feature name not declared by the dependency must be a parse error."
+  );
+
+  let empty: BTreeSet<String> = BTreeSet::new();
+  assert!(
+    parse_spec_with_diagnostic(
+      "(( feature:freetype ))",
+      GivenConstraintSpecParseContext {
+        is_before_output_name: false,
+        feature_context: FeatureValidationContext::PredefinedDep { dep_name: "imgui", declared_features: &empty }
+      }
+    ).is_err(),
+    "feature: constraints in a dependency config which declares no features must be a parse error."
+  );
+
+  // Language features are unaffected by the dep context and stay consumer-owned.
+  let lang_result = parse_spec_with_diagnostic(
+    "(( cpp:constexpr ))",
+    GivenConstraintSpecParseContext {
+      is_before_output_name: false,
+      feature_context: FeatureValidationContext::PredefinedDep { dep_name: "imgui", declared_features: &declared }
+    }
+  );
+  match lang_result {
+    Ok(Some(ParseSuccess { value, .. })) => {
+      assert!(value.exactly_matches_structure(&SystemSpecExpressionTree::Feature {
+        name: String::from("constexpr"),
+        feature_type: SystemSpecFeatureType::CppLang,
+        owner: FeatureOwner::ConsumingProject
+      }));
+    },
+    _ => panic!("Language features should parse in a predefined-dep context.")
   }
 }

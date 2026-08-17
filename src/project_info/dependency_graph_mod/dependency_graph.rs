@@ -267,9 +267,29 @@ pub enum ContainedItem<'a> {
 // even though the library isn't present.
 pub enum MaybePresentNonOwningTarget<'a> {
   NotImported {
-    namespaced_yaml_name: String
+    // The dependency-namespaced target name as a user would write it in cmake_data.yaml,
+    // like "freetype::freetype". Since the dependency was never imported, no TargetNode
+    // exists to look this up from, so the name is stored directly for use in error messages.
+    namespaced_yaml_name: String,
+    // The condition under which this library is actually required, parsed from the
+    // constraint prefix on the dependency's `external_requires` entry. For ImGui's
+    // `- (( feature:freetype )) freetype::freetype`, this holds the `(( feature:freetype ))`
+    // expression. SystemSpecifierWrapper::All when the requirement is unconditional.
+    constraint: SystemSpecifierWrapper
   },
-  Populated(Weak<RefCell<TargetNode<'a>>>)
+  Populated {
+    target: Weak<RefCell<TargetNode<'a>>>,
+    constraint: SystemSpecifierWrapper
+  }
+}
+
+impl<'a> MaybePresentNonOwningTarget<'a> {
+  pub fn constraint(&self) -> &SystemSpecifierWrapper {
+    match self {
+      Self::NotImported { constraint, .. } => constraint,
+      Self::Populated { constraint, .. } => constraint
+    }
+  }
 }
 
 // Weak references to existing nodes.
@@ -278,11 +298,35 @@ enum NonOwningComplexTargetRequirement<'a> {
   ExclusiveFrom(Weak<RefCell<TargetNode<'a>>>)
 }
 
+// Used to write CMake configure-time checks for conditionally required external dependencies.
+// For example, ImGui requires FreeType only if the ImGui `freetype` feature is enabled, and
+// that feature can also be conditionally be enabled based on a feature in the "current project".
+// Whether or not our project's feature is enabled can only be determined at CMake configure time,
+// so in cases like the ImGui->FreeType case, we use this to write guards in the CMake file to propagate
+// an error if the requirement isn't met.
+//   - FreeType is imported: ImGui's requirement can be satisfied, so no guard is needed
+//   - FreeType is missing and ImGui's `freetype` feature is disabled: FreeType is not needed
+//   - FreeType is missing and ImGui's `freetype` feature is enabled: CMake reports a FATAL_ERROR
+pub struct GatedRequirementGuard {
+  // YAML-namespaced name of the predefined dependency target whose `external_requires`
+  // entry produced this check. For the ImGui->FreeType case, this is "imgui::core".
+  pub requiring_target_yaml_name: String,
+  pub constraint: SystemSpecifierWrapper,
+  // The dependency-namespaced target names, as a user would write them in cmake_data.yaml,
+  // of every library that could satisfy this requirement - one per "or" alternative in the
+  // `external_requires` entry. For the ImGui->FreeType case this is ["freetype::freetype"].
+  pub alternative_yaml_names: Vec<String>
+}
+
 pub enum MaybePresentOwningTarget<'a> {
   NotImported {
-    namespaced_yaml_name: String
+    namespaced_yaml_name: String,
+    constraint: SystemSpecifierWrapper
   },
-  Populated(Rc<RefCell<TargetNode<'a>>>)
+  Populated {
+    target: Rc<RefCell<TargetNode<'a>>>,
+    constraint: SystemSpecifierWrapper
+  }
 }
 
 // Strong references to existing nodes.
@@ -295,13 +339,17 @@ impl<'a> OwningComplexTargetRequirement<'a> {
   fn make_owned_target_list(weak_target_list: &Vec<MaybePresentNonOwningTarget<'a>>) -> Vec<MaybePresentOwningTarget<'a>> {
     return weak_target_list.iter()
       .map(|non_owning_target| match non_owning_target {
-        MaybePresentNonOwningTarget::NotImported { namespaced_yaml_name } => {
-          MaybePresentOwningTarget::NotImported { namespaced_yaml_name: namespaced_yaml_name.clone() }
+        MaybePresentNonOwningTarget::NotImported { namespaced_yaml_name, constraint } => {
+          MaybePresentOwningTarget::NotImported {
+            namespaced_yaml_name: namespaced_yaml_name.clone(),
+            constraint: constraint.clone()
+          }
         },
-        MaybePresentNonOwningTarget::Populated(weak_target) => {
-          MaybePresentOwningTarget::Populated(
-            Weak::upgrade(weak_target).unwrap()
-          )
+        MaybePresentNonOwningTarget::Populated { target: weak_target, constraint } => {
+          MaybePresentOwningTarget::Populated {
+            target: Weak::upgrade(weak_target).unwrap(),
+            constraint: constraint.clone()
+          }
         }
       })
       .collect();
@@ -775,7 +823,11 @@ pub struct DependencyGraph<'a> {
   test_projects: BTreeMap<String, Rc<RefCell<DependencyGraph<'a>>>>,
   gcmake_deps: BTreeMap<String, Rc<RefCell<DependencyGraph<'a>>>>,
 
-  predefined_deps: BTreeMap<String, Rc<RefCell<DependencyGraph<'a>>>>
+  predefined_deps: BTreeMap<String, Rc<RefCell<DependencyGraph<'a>>>>,
+
+  // Only meaningfully populated on the TOPLEVEL graph. Keyed by the owning
+  // predefined dependency's name.
+  gated_predep_requirement_guards: RefCell<BTreeMap<String, Vec<GatedRequirementGuard>>>
 }
 
 impl<'a> Hash for DependencyGraph<'a> {
@@ -906,6 +958,12 @@ impl<'a> DependencyGraph<'a> {
   pub fn get_predefined_dependencies(&self) -> &BTreeMap<String, Rc<RefCell<DependencyGraph<'a>>>> {
     unsafe {
       return &(*self.root_project().as_ptr()).predefined_deps
+    }
+  }
+
+  pub fn get_gated_predep_requirement_guards(&self) -> &RefCell<BTreeMap<String, Vec<GatedRequirementGuard>>> {
+    unsafe {
+      return &(*Weak::upgrade(&self.toplevel).unwrap().as_ptr()).gated_predep_requirement_guards
     }
   }
 
@@ -1089,16 +1147,46 @@ impl<'a> DependencyGraph<'a> {
           for (container_feature_name, feature_config) in normal_project_config.get_features() {
             for FinalFeatureEnabler { dep_name, feature_name } in &feature_config.enables {
               if let Some(dep_name_str) = dep_name {
+                // GCMake dependencies are checked first so any pre-existing configuration
+                // keeps its current behavior if a predefined dependency ever shares a name
+                // with a gcmake dependency.
                 match self.root_project().as_ref().borrow().gcmake_deps.get(dep_name_str) {
                   None => {
-                    return Err(GraphLoadFailureReason::FailedAdditionalProjectValidation {
-                      project: Weak::upgrade(&self.current_graph_ref).unwrap(),
-                      failure_reason: AdditionalConfigValidationFailureReason::FeatureEnablerDependencyProjectNotFound {
-                        container_feature_name: container_feature_name.to_string(),
-                        gcmake_dep_name: dep_name_str.to_string(),
-                        feature_name_to_enable: feature_name.to_string()
+                    // Not a gcmake dependency: the enabler may name a predefined dependency's
+                    // feature instead (e.g. "imgui/freetype").
+                    match self.root_project().as_ref().borrow().predefined_deps.get(dep_name_str) {
+                      None => {
+                        return Err(GraphLoadFailureReason::FailedAdditionalProjectValidation {
+                          project: Weak::upgrade(&self.current_graph_ref).unwrap(),
+                          failure_reason: AdditionalConfigValidationFailureReason::FeatureEnablerDependencyProjectNotFound {
+                            container_feature_name: container_feature_name.to_string(),
+                            gcmake_dep_name: dep_name_str.to_string(),
+                            feature_name_to_enable: feature_name.to_string()
+                          }
+                        });
+                      },
+                      Some(predefined_dep) => {
+                        let has_needed_feature: bool = predefined_dep.as_ref().borrow()
+                          .project_wrapper()
+                          .maybe_predef_dep()
+                          .map_or(false, |predef_dep_config| predef_dep_config
+                            .as_common()
+                            .dep_features_map()
+                            .contains_key(feature_name)
+                          );
+
+                        if !has_needed_feature {
+                          return Err(GraphLoadFailureReason::FailedAdditionalProjectValidation {
+                            project: Weak::upgrade(&self.current_graph_ref).unwrap(),
+                            failure_reason: AdditionalConfigValidationFailureReason::FeatureEnablerDependencyFeatureNotFound {
+                              container_feature_name: container_feature_name.to_string(),
+                              gcmake_dep_name: dep_name_str.to_string(),
+                              feature_name_to_enable: feature_name.to_string()
+                            }
+                          });
+                        }
                       }
-                    });
+                    }
                   }
                   Some(gcmake_dep) => {
                     if let Some(available_gcmake_dep) = gcmake_dep.as_ref().borrow().project_wrapper().maybe_normal_project() {
@@ -1618,12 +1706,30 @@ impl<'a> DependencyGraph<'a> {
                   // target name is also guaranteed to exist in that project, but as a result can only
                   // be retrieved if that project has also been imported.
                   let required_predep_project_name: &str = link_spec.get_namespace_queue().iter().nth(0).unwrap();
-                  let required_lib_name: &str = link_spec.get_target_list().iter().nth(0).unwrap().get_name();
+                  let link_spec_target = link_spec.get_target_list().iter().nth(0).unwrap();
+                  let required_lib_name: &str = link_spec_target.get_name();
+
+                  // The constraint prefix parsed off the external_requires entry. For example, Crow's
+                  // `- (( feature:ssl )) openssl::ssl` means Crow only needs OpenSSL when its 'ssl'
+                  // feature is enabled. This constraint is needed in two places later in this function:
+                  //   - It's copied onto the link we auto-create from the user's target to the required
+                  //       library, so the generated CMake only downloads, links, and installs OpenSSL
+                  //       when the feature is enabled.
+                  //   - If the required dependency was never imported, requirements which only apply when
+                  //       a feature is enabled can't be checked until CMake configure time. Those become
+                  //       configure-time FATAL_ERROR guards (see GatedRequirementGuard) instead of
+                  //       failing the load immediately.
+                  let requirement_constraint: SystemSpecifierWrapper = link_spec_target.get_system_spec_info().clone();
 
                   match self.predefined_deps.get(required_predep_project_name) {
                     None => {
                       one_of_target_list.push(MaybePresentNonOwningTarget::NotImported {
-                        namespaced_yaml_name: link_spec.original_spec_str().to_string()
+                        // The plain "depname::target" name, NOT the original specifier string.
+                        // The constraint prefix is stored separately in `constraint`, so error
+                        // messages can print "freetype::freetype" without the gate text
+                        // duplicated into it.
+                        namespaced_yaml_name: format!("{}::{}", required_predep_project_name, required_lib_name),
+                        constraint: requirement_constraint
                       });
                     },
                     Some(required_predep_project) => {
@@ -1634,9 +1740,10 @@ impl<'a> DependencyGraph<'a> {
                         .get_target_in_current_namespace(required_lib_name)
                         .unwrap();
 
-                      one_of_target_list.push(MaybePresentNonOwningTarget::Populated(
-                        Rc::downgrade(&matching_target)
-                      ));
+                      one_of_target_list.push(MaybePresentNonOwningTarget::Populated {
+                        target: Rc::downgrade(&matching_target),
+                        constraint: requirement_constraint
+                      });
                     }
                   }
                 }
@@ -1667,12 +1774,19 @@ impl<'a> DependencyGraph<'a> {
 
         if let ProjectWrapper::PredefinedDependency(_) = &link_target_graph._project_wrapper {
           let mut checked_predef_targets: BTreeMap<TargetId, Rc<RefCell<TargetNode>>> = BTreeMap::new();
-          let mut predef_targets_checking_stack: Vec<(TargetId, Rc<RefCell<TargetNode>>)> = Vec::new();
+          // Requirements of the linked predefined dependency which still need to be checked
+          // and, if the user didn't link them already, linked to the user's output target.
+          // Some requirements only apply under a condition, so each entry also carries the
+          // condition under which its target is actually required; the link created for the
+          // requirement keeps that same condition. For example, in a project that uses the
+          // Crow predefined dependency, OpenSSL enters this stack with the condition
+          // "Crow's 'ssl' feature is enabled".
+          let mut predef_targets_checking_stack: Vec<(TargetId, Rc<RefCell<TargetNode>>, SystemSpecifierWrapper)> = Vec::new();
 
           for complex_requirement in &link_target.complex_requirements {
             if let NonOwningComplexTargetRequirement::OneOf(lib_list) = complex_requirement {
               if lib_list.len() == 1 {
-                if let MaybePresentNonOwningTarget::Populated(populated_target_weak) = lib_list.get(0).unwrap() {
+                if let MaybePresentNonOwningTarget::Populated { target: populated_target_weak, constraint } = lib_list.get(0).unwrap() {
                   let populated_target_rc = Weak::upgrade(populated_target_weak).unwrap();
                   let populated_target_id: TargetId = populated_target_rc.as_ref().borrow().unique_target_id();
 
@@ -1683,7 +1797,8 @@ impl<'a> DependencyGraph<'a> {
                   // dependency target which can be applied to our output item.
                   predef_targets_checking_stack.push((
                     populated_target_id,
-                    populated_target_rc
+                    populated_target_rc,
+                    constraint.clone()
                   ));
                 }
               }
@@ -1694,12 +1809,13 @@ impl<'a> DependencyGraph<'a> {
             predef_targets_checking_stack.push(
               (
                 *predef_target_id,
-                Weak::upgrade(&predef_requirement_target.target).unwrap()
+                Weak::upgrade(&predef_requirement_target.target).unwrap(),
+                SystemSpecifierWrapper::default_include_all()
               )
             );
           }
 
-          while let Some((target_checking_id, target_checking_rc)) = predef_targets_checking_stack.pop() {
+          while let Some((target_checking_id, target_checking_rc, carried_constraint)) = predef_targets_checking_stack.pop() {
             let predef_target_checking: &TargetNode = &target_checking_rc.as_ref().borrow();
 
             checked_predef_targets.insert(
@@ -1710,18 +1826,28 @@ impl<'a> DependencyGraph<'a> {
             // Essentially recurse nested requirements
             for (nested_requirement_id, nested_requirement) in &predef_target_checking.depends_on {
               let is_requirement_in_stack: bool = predef_targets_checking_stack.iter()
-                .find(|(id_finding, _)| id_finding == nested_requirement_id)
+                .find(|(id_finding, _, _)| id_finding == nested_requirement_id)
                 .is_some();
 
               if !is_requirement_in_stack && !checked_predef_targets.contains_key(nested_requirement_id) {
                 predef_targets_checking_stack.push(
                   (
                     *nested_requirement_id,
-                    Weak::upgrade(&nested_requirement.target).unwrap()
+                    Weak::upgrade(&nested_requirement.target).unwrap(),
+                    // Anything required transitively THROUGH a gated requirement inherits
+                    // the same gate: if the gate is off, none of it is needed.
+                    carried_constraint.clone()
                   )
                 );
               }
             }
+
+            // The conditions under which this requirement actually applies: the requirement
+            // target's own constraint, the directly linked target's constraint, and any
+            // feature gate carried by the requirement itself.
+            let requirement_product: SystemSpecifierWrapper = predef_target_checking.system_specifier_info
+              .intersection(link_target.get_system_spec_info())
+              .intersection(&carried_constraint);
 
             if let Some(existing_link_to_add) = links_to_add.get_mut(&target_checking_id) {
               // The link already exists and was added by code. Use the most permissive of the two
@@ -1731,7 +1857,9 @@ impl<'a> DependencyGraph<'a> {
                 link.link_mode.clone()
               );
 
-              existing_link_to_add.system_spec_info = existing_link_to_add.system_spec_info.union(&link.system_spec_info);
+              // Union with the new requirement's full gated product (NOT the outer link's raw
+              // constraint) so a second requirer can't silently widen away a feature gate.
+              existing_link_to_add.system_spec_info = existing_link_to_add.system_spec_info.union(&requirement_product);
             }
             else if let Some(existing_link) = project_output_target.depends_on.get(&target_checking_id) {
               // The link already exists and was added by the user. Return an error if the existing link mode
@@ -1754,8 +1882,11 @@ impl<'a> DependencyGraph<'a> {
                 target_checking_id,
                 Link::new(
                   predef_target_checking.locator_name.clone(),
-                  // predef_target_checking.system_specifier_info.clone(),
-                  predef_target_checking.system_specifier_info.intersection(link_target.get_system_spec_info()),
+                  // Stops conditionally-required dependencies from being downloaded, linked,
+                  // and installed when they aren't actually needed. For example, in a project
+                  // that uses the Crow predefined dependency, this is what makes the generated
+                  // CMake skip OpenSSL entirely unless Crow's 'ssl' feature is enabled.
+                  requirement_product.clone(),
                   Rc::downgrade(&target_checking_rc),
                   link.link_mode.clone()
                 )
@@ -1793,20 +1924,98 @@ impl<'a> DependencyGraph<'a> {
                 .iter()
                 .any(|maybe_populated_target| match maybe_populated_target {
                   MaybePresentNonOwningTarget::NotImported { .. } => false,
-                  MaybePresentNonOwningTarget::Populated(maybe_needed_target) => {
+                  MaybePresentNonOwningTarget::Populated { target: maybe_needed_target, .. } => {
                     let id_searching: TargetId = Weak::upgrade(maybe_needed_target).unwrap().as_ref().borrow().unique_target_id();
                     project_output_target.depends_on.contains_key(&id_searching)
                   }
                 });
 
               if !has_requirement_target {
-                return Err(GraphLoadFailureReason::ComplexTargetRequirementNotSatisfied {
-                  target: Rc::clone(project_output_target_rc),
-                  target_project: project_output_target.container_project(),
-                  dependency_project: link_target.as_ref().borrow().container_project(),
-                  dependency: Rc::clone(&link_target),
-                  failed_requirement: OwningComplexTargetRequirement::new_from(complex_requirement)
-                });
+                // When EVERY unmet alternative is feature-gated, whether the requirement applies
+                // is only knowable at CMake configure time. Defer the error to a generated configure-time
+                // guard. If ANY alternative is unconditional or platform-only-gated, the project
+                // is mis-specified right now, so keep the hard load-time error.
+                let every_alternative_is_feature_gated: bool = target_list
+                  .iter()
+                  .all(|alternative| alternative.constraint().references_project_defined_feature());
+
+                if every_alternative_is_feature_gated {
+                  let guard_constraint: SystemSpecifierWrapper = target_list
+                    .iter()
+                    .skip(1)
+                    .fold(
+                      target_list.get(0).unwrap().constraint().clone(),
+                      |combined, alternative| combined.union(alternative.constraint())
+                    );
+
+                  let alternative_yaml_names: Vec<String> = target_list
+                    .iter()
+                    .map(|alternative| match alternative {
+                      MaybePresentNonOwningTarget::NotImported { namespaced_yaml_name, .. } => namespaced_yaml_name.clone(),
+                      MaybePresentNonOwningTarget::Populated { target, .. } => Weak::upgrade(target).unwrap()
+                        .as_ref().borrow()
+                        .get_yaml_namespaced_target_name()
+                        .to_string()
+                    })
+                    .collect();
+
+                  let borrowed_link_target = link_target.as_ref().borrow();
+                  let owning_dep_name: String = borrowed_link_target.container_project()
+                    .as_ref().borrow()
+                    .project_identifier_name()
+                    .to_string();
+                  let requiring_target_yaml_name: String = borrowed_link_target
+                    .get_yaml_namespaced_target_name()
+                    .to_string();
+
+                  // Guards are recorded on the toplevel graph because the writer emits all
+                  // predefined dependency blocks from the root project's CMakeLists.
+                  let toplevel_graph = Weak::upgrade(&self.toplevel).unwrap();
+                  let toplevel_borrowed = toplevel_graph.as_ref().borrow();
+                  let mut all_guards = toplevel_borrowed.gated_predep_requirement_guards.borrow_mut();
+                  let dep_guards: &mut Vec<GatedRequirementGuard> = all_guards
+                    .entry(owning_dep_name)
+                    .or_insert(Vec::new());
+
+                  // Avoids recording the same guard multiple times. This requirement check runs
+                  // once per output target in the user's project, so if several of those targets
+                  // link imgui::core, the guard which checks that FreeType is present when ImGui's
+                  // 'freetype' feature is enabled would be recorded once for each of them.
+                  //
+                  // Two guards only count as duplicates when their conditions match, because a
+                  // target can require the same library through two external_requires entries with
+                  // different conditions, and each of those needs its own guard.
+                  // SystemSpecifierWrapper doesn't support direct comparison, so conditions are
+                  // compared using their rendered text.
+                  let constraint_render = |the_constraint: &SystemSpecifierWrapper| -> String {
+                    if the_constraint.includes_all()
+                      { String::from("") }
+                      else { the_constraint.unwrap_specific_ref().to_string() }
+                  };
+
+                  let is_duplicate: bool = dep_guards.iter().any(|existing_guard|
+                    existing_guard.requiring_target_yaml_name == requiring_target_yaml_name
+                      && existing_guard.alternative_yaml_names == alternative_yaml_names
+                      && constraint_render(&existing_guard.constraint) == constraint_render(&guard_constraint)
+                  );
+
+                  if !is_duplicate {
+                    dep_guards.push(GatedRequirementGuard {
+                      requiring_target_yaml_name,
+                      constraint: guard_constraint,
+                      alternative_yaml_names
+                    });
+                  }
+                }
+                else {
+                  return Err(GraphLoadFailureReason::ComplexTargetRequirementNotSatisfied {
+                    target: Rc::clone(project_output_target_rc),
+                    target_project: project_output_target.container_project(),
+                    dependency_project: link_target.as_ref().borrow().container_project(),
+                    dependency: Rc::clone(&link_target),
+                    failed_requirement: OwningComplexTargetRequirement::new_from(complex_requirement)
+                  });
+                }
               }
             },
             NonOwningComplexTargetRequirement::ExclusiveFrom(exclusion_target_weak) => {
@@ -2814,7 +3023,8 @@ impl<'a> DependencyGraph<'a> {
       subprojects: BTreeMap::new(),
       test_projects: BTreeMap::new(),
       predefined_deps: BTreeMap::new(),
-      gcmake_deps: BTreeMap::new()
+      gcmake_deps: BTreeMap::new(),
+      gated_predep_requirement_guards: RefCell::new(BTreeMap::new())
     }));
 
     *graph_id_counter += 1;
@@ -2975,7 +3185,8 @@ impl<'a> DependencyGraph<'a> {
       predefined_deps: BTreeMap::new(),
       subprojects: BTreeMap::new(),
       test_projects: BTreeMap::new(),
-      targets: RefCell::new(BTreeMap::new())
+      targets: RefCell::new(BTreeMap::new()),
+      gated_predep_requirement_guards: RefCell::new(BTreeMap::new())
     }));
 
     *graph_id_counter += 1;
@@ -3056,10 +3267,12 @@ impl<'a> DependencyGraph<'a> {
 
             single_target.add_complex_requirement(NonOwningComplexTargetRequirement::OneOf(
               req_names.iter()
-                .map(|lib_name| 
-                  MaybePresentNonOwningTarget::Populated(
-                    Rc::downgrade(targets.get(lib_name).unwrap())
-                  )
+                .map(|lib_name|
+                  MaybePresentNonOwningTarget::Populated {
+                    target: Rc::downgrade(targets.get(lib_name).unwrap()),
+                    // Intra-dependency 'requires' alternatives have no constraint syntax.
+                    constraint: SystemSpecifierWrapper::default_include_all()
+                  }
                 )
                 .collect()
             ))
@@ -3117,7 +3330,8 @@ impl<'a> DependencyGraph<'a> {
           // document in the project-local .gcmake/ dir. Essentially, this would be a small yaml
           // file which describes the dependency information and lists its targets, just like
           // the regular predefined dependency files.
-          targets: RefCell::new(BTreeMap::new())
+          targets: RefCell::new(BTreeMap::new()),
+          gated_predep_requirement_guards: RefCell::new(BTreeMap::new())
         }));
 
         let mut mut_graph = graph.as_ref().borrow_mut();
@@ -3292,7 +3506,10 @@ fn make_dep_map<'a>(
           for maybe_populated_dependency in maybe_dependency_list {
             match maybe_populated_dependency {
               MaybePresentNonOwningTarget::NotImported { .. } => (),
-              MaybePresentNonOwningTarget::Populated(maybe_used_dependency) => {
+              // NOTE: Constraint-gated alternatives are deliberately included regardless of
+              // their constraint. Ordering over the constraint-blind superset of edges stays
+              // valid for every feature/platform valuation.
+              MaybePresentNonOwningTarget::Populated { target: maybe_used_dependency, .. } => {
                 let wrapped_maybe_dep: RcRefcHashWrapper<TargetNode> = RcRefcHashWrapper(Weak::upgrade(maybe_used_dependency).unwrap());
                 
                 if !visited_targets.contains(&wrapped_maybe_dep) && !unvisited_targets.contains(&wrapped_maybe_dep) {

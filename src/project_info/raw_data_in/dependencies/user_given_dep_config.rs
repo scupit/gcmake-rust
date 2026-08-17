@@ -33,7 +33,12 @@ pub struct UserGivenPredefinedDependencyConfig {
 
   // TODO: Eventually allow option values to be either bool, String, or a list.
   // For now, just strings is fine though.
-  pub options: Option<HashMap<String, String>>
+  pub options: Option<HashMap<String, String>>,
+
+  // Mirrors the GCMake-dependency feature fields below. Feature names are validated
+  // against the dependency's declared feature set at load time.
+  pub use_default_features: Option<bool>,
+  pub features: Option<HashSet<String>>
 }
 
 impl UserGivenPredefinedDependencyConfig {
