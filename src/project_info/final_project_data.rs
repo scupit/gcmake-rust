@@ -1892,6 +1892,11 @@ impl FinalProjectData {
     !self.tests.is_empty()
   }
 
+  // Generally for use with the root project.
+  pub fn has_tests_in_tree(&self) -> bool {
+    self.has_tests() || self.subprojects.values().any(|sub| sub.has_tests_in_tree())
+  }
+
   pub fn has_predefined_dependencies(&self) -> bool {
     !self.predefined_dependencies.is_empty()
   }

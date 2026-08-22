@@ -410,7 +410,7 @@ impl<'a> CMakeListsWriter<'a> {
 
     self.write_root_vars()?;
 
-    if self.project_data.has_tests() {
+    if self.project_data.has_tests_in_tree() {
       self.write_section_header("Tests Configuration")?;
       self.write_test_config_section()?;
     }
@@ -515,11 +515,16 @@ impl<'a> CMakeListsWriter<'a> {
     let file_stats = self.project_data.get_code_file_stats();
     let mut initial_lang_list: Vec<&str> = Vec::new();
 
-    if file_stats.requires_c() {
+    // A language declared in cmake_data.yaml's `languages` map must be enabled even when the project
+    // itself has no files in it yet: dependencies built in-tree (e.g. the sqlite3 amalgamation)
+    // may need it.
+    let declared_languages = self.project_data.get_language_info();
+
+    if file_stats.requires_c() || declared_languages.c.is_some() {
       initial_lang_list.push("\"C\"");
     }
 
-    if file_stats.requires_cpp() {
+    if file_stats.requires_cpp() || declared_languages.cpp.is_some() {
       initial_lang_list.push("\"CXX\"");
     }
 
@@ -2553,13 +2558,17 @@ impl<'a> CMakeListsWriter<'a> {
       }
 
       if build_config.has_link_time_flags() {
+        // Link-time flags go to the compiler driver (e.g. -mwindows), so unlike linker_flags
+        // they must not be wrapped in LINKER:.
         writeln!(&self.cmakelists_file,
           "{}list( APPEND {}_{}_OWN_LINK_FLAGS {} )",
           spacer,
           output_name,
           &build_type_name_upper,
-          flattened_linker_flags_string(
+          flattened_compiler_flags_string(
+            "",
             &build_config.link_time_flags,
+            FlagUseTime::Link,
             FlagOptions {
               from_compiler: *specific_compiler,
               to_compiler: *specific_compiler
@@ -2707,16 +2716,12 @@ impl<'a> CMakeListsWriter<'a> {
           )?;
         }
 
-        let mut has_written_an_if: bool = false;
-
         // Settings by compiler, by config. ('all build type' configs per compiler will also be here).
         for (specific_compiler, config_by_build_type) in by_compiler {
           writeln!(&self.cmakelists_file,
             "\nif( {} )",
             compiler_matcher_string(&specific_compiler)
           )?;
-
-          has_written_an_if = true;
 
           for (given_build_type, build_config) in config_by_build_type {
             if let TargetSpecificBuildType::AllConfigs = &given_build_type {
@@ -2742,9 +2747,6 @@ impl<'a> CMakeListsWriter<'a> {
               )?;
             }
           }
-        }
-
-        if has_written_an_if {
           writeln!(&self.cmakelists_file,
             "endif()"
           )?;
@@ -3635,12 +3637,20 @@ impl<'a> CMakeListsWriter<'a> {
 
     writeln!(&self.cmakelists_file, "endif()")?;
 
-    if let Some(windows_icon_relative_path) = &output_data.windows_icon_relative_to_root_project {
-      writeln!(&self.cmakelists_file,
-        "generate_rc_file_for_windows_exe( {}\n\tICON_PATH \"${{TOPLEVEL_PROJECT_DIR}}/{}\"\n)",
-        borrowed_node.get_cmake_namespaced_target_name(),
-        windows_icon_relative_path.to_str().unwrap()
-      )?;
+    // See the comment in gcmake-windows-rc-file-utils.cmake for information on why
+    // the Windows executable RC file is always required now.
+    if !is_pre_build_script {
+      match &output_data.windows_icon_relative_to_root_project {
+        Some(windows_icon_relative_path) => writeln!(&self.cmakelists_file,
+          "generate_rc_file_for_windows_exe( {}\n\tICON_PATH \"${{TOPLEVEL_PROJECT_DIR}}/{}\"\n)",
+          borrowed_node.get_cmake_namespaced_target_name(),
+          windows_icon_relative_path.to_str().unwrap()
+        )?,
+        None => writeln!(&self.cmakelists_file,
+          "generate_rc_file_for_windows_exe( {} )",
+          borrowed_node.get_cmake_namespaced_target_name()
+        )?,
+      }
     }
 
     if !is_pre_build_script {

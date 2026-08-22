@@ -28,6 +28,66 @@ function( generate_rc_file_for_windows_exe
       string( APPEND RC_FILE_CONTENT "${useable_target_name}Icon ICON \"${RC_CONFIG_ICON_PATH}\"\n" )
     endif()
 
+    # Every Windows executable gets an application manifest. GUI toolkits such as
+    # wxWidgets import functions which only exist in ComCtl32 version 6, and
+    # without a manifest asking for it the loader binds to the ancient 5.82
+    # version shipped for compatibility. The process then fails to start at all,
+    # with STATUS_ENTRYPOINT_NOT_FOUND (0xC0000139). The remaining settings are
+    # harmless for console programs and useful for every executable:
+    #   - supportedOS: without a compatibility section Windows runs the process in
+    #     Vista compatibility mode (version lies, legacy behaviours).
+    #   - dpiAwareness / dpiAware: per-monitor DPI on Windows 10 1607+ / 8.1,
+    #     system DPI before that. Inert without windows.
+    #   - longPathAware: file APIs accept paths longer than MAX_PATH (when the
+    #     system policy allows it).
+    #   - activeCodePage UTF-8: argv, narrow file APIs and stdio use UTF-8
+    #     (Windows 10 1903+; ignored, harmlessly, before that).
+    # Microsoft's convention for the assembly name is Organization.Division.Name.
+    set( MANIFEST_FILE_PATH "${CMAKE_BINARY_DIR}/generated_windows_rc_files/${TARGET_BASE_NAME}.manifest" )
+    string( MAKE_C_IDENTIFIER "${PROJECT_VENDOR}" manifest_vendor )
+    string( MAKE_C_IDENTIFIER "${LOCAL_TOPLEVEL_PROJECT_NAME}" manifest_project )
+    if( NOT manifest_vendor )
+      set( manifest_vendor "Unknown" )
+    endif()
+
+    file( WRITE
+      "${MANIFEST_FILE_PATH}"
+      "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>
+<assembly xmlns=\"urn:schemas-microsoft-com:asm.v1\" manifestVersion=\"1.0\">
+  <assemblyIdentity type=\"win32\" name=\"${manifest_vendor}.${manifest_project}.${useable_target_name}\" version=\"1.0.0.0\" processorArchitecture=\"*\"/>
+  <dependency>
+    <dependentAssembly>
+      <assemblyIdentity type=\"win32\" name=\"Microsoft.Windows.Common-Controls\" version=\"6.0.0.0\" processorArchitecture=\"*\" publicKeyToken=\"6595b64144ccf1df\" language=\"*\"/>
+    </dependentAssembly>
+  </dependency>
+  <compatibility xmlns=\"urn:schemas-microsoft-com:compatibility.v1\">
+    <application>
+      <!-- Windows 10 and Windows 11 -->
+      <supportedOS Id=\"{8e0f7a12-bfb3-4fe8-b9a5-48fd50a15a9a}\"/>
+      <!-- Windows 8.1 -->
+      <supportedOS Id=\"{1f676c76-80e1-4239-95bb-83d0f6d0da78}\"/>
+      <!-- Windows 8 -->
+      <supportedOS Id=\"{4a2f28e3-53b9-4441-ba9c-d69d4a4a6e38}\"/>
+      <!-- Windows 7 -->
+      <supportedOS Id=\"{35138b9a-5d96-4fbd-8e2d-a2440225f93a}\"/>
+    </application>
+  </compatibility>
+  <application xmlns=\"urn:schemas-microsoft-com:asm.v3\">
+    <windowsSettings>
+      <dpiAware xmlns=\"http://schemas.microsoft.com/SMI/2005/WindowsSettings\">true/pm</dpiAware>
+      <dpiAwareness xmlns=\"http://schemas.microsoft.com/SMI/2016/WindowsSettings\">permonitorv2,permonitor</dpiAwareness>
+      <longPathAware xmlns=\"http://schemas.microsoft.com/SMI/2016/WindowsSettings\">true</longPathAware>
+      <activeCodePage xmlns=\"http://schemas.microsoft.com/SMI/2019/WindowsSettings\">UTF-8</activeCodePage>
+    </windowsSettings>
+  </application>
+</assembly>
+"
+    )
+
+    # 1 is CREATEPROCESS_MANIFEST_RESOURCE_ID, 24 is RT_MANIFEST (winuser.h); the
+    # generated .rc has no include to give them names. Must stay on one line.
+    string( APPEND RC_FILE_CONTENT "1 24 \"${MANIFEST_FILE_PATH}\"\n" )
+
     set( RC_FILE_PATH "${CMAKE_BINARY_DIR}/generated_windows_rc_files/${TARGET_BASE_NAME}.rc" )
 
     file( WRITE
