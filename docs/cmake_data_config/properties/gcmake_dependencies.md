@@ -24,7 +24,7 @@ a default one.
 | `git_tag` | `"3.1.0"` \| `v3.1.0` \| `develop` \| `origin/develop` | Tag or branch to check out after cloning. This is required if a *commit_hash* is not specified. |
 | `commit_hash` | `"2f11710abc5aa478503a7ff3f9e654bd2078ebab"` | The specific commit hash to check out after cloning. This is required if *git_tag* is not specified. |
 | `use_default_features` | `true` \| `false` | **Optional:** When `false`, turns off all features of the dependency which would otherwise be enabled by default. Defaults to `true` if not specified. |
-| `features` | `[use-fmt, extra-functions]` | **Optional:** List of features to enable on the dependency when it is imported. For full control over which features are enabled by default, pair this with `use_default_features: false`. |
+| `features` | `[use-fmt, extra-functions]` | **Optional:** List of features to enable on the dependency when it is imported. For full control over which features are enabled by default, pair this with `use_default_features: false`. Each entry may begin with a [constraint expression](../data_formats.md#constraint-specifier) See ["constraining when a feature is enabled"](./features.md#constraining-when-a-feature-is-enabled) for more details. |
 
 Minimal Example:
 

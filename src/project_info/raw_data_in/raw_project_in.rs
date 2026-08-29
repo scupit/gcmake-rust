@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet, BTreeSet, BTreeMap};
+use std::collections::{HashMap, BTreeSet, BTreeMap};
 use enum_iterator::Sequence;
 use serde::{Serialize, Deserialize};
 
@@ -93,10 +93,17 @@ pub struct RawGlobalPropertyConfig {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(untagged)]
+pub enum RawFeatureDefault {
+  Boolean(bool),
+  Constrained(String)
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(deny_unknown_fields)]
 pub struct RawFeatureConfig {
-  pub default: bool,
-  pub enables: Option<HashSet<String>>
+  pub default: RawFeatureDefault,
+  pub enables: Option<BTreeSet<String>>
 }
 
 fn make_none<T>() -> Option<T> { None }

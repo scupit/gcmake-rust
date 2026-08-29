@@ -4,6 +4,9 @@ use colored::Colorize;
 
 use crate::project_info::raw_data_in::dependencies::internal_dep_config::raw_dep_common::{RawEmscriptenConfig, RawDebianPackagesConfig, RawDepConfigOption, RawDepFeatureConfig, RawDepFeatureMode};
 use crate::project_info::validators::is_valid_lowercase_identifier;
+use crate::project_info::{FeatureValidationContext, GivenConstraintSpecParseContext, deny_feature_constraint_on_enabler, insert_union_merged, resolve_feature_default};
+use crate::project_info::parsers::general_parser::ParseSuccess;
+use crate::project_info::parsers::system_spec::platform_spec_parser::{SystemSpecifierWrapper, parse_leading_constraint_spec};
 
 use super::final_target_map_common::FinalTargetConfigMap;
 
@@ -87,9 +90,12 @@ pub fn resolve_final_config_options(
 
 #[derive(Clone)]
 pub struct FinalDepFeature {
-  pub is_enabled_by_default: bool,
-  pub enables: BTreeSet<String>,
-  // See the comment on the raw data struct for more info.
+  // An unconstrained `default: true` is stored as a constraint matching all
+  // systems.
+  pub enabled_by_default_when: Option<SystemSpecifierWrapper>,
+  // Unconstrained edges store a constraint matching all systems.
+  pub enables: BTreeMap<String, SystemSpecifierWrapper>,
+  // See the comment on the raw data struct for more info on what this means.
   pub list_value: String
 }
 
@@ -116,6 +122,10 @@ pub fn resolve_final_dep_features(
 
   let mut final_features: BTreeMap<String, FinalDepFeature> = BTreeMap::new();
 
+  // Constraints written in a registry config always refer to the dependency's OWN
+  // declared features, never the consuming project's.
+  let declared_features: BTreeSet<String> = features_map.keys().cloned().collect();
+
   for (feature_name, raw_feature) in features_map {
     if !is_valid_lowercase_identifier(feature_name) {
       return Err(format!(
@@ -125,25 +135,55 @@ pub fn resolve_final_dep_features(
       ));
     }
 
-    let enables: BTreeSet<String> = raw_feature.enables.clone().unwrap_or_default();
+    let mut enables: BTreeMap<String, SystemSpecifierWrapper> = BTreeMap::new();
 
-    for enabled_feature_name in &enables {
-      if !features_map.contains_key(enabled_feature_name) {
-        return Err(format!(
-          "Feature '{}' of predefined dependency '{}' enables '{}', but '{}' doesn't declare a feature named '{}'. NOTE that a predefined dependency's features may only enable other features of the same dependency.",
-          feature_name.green(),
-          dep_name,
-          enabled_feature_name.red(),
-          dep_name,
-          enabled_feature_name.red()
-        ));
+    if let Some(raw_enables) = raw_feature.enables.as_ref() {
+      for enabler_entry in raw_enables {
+        let parsing_context = GivenConstraintSpecParseContext {
+          is_before_output_name: false,
+          feature_context: FeatureValidationContext::PredefinedDep {
+            dep_name,
+            declared_features: &declared_features
+          }
+        };
+
+        let (constraint, enabled_feature_name): (SystemSpecifierWrapper, &str) = match parse_leading_constraint_spec(enabler_entry, parsing_context)? {
+          Some(ParseSuccess { value, rest }) => (value, rest),
+          None => (SystemSpecifierWrapper::default_include_all(), &enabler_entry[..])
+        };
+
+        deny_feature_constraint_on_enabler(
+          &constraint,
+          enabler_entry,
+          &format!("an 'enables' entry of feature '{}' of predefined dependency '{}'", feature_name, dep_name)
+        )?;
+
+        if !features_map.contains_key(enabled_feature_name) {
+          return Err(format!(
+            "Feature '{}' of predefined dependency '{}' enables '{}', but '{}' doesn't declare a feature named '{}'. NOTE that a predefined dependency's features may only enable other features of the same dependency.",
+            feature_name.green(),
+            dep_name,
+            enabled_feature_name.red(),
+            dep_name,
+            enabled_feature_name.red()
+          ));
+        }
+
+        insert_union_merged(&mut enables, enabled_feature_name.to_string(), constraint);
       }
     }
 
     final_features.insert(
       feature_name.clone(),
       FinalDepFeature {
-        is_enabled_by_default: raw_feature.default,
+        enabled_by_default_when: resolve_feature_default(
+          &raw_feature.default,
+          FeatureValidationContext::PredefinedDep {
+            dep_name,
+            declared_features: &declared_features
+          },
+          &format!("the 'default' value of feature '{}' of predefined dependency '{}'", feature_name, dep_name)
+        )?,
         enables,
         list_value: raw_feature.list_value.clone()
           .unwrap_or_else(|| feature_name.clone())

@@ -1145,7 +1145,7 @@ impl<'a> DependencyGraph<'a> {
       if self.root_project_id() == self.project_id() {
         if let Some(normal_project_config) = self.project_wrapper().maybe_normal_project() {
           for (container_feature_name, feature_config) in normal_project_config.get_features() {
-            for FinalFeatureEnabler { dep_name, feature_name } in &feature_config.enables {
+            for (FinalFeatureEnabler { dep_name, feature_name }, _) in &feature_config.enables {
               if let Some(dep_name_str) = dep_name {
                 // GCMake dependencies are checked first so any pre-existing configuration
                 // keeps its current behavior if a predefined dependency ever shares a name

@@ -2,6 +2,7 @@ use std::collections::{BTreeSet, HashMap};
 
 use serde::{Deserialize};
 use super::{RawMutualExclusionSet, RawPredefinedTargetMapIn};
+use crate::project_info::raw_data_in::RawFeatureDefault;
 
 #[derive(Deserialize, Clone)]
 #[serde(deny_unknown_fields)]
@@ -28,9 +29,9 @@ pub struct RawEmscriptenConfig {
 #[derive(Deserialize, Clone)]
 #[serde(deny_unknown_fields)]
 pub struct RawDepFeatureConfig {
-  pub default: bool,
-  // Names of OTHER features of this same dependency which are transitively enabled
-  // when this one is. Cross-dependency enables are deliberately not supported here;
+  pub default: RawFeatureDefault,
+  // Names of other features in the same dependency to transitively enable.
+  // Cross-dependency enables are deliberately not supported here;
   // If you need to constrain on other dependencies, use `external_requires` with a constraint
   // expression instead.
   pub enables: Option<BTreeSet<String>>,

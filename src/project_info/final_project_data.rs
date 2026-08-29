@@ -1564,7 +1564,7 @@ impl FinalProjectData {
         ));
       }
 
-      for FinalFeatureEnabler { dep_name, feature_name: feature_name_to_enable } in &feature_config.enables {
+      for (FinalFeatureEnabler { dep_name, feature_name: feature_name_to_enable }, _) in &feature_config.enables {
         // Dependency feature enablers are checked in the dependency graph's
         // do_additional_project_checks(...) function.
         if dep_name.is_none() && !self.features.contains_key(feature_name_to_enable) {
@@ -2292,7 +2292,8 @@ fn make_initial_root_project_info(
       let test_framework_lib: Rc<FinalPredefinedDependencyConfig> = FinalPredefinedDependencyConfig::new(
         all_dep_config,
         raw_framework_info.lib_config(),
-        raw_framework_info.name()
+        raw_framework_info.name(),
+        valid_feature_list.as_ref()
       )
         .map(|config| Rc::new(config))
         .map_err(ProjectLoadFailureReason::Other)?;
@@ -2323,10 +2324,18 @@ fn obtain_feature_map(raw_project: &RawProject) -> Result<Rc<BTreeMap<String, Fi
   let raw_feature_map = raw_project.features.clone()
     .unwrap_or(HashMap::new());
 
-  for (feature_name, raw_feature) in raw_feature_map {
-    let final_feature = FinalFeatureConfig::make_from(raw_feature)
+  let valid_feature_list: Vec<&str> = raw_feature_map.keys()
+    .map(|feature_name| &feature_name[..])
+    .collect();
+
+  let maybe_valid_feature_list: Option<&Vec<&str>> = if valid_feature_list.is_empty()
+    { None }
+    else { Some(&valid_feature_list) };
+
+  for (feature_name, raw_feature) in &raw_feature_map {
+    let final_feature = FinalFeatureConfig::make_from(feature_name, raw_feature, maybe_valid_feature_list)
       .map_err(ProjectLoadFailureReason::Other)?;
-    final_feature_map.insert(feature_name, final_feature);
+    final_feature_map.insert(feature_name.clone(), final_feature);
   }
 
   return Ok(Rc::new(final_feature_map));
@@ -2526,6 +2535,7 @@ fn obtain_gcmake_dep_projects(
   just_created_project_at: &Option<PathBuf>
 ) -> Result<GCMakeDependencyMap, ProjectLoadFailureReason> {
   let mut gcmake_dep_project_map = GCMakeDependencyMap::new();
+  let valid_feature_list: Option<Vec<&str>> = feature_list_from(&initial_project_data.features);
 
   if let Some(gcmake_dep_map) = &initial_project_data.raw_project.gcmake_dependencies {
     for (dep_name, dep_config) in gcmake_dep_map {
@@ -2591,7 +2601,8 @@ fn obtain_gcmake_dep_projects(
             &dep_name,
             dep_config,
             expected_hash,
-            maybe_dep_project
+            maybe_dep_project,
+            valid_feature_list.as_ref()
           )
           .map_err(ProjectLoadFailureReason::Other)?
         )
@@ -2686,6 +2697,7 @@ fn obtain_predefined_dependencies(
   all_dep_config: &RawPredefinedDependencyMap
 ) -> Result<PredefinedDepMap, ProjectLoadFailureReason> {
   let mut predefined_dependencies = PredefinedDepMap::new();
+  let valid_feature_list: Option<Vec<&str>> = feature_list_from(&initial_project_data.features);
 
   if let FinalProjectType::Root = &initial_project_data.project_type {
     if let Some(framework) = &initial_project_data.final_test_framework {
@@ -2701,7 +2713,8 @@ fn obtain_predefined_dependencies(
       let finalized_dep = FinalPredefinedDependencyConfig::new(
         all_dep_config,
         user_given_config,
-        dep_name
+        dep_name,
+        valid_feature_list.as_ref()
       )
         .map_err(ProjectLoadFailureReason::Other)?;
 

@@ -438,7 +438,7 @@ Features can be configured on any predefined dependency's import entry, mirrorin
 
 | Feature option | Example value | Description |
 | -------------- | ------------- | ----------- |
-| `features` | `[ freetype ]` | List of the dependency's features to enable. Every name must be a feature the dependency actually declares. |
+| `features` | `[ freetype ]` | List of the dependency's features to enable. Every name must be a feature the dependency actually declares. Each entry may begin with a [constraint expression](../data_formats.md#constraint-specifier). See ["constraining when a feature is enabled"](./features.md#constraining-when-a-feature-is-enabled) for more details on that. |
 | `use_default_features` | `false` | When `false`, the dependency's default-enabled features are NOT enabled automatically. Defaults to `true`. |
 
 ``` yaml

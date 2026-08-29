@@ -3,7 +3,7 @@ use std::hash::{ Hash, Hasher };
 
 use colored::Colorize;
 
-use super::{raw_data_in::{OutputItemType, RawCompiledItem, TargetBuildConfigMap, LinkSection, BuildConfigCompilerSpecifier, BuildType, TargetSpecificBuildType, RawBuildConfig, BuildTypeOptionMap, BuildConfigMap, RawGlobalPropertyConfig, DefaultCompiledLibType, RawShortcutConfig, RawFeatureConfig}, final_dependencies::FinalPredefinedDependencyConfig, LinkSpecifier, parsers::{link_spec_parser::LinkAccessMode, general_parser::ParseSuccess}, SystemSpecifierWrapper, platform_spec_parser::parse_leading_constraint_spec, helpers::{RetrievedCodeFileType, code_file_type, CodeFileLang}, path_manipulation::{cleaned_pathbuf}, final_project_data::CppFileGrammar, GivenConstraintSpecParseContext, FeatureValidationContext, LANGUAGE_FEATURE_BEGIN_TERMS, feature_map_for_lang, SystemSpecFeatureType};
+use super::{raw_data_in::{OutputItemType, RawCompiledItem, TargetBuildConfigMap, LinkSection, BuildConfigCompilerSpecifier, BuildType, TargetSpecificBuildType, RawBuildConfig, BuildTypeOptionMap, BuildConfigMap, RawGlobalPropertyConfig, DefaultCompiledLibType, RawShortcutConfig, RawFeatureConfig, RawFeatureDefault}, final_dependencies::FinalPredefinedDependencyConfig, LinkSpecifier, parsers::{link_spec_parser::LinkAccessMode, general_parser::ParseSuccess}, SystemSpecifierWrapper, platform_spec_parser::parse_leading_constraint_spec, helpers::{RetrievedCodeFileType, code_file_type, CodeFileLang}, path_manipulation::{cleaned_pathbuf}, final_project_data::CppFileGrammar, GivenConstraintSpecParseContext, FeatureValidationContext, LANGUAGE_FEATURE_BEGIN_TERMS, feature_map_for_lang, SystemSpecFeatureType};
 
 #[derive(Clone)]
 pub struct CodeFileInfo {
@@ -258,23 +258,119 @@ impl FinalFeatureEnabler {
   }
 }
 
+pub fn deny_feature_constraint_on_enabler(
+  constraint: &SystemSpecifierWrapper,
+  original_entry: &str,
+  described_location: &str
+) -> Result<(), String> {
+  if constraint.references_project_defined_feature() {
+    return Err(format!(
+      "The constraint on {} ('{}') references a feature. Constraints on feature 'enables' entries, feature 'default' values, and dependency 'features' lists may only use system and compiler predicates (windows, linux, mingw, etc.) because they are evaluated while feature values are still being resolved.",
+      described_location,
+      original_entry.red()
+    ));
+  }
+  return Ok(());
+}
+
+// Merges duplicate feature-enable entries which differ only in their constraints, so
+// each feature or enable edge is stored (and later emitted) exactly once. For example,
+// a feature whose 'enables' list contains both "(( windows )) some-feature" and
+// "(( linux )) some-feature" produces a single enable edge for 'some-feature' whose
+// constraint is "windows or linux".
+pub fn insert_union_merged<K: Ord>(
+  map: &mut BTreeMap<K, SystemSpecifierWrapper>,
+  key: K,
+  constraint: SystemSpecifierWrapper
+) {
+  let merged_constraint: SystemSpecifierWrapper = match map.remove(&key) {
+    Some(existing_constraint) => existing_constraint.union(&constraint),
+    None => constraint
+  };
+
+  map.insert(key, merged_constraint);
+}
+
+pub fn resolve_feature_default(
+  raw_default: &RawFeatureDefault,
+  feature_context: FeatureValidationContext,
+  described_location: &str
+) -> Result<Option<SystemSpecifierWrapper>, String> {
+  return match raw_default {
+    RawFeatureDefault::Boolean(true) => Ok(Some(SystemSpecifierWrapper::default_include_all())),
+    RawFeatureDefault::Boolean(false) => Ok(None),
+    RawFeatureDefault::Constrained(constraint_string) => {
+      let parsing_context = GivenConstraintSpecParseContext {
+        feature_context,
+        is_before_output_name: false
+      };
+
+      match parse_leading_constraint_spec(constraint_string.trim(), parsing_context)? {
+        None => Err(format!(
+          "Invalid value {} given for {}. A feature's 'default' must be true, false, or a constraint expression such as \"(( not windows ))\".",
+          constraint_string.red(),
+          described_location
+        )),
+        Some(ParseSuccess { value: _, rest }) if !rest.trim().is_empty() => Err(format!(
+          "The constraint given for {} is followed by unexpected text ({}). A feature's 'default' must be true, false, or a single constraint expression such as \"(( not windows ))\".",
+          described_location,
+          rest.trim().red()
+        )),
+        Some(ParseSuccess { value, rest: _ }) => {
+          deny_feature_constraint_on_enabler(&value, constraint_string, described_location)?;
+          Ok(Some(value))
+        }
+      }
+    }
+  }
+}
+
 pub struct FinalFeatureConfig {
-  pub is_enabled_by_default: bool,
-  pub enables: BTreeSet<FinalFeatureEnabler>
+  pub enabled_by_default_when: Option<SystemSpecifierWrapper>,
+  pub enables: BTreeMap<FinalFeatureEnabler, SystemSpecifierWrapper>
 }
 
 impl FinalFeatureConfig {
-  pub fn make_from(raw_feature_config: RawFeatureConfig) -> Result<Self, String> {
-    let enables_results: Result<BTreeSet<FinalFeatureEnabler>, String> = raw_feature_config.enables.as_ref()
-      .map_or(Ok(BTreeSet::new()), |enables_set|
-        enables_set.iter()
-          .map(FinalFeatureEnabler::make_from)
-          .collect()
-      );
+  pub fn make_from(
+    feature_name: &str,
+    raw_feature_config: &RawFeatureConfig,
+    maybe_valid_feature_list: Option<&Vec<&str>>
+  ) -> Result<Self, String> {
+    let mut enables: BTreeMap<FinalFeatureEnabler, SystemSpecifierWrapper> = BTreeMap::new();
+
+    if let Some(enables_set) = raw_feature_config.enables.as_ref() {
+      for enabler_entry in enables_set {
+        let parsing_context = GivenConstraintSpecParseContext {
+          feature_context: FeatureValidationContext::ConsumingProject { valid_feature_list: maybe_valid_feature_list },
+          is_before_output_name: false
+        };
+
+        let (constraint, enabler_spec): (SystemSpecifierWrapper, &str) = match parse_leading_constraint_spec(enabler_entry, parsing_context)? {
+          Some(ParseSuccess { value, rest }) => (value, rest),
+          None => (SystemSpecifierWrapper::default_include_all(), &enabler_entry[..])
+        };
+
+        deny_feature_constraint_on_enabler(
+          &constraint,
+          enabler_entry,
+          &format!("an 'enables' entry of feature '{}'", feature_name)
+        )?;
+
+        insert_union_merged(
+          &mut enables,
+          FinalFeatureEnabler::make_from(enabler_spec)?,
+          constraint
+        );
+      }
+    }
 
     return Ok(Self {
-      enables: enables_results?,
-      is_enabled_by_default: raw_feature_config.default
+      enables,
+      enabled_by_default_when: resolve_feature_default(
+        &raw_feature_config.default,
+        FeatureValidationContext::ConsumingProject { valid_feature_list: maybe_valid_feature_list },
+        &format!("the 'default' value of feature '{}'", feature_name)
+      )?
     });
   }
 }

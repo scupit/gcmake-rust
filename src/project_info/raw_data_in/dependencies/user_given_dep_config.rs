@@ -1,4 +1,4 @@
-use std::collections::{HashSet, HashMap};
+use std::collections::{BTreeSet, HashMap};
 
 use serde::{Serialize, Deserialize};
 
@@ -35,10 +35,11 @@ pub struct UserGivenPredefinedDependencyConfig {
   // For now, just strings is fine though.
   pub options: Option<HashMap<String, String>>,
 
-  // Mirrors the GCMake-dependency feature fields below. Feature names are validated
-  // against the dependency's declared feature set at load time.
   pub use_default_features: Option<bool>,
-  pub features: Option<HashSet<String>>
+  // Mirrors the GCMake-dependency feature fields below. Feature names are validated
+  // against the dependency's declared feature set at load time. Entries may carry a
+  // leading constraint expression.
+  pub features: Option<BTreeSet<String>>
 }
 
 impl UserGivenPredefinedDependencyConfig {
@@ -61,5 +62,6 @@ pub struct UserGivenGCMakeProjectDependency {
   pub repo_url: String,
 
   pub use_default_features: Option<bool>,
-  pub features: Option<HashSet<String>>
+  // Again, each entry can contain a constraint expression.
+  pub features: Option<BTreeSet<String>>
 }

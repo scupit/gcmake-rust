@@ -1847,12 +1847,22 @@ impl<'a> CMakeListsWriter<'a> {
           )?;
         }
 
-        for feature_name in dep_info.specified_features() {
-          writeln!(&self.cmakelists_file,
-            "\tgcmake_mark_for_enable( \"{}\" \"{}\" )",
-            dep_info.project_base_name(),
-            feature_name
-          )?;
+        for (feature_name, constraint) in dep_info.specified_features() {
+          if constraint.includes_all() {
+            writeln!(&self.cmakelists_file,
+              "\tgcmake_mark_for_enable( \"{}\" \"{}\" )",
+              dep_info.project_base_name(),
+              feature_name
+            )?;
+          }
+          else {
+            writeln!(&self.cmakelists_file,
+              "\tif( {} )\n\t\tgcmake_mark_for_enable( \"{}\" \"{}\" )\n\tendif()",
+              system_contstraint_conditional_expression(constraint),
+              dep_info.project_base_name(),
+              feature_name
+            )?;
+          }
         }
 
         self.write_dep_clone_code(
@@ -3955,6 +3965,23 @@ impl<'a> CMakeListsWriter<'a> {
   }
 
   // Only called by the root project.
+  // Resolves the feature-owner token for the dependency named in a "dep/feature"
+  // enable edge. The graph has already validated the identifier as either a gcmake
+  // dependency or a predefined dependency (checked in that order), so a name which
+  // isn't a gcmake dependency here is guaranteed to be a predefined one.
+  fn feature_enabler_dep_owner_token(&self, dep_identifier: &str) -> String {
+    return match self.dep_graph_ref()
+      .root_project().as_ref().borrow()
+      .get_gcmake_dependencies()
+      .get(dep_identifier)
+    {
+      Some(gcmake_dep) => gcmake_dep.as_ref().borrow()
+        .internal_project_name()
+        .to_string(),
+      None => predep_feature_owner_token(dep_identifier)
+    };
+  }
+
   fn write_features(&self) -> io::Result<()> {
     writeln!(&self.cmakelists_file,
       "if( NOT DEFINED ${{LOCAL_TOPLEVEL_PROJECT_NAME}}_USE_DEFAULT_FEATURES )"
@@ -3969,16 +3996,27 @@ impl<'a> CMakeListsWriter<'a> {
     for (feature_name, feature_config) in self.project_data.get_features() {
       let mut dep_enable_pairs: Vec<(&str, &str)> = Vec::new();
       let mut normal_enable_names: Vec<&str> = Vec::new();
+      let mut conditional_normal_enables: Vec<(&SystemSpecifierWrapper, &str)> = Vec::new();
+      let mut conditional_dep_enables: Vec<(&SystemSpecifierWrapper, &str, &str)> = Vec::new();
 
-      for enabler_config in &feature_config.enables {
+      for (enabler_config, constraint) in &feature_config.enables {
         match &enabler_config.dep_name {
-          None => normal_enable_names.push(&enabler_config.feature_name),
-          Some(enabler_dep_name) => dep_enable_pairs.push(
-            (
-              enabler_dep_name,
-              &enabler_config.feature_name
-            )
-          )
+          None => {
+            if constraint.includes_all() {
+              normal_enable_names.push(&enabler_config.feature_name);
+            }
+            else {
+              conditional_normal_enables.push((constraint, &enabler_config.feature_name));
+            }
+          },
+          Some(enabler_dep_name) => {
+            if constraint.includes_all() {
+              dep_enable_pairs.push((enabler_dep_name, &enabler_config.feature_name));
+            }
+            else {
+              conditional_dep_enables.push((constraint, enabler_dep_name, &enabler_config.feature_name));
+            }
+          }
         }
       }
 
@@ -4002,29 +4040,34 @@ impl<'a> CMakeListsWriter<'a> {
         writeln!(&self.cmakelists_file, "\n\tDEP_ENABLES")?;
 
         for (dep_identifier, enables_feature_name) in dep_enable_pairs {
-          // The graph has already validated the identifier as either a gcmake dependency
-          // or a predefined dependency (checked in that order), so a name which isn't a
-          // gcmake dependency here is guaranteed to be a predefined one.
-          let dep_owner_name: String = match self.dep_graph_ref()
-            .root_project().as_ref().borrow()
-            .get_gcmake_dependencies()
-            .get(dep_identifier)
-          {
-            Some(gcmake_dep) => gcmake_dep.as_ref().borrow()
-              .internal_project_name()
-              .to_string(),
-            None => predep_feature_owner_token(dep_identifier)
-          };
-
           writeln!(&self.cmakelists_file,
             "\t\t\"{}\" \"{}\"",
-            dep_owner_name,
+            self.feature_enabler_dep_owner_token(dep_identifier),
             enables_feature_name
           )?;
         }
       }
 
       writeln!(&self.cmakelists_file, ")")?;
+
+      for (constraint, enables_feature_name) in conditional_normal_enables {
+        writeln!(&self.cmakelists_file,
+          "if( {} )\n\tlist( APPEND ${{LOCAL_TOPLEVEL_PROJECT_NAME}}_FEATURE_{}_ENABLES {} )\nendif()",
+          system_contstraint_conditional_expression(constraint),
+          feature_name,
+          enables_feature_name
+        )?;
+      }
+
+      for (constraint, dep_identifier, enables_feature_name) in conditional_dep_enables {
+        writeln!(&self.cmakelists_file,
+          "if( {} )\n\tlist( APPEND ${{LOCAL_TOPLEVEL_PROJECT_NAME}}_FEATURE_{}_DEP_ENABLES \"{}\" \"{}\" )\nendif()",
+          system_contstraint_conditional_expression(constraint),
+          feature_name,
+          self.feature_enabler_dep_owner_token(dep_identifier),
+          enables_feature_name
+        )?;
+      }
     }
 
     writeln!(&self.cmakelists_file,
@@ -4032,11 +4075,20 @@ impl<'a> CMakeListsWriter<'a> {
     )?;
 
     for (feature_name, feature_config) in self.project_data.get_features() {
-      if feature_config.is_enabled_by_default {
-        writeln!(&self.cmakelists_file,
-          "\tgcmake_mark_for_enable( ${{LOCAL_TOPLEVEL_PROJECT_NAME}} {} )",
-          feature_name
-        )?;
+      if let Some(default_constraint) = &feature_config.enabled_by_default_when {
+        if default_constraint.includes_all() {
+          writeln!(&self.cmakelists_file,
+            "\tgcmake_mark_for_enable( ${{LOCAL_TOPLEVEL_PROJECT_NAME}} {} )",
+            feature_name
+          )?;
+        }
+        else {
+          writeln!(&self.cmakelists_file,
+            "\tif( {} )\n\t\tgcmake_mark_for_enable( ${{LOCAL_TOPLEVEL_PROJECT_NAME}} {} )\n\tendif()",
+            system_contstraint_conditional_expression(default_constraint),
+            feature_name
+          )?;
+        }
       }
     }
 
@@ -4094,10 +4146,15 @@ impl<'a> CMakeListsWriter<'a> {
           feature_name
         )?;
 
-        if !feature_config.enables.is_empty() {
+        let unconditional_enables: Vec<&str> = feature_config.enables.iter()
+          .filter(|(_, constraint)| constraint.includes_all())
+          .map(|(enabled_feature_name, _)| &enabled_feature_name[..])
+          .collect();
+
+        if !unconditional_enables.is_empty() {
           write!(&self.cmakelists_file, " ENABLES")?;
 
-          for enabled_feature_name in &feature_config.enables {
+          for enabled_feature_name in unconditional_enables {
             write!(&self.cmakelists_file, " {}", enabled_feature_name)?;
           }
         }
@@ -4110,33 +4167,67 @@ impl<'a> CMakeListsWriter<'a> {
         }
 
         writeln!(&self.cmakelists_file, " )")?;
+
+        for (enabled_feature_name, constraint) in &feature_config.enables {
+          if !constraint.includes_all() {
+            writeln!(&self.cmakelists_file,
+              "if( {} )\n\tlist( APPEND {}_FEATURE_{}_ENABLES {} )\nendif()",
+              system_contstraint_conditional_expression(constraint),
+              owner_token,
+              feature_name,
+              enabled_feature_name
+            )?;
+          }
+        }
       }
 
-      for user_enabled_feature in dep_config.specified_features() {
-        writeln!(&self.cmakelists_file,
-          "gcmake_mark_for_enable( {} {} )",
-          owner_token,
-          user_enabled_feature
-        )?;
+      for (user_enabled_feature, constraint) in dep_config.specified_features() {
+        if constraint.includes_all() {
+          writeln!(&self.cmakelists_file,
+            "gcmake_mark_for_enable( {} {} )",
+            owner_token,
+            user_enabled_feature
+          )?;
+        }
+        else {
+          writeln!(&self.cmakelists_file,
+            "if( {} )\n\tgcmake_mark_for_enable( {} {} )\nendif()",
+            system_contstraint_conditional_expression(constraint),
+            owner_token,
+            user_enabled_feature
+          )?;
+        }
       }
 
-      let default_enabled_names: Vec<&str> = dep_features.iter()
-        .filter(|(_, feature_config)| feature_config.is_enabled_by_default)
-        .map(|(feature_name, _)| &feature_name[..])
+      let default_enabled_features: Vec<(&str, &SystemSpecifierWrapper)> = dep_features.iter()
+        .filter_map(|(feature_name, feature_config)|
+          feature_config.enabled_by_default_when.as_ref()
+            .map(|default_constraint| (&feature_name[..], default_constraint))
+        )
         .collect();
 
-      if !default_enabled_names.is_empty() {
+      if !default_enabled_features.is_empty() {
         writeln!(&self.cmakelists_file,
           "if( {}_USE_DEFAULT_FEATURES )",
           owner_token
         )?;
 
-        for default_feature_name in default_enabled_names {
-          writeln!(&self.cmakelists_file,
-            "\tgcmake_mark_for_enable( {} {} )",
-            owner_token,
-            default_feature_name
-          )?;
+        for (default_feature_name, default_constraint) in default_enabled_features {
+          if default_constraint.includes_all() {
+            writeln!(&self.cmakelists_file,
+              "\tgcmake_mark_for_enable( {} {} )",
+              owner_token,
+              default_feature_name
+            )?;
+          }
+          else {
+            writeln!(&self.cmakelists_file,
+              "\tif( {} )\n\t\tgcmake_mark_for_enable( {} {} )\n\tendif()",
+              system_contstraint_conditional_expression(default_constraint),
+              owner_token,
+              default_feature_name
+            )?;
+          }
         }
 
         writeln!(&self.cmakelists_file, "endif()")?;

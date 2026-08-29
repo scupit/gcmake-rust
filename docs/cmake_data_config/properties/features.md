@@ -21,8 +21,8 @@ Once a feature is defined, it can be used in any
 
 | Property | Description |
 | -------- | ----------- |
-| `default` | **Required** *boolean* which determines whether the feature is enabled by default. |
-| `enables` | **Optional** list of other features the feature will transitively enable if it is enabled itself. |
+| `default` | **Required** *boolean* or [constraint expression](../data_formats.md#constraint-specifier) *string* which determines whether the feature is enabled by default. A constraint expression like `(( not windows ))` means the feature is enabled by default only on systems where the constraint holds. |
+| `enables` | **Optional** list of other features the feature will transitively enable if it is enabled itself. Each entry may begin with a [constraint expression](../data_formats.md#constraint-specifier). Transitive enablement only occurs when the constraint expression holds. |
 
 ## Enabler Expressions
 
@@ -90,6 +90,36 @@ A predefined dependency's features can also be enabled directly on its import en
 [the predefined_dependencies property](./properties_list.md#predefined_dependencies). Names are
 resolved against gcmake_dependencies first, then predefined dependencies. Trying to enable a feature
 the dependency doesn't declare will result in a project load error.
+
+## Constraining when a feature is enabled
+
+`enables` entries and the `default` specifier can carry a [constraint expression](../data_formats.md#constraint-specifier).
+
+``` yaml
+features:
+  with-freetype:
+    # Only enabled by default when C99 is available.
+    default: (( c:99 ))
+    enables:
+      # Whenever this project's `with-freetype` feature is enabled, imgui's `freetype` feature
+      # is transitively enabled, but only when building for a target other than Windows.
+      - (( not windows )) imgui/freetype
+
+predefined_dependencies:
+  freetype:
+    git_tag: VER-2-13-3
+  imgui:
+    git_tag: v1.92.9b
+```
+
+These constraints may not use feature predicates (like `(( feature:some-feature ))` ). However, the rest of the
+predicate types (system predicates, compiler predicates) are fully supported.
+
+**Listing the same enabler twice with different constraints is allowed; the feature is enabled wherever either constraint holds.**
+
+The `features` lists on
+[predefined dependency](./properties_list.md#predefined_dependencies) and
+[gcmake_dependency](./gcmake_dependencies.md#general-info) import entries follow the same rules.
 
 ## Example
 

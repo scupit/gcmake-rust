@@ -255,6 +255,11 @@ Constraint specifiers can currently be used on [compiler_flags](properties/build
 [linker_flags](properties/build_configs.md#linker_flags), [defines](properties/build_configs.md#defines),
 and [link specifiers](linking.md#formats), and [output](properties/output.md) items themselves.
 
+They can also make feature enablement itself conditional. See:
+
+- [`enables` entries and the `default` specifier](properties/features.md#constraining-when-a-feature-is-enabled)
+- The `features` lists of [predefined dependency](properties/properties_list.md#predefined-dependency-features) and [gcmake_dependency](properties/gcmake_dependencies.md#general-info) import entries. See ["constraining when a feature is enabled"](properties/features.md#constraining-when-a-feature-is-enabled) for more details.
+
 One great use case for system specifiers is to use different compile defines depending on the operating
 system you are targeting.
 

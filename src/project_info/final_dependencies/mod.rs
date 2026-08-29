@@ -14,11 +14,11 @@ pub use final_predefined_cmake_module_dep::*;
 pub use final_target_map_common::{FinalRequirementSpecifier, FinalTargetConfig, FinalExternalRequirementSpecifier};
 pub use predep_module_common::{PredefinedDepFunctionality, FinalDebianPackagesConfig};
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, BTreeMap};
 
 use colored::Colorize;
 
-use crate::project_info::{platform_spec_parser::parse_leading_constraint_spec, parsers::general_parser::ParseSuccess, FeatureValidationContext, GivenConstraintSpecParseContext};
+use crate::project_info::{platform_spec_parser::{parse_leading_constraint_spec, SystemSpecifierWrapper}, parsers::general_parser::ParseSuccess, FeatureValidationContext, GivenConstraintSpecParseContext, deny_feature_constraint_on_enabler, insert_union_merged};
 
 use self::{final_target_map_common::FinalTargetConfigMap};
 
@@ -83,7 +83,8 @@ pub struct FinalPredefinedDependencyConfig {
   post_load: HookScriptContainer,
   custom_populate: HookScriptContainer,
   custom_find_module: HookScriptContainer,
-  user_enabled_features: BTreeSet<String>,
+  // Unconstrained entries store a constraint matching all systems.
+  user_enabled_features: BTreeMap<String, SystemSpecifierWrapper>,
   use_default_features: bool
 }
 
@@ -91,7 +92,8 @@ impl FinalPredefinedDependencyConfig {
   pub fn new(
     all_raw_dep_configs: &RawPredefinedDependencyMap,
     user_given_config: &UserGivenPredefinedDependencyConfig,
-    dep_name: &str
+    dep_name: &str,
+    maybe_valid_feature_list: Option<&Vec<&str>>
   ) -> Result<Self, String> {
     let configs = PredefinedDependencyAllConfigs::new(
       all_raw_dep_configs,
@@ -238,32 +240,50 @@ impl FinalPredefinedDependencyConfig {
       dep_common.dep_features_map()
     };
 
-    let user_enabled_features: BTreeSet<String> = user_given_config.features.clone()
-      .map(|feature_set| feature_set.into_iter().collect())
-      .unwrap_or_default();
+    let mut user_enabled_features: BTreeMap<String, SystemSpecifierWrapper> = BTreeMap::new();
 
-    if !user_enabled_features.is_empty() && declared_dep_features.is_empty() {
-      return Err(format!(
-        "The configuration for predefined dependency '{}' enables features, but '{}' doesn't declare any features.",
-        dep_name.yellow(),
-        dep_name
-      ));
-    }
-
-    for user_feature_name in &user_enabled_features {
-      if !declared_dep_features.contains_key(user_feature_name) {
-        let valid_feature_list_str: String = declared_dep_features.keys()
-          .map(|key| &key[..])
-          .collect::<Vec<&str>>()
-          .join(", ");
-
+    if let Some(feature_entries) = user_given_config.features.as_ref() {
+      if !feature_entries.is_empty() && declared_dep_features.is_empty() {
         return Err(format!(
-          "The configuration for predefined dependency '{}' enables the feature '{}', but '{}' doesn't declare a feature with that name.\n\tValid features are [{}]",
+          "The configuration for predefined dependency '{}' enables features, but '{}' doesn't declare any features.",
           dep_name.yellow(),
-          user_feature_name.red(),
-          dep_name,
-          valid_feature_list_str.green()
+          dep_name
         ));
+      }
+
+      for feature_entry in feature_entries {
+        let parsing_context = GivenConstraintSpecParseContext {
+          is_before_output_name: false,
+          feature_context: FeatureValidationContext::ConsumingProject { valid_feature_list: maybe_valid_feature_list }
+        };
+
+        let (constraint, user_feature_name): (SystemSpecifierWrapper, &str) = match parse_leading_constraint_spec(feature_entry, parsing_context)? {
+          Some(ParseSuccess { value, rest }) => (value, rest),
+          None => (SystemSpecifierWrapper::default_include_all(), &feature_entry[..])
+        };
+
+        deny_feature_constraint_on_enabler(
+          &constraint,
+          feature_entry,
+          &format!("a 'features' entry for predefined dependency '{}'", dep_name)
+        )?;
+
+        if !declared_dep_features.contains_key(user_feature_name) {
+          let valid_feature_list_str: String = declared_dep_features.keys()
+            .map(|key| &key[..])
+            .collect::<Vec<&str>>()
+            .join(", ");
+
+          return Err(format!(
+            "The configuration for predefined dependency '{}' enables the feature '{}', but '{}' doesn't declare a feature with that name.\n\tValid features are [{}]",
+            dep_name.yellow(),
+            user_feature_name.red(),
+            dep_name,
+            valid_feature_list_str.green()
+          ));
+        }
+
+        insert_union_merged(&mut user_enabled_features, user_feature_name.to_string(), constraint);
       }
     }
 
@@ -293,7 +313,7 @@ impl FinalPredefinedDependencyConfig {
     self.use_default_features
   }
 
-  pub fn specified_features(&self) -> &BTreeSet<String> {
+  pub fn specified_features(&self) -> &BTreeMap<String, SystemSpecifierWrapper> {
     &self.user_enabled_features
   }
 
