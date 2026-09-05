@@ -84,20 +84,42 @@ function( generate_rc_file_for_windows_exe
 "
     )
 
-    # 1 is CREATEPROCESS_MANIFEST_RESOURCE_ID, 24 is RT_MANIFEST (winuser.h); the
-    # generated .rc has no include to give them names. Must stay on one line.
-    string( APPEND RC_FILE_CONTENT "1 24 \"${MANIFEST_FILE_PATH}\"\n" )
+    # An executable can only hold one manifest resource, and link.exe and lld-link
+    # always embed one of their own (CMake passes /MANIFEST:EMBED, or the Visual
+    # Studio generator's GenerateManifest). If the generated .rc also carried the
+    # manifest, both would claim resource type 24 ID 1 and the link would fail with
+    # "CVT1100 duplicate resource type:MANIFEST" (MSVC) or "duplicate resource: type
+    # MANIFEST" (lld-link). So how the manifest gets into the exe depends on the linker:
+    #   - MSVC-style linkers (MSVC itself, and Clang targeting the MSVC ABI through
+    #     either driver): the .manifest file is added as a target source. CMake hands
+    #     .manifest sources to the linker's manifest tool, which merges them with the
+    #     linker's own manifest, so the exe ends up with a single manifest containing
+    #     both our settings and the linker's UAC requestedExecutionLevel.
+    #   - GNU ld (MinGW): the linker embeds nothing, and CMake ignores .manifest sources
+    #     for it, so the .rc file references the manifest as resource type 24
+    #     (RT_MANIFEST) with ID 1 (CREATEPROCESS_MANIFEST_RESOURCE_ID). The numbers are
+    #     used directly because the generated .rc includes no header to name them.
+    if( MSVC OR "${CMAKE_CXX_SIMULATE_ID}" STREQUAL "MSVC" OR "${CMAKE_C_SIMULATE_ID}" STREQUAL "MSVC" )
+      target_sources( ${TARGET_BASE_NAME} PRIVATE "${MANIFEST_FILE_PATH}" )
+    else()
+      string( APPEND RC_FILE_CONTENT "1 24 \"${MANIFEST_FILE_PATH}\"\n" )
+    endif()
 
-    set( RC_FILE_PATH "${CMAKE_BINARY_DIR}/generated_windows_rc_files/${TARGET_BASE_NAME}.rc" )
+    # Only write and attach the .rc file when it has something in it. For an MSVC
+    # executable without an icon, the manifest is passed to the linker directly and
+    # the .rc would be empty.
+    if( RC_FILE_CONTENT )
+      set( RC_FILE_PATH "${CMAKE_BINARY_DIR}/generated_windows_rc_files/${TARGET_BASE_NAME}.rc" )
 
-    file( WRITE
-      "${RC_FILE_PATH}"
-      "${RC_FILE_CONTENT}"
-    )
+      file( WRITE
+        "${RC_FILE_PATH}"
+        "${RC_FILE_CONTENT}"
+      )
 
-    # This file path doesn't need a 'windows-only' generator expression because this
-    # function body is only run when the target system is Windows anyways.
-    target_sources( ${TARGET_BASE_NAME} PRIVATE "${RC_FILE_PATH}" )
+      # This file path doesn't need a 'windows-only' generator expression because this
+      # function body is only run when the target system is Windows anyways.
+      target_sources( ${TARGET_BASE_NAME} PRIVATE "${RC_FILE_PATH}" )
+    endif()
 
     set( ${TARGET_BASE_NAME}_RC_ALREADY_GENERATED TRUE )
   endif()
